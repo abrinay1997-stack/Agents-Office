@@ -14,7 +14,7 @@ const TOPE_RESPALDO_BYTES = 40 * 1024 * 1024, TOPE_LOTE_JSON = 700_000;
 
 /** Dónde vive cada cosa que un ámbito restablece. Un test (cloudflare/tests/restablecer.test.mjs) exige que TODA tabla, colección y clave de D1 esté aquí o en CONSERVA_*: lo nuevo obliga a decidir. */
 export const DESTINOS = {
-  cerebro: { tablas: ['notas', 'grafo'], docs: ['memoria', 'memory', 'notas.revisar', 'arranque.propuesta', 'arranque.aplicadas'], filas: ['notas-respaldo'] },
+  cerebro: { tablas: ['notas', 'grafo', 'notas_papelera'], docs: ['memoria', 'memory', 'notas.revisar', 'arranque.propuesta', 'arranque.aplicadas'], filas: ['notas-respaldo'] },
   habilidades: { filas: ['skills', 'biblioteca'] },
   equipo: { docs: ['agentes.cerebro', 'agentes.local'] },
   rutinas: { filas: ['rutinas'], docs: ['rutinas.estado'] },

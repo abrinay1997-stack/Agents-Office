@@ -28,6 +28,8 @@ export const ACCIONES = {
   pieza_crear: 'titulo, texto, fecha?, hora?, formato? post|reel|carrusel|historia, redes? — nace BORRADOR',
   pieza_mover: 'id, fecha, hora? — si estaba aprobada pierde el OK',
   contenido_llenar: 'dias? 1-14, redes?, pide? — los días sin publicación, como «Llenar la semana»',
+  // 27 oct 2026: el Cerebro. Una nota nueva o añadir a una que existe; nunca reemplazar ni borrar (eso es del dueño, en el Cerebro)
+  nota_crear: 'nombre, texto, grupo? — una nota NUEVA en el Cerebro', nota_agregar: 'nombre (EXACTO, de una nota que existe), texto, seccion? — añade al final sin tocar lo que decía',
   // Fase A2 de Anuncios: bajar el gasto, sí; gastar, no (403 aquí: lo hace el dueño con dos clics)
   anuncio_pausar: 'id (campaña, conjunto o anuncio de ver_anuncios) — deja de gastar; no se deshace desde aquí',
   anuncio_bajar_presupuesto: 'id (campaña o conjunto con presupuesto), valor (US$, menos que el de ahora) — no se deshace desde aquí',

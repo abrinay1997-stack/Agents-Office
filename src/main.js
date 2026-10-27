@@ -1748,7 +1748,7 @@ addEventListener('resize', () => { if (!focused && !tween && !HERO) { const atOv
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh(),
   getContext: () => { const v = views.current(), src = { studio, cal: tasks && tasks.calendar, contenido, analiticas, brain, tareas: tareasV, anuncios }[v]; return src && src.selection ? src.selection() : v ? { view: v, label: { studio: 'El Estudio', cal: 'El calendario', contenido: 'Contenido', analiticas: 'Analíticas', brain: 'El Cerebro', tareas: 'Tareas', anuncios: 'Anuncios' }[v] || v, kind: null } : null; }, // V4.8: «Viendo: …» (the views are defined below: only called once the chat is open)
-  openStudioFile: file => (studio.openFile ? studio.openFile(file) : studio.open()) });
+  openStudioFile: file => (studio.openFile ? studio.openFile(file) : studio.open()), openSettings: tab => settingsWin.open(tab) }); // 27 oct 2026: «con qué IA corre» → Ajustes → Modelos
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
   const VIEW_BTN = [['topDimitri', 'subOpen'], ['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topTareas', 'tvOpen'], ['topAnaliticas', 'anOpen'], ['topAnuncios', 'anuOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);

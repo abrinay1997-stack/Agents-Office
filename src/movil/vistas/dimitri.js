@@ -23,7 +23,7 @@ export function registrar(shell) {
   shell.registrarVista({
     id: 'dimitri', titulo: 'Dimitri', icono: 'dimitri', grupo: 'tab',
     montar(el, ctx) {
-      let mensajes = [], cargado = false, ocupado = false, nombre = 'Dimitri', error = '', fallo = null, vivo = '', vivoModo = '', corrida = '', deteniendo = false, sinCtx = false, ctxUlt = '', tic = 0;
+      let mensajes = [], pasosVivos = [], iaInfo = null, cargado = false, ocupado = false, nombre = 'Dimitri', error = '', fallo = null, vivo = '', vivoModo = '', corrida = '', deteniendo = false, sinCtx = false, ctxUlt = '', tic = 0;
       const edits = new Map(), opEdits = new Map(), picks = new Map(), opsOcupadas = new Set();
       let gente = []; // 26 oct 2026: las personas del equipo a las que se les puede pasar una pieza (cuentas de la plataforma y Ajustes → Equipo)
       const cargarGente = () => ctx.api('/api/team').then(j => { const yo = globalThis.AO_NUBE?.yo?.()?.nombre; gente = (j.people || []).map(p => p.name).filter(n => n && n !== 'Tú' && n !== yo); }).catch(() => {});
@@ -38,16 +38,20 @@ export function registrar(shell) {
       const viendo = () => (sinCtx ? null : ctx.viendo());
 
       async function cargar() {
-        try { const j = await ctx.api('/api/sub'); mensajes = j.messages || []; if (j.name) nombre = j.name; cargado = true; error = ''; } catch (e) { error = e.message; }
+        try { const j = await ctx.api('/api/sub'); mensajes = j.messages || []; if (j.name) nombre = j.name; iaInfo = j.ia || null; cargado = true; error = ''; } catch (e) { error = e.message; }
         ctx.cabecera({ titulo: nombre }); pintar(true);
       }
 
+      // ---- 27 oct 2026 (BRIAN): lo que consulta se ve en vivo y se queda como «Consulté N cosas» ----
+      const paso1 = p => `<li class="mv-paso ${esc(p.estado)}"><span class="mv-paso-i" aria-hidden="true">${p.estado === 'ok' ? '✓' : p.estado === 'error' ? '✕' : '…'}</span><span>${esc(p.titulo || p.nombre)}${p.resumen ? ` — ${esc(p.resumen)}` : ''}</span></li>`;
+      const pasosGuardados = m => (Array.isArray(m.pasos) && m.pasos.length ? `<details class="mv-pasos"><summary>Consulté ${m.pasos.length} ${m.pasos.length === 1 ? 'cosa' : 'cosas'}${m.ia ? ` · ${esc(m.ia)}` : ''}</summary><ul>${m.pasos.map(paso1).join('')}</ul></details>` : '');
+      const pasosEnVivo = () => (pasosVivos.length ? `<ul class="mv-pasos live" role="status" aria-label="Lo que ${esc(nombre)} está consultando">${pasosVivos.map(paso1).join('')}</ul>` : '');
       // ---- cada mensaje y sus tarjetas ----
       function burbuja(m, ultimo) {
         const mio = m.who === 'user';
         if (mio) return `<div class="mv-msg mio"><div class="mv-burbuja">${m.por && m.por !== globalThis.AO_NUBE?.yo?.()?.nombre ? `<small class="mv-uctx">${esc(m.por)} escribió:</small>` : ''}${m.context?.label ? `<small class="mv-uctx">Viendo: ${esc(m.context.label)}</small>` : ''}${adjuntosBurbuja(m)}${m.text ? `<p>${esc(m.text)}</p>` : ''}</div>${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
         const modo = m.stopped ? 'Detenido por ti' : MODO[m.mode] || '';
-        const cuerpo = `${m.shield ? `<p class="mv-escudo" role="note"><b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</p>` : ''}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>`;
+        const cuerpo = `${m.shield ? `<p class="mv-escudo" role="note"><b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</p>` : ''}${pasosGuardados(m)}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>`;
         const pie = m.quick ? `<p class="mv-meta">Calculado al instante con los datos de la oficina, sin el modelo.</p>${ultimo && !ocupado ? `<button type="button" class="mv-btn" data-analizar>Analizar con ${esc(nombre)}</button>` : ''}` : m.retry && ultimo && !ocupado ? `<button type="button" class="mv-btn" data-mas-corto="${esc(m.id)}">Respóndeme más corto</button>` : '';
         return `<div class="mv-msg suyo" data-id="${esc(m.id)}"><div class="mv-burbuja">${modo ? `<small class="mv-modo ${esc(m.mode || '')}">${esc(modo)}</small>` : ''}${cuerpo}${pie}</div>${planHTML(m, edits.get(m.id), { tareaDe: porId, ocupado: opsOcupadas.has(m.id) })}${opsHTML(m, opEdits.get(m.id), { ocupado: opsOcupadas.has(m.id) })}${estudioHTML(m)}${preguntasHTML(m, picks.get(m.id), { ocupado })}${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
       }
@@ -59,13 +63,13 @@ export function registrar(shell) {
         if (!cargado) { hilo.innerHTML = error ? `<div class="mv-vacio" role="alert"><h3>No se pudo abrir el chat</h3><p>${esc(error)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>` : '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div><span class="mv-sr" role="status">Abriendo el chat…</span>'; return; }
         const nuevo = !mensajes.length && !ocupado;
         const ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
-        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p></div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
+        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p>${iaInfo?.nombre ? `<p class="mv-ia">IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa'}. Se cambia en Ajustes → Modelos.</p>` : ''}</div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
           + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
         env.disabled = !puede(); chipViendo();
         if (fondo !== false) abajo();
         arrancaCuenta();
       }
-      const vivoHTML = () => `${vivo ? `<div class="mv-msg suyo"><div class="mv-burbuja">${MODO[vivoModo] ? `<small class="mv-modo ${esc(vivoModo)}">${MODO[vivoModo]}</small>` : ''}<div class="md mv-vivo">${mdToHtml(vivo)}</div></div></div>` : ''}
+      const vivoHTML = () => `${pasosEnVivo()}${vivo ? `<div class="mv-msg suyo"><div class="mv-burbuja">${MODO[vivoModo] ? `<small class="mv-modo ${esc(vivoModo)}">${MODO[vivoModo]}</small>` : ''}<div class="md mv-vivo">${mdToHtml(vivo)}</div></div></div>` : ''}
         <div class="mv-escribiendo" role="status"><span class="mv-puntos" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(nombre)} está ${deteniendo ? 'deteniéndose…' : vivo ? 'escribiendo…' : 'pensando…'}</span>${corrida && !deteniendo ? '<button type="button" class="mv-btn" data-detener>Detener</button>' : ''}</div>`;
       const falloHTML = () => `<div class="mv-falla" role="alert"><p><b>No pude responder ahora.</b> ${esc(fallo.motivo)} Tu mensaje no se perdió.</p><button type="button" class="mv-btn primario" data-reenviar>Reintentar</button></div>`;
       function chipViendo() {
@@ -82,7 +86,7 @@ export function registrar(shell) {
         if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `la oficina respondió ${r.status}`); }
         let final = null, errorSrv = '';
         const linea = l => { if (!l.trim()) return; let o; try { o = JSON.parse(l); } catch { return; }
-          if (o.type === 'start') { corrida = o.run; pintarVivo(); } else if (o.type === 'reply') { vivo = o.text || ''; vivoModo = o.mode || ''; pintarVivo(); } else if (o.type === 'done') final = o; else if (o.type === 'error') errorSrv = o.error || 'no pude responder'; };
+          if (o.type === 'start') { corrida = o.run; pintarVivo(); } else if (o.type === 'reply') { vivo = o.text || ''; vivoModo = o.mode || ''; pintarVivo(); } else if (o.type === 'paso' && o.paso) { const i = pasosVivos.findIndex(x => x.n === o.paso.n); if (i >= 0) pasosVivos[i] = o.paso; else pasosVivos.push(o.paso); pintar(); } else if (o.type === 'done') final = o; else if (o.type === 'error') errorSrv = o.error || 'no pude responder'; };
         if (r.body?.getReader) { const rd = r.body.getReader(), dec = new TextDecoder(); let buf = ''; for (;;) { const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true }); const ls = buf.split('\n'); buf = ls.pop(); ls.forEach(linea); } buf += dec.decode(); linea(buf); }
         else (await r.text()).split('\n').forEach(linea);
         if (errorSrv) throw new Error(errorSrv);
@@ -99,7 +103,7 @@ export function registrar(shell) {
         if (via === 'chat' && X.subiendo()) await X.esperar(); // una foto que aún sube: se espera, no se manda sin ella
         const guardadas = X.lista(), salida = via === 'chat' ? X.tomar(texto) : null; if (via === 'chat' && !salida && !texto) return;
         if (salida) { texto = salida.text; X.devolver([]); }
-        mensajes = mensajes.filter(m => m.id !== 'tmp-fallo'); ocupado = true; fallo = null; vivo = ''; vivoModo = ''; corrida = ''; deteniendo = false; caja.value = ''; ajustaAlto();
+        mensajes = mensajes.filter(m => m.id !== 'tmp-fallo'); ocupado = true; fallo = null; vivo = ''; vivoModo = ''; pasosVivos = []; corrida = ''; deteniendo = false; caja.value = ''; ajustaAlto();
         const v = viendo(), contexto = v ? { view: v.view, label: v.label, kind: v.kind || null, id: v.id || null } : null;
         mensajes.push({ id: 'tmp', who: 'user', text: texto, attach: salida ? salida.attach : undefined, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) }); pintar(); const desde = Date.now() - 5000;
         try {

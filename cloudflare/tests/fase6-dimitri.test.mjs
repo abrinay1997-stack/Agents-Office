@@ -24,7 +24,11 @@ test('charla: Dimitri contesta, el chat queda en D1 y su gasto en la tabla de co
   assert.match(p.system, /Eres Dimitri, la mano derecha del dueño de PanaClaw/); assert.match(p.system, /CÓMO RESPONDES/); assert.match(p.system, /<departamentos>/); assert.match(p.system, /<estado>/);
   for (const k of ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery']) assert.match(p.system, new RegExp(`key: ${k}\\)`));
   assert.ok(p.system.length < 30000, 'el prompt de una charla se mantiene corto (' + p.system.length + ')');
-  assert.equal(p.tools, undefined, 'Dimitri no tiene herramientas: propone, no ejecuta');
+  // 27 oct 2026: Dimitri CONSULTA (herramientas de lectura) pero no ejecuta: ninguna de sus herramientas suena a escribir, enviar, aprobar, pagar ni borrar
+  assert.ok(Array.isArray(p.tools) && p.tools.length >= 15, 'Dimitri tiene herramientas de consulta');
+  for (const t of p.tools) assert.doesNotMatch(t.name, /enviar|crear|aprobar|publicar|pagar|borrar|eliminar|escribir|cambiar|editar|programar|send|delete|write|create/i, 'solo lectura: ' + t.name);
+  assert.ok(p.systemBloques?.[0]?.cache_control?.type === 'ephemeral', 'la parte fija del sistema lleva marca de caché'); assert.ok(!p.systemBloques[1].cache_control, 'la variable no');
+  assert.ok(!/Ahora es/.test(p.systemBloques[0].text) && /Ahora es/.test(p.systemBloques[1].text), 'la hora va en la parte variable (si no, la caché nunca acierta)');
 });
 
 test('quién habla con Dimitri: solo el administrador; sin sesión, 401', { skip: SALTAR }, async () => {
@@ -213,7 +217,7 @@ test('el informe del lunes: sale una vez por semana, solo el lunes desde las 8, 
   assert.equal(await informeSemanal({ env: o.env, db: o.d1, ahora: lunes7 }), null);
   const t = await informeSemanal({ env: o.env, db: o.d1, ahora: lunes9, fetchFn: o.m.fetchFn }); assert.match(t, /Semana tranquila/);
   assert.equal(await informeSemanal({ env: o.env, db: o.d1, ahora: lunes9, fetchFn: o.m.fetchFn }), null, 'una sola vez esa semana');
-  const g = (await o.admin('GET', '/api/sub')).j.messages; assert.match(g.at(-1).text, /Informe de la semana/);
+  const g = (await o.admin('GET', '/api/sub')).j.messages; assert.match(g.at(-1).text, /Resumen de la semana/);
   assert.equal(filas(o.d1, "select tipo from costos where tipo = 'informe'").length, 1);
   assert.ok(filas(o.d1, "select * from filas where coleccion = 'avisos'").some((r) => /weekly/.test(r.json)));
   // apagado en Ajustes

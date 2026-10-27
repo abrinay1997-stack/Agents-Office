@@ -45,8 +45,8 @@ test('el Cerebro en la nube: subir, mapa, búsqueda y lectura con la forma de la
   assert.deepEqual(await (await pedir(manejar, env, '/api/brain/search?q=a', { cookie: ck })).json(), { q: 'a', hits: [] });
 
   const n = await (await pedir(manejar, env, '/api/note?id=oferta', { cookie: ck })).json();
-  assert.deepEqual(Object.keys(n).sort(), ['cut', 'deletable', 'group', 'modified', 'name', 'size', 'text']);
-  assert.equal(n.group, '00-Empresa'); assert.equal(n.modified, 1790000000000); assert.equal(n.deletable, false);
+  assert.deepEqual(Object.keys(n).sort(), ['cut', 'deletable', 'editable', 'group', 'key', 'modified', 'name', 'size', 'text']);
+  assert.equal(n.group, '00-Empresa'); assert.equal(n.modified, 1790000000000); assert.equal(n.deletable, true); assert.equal(n.editable, true); assert.equal(n.key, false);
   const entrega = await (await pedir(manejar, env, '/api/note?id=' + encodeURIComponent('2026-10-25 entrega'), { cookie: ck })).json();
   assert.equal(entrega.deletable, true);
   const p = await (await pedir(manejar, env, '/api/note?peek=1&id=oferta', { cookie: ck })).json();

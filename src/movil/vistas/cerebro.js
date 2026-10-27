@@ -39,7 +39,7 @@ export function registrar(shell) {
     montar(el, ctx) {
       let carpeta = 'todas', edad = 'todas', texto = '', hits = null, seq = 0, tmr = 0, limite = 60;
       el.innerHTML = `<form class="mv-busca" role="search"><label class="mv-sr" for="mvCq">Buscar en las notas</label>${svg('buscar', 'mv-busca-i')}<input id="mvCq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Buscar en tus notas…"></form>
-        <div class="mv-chips mv-herr" role="group" aria-label="Acciones"><button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button></div>
+        <div class="mv-chips mv-herr" role="group" aria-label="Acciones"><button type="button" class="mv-chip" data-a="nueva">${ic('nota')}Nueva nota</button><button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button></div>
         <div class="mv-chips" role="group" aria-label="Cuándo" data-ce></div><div class="mv-chips" role="group" aria-label="Carpeta" data-cc></div>
         <div class="mv-scroll" tabindex="-1" data-lista></div>`;
       const q = el.querySelector('#mvCq'), lista = el.querySelector('[data-lista]'), cEdad = el.querySelector('[data-ce]'), cCarp = el.querySelector('[data-cc]');
@@ -91,6 +91,7 @@ export function registrar(shell) {
         if (b.dataset.carp) { carpeta = b.dataset.carp; limite = 60; return pintar(); }
         if (b.hasAttribute('data-mas')) { limite += 60; return pintar(); }
         if (b.hasAttribute('data-reintentar')) return cargar();
+        if (b.dataset.a === 'nueva') return nueva(ctx, cargar);
         if (b.dataset.a === 'subir') return subir(ctx, cargar);
         if (b.dataset.a === 'papelera') return papelera(ctx, cargar);
         if (b.dataset.a === 'mapa') return mapa(ctx, D, idx, n => abrirNota(ctx, n, vecinas));
@@ -115,7 +116,7 @@ function abrirNota(ctx, nombre, vecinas) {
       <article class="mv-md md">${notaHTML(j.text)}</article>${j.cut ? '<p class="mv-meta">La nota es muy larga: se muestra el principio.</p>' : ''}
       ${enl.length ? `<h3 class="mv-gh">Enlaces de esta nota<span>${enl.length}</span></h3><ul class="mv-lista">${enl.map(rel).join('')}</ul>` : ''}
       ${otras.length ? `<h3 class="mv-gh">También conectada con<span>${otras.length}</span></h3><ul class="mv-lista">${otras.slice(0, 12).map(rel).join('')}</ul>` : ''}
-      <div class="mv-det-acc"><button type="button" class="mv-btn" data-copiar>Copiar el texto</button>${j.deletable ? '<button type="button" class="mv-btn peligro" data-papelera>Mandar a la papelera</button>' : ''}</div>`;
+      <div class="mv-det-acc">${j.editable ? '<button type="button" class="mv-btn primario" data-editar>Editar</button>' : ''}<button type="button" class="mv-btn" data-copiar>Copiar el texto</button>${j.deletable ? '<button type="button" class="mv-btn peligro" data-papelera>Mandar a la papelera</button>' : ''}</div>`;
   };
   async function ir(n, agregar = true) {
     h.cuerpo.innerHTML = esqueleto(4);
@@ -128,6 +129,11 @@ function abrirNota(ctx, nombre, vecinas) {
       h.cuerpo.innerHTML = cuerpoHTML(actual); ctx.toast(e.status === 404 ? `«${n}» no existe (todavía).` : 'No se pudo abrir: ' + e.message);
     }
   }
+  function editar() { // el texto de la nota en un campo de 16 px; el servidor no la pisa si otra persona la cambió (base = modified)
+    h.cuerpo.innerHTML = `<label class="mv-lab" for="mvEd">Texto de la nota (Markdown; [[nombre]] enlaza otra nota)</label><textarea id="mvEd" class="mv-campo" rows="16" spellcheck="true"></textarea><p class="mv-meta" data-est role="status"></p>
+      <div class="mv-det-acc"><button type="button" class="mv-btn primario" data-guardar>Guardar</button><button type="button" class="mv-btn" data-cancelar>Cancelar</button></div>`;
+    const ta = h.cuerpo.querySelector('#mvEd'); ta.value = actual.text; ta.focus({ preventScroll: true });
+  }
   h = ctx.hoja({ titulo: nombre, lleno: true, clase: 'mv-nota', cuerpo: esqueleto(4) });
   h.cuerpo.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -135,8 +141,16 @@ function abrirNota(ctx, nombre, vecinas) {
     if (b.hasAttribute('data-volver')) { traza.pop(); return ir(traza.pop(), true); }
     if (b.hasAttribute('data-reintentar')) return ir(traza.at(-1) || nombre, !traza.length);
     if (b.hasAttribute('data-copiar')) { try { await navigator.clipboard.writeText(actual.text); ctx.toast('Texto copiado.'); } catch { ctx.toast('Tu teléfono no dejó copiar. Mantén pulsado el texto para elegirlo.'); } return; }
+    if (b.hasAttribute('data-editar')) return editar(); // 27 oct 2026: escribir en el Cerebro
+    if (b.hasAttribute('data-guardar')) {
+      const ta = h.cuerpo.querySelector('#mvEd'), est = h.cuerpo.querySelector('[data-est]');
+      const r = await conEstado(b, () => ctx.api('/api/note', { method: 'PUT', body: { name: actual.name, text: ta.value, base: actual.modified } }), { ocupado: 'Guardando…', hecho: 'Guardada' });
+      if (!r.ok) { est.textContent = r.error || r.mensaje || 'No se pudo guardar.'; return; }
+      ctx.toast('Nota guardada.'); document.querySelector('#mvRoot [data-vista="cerebro"]')?._cargar?.(); return ir(actual.name, false);
+    }
+    if (b.hasAttribute('data-cancelar')) return ir(actual.name, false);
     if (b.hasAttribute('data-papelera')) {
-      if (!(await ctx.confirmar({ titulo: '¿Mandar esta nota a la papelera?', texto: 'La podrás recuperar desde Cerebro → Papelera durante 30 días.', ok: 'A la papelera', peligro: true }))) return;
+      if (!(await ctx.confirmar({ titulo: '¿Mandar esta nota a la papelera?', texto: `La podrás recuperar desde Cerebro → Papelera durante 30 días.${actual.key ? ' OJO: es una nota clave de la oficina; sin ella los agentes trabajan con menos contexto.' : ''}`, ok: 'A la papelera', peligro: true }))) return;
       const r = await conEstado(b, () => ctx.api('/api/note/trash', { method: 'POST', body: { id: actual.name } }), { ocupado: 'Moviendo…', hecho: 'En la papelera' });
       if (r.ok) { h.cerrar(); ctx.toast('Nota en la papelera.', { accion: 'Deshacer', alAccion: () => ctx.api('/api/note/restore', { method: 'POST', body: { file: r.valor.trashed } }).then(() => ctx.toast('Nota recuperada.')).catch(er => ctx.toast('No se pudo: ' + er.message)) }); document.querySelector('#mvRoot [data-vista="cerebro"]')?._cargar?.(); }
     }
@@ -158,6 +172,21 @@ async function papelera(ctx, recargar) {
     if (b.dataset.rec) { const r = await conEstado(b, () => ctx.api('/api/note/restore', { method: 'POST', body: { file: b.dataset.rec } }), { ocupado: 'Recuperando…', hecho: 'Recuperada' }); if (r.ok) { b.closest('li').remove(); recargar(); } }
   });
   cargar();
+}
+
+/** 27 oct 2026: escribir una nota nueva (antes solo se podía subir un documento). */
+function nueva(ctx, recargar) {
+  const h = ctx.hoja({ titulo: 'Nota nueva', cuerpo: `<p class="mv-texto">La leen los agentes cuando toca su trabajo. [[nombre]] la enlaza con otra nota.</p>
+    <label class="mv-lab" for="mvNn">Nombre</label><input id="mvNn" class="mv-campo" maxlength="80" autocomplete="off" enterkeyhint="next">
+    <label class="mv-lab" for="mvNg">Carpeta</label><input id="mvNg" class="mv-campo" maxlength="60" value="Notas" autocomplete="off">
+    <label class="mv-lab" for="mvNt">Texto</label><textarea id="mvNt" class="mv-campo" rows="9" spellcheck="true"></textarea><p class="mv-meta" data-est role="status"></p>`,
+    acciones: [{ texto: 'Guardar la nota', tipo: 'primario', alTocar: async (x, b) => {
+      const v = id => h.cuerpo.querySelector(id).value, est = h.cuerpo.querySelector('[data-est]');
+      const r = await conEstado(b, () => ctx.api('/api/note', { method: 'POST', body: { name: v('#mvNn'), group: v('#mvNg'), text: v('#mvNt') } }), { ocupado: 'Guardando…', hecho: 'Guardada' });
+      if (!r.ok) { est.textContent = r.error || r.mensaje || 'No se pudo guardar.'; return; }
+      x.cerrar(); recargar(); ctx.toast(`Nota «${r.valor.name}» creada.`);
+    } }, { texto: 'Cancelar', alTocar: x => x.cerrar() }] });
+  setTimeout(() => h.cuerpo.querySelector('#mvNn')?.focus({ preventScroll: true }), 250);
 }
 
 function subir(ctx, recargar) {

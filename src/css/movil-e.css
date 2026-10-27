@@ -175,3 +175,11 @@
 .mv-para span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mv-para i { flex: none; font-style: normal; font-size: 13px; }
 .mv-para.otro { border-color: var(--mv-acc); color: var(--mv-acc); }
+
+/* 27 oct 2026 — lo que Dimitri consulta se ve (pasos en vivo y «Consulté N cosas», como BRIAN) y con qué IA corre. Texto ≥ 12 px, objetivos ≥ 44 px, colores --mv-*. */
+.mv-pasos { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--mv-surf2); color: var(--mv-grey); font-size: 13px; line-height: 1.45; }
+.mv-pasos ul, ul.mv-pasos { list-style: none; margin: 4px 0 0; padding: 0; } ul.mv-pasos { margin: 0 0 8px; }
+.mv-pasos summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 0 2px; } .mv-pasos[open] summary { min-height: 36px; }
+.mv-paso { display: flex; gap: 8px; margin: 3px 0; } .mv-paso-i { flex: none; width: 1.2em; font-weight: 700; } .mv-paso.error .mv-paso-i { color: var(--mv-rojo); } .mv-paso.ok .mv-paso-i { color: var(--mv-acc); }
+.mv-paso.en_curso .mv-paso-i { animation: mvPaso 1s ease-in-out infinite; } @keyframes mvPaso { 50% { opacity: .35; } } @media (prefers-reduced-motion: reduce) { .mv-paso.en_curso .mv-paso-i { animation: none; } }
+.mv-ia { margin: 6px 0 0; font-size: 13px; color: var(--mv-grey); } .mv-ia b { color: var(--mv-ink); }

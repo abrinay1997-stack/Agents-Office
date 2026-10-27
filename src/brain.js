@@ -196,7 +196,7 @@ export function initBrain({ esc }) {
       (hood ? `<section class="bv-sec bv-hood"><h3>Vecindario</h3><div class="bv-hoodc"><span>Lo que está a ${hood.depth} ${hood.depth === 1 ? 'salto' : 'saltos'} de <b>${escHTML(hood.id)}</b></span><button type="button" class="bv-hoodx" aria-label="Quitar el vecindario" title="Quitar el vecindario">✕</button></div>${seg('hd', [['1', '1 salto'], ['2', '2 saltos'], ['3', '3 saltos']])}</section>` : '') +
       (match ? `<section class="bv-sec bv-tgs"><label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo lo que encontré</label></section>` : '') +
       (active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : '') +
-      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3><button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
+      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3><button type="button" class="bv-tool bv-new" title="Escribe una nota nueva: la leen todos los agentes">✎ Nueva nota</button><button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
       `<details class="bv-sec bv-list"${listOpen ? ' open' : ''}><summary>Lista de notas <b>${shown}</b></summary><div class="bv-lst">${listOpen ? listHTML() : ''}</div></details>`;
     cnt.textContent = `${shown} de ${nodes.length}`;
     emptyEl.hidden = !(openNow && shown === 0);
@@ -215,6 +215,7 @@ export function initBrain({ esc }) {
   chipsEl.addEventListener('pointerleave', () => { if (regionHi) { regionHi = null; dirty(); } });
   row2.addEventListener('click', e => {
     if (e.target.closest('.bv-bin')) return showBin();
+    if (e.target.closest('.bv-new')) return nueva();
     if (e.target.closest('.bv-up')) return showUpload();
     if (e.target.closest('.bv-stale')) return showStale();
     if (e.target.closest('.bv-reset')) return resetF();
@@ -375,9 +376,10 @@ export function initBrain({ esc }) {
       const box = pane.querySelector('.bv-note'); if (!box) return;
       if (!ok) { box.innerHTML = `<p class="bv-err">No pude abrir esta nota: ${esc(j.error || 'error')}.</p>`; return; }
       box.innerHTML = frontFacts(j.text) + `<div class="bv-md md">${mdToHtml(j.text, { front: true })}</div>` + (j.cut ? '<p class="bv-err">La nota es muy larga: se muestran los primeros 200.000 caracteres.</p>' : '') +
-        `<div class="bv-actions">${j.deletable ? '<button type="button" class="bv-btn bv-trash">Mover a la papelera</button>' : ''}<button type="button" class="bv-btn bv-copy">Copiar texto</button></div>`;
+        `<div class="bv-actions">${j.editable ? '<button type="button" class="bv-btn bv-edit">Editar</button>' : ''}${j.deletable ? '<button type="button" class="bv-btn bv-trash">Mover a la papelera</button>' : ''}<button type="button" class="bv-btn bv-copy">Copiar texto</button></div>`;
       box.querySelector('.bv-copy').addEventListener('click', e => copyText(j.text.replace(/^---\n[\s\S]*?\n---\n?/, ''), e.currentTarget));
-      const tr = box.querySelector('.bv-trash'); if (tr) tr.addEventListener('click', () => trash(n.id, tr));
+      const tr = box.querySelector('.bv-trash'); if (tr) tr.addEventListener('click', () => trash(n.id, tr, j));
+      const ed = box.querySelector('.bv-edit'); if (ed) ed.addEventListener('click', () => editar(n, j, box));
     }).catch(() => { const box = pane.querySelector('.bv-note'); if (box && seq === readSeq) box.innerHTML = '<p class="bv-err">Sin conexión con la oficina: no pude abrir la nota.</p>'; });
   }
   function copyText(t, btn) {
@@ -440,8 +442,24 @@ export function initBrain({ esc }) {
       setGraph(j.graph); const i = byId.get(j.name); if (i != null) { select(nodes[i]); centre(nodes[i]); } else showBin();
     } catch (err) { b.disabled = false; b.textContent = 'Restaurar'; b.insertAdjacentHTML('afterend', `<small class="bv-err"> ${esc(err.message)}</small>`); }
   });
-  async function trash(id, btn) {
-    if (!confirm(`¿Mover «${id}» a la papelera?\n\nVa a «Agents Office/.papelera» dentro del cerebro: sale del grafo y los agentes dejan de leerla. Puedes deshacerlo.`)) return;
+
+  // 27 oct 2026 — escribir en el Cerebro: editar la nota que lees y crear una nueva (antes solo se podía subir un documento). El servidor no pisa lo que otra persona cambió (base = modified).
+  const apiNota = async (m, u, b) => { const r = await fetch(u, { method: m, headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
+  function irA(name, g) { setGraph(g); const i = byId.get(name); if (i != null) { select(nodes[i]); centre(nodes[i]); } else closePane(); }
+  function editar(n, j, box) {
+    box.innerHTML = `<label class="bv-lab" for="bvEd">Editando «${esc(n.id)}» — es texto con Markdown; [[nombre]] enlaza otra nota</label><textarea id="bvEd" class="bv-ed" rows="18" spellcheck="true"></textarea><div class="bv-actions"><button type="button" class="bv-btn bv-ok">Guardar</button><button type="button" class="bv-btn bv-no">Cancelar</button><small class="bv-edn" role="status" aria-live="polite"></small></div>`;
+    const ta = box.querySelector('.bv-ed'), st = box.querySelector('.bv-edn'); ta.value = j.text; ta.focus({ preventScroll: true });
+    box.querySelector('.bv-no').onclick = () => select(n);
+    box.querySelector('.bv-ok').onclick = async e => { const b = e.currentTarget; b.disabled = true; st.textContent = 'Guardando…'; try { const r = await apiNota('PUT', '/api/note', { name: n.id, text: ta.value, base: j.modified }); irA(r.name, r.graph); } catch (err) { b.disabled = false; st.textContent = err.message; } };
+  }
+  function nueva() {
+    sel = null; dirty();
+    setPane(`<h3>Nota nueva</h3><div class="bv-path">La leen todos los agentes cuando toca su trabajo. [[nombre]] la enlaza con otra nota.</div><label class="bv-lab" for="bvNn">Nombre</label><input id="bvNn" class="bv-in" maxlength="80" autocomplete="off"><label class="bv-lab" for="bvNg">Carpeta</label><input id="bvNg" class="bv-in" maxlength="60" value="Notas" autocomplete="off"><label class="bv-lab" for="bvNt">Texto</label><textarea id="bvNt" class="bv-ed" rows="14" spellcheck="true"></textarea><div class="bv-actions"><button type="button" class="bv-btn bv-ok">Guardar la nota</button><small class="bv-edn" role="status" aria-live="polite"></small></div>`);
+    const nn = pane.querySelector('#bvNn'), st = pane.querySelector('.bv-edn'); nn.focus({ preventScroll: true });
+    pane.querySelector('.bv-ok').onclick = async e => { const b = e.currentTarget; b.disabled = true; st.textContent = 'Guardando…'; try { const r = await apiNota('POST', '/api/note', { name: nn.value, group: pane.querySelector('#bvNg').value, text: pane.querySelector('#bvNt').value }); irA(r.name, r.graph); } catch (err) { b.disabled = false; st.textContent = err.message; } };
+  }
+  async function trash(id, btn, j0) {
+    if (!confirm(`¿Mover «${id}» a la papelera?\n\nSale del mapa y los agentes dejan de leerla. Se queda 30 días en la papelera y la puedes recuperar.${j0 && j0.key ? '\n\nOJO: es una nota clave de la oficina; sin ella los agentes trabajan con menos contexto.' : ''}`)) return;
     btn.disabled = true; btn.textContent = 'Moviendo…';
     try {
       const r = await fetch('/api/note/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });

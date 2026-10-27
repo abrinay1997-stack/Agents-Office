@@ -19,6 +19,8 @@ import { nuevaTarea } from '../tareas/tasks-api.js';
 import { crearOffice } from '../agentes/herramientas.js';
 import { localDia, anuncioDeVista } from './datos.js';
 import * as chat from './chat.js';
+import * as cerebro from '../cerebro.js';
+import { quitarTexto, tieneSeccion } from '../../../../notas-core.mjs';
 
 export const OPS_UNDO_MS = 30000;
 
@@ -34,8 +36,10 @@ export async function contextoDeOps({ office, C, db, ops = [], usuario = null })
   for (const id of ids) { try { if ((await office(`/api/contenido/piezas/${encodeURIComponent(id)}`)).pieza) piezas.add(id); } catch { /* no está */ } }
   let vista = null;
   if (ops.some((o) => sub.ANUNCIO_TIPO[o?.type])) { try { vista = await office('/api/anuncios?rango=7d'); } catch { vista = null; } }
+  const notas = new Map(); // 27 oct 2026: las notas que las ops nombran (el nombre tiene que ser exacto, sin mirar mayúsculas)
+  for (const o of ops) if (o?.type === 'nota_agregar' || o?.type === 'nota_crear') { const k = String(o.nombre || o.titulo || o.title || '').replace(/\s+/g, ' ').trim(); if (k && !notas.has(k.toLowerCase())) { const f = await db.prepare('select nombre from notas where lower(nombre) = lower(?)').bind(k).first(); notas.set(k.toLowerCase(), f?.nombre || null); } }
   const [tasks, rutinas] = [await cargarTareas(db), (await RT.rutinasConEstado(db, C.agents)).list];
-  return { depts: C.depts, agents: C.agents, routineDepts: DEPTS_RUTINAS, routines: rutinas, tasks, piezaHas: (id) => piezas.has(String(id)), anuncio: (id) => (vista ? anuncioDeVista(vista, id) : null),
+  return { notaDe: (n) => notas.get(String(n || '').replace(/\s+/g, ' ').trim().toLowerCase()) || null, depts: C.depts, agents: C.agents, routineDepts: DEPTS_RUTINAS, routines: rutinas, tasks, piezaHas: (id) => piezas.has(String(id)), anuncio: (id) => (vista ? anuncioDeVista(vista, id) : null),
     personas: sub.nombresDe(C.personas), mios: nombresMios(yoDe(usuario)) }; // 26 oct 2026: a quién se puede pasar una tarea, y qué nombres cuentan como «mía»
 }
 
@@ -107,6 +111,18 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
       if (!o.persona) { o.agent = r.a; o.agentName = r.a; } o.undo = { deAgente: r.tarea?.deAgente || null }; return;
     }
     if (o.type === 'mia_hecha') { await office(`/api/tareas/${encodeURIComponent(o.id)}/estado`, { a: 'done' }); o.undo = { reabrir: true, at: Date.now() }; return; }
+    if (o.type === 'nota_crear') { // 27 oct 2026: una nota NUEVA en el Cerebro (con el clic del dueño); se deshace mandándola a la papelera
+      const r = await cerebro.crearNota(db, { nombre: o.nombre, texto: o.texto, grupo: o.grupo, por: por === 'dimitri' ? 'Dimitri' : por });
+      if (r.error) throw new Error(r.error);
+      Object.assign(o, { creada: r.nombre, desc: `Nota «${r.nombre}» creada en el Cerebro (carpeta ${o.grupo || 'Notas'}).`, undo: { papelera: r.nombre } }); return;
+    }
+    if (o.type === 'nota_agregar') { // añade al final (o a una sección) sin tocar lo que decía
+      const ya = await cerebro.leerNota(db, o.nombre); if (!ya) throw new Error('esa nota ya no existe');
+      const creaSeccion = !!o.seccion && !tieneSeccion(ya.text, o.seccion);
+      const r = await cerebro.agregarANota(db, { nombre: o.nombre, texto: o.texto, seccion: o.seccion || '', por: por === 'dimitri' ? 'Dimitri' : por });
+      if (r.error) throw new Error(r.error);
+      Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion } }); return;
+    }
     if (o.type === 'anuncio_borrador') { // un BORRADOR en la oficina; nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
       const creativos = (o.media || []).length ? o.media.map((m) => ({ media: m, texto: o.texto || '' })) : o.texto ? [{ texto: o.texto }] : [];
       const r = await office('/api/anuncios/borradores', { nombre: o.nombre, objetivo: o.objetivo, ...(o.destino ? { destino: o.destino } : {}), ...(o.usd ? { presupuesto: { usd: o.usd } } : {}), creativos });
@@ -135,6 +151,13 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
         if (b && (b.estado === 'creado' || b.estado === 'creando')) return { error: 'ya se creó en Meta (en pausa): archívalo desde Anuncios → Campañas' };
         if (b) await office(`/api/anuncios/borradores/${encodeURIComponent(u.borrador)}`, undefined, 'DELETE');
         return {};
+      }
+      if (o.type === 'nota_crear') { const r = await cerebro.mandarAPapelera(db, u.papelera, { por: 'Dimitri (deshacer)' }); return r.error ? { error: r.error } : {}; }
+      if (o.type === 'nota_agregar') {
+        const n = await cerebro.leerNota(db, u.nota); if (!n) return { error: 'la nota ya no existe' };
+        const q = quitarTexto(n.text, u.add, { seccion: u.seccion, seccionCreada: u.seccionCreada });
+        if (!q.ok) return { error: 'la nota cambió después de que añadí eso: quítalo a mano en el Cerebro (G)' };
+        const r = await cerebro.guardarNota(db, { nombre: u.nota, texto: q.texto, base: n.modified, por: 'Dimitri (deshacer)' }); return r.error ? { error: r.error } : {};
       }
       const fueraDeCola = async (id) => { // solo se quita lo que nadie empezó
         const lista = (await office('/api/tasks?light=1')) || [];

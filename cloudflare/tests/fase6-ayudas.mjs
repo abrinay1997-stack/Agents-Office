@@ -19,7 +19,7 @@ export function mundo({ guion = [], telegramFalla = null } = {}) {
   const fetchFn = async (url, init = {}) => {
     const u = String(url);
     if (u.startsWith('https://api.anthropic.com/')) {
-      registro.anthropic.push(JSON.parse(init.body));
+      { const cuerpo = JSON.parse(init.body); if (Array.isArray(cuerpo.system)) { cuerpo.systemBloques = cuerpo.system; cuerpo.system = cuerpo.system.map((b) => b.text).join('\n\n'); } registro.anthropic.push(cuerpo); } // 27 oct 2026: el sistema de Dimitri va en dos bloques (el fijo con caché); los tests lo leen como un texto y `systemBloques` guarda los bloques
       const r = guion.shift() || dimitriDice({ mode: 'charla', reply: 'Entendido.' });
       return new Response(JSON.stringify(r), { status: 200 });
     }

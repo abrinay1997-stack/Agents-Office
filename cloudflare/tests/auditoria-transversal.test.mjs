@@ -192,9 +192,11 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, id] of [[RETENCION_DIAS.invitaciones + 5, 'i-vieja'], [1, 'i-nueva']]) db.prepare("insert into invitaciones (id, token_hash, email, rol, creada_por, created_at, expires_at) values (?,?,?,?,?,?,?)").run(id, 'h' + id, id + '@x.test', 'editor', uid, dias(d + 7), dias(d));
   for (const [d, id] of [[RETENCION_DIAS.reinicios + 5, 'r-viejo'], [1, 'r-nuevo']]) db.prepare("insert into reinicios (id, token_hash, user_id, created_at, expires_at) values (?,?,?,?,?)").run(id, 'h' + id, uid, dias(d + 1), dias(d));
   for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
+  for (const [d, nombre] of [[RETENCION_DIAS.notas_papelera + 5, 'n-vieja'], [2, 'n-nueva']]) db.prepare("insert into notas_papelera (nombre, grupo, texto, borrada) values (?, 'Notas', 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1 });
   assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
+  assert.equal(db.prepare("select count(*) n from notas_papelera where nombre = 'n-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria_agentes where tarea = 'nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from ejecuciones where id = 'e-nueva'").get().n, 1);
@@ -372,7 +374,7 @@ const TABLAS = {
   filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); el resto es configuración',
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
-  auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento',
+  auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento',
   // el libro contable: se conserva (una fila de ~150 bytes por llamada a un modelo), se lee por rango con índice
   costos: 'libro contable (se conserva)',
 };
