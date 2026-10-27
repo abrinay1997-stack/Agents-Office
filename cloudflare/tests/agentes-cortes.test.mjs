@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
-import { oficina, tarea, tareaEnDisco, crearFetch, texto, respuesta, minutos, filas } from './agentes-ayudas.mjs';
+import { oficina, tarea, tareaEnDisco, crearFetch, texto, respuesta, usar, minutos, filas } from './agentes-ayudas.mjs';
 import { mensajeDeCorte, TOKENS_TURNO, TOKENS_TURNO_ALTO } from '../worker/lib/agentes/ejecutor.js';
 
 const GRANDE = { AGENTES_MAX_CONSULTAS: '5000', AGENTES_MAX_LLAMADAS: '500' };
@@ -54,6 +54,15 @@ test('CORTE: el límite alto queda apuntado en la corrida ANTES de repetir el tu
   const fetchFn = async (url, init) => { if (base.registro.anthropic.length === 1 && String(url).includes('anthropic')) apuntado = JSON.parse(filas(d1, 'select datos from corridas')[0].datos).maxTokens; return base.fetchFn(url, init); };
   await minutos(env, fetchFn);
   assert.equal(apuntado, TOKENS_TURNO_ALTO, 'al llegar la segunda llamada, la corrida ya recuerda el límite alto');
+  assert.equal((await tareaEnDisco(d1, t.id)).state, 'done');
+});
+
+test('CORTE: el límite alto es solo para repetir el turno cortado: los turnos que siguen vuelven al normal (y al guardarse ya no lo recuerdan)', { skip: SALTAR }, async () => {
+  const { d1, env } = await oficina({ env: GRANDE });
+  const t = await tarea(env);
+  const f = crearFetch({ guion: [cortadoPensando(), usar(['mcp__gmail__search_threads', { query: 'x' }]), texto('Listo.\nFuentes: —')], herramientasMcp: { search_threads: { salida: 'hilo' } } });
+  await minutos(env, f.fetchFn);
+  assert.deepEqual(f.registro.anthropic.map(x => x.cuerpo.max_tokens), [TOKENS_TURNO, TOKENS_TURNO_ALTO, TOKENS_TURNO], 'cortado → repetido con el alto → el turno siguiente, con el normal');
   assert.equal((await tareaEnDisco(d1, t.id)).state, 'done');
 });
 

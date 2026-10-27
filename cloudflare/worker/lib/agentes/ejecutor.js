@@ -294,6 +294,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
       if (parcial && !usosDe(resp.content).length) { datos.texto = `${parcial}\n\n⚠ La respuesta se cortó por el límite de longitud del modelo (${limite} tokens): puede faltarle el final.`; break; }
       throw new FalloFatal(mensajeDeCorte(resp, limite)); // repetirla costaría igual y fallaría igual: se dice la verdad y no se reintenta
     }
+    delete datos.maxTokens; // el límite alto es solo para repetir el turno cortado: los siguientes vuelven al normal (se guarda con el próximo avance)
     datos.mensajes.push({ role: 'assistant', content: resp.content });
     const usos = usosDe(resp.content);
     if (usos.length && resp.stop_reason === 'tool_use' && !modelo.meta) { datos.turno = { usos: usos.map(u => ({ id: u.id, name: u.name, input: u.input })), hechos: {} }; await guardarAvance(db, task.id, token, datos, reloj()); continue; }
