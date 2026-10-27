@@ -12,7 +12,9 @@ import { resumir } from '../../../cerebro-evals.mjs';
 import PREGUNTAS from '../../../evals-cerebro/preguntas.json' with { type: 'json' };
 import { leerDoc, guardarDoc } from './almacen.js';
 import * as costos from './agentes/costos.js';
-import { leerCfg } from './ajustes.js';
+
+/** Los precios propios de Ajustes → Costos. Se leen de los documentos y no con ajustes.js: ese archivo arrastra el Estudio entero (y node:fs), y este lo importa el módulo de tareas, que tiene que caber en un Worker. */
+async function preciosPropios(db) { const [base, aj] = await Promise.all([leerDoc(db, 'config'), leerDoc(db, 'ajustes')]); return { ...(base?.costs?.prices || {}), ...(aj?.costs?.prices || {}) }; }
 
 export const MODELO_CF = '@cf/baai/bge-m3';
 export const DOC_SIGNIFICADO = 'cerebro.significado';
@@ -63,7 +65,7 @@ export function embedder(env) {
 /** Lo que cuesta embeber estos textos, para el libro de costos (unos 4 caracteres por token). Workers AI tiene capa gratis: se apunta como estimado 0. */
 const tokensDe = (textos) => Math.ceil(textos.reduce((t, x) => t + String(x).length, 0) / 4);
 async function anotarCosto(db, emb, textos, ms) {
-  try { const cfg = await leerCfg(db); await costos.anotar(db, { tipo: 'embeddings', modelo: emb.id, proveedor: emb.proveedor, usage: { input_tokens: tokensDe(textos), output_tokens: 0 }, cfgPrices: cfg.costs?.prices, ms }); } catch { /* el libro no tumba una búsqueda */ }
+  try { await costos.anotar(db, { tipo: 'embeddings', modelo: emb.id, proveedor: emb.proveedor, usage: { input_tokens: tokensDe(textos), output_tokens: 0 }, cfgPrices: await preciosPropios(db), ms }); } catch { /* el libro no tumba una búsqueda */ }
 }
 
 /* ------------------------------------------------------------------ pasajes ------------------------------------------------------------------ */
