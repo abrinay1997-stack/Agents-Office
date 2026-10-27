@@ -34,6 +34,8 @@ import { sha256 } from '../ids.js';
 export const TTL_CANDADO = 5 * 60_000;       // un paso que muere a medias libera su candado a los 5 minutos
 export const VUELTAS_POR_PASO = 8;           // vueltas del modelo en una invocación
 export const VUELTAS_MAX = 30;               // vueltas de todo el trabajo: pasado esto, se entrega lo que haya
+export const TOKENS_TURNO = 8000;            // lo que el modelo puede escribir en UN turno (razonamiento + llamadas a herramientas + texto). Con 4000, «dame 5 ideas» (5 borradores en un turno) se cortaba siempre
+export const TOKENS_TURNO_ALTO = 16000;      // si un turno se corta, ese mismo turno se repite UNA vez con este límite (sin gastar un reintento de la tarea)
 export const MAX_RESULTADO = 6000;           // lo que se guarda de lo que devolvió una herramienta
 export const MAX_DATOS = 1_500_000;          // D1 corta una fila a 2 MB
 const RESERVA = { llamadas: 3, consultas: 14 };
@@ -41,6 +43,13 @@ const RESERVA = { llamadas: 3, consultas: 14 };
 const clonar = x => JSON.parse(JSON.stringify(x));
 class PerdiElCandado extends Error { constructor() { super('perdí el candado de la corrida'); this.perdido = true; } }
 class FalloFatal extends Error { constructor(m) { super(m); this.fatal = true; } }
+
+/** Lo que el dueño lee cuando un turno no cabe ni con el límite alto: qué pasó y qué hacer, con lo que había dentro (para saber si se fue en razonamiento o en llamadas a herramientas). < 400 letras: es lo que guarda la tarea. */
+export function mensajeDeCorte(resp, limite) {
+  const n = tipo => (resp?.content || []).filter(b => b.type === tipo).length;
+  const salida = Number(resp?.usage?.output_tokens) || limite;
+  return `El modelo se quedó sin espacio para responder: escribió ${salida} tokens (razonamiento: ${n('thinking') + n('redacted_thinking')} bloques, llamadas a herramientas: ${n('tool_use')}, texto: ${n('text')}) y se cortó antes de terminar. Pídele menos cosas a la vez (una publicación por tarea, por ejemplo) o elige otro modelo en Ajustes → Modelos.`;
+}
 
 /* ---------- las corridas ---------- */
 
@@ -274,15 +283,21 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     // 2) una vuelta del modelo
     if (datos.vueltas >= VUELTAS_MAX) { datos.texto = datos.texto || 'Se llegó al máximo de vueltas sin una entrega final.'; break; }
     const t1 = reloj();
-    const resp = await llamarModelo({ env, modelo, sistema: datos.sistema, mensajes: datos.mensajes, herramientas: herramientasApi, fetchFn, presupuesto });
+    const limite = datos.maxTokens || TOKENS_TURNO;
+    const resp = await llamarModelo({ env, modelo, sistema: datos.sistema, mensajes: datos.mensajes, herramientas: herramientasApi, maxTokens: limite, fetchFn, presupuesto });
     await verificarCandado(db, task.id, token); // A1: si la detuvieron mientras el modelo pensaba, no se sigue
     datos.vueltas++; vueltas++;
     datos.usd += await anotarCosto(db, { tarea: task.id, agente: agente.id, dept: agente.department, tipo: modo, modelo: resp.model, proveedor: modelo.meta ? 'meta' : 'anthropic', usage: resp.usage, cfgPrices: aj.costs?.prices, ms: reloj() - t1 });
+    if (resp.stop_reason === 'max_tokens') { // el turno se llenó antes de terminar: lo escrito no se guarda en la conversación (una llamada a herramienta cortada no se puede contestar) y NUNCA se ejecuta
+      if (limite < TOKENS_TURNO_ALTO) { datos.maxTokens = TOKENS_TURNO_ALTO; await guardarAvance(db, task.id, token, datos, reloj()); continue; } // el mismo turno, con más espacio; no gasta un reintento de la tarea (repetir con el mismo límite fallaba siempre igual)
+      const parcial = textoDe(resp.content);
+      if (parcial && !usosDe(resp.content).length) { datos.texto = `${parcial}\n\n⚠ La respuesta se cortó por el límite de longitud del modelo (${limite} tokens): puede faltarle el final.`; break; }
+      throw new FalloFatal(mensajeDeCorte(resp, limite)); // repetirla costaría igual y fallaría igual: se dice la verdad y no se reintenta
+    }
     datos.mensajes.push({ role: 'assistant', content: resp.content });
     const usos = usosDe(resp.content);
     if (usos.length && resp.stop_reason === 'tool_use' && !modelo.meta) { datos.turno = { usos: usos.map(u => ({ id: u.id, name: u.name, input: u.input })), hechos: {} }; await guardarAvance(db, task.id, token, datos, reloj()); continue; }
     datos.texto = textoDe(resp.content);
-    if (resp.stop_reason === 'max_tokens' && !datos.texto) throw new Error('El proveedor de IA cortó la respuesta (max_tokens) sin texto [HTTP 529]'); // pasajero: se reintenta
     break;
   }
   return finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, modo, pol });
