@@ -27,9 +27,12 @@ const hash = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h
 
 /* ------------------------------------------------------------------ cifras ------------------------------------------------------------------ */
 
-const num = (s) => String(s).replace(/,/g, '').replace(/\s/g, '');
+/** Un importe como número canónico: «1,250», «1,250.00» y «1250» son lo mismo; «9,99» (coma decimal, como en la interfaz) es 9.99 y «1.250,50» es 1250.5. */
+const num = (s) => { const t = String(s).replace(/\s/g, ''), coma = /^\d+,\d{1,2}$/.test(t) || /^\d{1,3}(?:\.\d{3})+,\d{1,2}$/.test(t); return String(+(coma ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, ''))); };
 const HORAS = { h: 1, hora: 1, horas: 1, dia: 24, dias: 24, semana: 168, semanas: 168, mes: 720, meses: 720, min: 1 / 60, minuto: 1 / 60, minutos: 1 / 60 };
-const MONEDA = /\$\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)(?:\s?[–-]\s?\$?\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?))?|((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?)\s?(?:USD|dólares|dolares)\b/gi;
+// Un importe: miles con coma («1,250»), o con punto y decimal con coma («1.250,50»), o simple; decimales con punto («9.99») o con coma de 1–2 cifras («9,99»).
+const IMPORTE = String.raw`(?:\d{1,3}(?:,\d{3})+|\d{1,3}(?:\.\d{3})+(?=,\d{1,2}(?!\d))|\d+)(?:\.\d+|,\d{1,2}(?!\d))?`;
+const MONEDA = new RegExp(String.raw`\$\s?(${IMPORTE})(?:\s?[–-]\s?\$?\s?(${IMPORTE}))?|(${IMPORTE})\s?(?:USD|dólares|dolares)\b`, 'gi');
 const PORCIENTO = /(\d+(?:[.,]\d+)?)\s?%/g;
 const DURACION = /(\d+(?:[.,]\d+)?)(?:\s?[–-]\s?(\d+(?:[.,]\d+)?))?\s?(horas?|h|días?|dias?|semanas?|meses|mes|minutos?|min)\b/gi;
 const enHoras = (x, u) => String(+(parseFloat(String(x).replace(',', '.')) * (HORAS[fold(u)] ?? 1)).toFixed(2));

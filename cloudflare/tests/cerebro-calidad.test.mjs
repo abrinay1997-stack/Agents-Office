@@ -20,6 +20,9 @@ test('cifras: dinero, porcentajes y duraciones (en horas), sin la puntuación de
   assert.deepEqual(c('20 USD y 45 dólares'), ['$:20', '$:45']);
   assert.deepEqual(c('el 2026-08-19 sin cifras con unidad; dos meses gratis'), [], 'una fecha o un número en palabras no es una cifra');
   assert.equal(cifras('$1,200,')[0].raw, '$1,200', 'la coma de al lado no se come');
+  assert.deepEqual(c('US$9,99 y US$9,49; también $9.99'), ['$:9.99', '$:9.49', '$:9.99'], 'la coma decimal conserva los centavos (la interfaz escribe US$0,50)');
+  assert.deepEqual(c('$1,250 y $1,250.00 y $1.250,50 y 12,50 USD'), ['$:1250', '$:1250', '$:1250.5', '$:12.5'], 'miles y decimales de las dos costumbres dan el mismo número');
+  assert.deepEqual(c('$850, 8 días'), ['$:850', 'dur:192'], 'una coma de lista no es un decimal');
   assert.deepEqual(cifras(undefined), []);
 });
 
@@ -63,6 +66,13 @@ test('banco de contradicciones plantadas: encuentra casi todas y la nota de fáb
   console.log(`# banco: ${halladas.length}/${PLANTADAS.length} encontradas; faltaron: ${falladas.join(', ') || '—'}`);
   assert.ok(halladas.length >= 9, `se esperaba encontrar al menos 9 de ${PLANTADAS.length}; faltaron: ${falladas.join(', ')}`);
   for (const [id, texto] of INOCENTES) assert.deepEqual(contradicciones([...base, { nombre: 'Inocente ' + id, texto }], { esFabrica }).map((x) => x.a.nota + ' ⇄ ' + x.b.nota), [], `«${id}» no es una contradicción`);
+});
+
+test('un precio con coma decimal que cambia es una contradicción (US$9,99 contra US$9,49), y el mismo precio escrito de otra forma no', () => {
+  const dos = (x, y) => contradicciones([{ nombre: 'Mía A', texto: `El plan Gold cuesta ${x} al mes.` }, { nombre: 'Mía B', texto: `El plan Gold cuesta ${y} al mes.` }]);
+  assert.equal(dos('US$9,99', 'US$9,49').length, 1);
+  assert.equal(dos('US$9,99', 'US$9.99').length, 0);
+  assert.equal(dos('$1,250', '$1,250.00').length, 0);
 });
 
 test('la clave de un aviso no cambia si las notas llegan en otro orden (así «ya lo revisé» sigue valiendo)', () => {
