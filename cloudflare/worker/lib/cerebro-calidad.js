@@ -96,7 +96,7 @@ export function contradicciones(notas, { esFabrica = () => false, max = MAX_AVIS
         const sb = new Set(vb.map((x) => x.v)); if (!va.some((x) => sb.has(x.v))) dif.push({ t, a: va.map((x) => x.raw), b: vb.map((x) => x.raw) });
       }
       if (!dif.length) continue;
-      const par = [a.nombre, b.nombre].sort().join('\u0001'), n = porPar.get(par) || 0, clave = hash(['contradice', a.nombre, b.nombre, a.l, b.l].join('\u0001'));
+      const par = [a.nombre, b.nombre].sort().join('\u0001'), n = porPar.get(par) || 0, clave = hash(['contradice', ...[a.nombre + '\u0002' + a.l, b.nombre + '\u0002' + b.l].sort()].join('\u0001')); // no depende del orden en que llegaron las notas
       if (n >= 3 || vistos.has(clave)) continue; vistos.add(clave); porPar.set(par, n + 1);
       const fa = esFabrica(a.nombre), fb = esFabrica(b.nombre);
       out.push({ clave, J: +J.toFixed(2), a: { nota: a.nombre, linea: a.l.slice(0, 200) }, b: { nota: b.nombre, linea: b.l.slice(0, 200) }, dif, manda: fa && !fb ? 'a' : fb && !fa ? 'b' : null, accionable: !(fa && fb) });
@@ -132,7 +132,7 @@ export function duplicadas(notas, { esFabrica = () => false, max = MAX_DUPLICADA
       if (!(J >= 0.5 || cont >= 0.8)) continue;
       const fa = esFabrica(a.nombre), fb = esFabrica(b.nombre); if (fa && fb) continue;
       const corta = a.set.size <= b.set.size ? 'a' : 'b', menor = Math.min(a.set.size, b.set.size), mayor = Math.max(a.set.size, b.set.size);
-      out.push({ clave: hash(['duplicada', a.nombre, b.nombre].join('\u0001')), a: { nota: a.nombre, palabras: a.n }, b: { nota: b.nombre, palabras: b.n }, parecido: +J.toFixed(2), contiene: cont >= 0.8 && menor < 0.8 * mayor ? corta : null, accionable: true });
+      out.push({ clave: hash(['duplicada', ...[a.nombre, b.nombre].sort()].join('\u0001')), a: { nota: a.nombre, palabras: a.n }, b: { nota: b.nombre, palabras: b.n }, parecido: +J.toFixed(2), contiene: cont >= 0.8 && menor < 0.8 * mayor ? corta : null, accionable: true });
     }
   }
   return out.sort((x, y) => y.parecido - x.parecido || x.clave.localeCompare(y.clave)).slice(0, max);

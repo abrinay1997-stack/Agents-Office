@@ -65,6 +65,13 @@ test('banco de contradicciones plantadas: encuentra casi todas y la nota de fáb
   for (const [id, texto] of INOCENTES) assert.deepEqual(contradicciones([...base, { nombre: 'Inocente ' + id, texto }], { esFabrica }).map((x) => x.a.nota + ' ⇄ ' + x.b.nota), [], `«${id}» no es una contradicción`);
 });
 
+test('la clave de un aviso no cambia si las notas llegan en otro orden (así «ya lo revisé» sigue valiendo)', () => {
+  const notas = [{ nombre: 'Mía A', texto: 'El plan Gold cuesta $100 al mes.' }, { nombre: 'Mía B', texto: 'El plan Gold cuesta $120 al mes.' }];
+  assert.deepEqual(contradicciones(notas).map((x) => x.clave), contradicciones([...notas].reverse()).map((x) => x.clave));
+  const largo = 'Texto largo de la nota con muchas palabras distintas para formar secuencias repetidas entre las dos copias del mismo asunto importante de la empresa y sus clientes en Panamá. '.repeat(3);
+  assert.deepEqual(duplicadas([{ nombre: 'x', texto: largo }, { nombre: 'y', texto: largo }]).map((d) => d.clave), duplicadas([{ nombre: 'y', texto: largo }, { nombre: 'x', texto: largo }]).map((d) => d.clave));
+});
+
 test('quién manda: una de fábrica manda sobre la tuya; entre dos tuyas decides tú; dos de fábrica solo se enseñan', () => {
   const mias = [{ nombre: 'Mía A', texto: 'El plan Gold cuesta $100 al mes.' }, { nombre: 'Mía B', texto: 'El plan Gold cuesta $120 al mes.' }];
   const r = contradicciones(mias, { esFabrica: () => false });
