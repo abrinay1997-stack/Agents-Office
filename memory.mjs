@@ -172,3 +172,14 @@ export const boostOf = (mem, name, now = Date.now()) => 0.8 + 0.4 * effective(me
 export function learnedLinks(mem, now = Date.now()) {
   return Object.entries(mem.edges).map(([k, e]) => { const [a, b] = k.split('\u0001'); return [a, b, +effective(e, now, 0).toFixed(3)]; }).filter(x => x[2] >= 0.1);
 }
+/**
+ * What the Brain learned, in the shape the page draws (GET /api/brain → `learned`): { w: { [nodeIndex]: weight }, links: [[iA, iB, w]] },
+ * only for notes that are nodes of the graph. A weight close to neutral (0.5) is not worth drawing. Shared by serve.mjs and the Worker.
+ */
+export function learnedForGraph(mem, nodes, now = Date.now()) {
+  const at = new Map((nodes || []).map((n, i) => [n.id, i])), w = {};
+  if (!mem || !mem.notes || !mem.edges) return { w, links: [] };
+  for (const [name, e] of Object.entries(mem.notes)) { const v = effective(e, now); if (at.has(name) && Math.abs(v - 0.5) > 0.02) w[at.get(name)] = +v.toFixed(3); }
+  const links = learnedLinks(mem, now).filter(([a, b]) => at.has(a) && at.has(b)).map(([a, b, x]) => [at.get(a), at.get(b), x]);
+  return { w, links };
+}

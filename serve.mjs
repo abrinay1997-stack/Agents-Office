@@ -2571,10 +2571,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
     if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') mcp.discover().catch(() => {}); /* MCP-09: always answers at once; `discovering` says a check is running and the page asks again (one `claude mcp list` at a time) */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
     if (url.pathname === '/api/brain') { // V4.6: + what the Brain learned — each note's weight and the links learned from use (live only: never baked into the repo)
-      const at = new Map(graph.nodes.map((n, i) => [n.id, i])), now = Date.now(), w = {};
-      for (const [name, e] of Object.entries(MEM.notes)) { const v = memory.effective(e, now); if (at.has(name) && Math.abs(v - 0.5) > 0.02) w[at.get(name)] = +v.toFixed(3); }
-      const learned = memory.learnedLinks(MEM, now).filter(([a, b]) => at.has(a) && at.has(b)).map(([a, b, x]) => [at.get(a), at.get(b), x]);
-      return json(res, 200, { ...graph, learned: { w, links: learned } });
+      return json(res, 200, { ...graph, learned: memory.learnedForGraph(MEM, graph.nodes) }); // memory.mjs: the same function draws the Worker's gold synapses
     }
     if (url.pathname === '/api/brain/search' && req.method === 'GET') return json(res, 200, buscarEnCerebro(vaultIndex(), url.searchParams.get('q'))); // the Brain's search: names AND text, accents ignored, a snippet around the hit (cerebro-busqueda.mjs, shared with the Cloudflare Worker)
     if (url.pathname === '/api/note' && req.method === 'GET') { // read one note of the brain, by name (the Brain's reader)

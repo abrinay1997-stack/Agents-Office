@@ -1,7 +1,7 @@
 // «Actualizar conexiones» del Cerebro en la nube (27 oct 2026, pedido del dueño: «un botón de actualizar que no esté siempre en vivo; que conecte las notas nuevas con IA y limpie lo que
 // quedó de las notas que borré»). Se pulsa a mano y hace dos cosas, cada una con su propio cuidado:
 //
-//  1 · LIMPIAR (sin IA, gratis). El mapa 3D que se guarda en D1 (`grafo`) lo calcula la computadora del dueño; un Worker no tiene CPU para reacomodar neuronas. Aquí se reconcilia con las notas de
+//  1 · LIMPIAR (sin IA, gratis). El mapa 3D que se guarda en D1 (`grafo`) lo calcula la computadora del dueño (o el botón «Reacomodar todo el mapa», cerebro-mapa.js, a mano); esta limpieza NO reacomoda neuronas. Aquí se reconcilia con las notas de
 //      verdad (`notas`): los enlaces `[[…]]` de su texto son la única fuente. Las neuronas que ya estaban NO se mueven; se quitan las de notas borradas con sus líneas, se corrige el grado de las
 //      vecinas, las notas que ganaron o perdieron enlaces pasan de las conectadas al anillo (o al revés) y se vuelven a calcular las menciones. También se limpia lo aprendido (`memoria`) de notas que
 //      ya no existen y se cuenta cuántos `[[enlaces]]` de otras notas apuntan a una que se fue (se enseñan; sus textos no se tocan).
@@ -27,6 +27,7 @@ import { DOC_MEMORIA } from './agentes/contexto.js';
 import { notasSemilla } from './semilla.js';
 import { hechosDeNota, guardarGrafo, agregarANota, guardarNota } from './cerebro.js';
 import { ahora } from './ids.js';
+import { enlacesPorUso } from './cerebro-uso.js';
 
 export const DOC_CONEXIONES = 'cerebro.conexiones';
 export const FUNCION_IA = 'cerebro';
@@ -36,8 +37,10 @@ export const POR_PETICION = 3;    // notas que el navegador pide de una vez al s
 export const MAX_ENLACES = 5;     // enlaces nuevos por nota
 const ATAJO = 25;                 // notas parecidas que se le enseñan al modelo
 const CABEZA = 1500;              // letras de la nota nueva que lee el modelo
-const NO_ENLAZAR = new Set(['CLAUDE', 'index', 'log']); // un índice enlazado a todo no aporta nada; CLAUDE son instrucciones
+export const NO_ENLAZAR = new Set(['CLAUDE', 'index', 'log']); // un índice enlazado a todo no aporta nada; CLAUDE son instrucciones
 const llave = (a, b) => (a < b ? a + '\u0001' + b : b + '\u0001' + a);
+/** La regla de siempre: nunca se escribe en una nota de fábrica, clave, de un agente ni en los índices. */
+export const puedeEscribirNota = (f, fabrica) => !f.oficina && !fabrica.has(f.nombre) && !N.esClave(f.nombre) && !NO_ENLAZAR.has(f.nombre);
 const fold = knowledge.fold;
 
 /* ------------------------------------------------------------------ lo puro ------------------------------------------------------------------ */
@@ -193,32 +196,34 @@ export function memoriaHuerfana(mem, nombres) {
 
 /* ------------------------------------------------------------------ lo que toca D1 ------------------------------------------------------------------ */
 
-const todasLasNotas = async (db) => (await db.prepare('select nombre, grupo, oficina, actualizado, texto from notas').all()).results;
-async function leerMapa(db) {
+export const todasLasNotas = async (db) => (await db.prepare('select nombre, grupo, oficina, actualizado, texto from notas').all()).results;
+export async function leerMapa(db) {
   const f = await db.prepare('select json, calculado from grafo where id = 1').first();
   if (!f) return { g: null, calculado: 0 };
   let g = null; try { g = JSON.parse(f.json); } catch { /* un mapa dañado cuenta como «sin mapa» */ }
   const t = Date.parse(f.calculado); return { g, calculado: Number.isFinite(t) ? t : 0 };
 }
-async function nombresDeFabrica(env) {
+export async function nombresDeFabrica(env) {
   try { return new Set(((await notasSemilla(env)) || []).map((n) => n.nombre).filter(Boolean)); } catch { return new Set(); }
 }
-const leerEstado = async (db) => { const v = (await leerDoc(db, DOC_CONEXIONES, {})).valor || {}; return { ref: Number(v.ref) || 0, revisadas: v.revisadas && typeof v.revisadas === 'object' ? v.revisadas : {}, ultima: v.ultima || null }; };
+export const leerEstado = async (db) => { const v = (await leerDoc(db, DOC_CONEXIONES, {})).valor || {}; return { ref: Number(v.ref) || 0, revisadas: v.revisadas && typeof v.revisadas === 'object' ? v.revisadas : {}, ultima: v.ultima || null }; };
 
 /** El modelo que hace este trabajo (Ajustes → Modelos → «Conectar notas del Cerebro») y si tiene su llave. */
-async function modeloDe(env, db) {
+export async function modeloDe(env, db) {
   const modelo = elegirModelo({ env, modelos: await leerModelos(db), funcion: FUNCION_IA });
   const p = armarLlamada({ env, modelo, sistema: 'x', mensajes: [{ role: 'user', content: 'x' }], maxTokens: 1 });
   return { id: modelo.id, nombre: CATALOGO.find((m) => m.id === modelo.id)?.nombre || modelo.id, proveedor: modelo.proveedor, conClave: !!p.tieneClave, secreto: p.secreto || null };
 }
-const usdDe = (modeloId, entrada, salida, precios) => { const pr = costsCore.priceFor(modeloId, precios); return pr ? +costsCore.usdOf({ input_tokens: entrada, output_tokens: salida }, pr).toFixed(4) : null; };
+export const usdDe = (modeloId, entrada, salida, precios) => { const pr = costsCore.priceFor(modeloId, precios); return pr ? +costsCore.usdOf({ input_tokens: entrada, output_tokens: salida }, pr).toFixed(4) : null; };
 
 /** Lo que se ve al abrir el botón: qué hay que limpiar, qué notas se podrían conectar, con qué modelo y cuánto costaría. No llama a la IA ni escribe nada. */
 export async function estadoConexiones({ env, db }) {
   const [filas, { g, calculado }, est, fabrica, cfg] = await Promise.all([todasLasNotas(db), leerMapa(db), leerEstado(db), nombresDeFabrica(env), leerCfg(db)]);
-  const { grado } = analizarEnlaces(filas), r = reconciliarMapa(g, filas);
+  const { grado, pares } = analizarEnlaces(filas), r = reconciliarMapa(g, filas);
   const nombres = new Set(filas.map((f) => f.nombre)), mem = (await leerDoc(db, DOC_MEMORIA, null)).valor;
   const huerfana = memoriaHuerfana(mem, nombres);
+  // las parejas que los agentes usaron juntas en trabajo bueno y nadie ha enlazado: gratis, es lo que ya pasó (cerebro-uso.js)
+  const porUso = enlacesPorUso({ mem, pares, notas: filas, puedeEscribir: (f) => puedeEscribirNota(f, fabrica), puedeEnlazar: (f) => !NO_ENLAZAR.has(f.nombre) });
   const todas = elegirCandidatas({ notas: filas, grado, fabrica, revisadas: est.revisadas, ref: est.ref || calculado });
   const lista = todas.slice(0, TOPE_NOTAS), modelo = await modeloDe(env, db);
   const c = r.cambios || {}, usd = lista.length ? usdDe(modelo.id, lista.length * 1700, lista.length * 160, cfg.costs?.prices) : 0;
@@ -234,6 +239,7 @@ export async function estadoConexiones({ env, db }) {
       enlacesRotos: r.rotos.slice(0, 40), totalRotos: r.rotos.length,
     },
     candidatas: lista.map((n) => ({ nombre: n.nombre, grupo: n.grupo, rev: n.actualizado })), total: todas.length, pendientes: Math.max(0, todas.length - lista.length),
+    porUso,
     protegidas: fabrica.size,
     modelo, costo: { usd, aprox: true },
     ultima: est.ultima,
@@ -269,7 +275,7 @@ export async function proponerConexiones({ env, db, nombres, fetchFn = undefined
 }
 
 /** Pone el mapa guardado al día con las notas y limpia lo aprendido de las que ya no existen. → { mapa: la reconciliación, memoria: cuántas entradas se quitaron } */
-async function sincronizar(db, filas) {
+export async function sincronizar(db, filas) {
   const { g } = await leerMapa(db), r = reconciliarMapa(g, filas);
   if (r.hay && r.cambios.hay) await guardarGrafo(db, r.mapa);
   const nombres = new Set(filas.map((f) => f.nombre)), h = memoriaHuerfana((await leerDoc(db, DOC_MEMORIA, null)).valor, nombres);
@@ -290,15 +296,17 @@ async function sincronizar(db, filas) {
  * `rev` es la versión de la nota que leyó la IA (`actualizado`): si alguien la editó mientras el dueño revisaba, NO se escribe (la recomendación era de otro texto) y no se da por revisada.
  * Cada cosa se vuelve a validar aquí (las notas existen, no son de fábrica, el enlace no existe ya). → { ok, aplicadas, omitidas, deshacer, limpieza, … }
  */
-export async function aplicarConexiones({ env, db, conexiones, revisadas, por = '' }) {
+export async function aplicarConexiones({ env, db, conexiones, revisadas, por = '', origen = 'ia' }) {
   const lista = (Array.isArray(conexiones) ? conexiones : []).slice(0, TOPE_NOTAS);
   const fabrica = await nombresDeFabrica(env);
+  // la referencia de «lo nuevo desde la última vez» se fija ANTES de escribir: limpiar el mapa adelanta su fecha de cálculo y, sin esto, las notas editadas que aún esperan a la IA dejarían de salir
+  const [estAntes, mapaAntes] = await Promise.all([leerEstado(db), leerMapa(db)]), refAntes = estAntes.ref || mapaAntes.calculado;
   const aplicadas = [], omitidas = [], deshacer = [], leidas = await todasLasNotas(db); // se leen UNA vez; lo que se va escribiendo se apunta aquí para que la nota siguiente vea los enlaces nuevos de la anterior
   for (const c of lista) {
     const nombre = String(c?.nota ?? '');
     const filas = leidas, nota = filas.find((f) => f.nombre === nombre);
     if (!nota) { omitidas.push({ nota: nombre, motivo: 'Ya no existe.' }); continue; }
-    if (nota.oficina || fabrica.has(nombre) || N.esClave(nombre) || NO_ENLAZAR.has(nombre)) { omitidas.push({ nota: nombre, motivo: 'Es una nota de fábrica, clave o de un agente: no se toca.' }); continue; }
+    if (!puedeEscribirNota(nota, fabrica)) { omitidas.push({ nota: nombre, motivo: 'Es una nota de fábrica, clave o de un agente: no se toca.' }); continue; }
     if (!Number.isFinite(Number(c?.rev)) || Number(c.rev) !== Number(nota.actualizado)) { omitidas.push({ nota: nombre, motivo: 'Alguien la editó mientras revisabas: lo que la IA proponía era para otro texto. Vuelve a buscarle conexiones.' }); continue; }
     const { pares, resolver } = analizarEnlaces(filas), ya = new Set(pares.filter(([a, b]) => a === nombre || b === nombre).map(([a, b]) => (a === nombre ? b : a)));
     const dados = [], vistos = new Set();
@@ -318,15 +326,15 @@ export async function aplicarConexiones({ env, db, conexiones, revisadas, por = 
   }
   const filas = await todasLasNotas(db), s = await sincronizar(db, filas);
   // se apunta lo que se miró: una nota revisada no vuelve a salir hasta que se edite; si ya no queda nada por revisar, la referencia avanza
-  const est = await leerEstado(db), porNombre = new Map(filas.map((f) => [f.nombre, f])), marcadas = { ...est.revisadas };
-  for (const r of (Array.isArray(revisadas) ? revisadas : [])) { const n = String(r?.nota ?? ''), rev = Number(r?.rev); if (porNombre.has(n) && Number.isFinite(rev) && rev === Number(porNombre.get(n).actualizado)) marcadas[n] = rev; } // solo si sigue siendo el texto que se miró: una nota editada después vuelve a salir
-  for (const d of deshacer) if (porNombre.has(d.nota)) marcadas[d.nota] = Number(porNombre.get(d.nota).actualizado); // la que acabamos de escribir ya está revisada (su texto cambió por nuestra propia línea)
+  const est = await leerEstado(db), porNombre = new Map(filas.map((f) => [f.nombre, f])), marcadas = { ...est.revisadas }, soloUso = origen === 'uso'; // lo que sale del uso no es una revisión de la IA: la cola de la IA queda como estaba
+  for (const r of (soloUso ? [] : Array.isArray(revisadas) ? revisadas : [])) { const n = String(r?.nota ?? ''), rev = Number(r?.rev); if (porNombre.has(n) && Number.isFinite(rev) && rev === Number(porNombre.get(n).actualizado)) marcadas[n] = rev; } // solo si sigue siendo el texto que se miró: una nota editada después vuelve a salir
+  if (!soloUso) for (const d of deshacer) if (porNombre.has(d.nota)) marcadas[d.nota] = Number(porNombre.get(d.nota).actualizado); // la que acabamos de escribir ya está revisada (su texto cambió por nuestra propia línea)
   for (const n of Object.keys(marcadas)) if (!porNombre.has(n)) delete marcadas[n];
-  const { grado } = analizarEnlaces(filas), { calculado } = await leerMapa(db);
-  const quedan = elegirCandidatas({ notas: filas, grado, fabrica, revisadas: marcadas, ref: est.ref || calculado });
+  const { grado } = analizarEnlaces(filas);
+  const quedan = elegirCandidatas({ notas: filas, grado, fabrica, revisadas: marcadas, ref: refAntes });
   const total = aplicadas.reduce((t, a) => t + a.enlaces.length, 0), cuando = Date.now();
-  await guardarDoc(db, DOC_CONEXIONES, { ref: quedan.length ? est.ref : cuando, revisadas: marcadas, ultima: { at: cuando, por, notas: aplicadas.length, enlaces: total } });
-  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'cerebro', por || 'oficina', JSON.stringify({ accion: 'conexiones', notas: aplicadas.length, enlaces: total, quitadas: s.mapa.cambios?.nodosQuitados?.length || 0, memoria: s.memoria })).run().catch(() => {});
+  await guardarDoc(db, DOC_CONEXIONES, { ref: quedan.length || soloUso ? refAntes : cuando, revisadas: marcadas, ultima: { at: cuando, por, notas: aplicadas.length, enlaces: total } });
+  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'cerebro', por || 'oficina', JSON.stringify({ accion: 'conexiones', origen, notas: aplicadas.length, enlaces: total, quitadas: s.mapa.cambios?.nodosQuitados?.length || 0, memoria: s.memoria })).run().catch(() => {});
   const c = s.mapa.cambios || {};
   return {
     ok: true, aplicadas, omitidas, deshacer, enlaces: total, pendientes: quedan.length,
