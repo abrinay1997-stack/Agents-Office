@@ -7,6 +7,8 @@ import { calcularMapa, recalcularMapa, deshacerMapa, MAX_NOTAS_MAPA } from '../w
 import { analizarEnlaces } from '../worker/lib/conexiones.js';
 import { layoutGraphFromNotes } from '../../graph-core.mjs';
 
+// El motor depende de lo instalado: con las librerías de la raíz es d3-force (como en la computadora y en el Worker publicado); sin ellas, el cálculo de reserva.
+const MOTOR = await import('d3-force').then(() => 'd3-force', () => 'interno');
 const guardado = (m) => JSON.parse(m.d1._db.prepare('select json from grafo where id = 1').get().json);
 const posiciones = (g) => Object.fromEntries(g.nodes.map((n) => [n.id, [n.x, n.y]]));
 const filasDeSemilla = (m) => m.semilla.notas.map((n) => ({ nombre: n.nombre, grupo: n.grupo, oficina: 0, actualizado: 1000, texto: n.texto }));
@@ -37,7 +39,7 @@ test('recalcular: mueve las neuronas, deja el mapa limpio y coherente y NO toca 
   const antes = guardado(m), e0 = (await m.p.admin('GET', '/api/brain/actualizar')).j;
   assert.deepEqual(e0.mapaCompleto, { notas: m.fabrica.size + 1, tope: MAX_NOTAS_MAPA, puede: true, copia: null });
   const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'mapa' });
-  assert.equal(r.status, 200, r.texto); assert.equal(r.j.ok, true); assert.equal(r.j.motor, 'd3-force'); assert.equal(r.j.copia, true); assert.equal(r.j.notas, m.fabrica.size + 1);
+  assert.equal(r.status, 200, r.texto); assert.equal(r.j.ok, true); assert.equal(r.j.motor, MOTOR); assert.equal(r.j.copia, true); assert.equal(r.j.notas, m.fabrica.size + 1);
   const despues = guardado(m); coherente(despues); coherente(r.j.graph);
   assert.equal(despues.nodes.find((n) => n.id === 'Oferta de verano').d, 1, 'la nota nueva entra conectada');
   assert.equal(despues.nodes.find((n) => n.id === 'precios-webs').d, antes.nodes.find((n) => n.id === 'precios-webs').d + 1);
