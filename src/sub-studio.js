@@ -13,8 +13,8 @@
 import { weightOf } from '../estudio-pesos.mjs'; // V4.11 (DIM-02): one source for what counts against the day's cap (a video 5, a music 3)
 
 export const MAX_ATTACH = 4;                    // images per message (the server takes ≤4)
-export const VISION_SIDE = 1568;                // Claude's vision gains nothing past this long side
-export const VISION_BYTES = 1.5 * 1024 * 1024;  // each copy for the vision stays under 1.5 MB (the server refuses > 1.6 MB)
+import { VISION_SIDE, VISION_BYTES, fitWithin, shrinkStep, b64Bytes } from './vision-copia.js'; // 28 oct 2026: la copia para la visión vive en vision-copia.js (la usan Dimitri y «Mejorar con Marketing»)
+export { VISION_SIDE, VISION_BYTES, fitWithin, shrinkStep, b64Bytes };
 export const DIMITRI_FOLDER = 'Referencias de Dimitri';
 
 /* ---------- pure: money ---------- */
@@ -107,22 +107,6 @@ export function loteVivo(m) {
   if (L && L.id && !(L.progreso && ['hecho', 'cancelado'].includes(L.progreso.estado))) return true;
   return !!(m && m.studio && m.studio.loteRef && m.studio.loteRef.seguir);
 }
-
-/* ---------- pure: the copy of an image for Claude's vision (the server never rescales) ---------- */
-/** The size to draw an image at: its long side at most `max`, never upscaled. */
-export function fitWithin(w, h, max = VISION_SIDE) {
-  w = Math.max(1, Math.round(+w || 1)); h = Math.max(1, Math.round(+h || 1));
-  const k = Math.min(1, max / Math.max(w, h));
-  return { w: Math.max(1, Math.round(w * k)), h: Math.max(1, Math.round(h * k)), scaled: k < 1 };
-}
-/** One step of the reducer: null when `bytes` fits; else a lower JPEG quality, and once that is at its floor, a smaller picture. */
-export function shrinkStep(t, bytes, limit = VISION_BYTES) {
-  if (bytes <= limit) return null;
-  if (t.q > 0.55) return { w: t.w, h: t.h, q: Math.round((t.q - 0.1) * 100) / 100 };
-  return { w: Math.max(1, Math.round(t.w * 0.8)), h: Math.max(1, Math.round(t.h * 0.8)), q: 0.85 };
-}
-/** The bytes a base64 string carries (a data-URL's header is ignored). */
-export const b64Bytes = s => { s = String(s || ''); const i = s.indexOf(','); if (s.startsWith('data:') && i > 0) s = s.slice(i + 1); const pad = s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0; return Math.max(0, Math.floor(s.length * 3 / 4) - pad); };
 
 /* ---------- the page: HTML ---------- */
 const mediaSrc = f => '/media/' + String(f).split('/').map(encodeURIComponent).join('/');

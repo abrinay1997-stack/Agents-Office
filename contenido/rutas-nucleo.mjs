@@ -12,7 +12,9 @@ import { hashtagsUsados } from './guardados-core.mjs';
 import { emparejar, comoEvento } from '../src/contenido-publicadas.js';
 import { huecos as huecosDe, queVuelven, repartir, encargo, origenVuelve, raizDe } from '../src/contenido-llenar.js';
 import { NOMBRE_RED, REDES } from './piezas-core.mjs';
+import { validateVision, MAX_IMAGES, MAX_B64 } from '../vision.mjs';
 
+export const LIMITE_VISION = MAX_IMAGES * (MAX_B64 + 400) + 256 * 1024; // lo que pesa un «Mejorar» con las 4 imágenes que Claude puede ver (+ la pieza)
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -84,7 +86,7 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
    */
   async function responder({ metodo, p, query = new URLSearchParams(), cuerpo = async () => ({}) }) {
     if (p !== '/api/contenido' && !p.startsWith('/api/contenido/')) return null;
-    const body = async () => (await cuerpo()) || {};
+    const body = async (limite) => (await cuerpo(limite)) || {}; // `limite`: bytes que admite el cuerpo (solo «Mejorar» lleva imágenes y pide más que el 1 MB de siempre)
     try {
       if (p === '/api/contenido' && metodo === 'GET') {
         const q = query, f = { desde: q.get('desde') || '', hasta: q.get('hasta') || '', sinFecha: q.get('sin_fecha') === '1', estado: q.get('estado') || undefined, formato: q.get('formato') || undefined, red: q.get('red') || undefined, q: q.get('q') || '' };
@@ -137,11 +139,14 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
         const r = await guardados.borrar(decodeURIComponent(gd[1])); return R(r.error ? 404 : 200, r.error ? { error: r.error } : { ok: true, textos: r.lista });
       }
       if (p === '/api/contenido/mejorar' && metodo === 'POST') { // C1: «✨ Mejorar con Marketing» — una propuesta, nada se guarda
-        const b = await body(); if (b.por === 'agente') return R(403, { error: 'esto es para el dueño: un agente mejora sus borradores con mejorar_borrador' });
+        const b = await body(LIMITE_VISION); if (b.por === 'agente') return R(403, { error: 'esto es para el dueño: un agente mejora sus borradores con mejorar_borrador' });
         if (!mejorar) return R(404, { error: 'aquí no hay agentes que propongan' });
         const pz = b.pieza && typeof b.pieza === 'object' ? b.pieza : {};
-        if (!String(pz.texto || '').trim() && !String(pz.titulo || '').trim() && !String(pz.notas || '').trim()) return R(400, { error: 'escribe algo primero (un título, unas notas o el texto): el agente parte de ahí' });
-        try { return R(200, await mejorar({ pieza: pz, red: String(b.red || ''), pide: String(b.pide || '').slice(0, 300) })); }
+        // 28 oct 2026: las fotos de la pieza (y unos cuadros de sus videos) que el navegador redujo; el agente las MIRA y puede escribir a partir de ellas
+        const vis = validateVision(b.vision); if (vis.error) return R(400, { error: vis.error });
+        const sinLeer = (Array.isArray(b.sinLeer) ? b.sinLeer : []).slice(0, 6).filter(x => x && typeof x === 'object').map(x => ({ file: String(x.file || '').slice(0, 300), motivo: String(x.motivo || '').slice(0, 120) }));
+        if (!String(pz.texto || '').trim() && !String(pz.titulo || '').trim() && !String(pz.notas || '').trim() && !vis.images.length) return R(400, { error: 'escribe algo primero (un título, unas notas o el texto), o deja una foto o un video en la pieza: el agente parte de ahí' });
+        try { return R(200, await mejorar({ pieza: pz, red: String(b.red || ''), pide: String(b.pide || '').slice(0, 300), imagenes: vis.images, sinLeer, omitidos: Math.max(0, Math.min(50, Math.round(+b.omitidos) || 0)) })); }
         catch (e) { return R(e.status || 502, { error: 'no pude traer la propuesta: ' + e.message }); }
       }
       if (p === '/api/contenido/publicadas' && metodo === 'GET') { // C2: lo publicado (Analíticas) junto a la pieza de la que salió

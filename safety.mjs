@@ -67,7 +67,7 @@ const INTERNAL = new Set(['estudio', 'contenido', 'tareas', 'habilidades', 'anun
 // MCP-08: a prompt or a file goes to a paid engine — «cost»: fine before the OK, never with «nunca». Banco de presets (E8, 1 oct 2026):
 // the Estudio's tools that only LOOK are named here; any other Estudio tool (aplicar_preset, crear_lote, the next one someone adds)
 // is «cost» — never «read» if it can spend (fail closed, like a send).
-const ESTUDIO_READ = new Set(['buscar_en_galeria', 'estado_trabajo', 'estado_estudio', 'buscar_presets', 'estado_lote']);
+const ESTUDIO_READ = new Set(['buscar_en_galeria', 'estado_trabajo', 'estado_estudio', 'buscar_presets', 'estado_lote', 'ver_imagen']);
 export const estudioKind = tool => (ESTUDIO_READ.has(String(tool)) ? 'read' : 'cost');
 // Revisión E8: las que arrancan trabajo en serie o aplican una receta sin que el dueño mire cada pedido. Con la ejecución
 // contaminada (algo leído trae órdenes escondidas) no se llaman: un texto inyectado no encadena lotes ni presets.

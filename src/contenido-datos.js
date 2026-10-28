@@ -88,7 +88,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     guardados: async () => http('GET', '/api/contenido/guardados'),
     guardar: async (nombre, texto) => http('POST', '/api/contenido/guardados', { nombre, texto }),
     borrarGuardado: async nombre => http('DELETE', '/api/contenido/guardados/' + encodeURIComponent(nombre)),
-    mejorar: async (pieza, red, pide) => http('POST', '/api/contenido/mejorar', { pieza, red, pide }),
+    mejorar: async (pieza, red, pide, vision = null) => http('POST', '/api/contenido/mejorar', { pieza, red, pide, ...(vision?.vision?.length ? { vision: vision.vision } : {}), ...(vision?.sinLeer?.length ? { sinLeer: vision.sinLeer } : {}), ...(vision?.omitidos ? { omitidos: vision.omitidos } : {}) }), // 28 oct 2026: `vision` = las fotos y unos cuadros de los videos de la pieza, ya reducidos (vision-copia.js)
     publicadas: async ({ desde, hasta }) => http('GET', `/api/contenido/publicadas?desde=${desde}&hasta=${hasta}`),
     cuentas: async () => http('GET', '/api/contenido/cuentas'), // 9 oct 2026: a qué cuenta sale cada pieza // C2: lo ya publicado, con sus resultados
     llenar: async ({ desde, dias = 7, redes = [] }) => http('GET', `/api/contenido/llenar?desde=${desde}&dias=${dias}&redes=${encodeURIComponent(redes.join(','))}`), // C3

@@ -16,6 +16,7 @@ import { crearIndicadores } from '../lib/contenido/aprender.js';
 import { hayQueAdoptar, adoptar } from '../lib/contenido/migracion.js';
 import { describirZona } from '../lib/zona.js';
 import { crearPresupuesto, contarD1, contarR2 } from '../lib/contenido/presupuesto.js';
+import { LIMITE_VISION } from '../../../contenido/rutas-nucleo.mjs';
 
 export const nombre = 'contenido';
 export const grupos = ['contenido'];
@@ -47,10 +48,10 @@ export async function conServicio(env, fn, opciones = {}) {
   });
 }
 
-async function leerCuerpo(req) {
+async function leerCuerpo(req, tope = MAX_CUERPO) {
   if (req.method === 'GET' || req.method === 'HEAD') return {};
   const largo = Number(req.headers.get('content-length') || 0);
-  if (largo > MAX_CUERPO) throw Object.assign(new Error('el cuerpo es demasiado grande'), { status: 413 });
+  if (largo > tope) throw Object.assign(new Error('el cuerpo es demasiado grande'), { status: 413 });
   try { return await req.json(); } catch { return {}; }
 }
 
@@ -60,7 +61,7 @@ export async function manejar(ctx) {
   if (ruta === '/api/contenido/bandeja' || ruta.startsWith('/api/contenido/bandeja/')) return null; // la Bandeja es de otra fase: pasa al módulo que la conteste
   if (metodo !== 'GET' && usuario.rol === 'lectura') return prohibido('Con acceso de lectura no se cambia nada en Contenido.');
   if (soloAdmin(metodo, ruta) && usuario.rol !== 'admin') return prohibido('Solo un administrador decide esto en Contenido (aprobar, entregar, tocar Meta o escribir en el Cerebro).');
-  let cuerpo; try { cuerpo = await leerCuerpo(req); } catch (e) { return error(e.message, e.status || 400); }
+  let cuerpo; try { cuerpo = await leerCuerpo(req, ruta === '/api/contenido/mejorar' ? LIMITE_VISION : MAX_CUERPO); } catch (e) { return error(e.message, e.status || 400); } // «Mejorar» lleva las fotos de la pieza (hasta 4 imágenes reducidas)
   const crudo = cuerpo; // (un arreglo o un texto no es un cuerpo válido para las rutas; los ajustes lo dicen en palabras)
   if (cuerpo === null || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) cuerpo = {};
   // Quién aprueba lo pone el servidor (la sesión), no lo que diga el cuerpo.
