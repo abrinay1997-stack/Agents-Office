@@ -24,6 +24,7 @@ import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-
 import { mejoresDelDia, siguienteBuena } from './contenido-hora.js';
 import { CADA, MAX_VECES } from './contenido-repetir.js';
 import { cuentaDe, nombreCorto, cuentasLimpias } from './contenido-cuentas.js'; // 9 oct 2026: «Publicar en» (qué página, qué Instagram)
+import { copiasDeMedios, tipoDeMedio, avisosDeLectura, PIDE_DESDE_IMAGEN } from './vision-copia.js'; // 28 oct 2026: «Mejorar con Marketing» MIRA las fotos y unos cuadros de los videos de la pieza
 export { ESTADO, FORMATO, RED, FICON, HORAS_RAPIDAS, mediaUrl, thumbHTML };
 
 // M2 (6 oct 2026): las redes que llevan su propio texto si hace falta (Instagram usa el principal; Facebook, «Texto de Facebook»)
@@ -103,7 +104,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   // C1: lo que el editor recuerda mientras la pieza está abierta
   let ctaAbierta = ''; // 9 oct 2026: la lista de cuentas de esa red, desplegada
   let porRed = false, tab = '', pop = '', verCom = false, verHash = false, verTextoHist = false, avisos = false, cuando = false, menu = false, confirmaYa = 0;
-  let abiertos = new Set(), lastSel = null, dragI = null, guard = null, mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '' }, gConfirma = '';
+  let abiertos = new Set(), lastSel = null, dragI = null, guard = null, mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '', mirar: true, paso: '', lectura: null }, gConfirma = '', cacheVision = new Map();
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
   const rev = () => {
     const r = revisarPublicacion(postDePieza(cur), cur.redes), m = revisarMomento(cur.fecha, cur.hora);
@@ -294,17 +295,19 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     }
     if (pop === 'mejorar') {
       const red = tab, donde = red ? RED[red].name : 'el texto principal';
-      if (mej.cargando) return `<p class="pz-help" role="status"><span class="pz-spin" aria-hidden="true"></span> Tu agente de Marketing está escribiendo la propuesta para ${esc(donde)}… (suele tardar de 10 a 30 segundos)</p>`;
+      if (mej.cargando) return `<p class="pz-help" role="status"><span class="pz-spin" aria-hidden="true"></span> ${mej.paso ? esc(mej.paso) : `Tu agente de Marketing está escribiendo la propuesta para ${esc(donde)}… (suele tardar de 10 a 30 segundos)`}</p>`;
       if (mej.propuesta) {
         const n = longitudPara(mej.propuesta.texto, red || 'instagram'), max = LIMITES[red || 'instagram']?.caracteres;
         return `<p class="pz-lab">Propuesta de ${esc(mej.propuesta.agente || 'Marketing')} para ${esc(donde)} ${max ? `<small class="pz-cnt${n > max ? ' over' : ''}">${cnt(n, max)}</small>` : ''}</p>
-          <blockquote class="pz-prop">${esc(mej.propuesta.texto)}</blockquote>${mej.propuesta.porque ? `<p class="pz-help">${esc(mej.propuesta.porque)}</p>` : ''}
+          <blockquote class="pz-prop">${esc(mej.propuesta.texto)}</blockquote>${mej.propuesta.porque ? `<p class="pz-help">${esc(mej.propuesta.porque)}</p>` : ''}${lecturaHTML()}
           <div class="pz-row"><button type="button" class="pz-go sm" data-a="usar-prop">Usar este texto</button><button type="button" class="pz-btn" data-a="otra-prop">Otra versión</button><button type="button" class="pz-lk" data-a="descartar-prop">Descartar</button></div>`;
       }
-      return `<p class="pz-help">Tu agente de contenido reescribe ${esc(donde)} con la voz de tu marca, sus instrucciones y tus cifras. Tú decides si lo usas: no se guarda nada solo.</p>
+      const ml = legibles();
+      return `<p class="pz-help">Tu agente de contenido reescribe ${esc(donde)} con la voz de tu marca, sus instrucciones y tus cifras${ml.n ? ' — y mira ' + esc(ml.que) + ' de la publicación para escribir a partir de ' + (ml.fotos && ml.videos ? 'ellos' : ml.fotos ? (ml.fotos === 1 ? 'ella' : 'ellas') : (ml.videos === 1 ? 'él' : 'ellos')) : ''}. Tú decides si lo usas: no se guarda nada solo.</p>
+        ${ml.n ? `<label class="pz-chk"><input type="checkbox" data-mmirar${mej.mirar ? ' checked' : ''}> Que mire ${esc(ml.que)}${ml.videos ? ' <small>(de un video ve unos cuadros, no oye el sonido)</small>' : ''}</label>` : '<p class="pz-help">Si le pones una foto o un video a la publicación, también puede escribirla a partir de lo que ve.</p>'}
         ${mej.anterior ? `<p class="pz-inline ok" role="status">Puse la propuesta. <button type="button" class="pz-lk" data-a="deshacer-prop">Deshacer</button></p>` : ''}
         ${mej.error ? `<p class="pz-inline err" role="status">${esc(mej.error)}</p>` : ''}
-        <div class="pz-row" role="group" aria-label="Qué le pides">${MEJORAR_PIDE.map(t => `<button type="button" class="pz-qh" data-pide="${esc(t)}">${esc(t)}</button>`).join('')}</div>
+        <div class="pz-row" role="group" aria-label="Qué le pides">${ml.n ? `<button type="button" class="pz-qh pz-qimg" data-pide="${esc(PIDE_DESDE_IMAGEN)}" data-mirar>✨ A partir ${ml.fotos && ml.videos ? 'de las fotos y los videos' : ml.fotos ? (ml.fotos === 1 ? 'de la foto' : 'de las fotos') : (ml.videos === 1 ? 'del video' : 'de los videos')}</button>` : ''}${MEJORAR_PIDE.map(t => `<button type="button" class="pz-qh" data-pide="${esc(t)}">${esc(t)}</button>`).join('')}</div>
         <div class="pz-row"><label class="pz-lab" for="${I('mp')}">U otra cosa</label><input id="${I('mp')}" class="pz-in pz-grow" data-mpide maxlength="300" value="${esc(mej.pide)}" placeholder="Por ejemplo: menciona el examen gratis de octubre"><button type="button" class="pz-go sm" data-a="pedir-prop">Pedir propuesta</button></div>`;
     }
     return '';
@@ -426,6 +429,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (e.target.dataset?.tx) { set({ textos: { ...(cur.textos || {}), [e.target.dataset.tx]: e.target.value } }); contadores(); preview.text(cur); return; }
     if (e.target.dataset?.op && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') { opcion(e.target.dataset.op, e.target.value); return; }
     if ('mpide' in (e.target.dataset || {})) { mej.pide = e.target.value; return; }
+    if ('mmirar' in (e.target.dataset || {})) { mej.mirar = !!e.target.checked; return; }
     if (!f || e.target.tagName === 'SELECT' || e.target.type === 'checkbox') return;
     set({ [f]: e.target.value }); contadores(); preview.text(cur);
   });
@@ -449,12 +453,36 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   const swapMedios = list => { const extra = {}; for (const m of list) if (!cur.medidas?.[m]) { const x = medidaDe(m); if (x) extra[m] = x; } if (Object.keys(extra).length) cur.medidas = { ...(cur.medidas || {}), ...extra }; set({ medios: list }); paintMedios(); paintPreview(); const h = scroll.querySelector('.pz-mhelp'); if (h) h.textContent = mediosAyuda(); };
   function swap(to) { host.dataset.swap = to; host.querySelectorAll('[data-swap]').forEach(b => b.setAttribute('aria-selected', b.dataset.swap === to)); if (to === 'ver') paintPreview(); }
   function abrirPop(k) { pop = pop === k ? '' : k; if (k === 'mejorar' && pop) { mej.error = ''; } paintPop(); const b = scroll.querySelector('.pz-pop'); if (pop) (b?.querySelector('input, button') || b)?.focus?.({ preventScroll: true }); }
-  async function pedirPropuesta(pide) {
+  /** Qué lleva la pieza que el agente puede mirar: fotos (JPEG, PNG, WebP) y videos (unos cuadros). */
+  function legibles() {
+    const m = (cur?.medios || []).map(tipoDeMedio), fotos = m.filter(x => x === 'imagen').length, videos = m.filter(x => x === 'video').length;
+    const que = [fotos ? (fotos === 1 ? 'la foto' : `las ${fotos} fotos`) : '', videos ? (videos === 1 ? 'el video' : `los ${videos} videos`) : ''].filter(Boolean).join(' y ');
+    return { fotos, videos, n: fotos + videos, que };
+  }
+  /** Lo que de verdad miró el agente (lo cuenta el servidor, no lo supone la página) y lo que NO pudo mirar, en palabras. */
+  function lecturaHTML() {
+    if (!mej.propuesta) return '';
+    return avisosDeLectura(mej.propuesta, { sinLeer: mej.lectura?.sinLeer, omitidos: mej.lectura?.omitidos, que: legibles().que }).map(a => a.tipo === 'aviso' ? `<p class="pz-inline err">${esc(a.texto)}</p>` : `<p class="pz-help${a.tipo === 'vio' ? ' pz-vi' : ''}">${esc(a.texto)}</p>`).join('');
+  }
+  async function pedirPropuesta(pide, { aPartirDe = false } = {}) {
     if (pide !== undefined) mej.pide = pide;
+    if (aPartirDe) mej.mirar = true;
     await flush(); const red = tab, base = textoPropio(cur, red).trim() || (red ? String(cur.texto || '') : '');
-    mej = { ...mej, cargando: true, propuesta: null, error: '', red }; paintPop();
-    try { const r = await datos.mejorar({ titulo: cur.titulo, texto: base, redes: cur.redes, formato: formatoDe(cur, red || cur.redes[0] || 'instagram'), hashtags: cur.hashtags, notas: cur.notas, medios: cur.medios }, red, mej.pide); if (!cur) return; mej = { ...mej, cargando: false, propuesta: r }; }
-    catch (err) { mej = { ...mej, cargando: false, error: err.message || 'No llegó la propuesta' }; }
+    const ver = mej.mirar && legibles().n > 0;
+    mej = { ...mej, cargando: true, paso: ver ? `Mirando ${legibles().que}…${legibles().videos ? ' (de un video saco unos cuadros: puede tardar unos segundos)' : ''}` : '', propuesta: null, error: '', red, lectura: null }; paintPop();
+    try {
+      let vision = null;
+      if (ver) {
+        const c = await copiasDeMedios(cur.medios, { urlDe: mediaUrl, cache: cacheVision });
+        if (!cur) return;
+        vision = { vision: c.imagenes, sinLeer: c.sinLeer, omitidos: c.omitidos };
+        mej = { ...mej, paso: c.imagenes.length ? 'Tu agente de Marketing está mirando y escribiendo la propuesta… (suele tardar de 10 a 40 segundos)' : '' }; paintPop();
+        if (!c.imagenes.length && !base.trim() && !String(cur.titulo || '').trim() && !String(cur.notas || '').trim()) throw new Error('No pude abrir ' + legibles().que + ' para que el agente lo mire' + (c.sinLeer[0] ? ` («${c.sinLeer[0].motivo}»)` : '') + ' y no hay texto de donde partir.');
+      }
+      const r = await datos.mejorar({ titulo: cur.titulo, texto: base, redes: cur.redes, formato: formatoDe(cur, red || cur.redes[0] || 'instagram'), hashtags: cur.hashtags, notas: cur.notas, medios: cur.medios }, red, mej.pide, vision);
+      if (!cur) return; mej = { ...mej, cargando: false, paso: '', propuesta: r, lectura: vision ? { sinLeer: vision.sinLeer, omitidos: vision.omitidos } : null };
+    }
+    catch (err) { mej = { ...mej, cargando: false, paso: '', error: err.message || 'No llegó la propuesta' }; }
     if (pop === 'mejorar') { paintPop(); scroll.querySelector('.pz-pop [data-a="usar-prop"], .pz-pop [data-a="pedir-prop"]')?.focus({ preventScroll: true }); }
   }
   function cerrarMenu(foco = true) { if (!menu) return; menu = false; const m = foot.querySelector('.pz-menu'); if (m) m.hidden = true; const t = foot.querySelector('[data-a="menu"]'); if (t) { t.setAttribute('aria-expanded', 'false'); if (foco) t.focus({ preventScroll: true }); } }
@@ -485,7 +513,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
       if (gConfirma !== g.nombre) { gConfirma = g.nombre; paintPop(); scroll.querySelector(`[data-gdel="${b.dataset.gdel}"]`)?.focus(); setTimeout(() => { if (gConfirma === g.nombre) { gConfirma = ''; if (pop === 'guardados') paintPop(); } }, 5000); return; }
       gConfirma = ''; try { const r = await datos.borrarGuardado(g.nombre); guard.textos = r.textos || []; setState(`Borrado «${g.nombre}».`); } catch (err) { setState(err.message, true); } paintPop(); return;
     }
-    if (b.dataset.pide) { pedirPropuesta(b.dataset.pide); return; }
+    if (b.dataset.pide) { pedirPropuesta(b.dataset.pide, { aPartirDe: 'mirar' in b.dataset }); return; }
     if (b.dataset.fix && /^(texto-red|opciones):/.test(b.dataset.fix)) { // M2: lo escribe el dueño: se abre ese campo
       const [k, red] = b.dataset.fix.split(':');
       if (k === 'texto-red') { porRed = true; tab = red; paintBody(); const ta = activeTA(); ta?.scrollIntoView({ block: 'center', behavior: 'smooth' }); ta?.focus({ preventScroll: true }); return; }
@@ -600,7 +628,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', formatos: {}, redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
     cur.medidas ||= {}; cur.textos ||= {}; cur.formatos ||= {}; masRedes = false; repAbierto = false; tplAbierto = false; ctaAbierta = ''; horaK = ''; horaSug = null;
     if (!p.id) Object.assign(cur, p.extra?.formatos ? formatosConRedes(cur, cur.redes) : formatosConRedes({ ...cur, redes: [] }, cur.redes)); // C1: una red sin ese formato (X en una historia) entra con el suyo; C3: la de una plantilla trae el suyo
-    porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '' };
+    porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '', mirar: true, paso: '', lectura: null }; cacheVision.clear();
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato, formatos: cur.formatos } : {}) };
     if (!cur.id && p.extra) dirty = { ...dirty, ...p.extra, formato: cur.formato, formatos: cur.formatos, redes: cur.redes }; // C3: lo que trae una plantilla se guarda solo
     host.hidden = false; host.classList.add('on'); isModal = true; host.setAttribute('role', 'dialog'); host.setAttribute('aria-modal', 'true'); // ventana centrada (25 oct 2026)

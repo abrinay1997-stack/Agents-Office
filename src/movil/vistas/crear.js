@@ -7,6 +7,7 @@
 // (docs/diseno-crear-publicacion.md) con un paso a la vez.
 import { FORMATOS_RED, formatoDe, nombreFormato, ponFormato, formatosConRedes, postDePieza, revisarPublicacion, textoPara, longitudPara, LIMITES } from '../../contenido-reglas.js';
 import { mejoresDelDia, siguienteBuena } from '../../contenido-hora.js';
+import { copiasDeMedios, tipoDeMedio, avisosDeLectura, PIDE_DESDE_IMAGEN } from '../../vision-copia.js'; // 28 oct 2026: Marketing MIRA las fotos y unos cuadros de los videos
 import { diasRapidos } from '../../contenido-cola.js';
 import { HORAS_RAPIDAS } from '../../pieza-base.js';
 import { esc, svg, esqueleto } from '../ui.js';
@@ -22,11 +23,13 @@ export function registrar(shell) {
   shell.registrarVista({
     id: 'crear', titulo: 'Crear publicación', icono: 'mas1', grupo: 'oculta',
     montar(el, ctx) {
-      const S = { p: vacia(), paso: 0, ajustes: {}, cuentas: [], porDefecto: {}, grid: null, galeria: [], itemsGal: new Map(), cargando: true, rev: null, guardado: null, sucio: false, previa: '', otras: [], masRedes: false, subiendo: false, idEnv: 0 };
+      const S = { p: vacia(), cacheVision: new Map(), paso: 0, ajustes: {}, cuentas: [], porDefecto: {}, grid: null, galeria: [], itemsGal: new Map(), cargando: true, rev: null, guardado: null, sucio: false, previa: '', otras: [], masRedes: false, subiendo: false, idEnv: 0 };
       el.innerHTML = `<ol class="md-pasos" aria-label="Pasos de la publicación"></ol>
         <div class="mv-scroll" data-sc><div class="mv-cuerpo md-paso" aria-live="polite"></div></div>
         <div class="md-pie"></div>`;
       const pasos = el.querySelector('.md-pasos'), cuerpo = el.querySelector('.md-paso'), sc = el.querySelector('[data-sc]'), pie = el.querySelector('.md-pie');
+      const legibles = () => S.p.medios.filter(m => tipoDeMedio(m));
+      const quePuede = () => { const m = S.p.medios.map(tipoDeMedio), f = m.filter(x => x === 'imagen').length, v = m.filter(x => x === 'video').length; return [f ? (f === 1 ? 'la foto' : `las ${f} fotos`) : '', v ? (v === 1 ? 'el video' : `los ${v} videos`) : ''].filter(Boolean).join(' y '); };
 
       // ------------------------------------------------------------ carga
       async function iniciar(params = {}) {
@@ -95,7 +98,7 @@ export function registrar(shell) {
           <label class="mv-lab" for="mdTexto">Texto de la publicación</label>
           <textarea id="mdTexto" class="mv-campo" rows="7" data-campo="texto" placeholder="Escribe lo que va debajo de la imagen…" autocomplete="off">${esc(S.p.texto)}</textarea>
           <div class="md-conts" data-conts aria-live="polite">${rs.map(r => { const c = cont(r); return `<span class="md-cont${c.max && c.n > c.max ? ' mal' : ''}" data-cont="${r}">${iconoRed(r, { tam: 14 })} ${c.n}${c.max ? ' / ' + c.max : ''}</span>`; }).join('')}</div>
-          <button type="button" class="mv-btn md-ancho" data-mejorar>✨ Mejorar con Marketing</button>
+          <button type="button" class="mv-btn md-ancho" data-mejorar>✨ Mejorar con Marketing</button>${legibles().length ? `<p class="mv-meta">Mira ${esc(quePuede())} de la publicación para escribir.</p>` : ''}
           <label class="mv-lab" for="mdHash">Hashtags</label><input id="mdHash" type="text" class="mv-campo" data-campo="hashtags" value="${esc(S.p.hashtags)}" placeholder="#negocio #panamá" autocapitalize="none" autocomplete="off">
           ${rs.includes('instagram') ? `<label class="md-sw-l"><input type="checkbox" aria-label="Poner los hashtags en el primer comentario" data-campo="hashtagsEnComentario"${S.p.hashtagsEnComentario ? ' checked' : ''}><span>Poner los hashtags en el primer comentario (Instagram)</span></label>` : ''}
           <label class="mv-lab" for="mdTit">Título interno (solo para ti, no se publica)</label><input id="mdTit" type="text" class="mv-campo" data-campo="titulo" value="${esc(S.p.titulo)}" placeholder="Para encontrarla después" autocomplete="off">`;
@@ -107,6 +110,7 @@ export function registrar(shell) {
           <input type="file" data-file="archivo" accept="image/*,video/*" multiple hidden><input type="file" data-file="camara" accept="image/*" capture="environment" hidden>
           ${S.subiendo ? '<p class="md-aviso info" role="status">Subiendo a tu galería…</p>' : ''}
           ${sel.length ? `<h3 class="mv-gh">En esta publicación <span>${sel.length}</span></h3><ul class="md-sel">${sel.map((m, i) => `<li>${miniatura(m, { clase: 'md-mini grande' })}<span class="md-sel-b"><button type="button" class="mv-ic" data-mov="${i}|-1" aria-label="Mover antes"${i === 0 ? ' disabled' : ''}>${svg('izq')}</button><button type="button" class="mv-ic" data-mov="${i}|1" aria-label="Mover después"${i === sel.length - 1 ? ' disabled' : ''}>${svg('der')}</button><button type="button" class="mv-ic" data-quitar="${i}" aria-label="Quitar">${svg('cerrar')}</button></span></li>`).join('')}</ul>` : ''}
+          ${legibles().length ? `<button type="button" class="mv-btn md-ancho" data-mejorar>✨ Escribir el texto a partir de ${esc(quePuede())}</button><p class="mv-meta">Marketing mira ${esc(quePuede())}${S.p.medios.some(m => tipoDeMedio(m) === 'video') ? ' (de un video ve unos cuadros, no oye el sonido)' : ''} y propone el texto; tú decides si lo usas.</p>` : ''}
           <h3 class="mv-gh">De la galería del Estudio</h3>
           ${libres.length ? `<div class="md-gal" role="group" aria-label="Galería del Estudio">${libres.map(i => `<button type="button" class="md-gal-b" data-gal="${esc(i.file)}" aria-label="Usar ${esc(i.prompt || i.file)}">${miniatura(i.file, { clase: 'md-mini fill' })}</button>`).join('')}</div><button type="button" class="mv-link" data-gal-todas>Ver toda la galería</button>` : '<p class="mv-nada">Todavía no hay nada en la galería del Estudio. Sube una foto con los botones de arriba.</p>'}`;
       }
@@ -207,10 +211,19 @@ export function registrar(shell) {
         return h;
       }
       async function mejorar(b) {
-        if (!S.p.texto.trim() && !S.p.titulo.trim()) { ctx.toast('Escribe primero una idea o unas notas: Marketing parte de ahí.'); cuerpo.querySelector('#mdTexto')?.focus(); return; }
-        const r = await con(b, () => ctx.api('/api/contenido/mejorar', { method: 'POST', body: { pieza: { titulo: S.p.titulo, texto: S.p.texto, notas: '' }, red: S.p.redes[0] || 'instagram' } }), { hecho: 'Propuesta lista', ocupado: 'Marketing está escribiendo…' });
-        if (!r.ok) return; const v = r.valor;
-        ctx.hoja({ titulo: 'Propuesta de Marketing', cuerpo: `<p class="mv-texto">${esc(v.texto || '')}</p>${v.porque ? `<p class="mv-meta">${esc(v.porque)}</p>` : ''}`, acciones: [{ texto: 'Dejar el mío', alTocar: x => x.cerrar() }, { texto: 'Usar este texto', tipo: 'primario', alTocar: x => { S.p.texto = v.texto || S.p.texto; S.sucio = true; x.cerrar(); pintar(); } }] });
+        const n = legibles().length;
+        if (!S.p.texto.trim() && !S.p.titulo.trim() && !n) { ctx.toast('Escribe primero una idea o unas notas, o añade una foto o un video: Marketing parte de ahí.'); cuerpo.querySelector('#mdTexto')?.focus(); return; }
+        // 28 oct 2026: si la publicación ya lleva fotos o videos, Marketing los MIRA (el teléfono saca las copias reducidas; de un video, unos cuadros) y escribe a partir de lo que ve
+        const r = await con(b, async () => {
+          const lect = n ? await copiasDeMedios(S.p.medios, { urlDe: mediaUrl, cache: S.cacheVision }) : { imagenes: [], sinLeer: [], omitidos: 0 };
+          if (n && !lect.imagenes.length && !S.p.texto.trim() && !S.p.titulo.trim()) throw new Error(`No pude abrir ${quePuede()} para que Marketing lo mire${lect.sinLeer[0] ? ` («${lect.sinLeer[0].motivo}»)` : ''}. Escribe una idea y vuelve a intentarlo.`);
+          const v = await ctx.api('/api/contenido/mejorar', { method: 'POST', body: { pieza: { titulo: S.p.titulo, texto: S.p.texto, notas: '', redes: S.p.redes, formato: S.p.formato, medios: S.p.medios }, red: S.p.redes[0] || 'instagram',
+            ...(lect.imagenes.length ? { vision: lect.imagenes } : {}), ...(lect.sinLeer.length ? { sinLeer: lect.sinLeer } : {}), ...(lect.omitidos ? { omitidos: lect.omitidos } : {}), ...(n && !S.p.texto.trim() ? { pide: PIDE_DESDE_IMAGEN } : {}) } });
+          return { v, lect };
+        }, { hecho: 'Propuesta lista', ocupado: n ? 'Marketing está mirando y escribiendo…' : 'Marketing está escribiendo…' });
+        if (!r.ok) return; const { v, lect } = r.valor;
+        const avisos = avisosDeLectura(v, { sinLeer: lect.sinLeer, omitidos: lect.omitidos, que: quePuede() }).map(a => `<p class="${a.tipo === 'aviso' ? 'md-aviso' : 'mv-meta'}">${esc(a.texto)}</p>`).join('');
+        ctx.hoja({ titulo: 'Propuesta de Marketing', cuerpo: `<p class="mv-texto">${esc(v.texto || '')}</p>${v.porque ? `<p class="mv-meta">${esc(v.porque)}</p>` : ''}${avisos}`, acciones: [{ texto: 'Dejar el mío', alTocar: x => x.cerrar() }, { texto: 'Usar este texto', tipo: 'primario', alTocar: x => { S.p.texto = v.texto || S.p.texto; S.sucio = true; x.cerrar(); pintar(); if (S.paso !== 1) ctx.toast('Puse el texto: míralo y ajústalo en el paso «Qué».'); } }] });
       }
 
       el.addEventListener('click', async e => {

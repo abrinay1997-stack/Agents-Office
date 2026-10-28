@@ -63,6 +63,7 @@ import { crearNotasLocal } from './cerebro-local.mjs';
 import { esClave as notaClave, quitarTexto, tieneSeccion } from './notas-core.mjs';
 import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dimitri's answer while it is written
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
+import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
@@ -94,7 +95,7 @@ import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content piec
 import { crearRutas } from './contenido/rutas.mjs';
 import { porDefecto as porDefectoCuentasContenido, motivoNoPublica, listaCuentas, MOTIVO_METRICOOL } from './src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
-import { agenteDeContenido, promptMejorar, leerPropuesta } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
+import { agenteDeContenido, promptMejorar, leerPropuesta, prepararVistas } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
 import { crearPlantillas as crearPlantillasContenido } from './contenido/plantillas.mjs'; // C3: plantillas de publicación
 import { LIMITES as LIMITES_RED, formatoDe as formatoDeRed } from './src/contenido-reglas.js'; // C1: el tope y el formato de la red que se mejora
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
@@ -355,6 +356,7 @@ const PROVIDER = (() => {
   if (/openrouter\.ai$/.test(host)) return { id: 'openrouter', name: 'OpenRouter', host, model: process.env.ANTHROPIC_MODEL || '' };
   return { id: 'other', name: host, host, model: process.env.ANTHROPIC_MODEL || '' };
 })();
+const PUEDE_VER = PROVIDER.id === 'anthropic' || /^(1|si|sí|true)$/i.test(process.env.AO_VISION || ''); // 28 oct 2026: ¿el modelo de esta oficina mira imágenes? Claude sí; Meta Muse Spark no; otro proveedor compatible solo si el dueño lo dice (AO_VISION=1)
 let backend = 'claude-cli', sdk = null;
 if (process.env.ANTHROPIC_API_KEY) {
   try {
@@ -692,7 +694,7 @@ function studioText(a) {
   const on = media.models().filter(m => m.on && m.engine !== 'prueba');
   const img = on.filter(m => m.kind === 'image').map(m => m.id), vid = on.filter(m => m.kind === 'video').map(m => m.id);
   const voz = on.filter(m => m.kind === 'audio').map(m => m.id), mus = on.filter(m => m.kind === 'music').map(m => m.id); // V4.10: MiniMax
-  return '\n- ESTUDIO (mcp__estudio__*): generar_imagen y generar_video crean imágenes y videos REALES y los guardan en el cerebro. ' +
+  return '\n- ESTUDIO (mcp__estudio__*): generar_imagen y generar_video crean imágenes y videos REALES y los guardan en el cerebro. ver_imagen te deja MIRAR una imagen de la galería (la foto de un producto, lo que el dueño pegó en la tarea): úsala antes de escribir sobre ella. ' +
     (on.length ? `Modelos listos — imagen: ${img.join(', ') || 'ninguno'}; video: ${vid.join(', ') || 'ninguno'}${voz.length ? `; voz: ${voz.join(', ')}` : ''}${mus.length ? `; música: ${mus.join(', ')}` : ''}. Si no eliges modelo se usa el del dueño. ` : 'El dueño aún no puso una key de imagen: solo están los motores de «prueba» (tarjetas de muestra); úsalos solo si la tarea pide probar el Estudio. ') +
     (voz.length ? `generar_voz graba una locución REAL con el texto exacto que le des (voz: un voiceId del sistema, como Spanish_Narrator, o una voz del dueño${(v => v.length ? ': ' + v.slice(0, 8).map(x => `${x.voiceId} (${x.name})`).join(', ') : '')(voces.list())}). ` : '') +
     (mus.length ? 'generar_musica compone un jingle o una canción (letra con [Verse] [Chorus]…) o música instrumental de fondo. ' : '') +
@@ -1892,12 +1894,14 @@ async function informeRedes(mes, { guardar = false, cuenta = '' } = {}) { // 9 o
   return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
 }
 // C1 (8 oct 2026): «✨ Mejorar con Marketing» — tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, skills y lecciones
-async function mejorarPieza({ pieza, red, pide }) {
+async function mejorarPieza({ pieza, red, pide, imagenes = [], sinLeer = [], omitidos = 0 }) {
   const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); if (!a) throw Object.assign(new Error('no hay ningún puesto de Marketing'), { status: 409 });
   const index = vaultIndex(), lim = red ? LIMITES_RED[red]?.caracteres : 0;
-  const { system, user } = promptMejorar({ empresa: cfg.name, agente: a, instrucciones: agentBrief(a), voz: index.get('voice') || '', contexto: index.get('contexto-marketing') || '', cifras: cifrasText(), pieza, red, formato: red ? formatoDeRed(pieza, red) : '', limite: lim || 0, pide });
-  const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
-  return { ...leerPropuesta(raw), agente: a.name, red };
+  // 28 oct 2026: el agente MIRA las fotos de la pieza (y unos cuadros de sus videos) que el navegador redujo; con un modelo que no ve (Meta, DeepSeek…) no se finge: se dice
+  const ver = prepararVistas({ imagenes, sinLeer, omitidos, puedeVer: PUEDE_VER, motivo: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1 en las variables de entorno)` });
+  const { system, user } = promptMejorar({ empresa: cfg.name, agente: a, instrucciones: agentBrief(a), voz: index.get('voice') || '', contexto: index.get('contexto-marketing') || '', cifras: cifrasText(), pieza, red, formato: red ? formatoDeRed(pieza, red) : '', limite: lim || 0, pide, vistas: ver.vistas });
+  const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model, images: ver.enviar.length ? ver.enviar : null }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
+  return { ...leerPropuesta(raw), agente: a.name, red, ...ver.info };
 }
 // Fase A3 (9 oct 2026): «✨ Mejorar con el agente de anuncios» — ada propone el texto o el titular de un creativo (sin herramientas, sin guardar nada)
 async function mejorarAnuncio({ borrador, creativo, campo, pide }) {
@@ -3013,6 +3017,12 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
     }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: STUDIO_DEFAULTS(), ...(minimaxOn() ? { voices: voces.summary() } : {}) });
+    if (url.pathname === '/api/media/vision' && req.method === 'GET') { // 28 oct 2026: la copia que un agente MIRA (ver_imagen): JPEG ≤ 1568 px y ≤ 1,5 MB. Solo lee; el id sale de la galería (media.resolve nunca sale de ella)
+      const id = String(url.searchParams.get('file') || ''), f = media.resolve(id);
+      if (!f) return json(res, 404, { error: 'esa imagen ya no está en el Estudio (¿en la papelera?)' });
+      const no = motivoSinMirar(id, { hayAnalizarVideo: media.engines().some(e => e.id === 'meta' && e.on) }); if (no) return json(res, 415, { error: no });
+      try { return json(res, 200, { file: id, ...(await copiaParaVer(f)) }); } catch (e) { return json(res, 500, { error: e.message }); }
+    }
     if (url.pathname === '/api/media/jobs' && req.method === 'GET') return json(res, 200, { jobs: media.jobs({ task: url.searchParams.get('task') || undefined, active: url.searchParams.get('active') === '1' }), budget: media.budget() });
     if (url.pathname === '/api/media/jobs' && req.method === 'POST') { // queue one generation; `wait` (ms, max 110 s) answers when it finished or at that time, whichever first
       const b = await body(req);

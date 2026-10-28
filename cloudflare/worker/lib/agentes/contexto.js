@@ -71,7 +71,7 @@ const textoDeHerramientas = (a, { tieneContenido }) => TAREAS_TEXT + (tieneConte
  * El sistema y el pedido de UNA ejecución. → { sistema, usuario, leidas: [nombres de notas] }
  * `C`: leerContexto(db). `feedback`: lo que el dueño pidió cambiar (revise). `tareas`: la lista (para «mismo cliente»).
  */
-export async function armarEjecucion({ db, env = null, C, agente: a, tarea: task, modo, feedback, tareas = [], tieneContenido = false, tieneEstudio = false, tieneHabilidades = false, proyectoDe = () => null, ahora = Date.now() }) {
+export async function armarEjecucion({ db, env = null, C, agente: a, tarea: task, modo, feedback, tareas = [], tieneContenido = false, tieneEstudio = false, tieneVerImagen = false, tieneHabilidades = false, proyectoDe = () => null, ahora = Date.now() }) {
   const [skills, rules, cifras, ejemplos, mem, { index, stale }] = await Promise.all([skillsDe(db, a), leccionesDe(db, a.id).then(l => l.rules || []), cifrasDe(db), ejemplosDe(db, a.id), leerMemoria(db), indiceDeNotas(db)]);
   const leidas = notasRelevantes(index, a.department, task.title + ' ' + task.text, mem, 4, await semanticaPara({ db, env, texto: task.title + ' ' + task.text })); // con el significado encendido en Ajustes del Cerebro; si no, solo palabras
   const deptName = C.depts[a.department]?.name || a.department;
@@ -79,14 +79,14 @@ export async function armarEjecucion({ db, env = null, C, agente: a, tarea: task
   let bibliotecaTexto = '', marketingTexto = '';
   if (tieneHabilidades && env) { const lib = await cargarBibliotecaNube({ env, db, agentes: C.agents }); const t = await textoParaAgente(lib, a, task.title + ' ' + task.text); if (t) { bibliotecaTexto = '\n' + t; marketingTexto = contextoMarketingTexto(index.get('contexto-marketing')); } }
   const sistema = `You are ${a.name}, ${a.role || 'an agent'}, in the ${deptName} department of ${C.nombre}. ${a.does}\n${agentBrief(a, { skills, rules })}` + instruccionesBase(260) +
-    textoDeHerramientas(a, { tieneContenido }) + (tieneEstudio ? '\n- ESTUDIO (mcp__estudio__*): generar_imagen crea imágenes REALES; buscar_en_galeria, estado_trabajo y estado_estudio las consultan. Pon en tu entregable, tal cual, las líneas que devuelve la herramienta. El gasto en motores de pago solo corre en la ejecución que sigue al OK del dueño; antes, deja el prompt listo.' : '') +
+    textoDeHerramientas(a, { tieneContenido }) + (tieneEstudio ? `\n- ESTUDIO (mcp__estudio__*): generar_imagen crea imágenes REALES; buscar_en_galeria, estado_trabajo y estado_estudio las consultan.${tieneVerImagen ? ' ver_imagen te deja MIRAR una imagen de la galería (la foto de un producto, lo que el dueño pegó en la tarea): úsala antes de escribir sobre ella.' : ''} Pon en tu entregable, tal cual, las líneas que devuelve la herramienta. El gasto en motores de pago solo corre en la ejecución que sigue al OK del dueño; antes, deja el prompt listo.` : '') +
     bibliotecaTexto + cifrasLine(cifras) + ejemplos + marketingTexto +
     `\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, leidas, stale)}` +
     knowledge.sameClientText(knowledge.sameClient(tareas, task), id => C.nombreAgente(id), d => C.depts[d]?.name || d);
   const hoy = new Date(ahora).toLocaleString('es-PA', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   const lineaDeCuando = task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${hoy}. Do the work for now.`
     : task.dueAt ? `\nThis task was scheduled in advance and is running now; the owner is not at the keyboard${task.late ? ' and this run is late' : ''}. It is now ${hoy}. Do the work for now.` : '';
-  const usuario = `Task: ${task.title}\nOwner's request: ${task.text}` + pasosLine(task, proyectoDe) + reanudaLine(task) + (task.refs?.length ? `\nFiles from the Estudio to use: ${task.refs.join(', ')}` : '') + lineaDeCuando + modeLineFor(modo === 'approve' ? 'approve' : modo === 'draft' ? 'draft' : 'routine', task) +
+  const usuario = `Task: ${task.title}\nOwner's request: ${task.text}` + pasosLine(task, proyectoDe) + reanudaLine(task) + (task.refs?.length ? `\nFiles from the Estudio to use: ${task.refs.join(', ')}${tieneVerImagen ? ' (you can look at the photos with ver_imagen)' : ''}` : '') + lineaDeCuando + modeLineFor(modo === 'approve' ? 'approve' : modo === 'draft' ? 'draft' : 'routine', task) +
     (feedback && modo !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   return { sistema, usuario, leidas: [...leidas] };
 }

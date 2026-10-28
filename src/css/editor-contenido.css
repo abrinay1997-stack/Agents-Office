@@ -223,3 +223,7 @@ body.dark :is(.pz-ctt small, .pz-cto small, .pz-ctc) { color: #C2C0B9; }
   .ct-panel[data-paso="4"] .pz-body .pz-side { display: block; flex: none; width: auto; border-left: 0; overflow: visible; }
   .pz-foot .pz-links { flex-wrap: wrap; gap: 8px 14px; }
 }
+/* 28 oct 2026 · «Mejorar con Marketing» mira la foto: el chip «A partir de la foto» y lo que el agente dice haber visto */
+.pz-qimg { border-color: var(--ink); font-weight: 700; }
+.pz-chk small { color: var(--grey); font-size: 11px; }
+.pz-vi { color: var(--ink); border-left: 3px solid var(--ink); padding: 2px 0 2px 8px; margin: 6px 0; }

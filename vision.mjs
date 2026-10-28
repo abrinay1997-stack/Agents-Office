@@ -1,6 +1,6 @@
 // Agents Office — images for Claude's own eyes (Dimitri's chat, V4.8). Pure: no file, no network.
 //
-// The page sends a reduced copy of each image (a canvas, ≤1568 px, JPEG): { file?: <gallery id>, media_type, data: <base64> }.
+// The page sends a reduced copy of each image (a canvas, ≤1568 px, JPEG): { file?: <gallery id>, cuadro?: <second of the video it was taken from>, media_type, data: <base64> }.
 //   SDK  → messages: [{ role: 'user', content: sdkContent(text, images) }]
 //   CLI  → `claude -p --input-format stream-json …` and cliInput(text, images) on stdin (Claude Code 2.1.286 takes exactly this line)
 // The server never rescales (there is no sharp): what does not fit is refused with the reason.
@@ -38,7 +38,8 @@ export function validateVision(list) {
     if (data.length % 4 !== 0 || !B64_RE.test(data)) return { error: `la imagen ${n} no es base64 válido` };
     if (!MAGIC[type](Buffer.from(data.slice(0, 24), 'base64'))) return { error: `la imagen ${n} no es un ${type.split('/')[1].toUpperCase()} de verdad` };
     const file = typeof im.file === 'string' && im.file ? im.file.slice(0, 300) : undefined;
-    images.push({ ...(file ? { file } : {}), media_type: type, data });
+    const cuadro = typeof im.cuadro === 'number' && Number.isFinite(im.cuadro) && im.cuadro >= 0 && im.cuadro <= 86400 ? Math.round(im.cuadro * 1000) / 1000 : undefined; // un fotograma de un video: el segundo donde se tomó (28 oct 2026)
+    images.push({ ...(file ? { file } : {}), ...(cuadro !== undefined ? { cuadro } : {}), media_type: type, data });
   }
   return { images };
 }

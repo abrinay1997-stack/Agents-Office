@@ -31,6 +31,7 @@ import { anotar as anotarCosto, estadoDelMes } from './costos.js';
 import { draftFacts, huellaDe, registrar as registrarAprobacion } from './aprobaciones.js';
 import { registrarLeccion } from './lecciones.js';
 import { sha256 } from '../ids.js';
+import { resumenImagenes, expandirImagenes, BLOQUE as BLOQUE_IMAGEN } from './imagenes.js';
 
 export const TTL_CANDADO = 5 * 60_000;       // un paso que muere a medias libera su candado a los 5 minutos
 export const VUELTAS_POR_PASO = 8;           // vueltas del modelo en una invocación
@@ -45,9 +46,21 @@ const clonar = x => JSON.parse(JSON.stringify(x));
 class PerdiElCandado extends Error { constructor() { super('perdí el candado de la corrida'); this.perdido = true; } }
 class FalloFatal extends Error { constructor(m) { super(m); this.fatal = true; } }
 
+/** Las imágenes que esta tarea ya miró (las de turnos anteriores, guardadas como referencia, y las de este turno): cuántas y cuánto pesan. */
+function imagenesDeLaTarea(datos) {
+  const r = resumenImagenes(datos.mensajes);
+  for (const h of Object.values(datos.turno?.hechos || {})) for (const i of h?.imagenes || []) { r.n++; r.bytes += Number(i.bytes) || 0; }
+  return r;
+}
+
 /** Una tarea que habla de Meta o de anuncios pero cae en un agente SIN las herramientas de Anuncios (no es de Marketing): se lo dice, para que pase la tarea a quien las tiene en lugar de pedirle al dueño «un conector de Meta que conectar» (caso real: Líder Operaciones, 27 oct 2026). */
 function notaDeAnuncios(internas, task) {
   return internas.omitidas.includes(OMITIDAS.anuncios) && /meta\b|anuncio|publicidad|campa[ñn]a|\bads?\b/i.test(`${task.title || ''}\n${task.text || ''}`) ? `\n\nNOTE ABOUT YOUR TOOLS: ${OMITIDAS.anuncios}` : '';
+}
+
+/** Una tarea con fotos (las del dueño en `refs`, o que habla de una foto o imagen) que cae en un modelo que NO mira imágenes: se lo dice, para que no invente lo que no ve y lo deje dicho en su entrega. */
+function notaDeVision(internas, task) {
+  return internas.omitidas.includes(OMITIDAS.ver_imagen) && (task.refs?.length || /foto|imagen|image|photo|picture|captura|logo/i.test(`${task.title || ''}\n${task.text || ''}`)) ? `\n\nNOTE ABOUT YOUR TOOLS: ${OMITIDAS.ver_imagen}` : '';
 }
 
 /** Lo que el dueño lee cuando un turno no cabe ni con el límite alto: qué pasó y qué hacer, con lo que había dentro (para saber si se fue en razonamiento o en llamadas a herramientas). < 400 letras: es lo que guarda la tarea. */
@@ -148,22 +161,22 @@ async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, 
 }
 
 /** Ejecuta una llamada a una herramienta, con el guardián delante y detrás. → { texto, esError } */
-async function ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes = null }) {
+async function ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes = null, vistas = { n: 0, bytes: 0 } }) {
   const entrada = uso.input && typeof uso.input === 'object' ? uso.input : {};
   const d = await guardian.antes(def.nombre, entrada);
   if (!d.allow) return { texto: d.why, esError: true, bloqueada: true };
   if (antes) await antes(d.kind, def.nombre); // «detener» y el apunte previo de lo que cuesta o envía: si se perdió el candado, esto lanza y la herramienta NO corre
-  let texto, esError = false;
+  let texto, esError = false, imagenes = null;
   try {
     if (def.remota) {
       let cli = clientes.get(def.servidor);
       if (!cli) { cli = crearClienteMcp({ conector: conectoresPorNombre.get(def.servidor), env, fetchFn, presupuesto }); clientes.set(def.servidor, cli); }
       const r = await cli.llamar(def.original, entrada); texto = r.texto; esError = r.esError;
-    } else texto = await internas.llamar(def.nombre, entrada);
+    } else { const v = await internas.llamar(def.nombre, entrada, { imagenesVistas: vistas.n, bytesVistos: vistas.bytes }); if (v && typeof v === 'object') { texto = v.texto; imagenes = v.imagenes; } else texto = v; }
   } catch (e) { texto = 'No se pudo: ' + String(e?.message || 'falló').slice(0, 300); esError = true; }
   const aviso = await guardian.despues(def.nombre, entrada, texto);
   texto = String(texto).slice(0, MAX_RESULTADO) + (aviso ? '\n\n' + aviso : '');
-  return { texto, esError, kind: d.kind };
+  return { texto, esError, kind: d.kind, ...(imagenes?.length && !esError ? { imagenes } : {}) }; // `imagenes`: referencias a la galería (ver_imagen), nunca los bytes
 }
 
 /* ---------- el paso ---------- */
@@ -231,9 +244,10 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
       avisoModelo = `ℹ Esta tarea necesitaba los conectores del agente y ${modelo.id} no usa herramientas: la hizo ${capaz.id}. Cámbialo en Ajustes → Modelos si prefieres otra cosa.`;
       modelo = modeloPorId(capaz.id, modelos, 'caída por falta de herramientas');
     } else if (modelo.meta && h.defs.length) avisoModelo = `ℹ ${modelo.id} no usa herramientas: esta tarea se redactó sin ellas.`;
-    const e = await armarEjecucion({ db, env, C, agente, tarea: task, modo, feedback: fila.feedback, tareas: lista, tieneContenido: h.defs.some(d => d.servidor === 'contenido'), tieneEstudio: h.defs.some(d => d.servidor === 'estudio'), tieneHabilidades: h.defs.some(d => d.servidor === 'habilidades'), ahora: reloj() });
+    if (!modelo.caps?.vision) { h.defs = h.defs.filter(d => d.nombre !== 'mcp__estudio__ver_imagen'); h.internas.omitidas.push(OMITIDAS.ver_imagen); } // un modelo que no mira imágenes no recibe la herramienta que las muestra
+    const e = await armarEjecucion({ db, env, C, agente, tarea: task, modo, feedback: fila.feedback, tareas: lista, tieneContenido: h.defs.some(d => d.servidor === 'contenido'), tieneEstudio: h.defs.some(d => d.servidor === 'estudio'), tieneVerImagen: h.defs.some(d => d.nombre === 'mcp__estudio__ver_imagen'), tieneHabilidades: h.defs.some(d => d.servidor === 'habilidades'), ahora: reloj() });
     Object.assign(datos, {
-      base: clonar(task), sistema: e.sistema + notaDeAnuncios(h.internas, task), usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick }, avisoModelo,
+      base: clonar(task), sistema: e.sistema + notaDeAnuncios(h.internas, task) + notaDeVision(h.internas, task), usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick }, avisoModelo,
       herramientas: modelo.meta ? [] : h.defs, fallosConectores: h.fallos, omitidas: h.internas.omitidas, mensajes: [{ role: 'user', content: e.usuario }],
       usd: 0, vueltas: 0, usadas: [], skills: [], texto: '', ctx: { deptsEstudio, deptsContenido, deptsAnuncios, quien, writes, gasto },
     });
@@ -278,12 +292,12 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
             catch (e) { delete datos.turno.hechos[uso.id]; datos.envios = antesEnv; throw e; } // si no se pudo apuntar, la herramienta NO corre y no se dice que salió
           }
         };
-        const r = def ? await ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes }) : { texto: `La herramienta «${uso.name}» no existe en esta ejecución.`, esError: true };
+        const r = def ? await ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes, vistas: imagenesDeLaTarea(datos) }) : { texto: `La herramienta «${uso.name}» no existe en esta ejecución.`, esError: true };
         if (def && !datos.usadas.includes(def.nombre)) datos.usadas.push(def.nombre);
-        datos.turno.hechos[uso.id] = { texto: r.texto, esError: r.esError };
+        datos.turno.hechos[uso.id] = { texto: r.texto, esError: r.esError, ...(r.imagenes?.length ? { imagenes: r.imagenes } : {}) };
         if (costosa) await guardarAvance(db, task.id, token, datos, reloj()); // ya se sabe cómo acabó: se apunta enseguida
       }
-      datos.mensajes.push({ role: 'user', content: datos.turno.usos.map(u => ({ type: 'tool_result', tool_use_id: u.id, content: datos.turno.hechos[u.id].texto, ...(datos.turno.hechos[u.id].esError ? { is_error: true } : {}) })) });
+      datos.mensajes.push({ role: 'user', content: datos.turno.usos.map(u => ({ type: 'tool_result', tool_use_id: u.id, content: datos.turno.hechos[u.id].imagenes?.length ? [{ type: 'text', text: datos.turno.hechos[u.id].texto }, ...datos.turno.hechos[u.id].imagenes.map(i => ({ type: BLOQUE_IMAGEN, ref: i.ref, media_type: i.media_type, bytes: i.bytes }))] : datos.turno.hechos[u.id].texto, ...(datos.turno.hechos[u.id].esError ? { is_error: true } : {}) })) });
       delete datos.turno;
       await guardarAvance(db, task.id, token, datos, reloj());
       continue;
@@ -292,7 +306,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     if (datos.vueltas >= VUELTAS_MAX) { datos.texto = datos.texto || 'Se llegó al máximo de vueltas sin una entrega final.'; break; }
     const t1 = reloj();
     const limite = datos.maxTokens || TOKENS_TURNO;
-    const resp = await llamarModelo({ env, modelo, sistema: datos.sistema, mensajes: datos.mensajes, herramientas: herramientasApi, maxTokens: limite, fetchFn, presupuesto });
+    const resp = await llamarModelo({ env, modelo, sistema: datos.sistema, mensajes: await expandirImagenes(datos.mensajes, { env }), herramientas: herramientasApi, maxTokens: limite, fetchFn, presupuesto }); // las referencias a imágenes de la galería se cambian por sus bytes aquí, no en lo guardado
     await verificarCandado(db, task.id, token); // A1: si la detuvieron mientras el modelo pensaba, no se sigue
     datos.vueltas++; vueltas++;
     datos.usd += await anotarCosto(db, { tarea: task.id, agente: agente.id, dept: agente.department, tipo: modo, modelo: resp.model, proveedor: modelo.meta ? 'meta' : 'anthropic', usage: resp.usage, cfgPrices: aj.costs?.prices, ms: reloj() - t1 });

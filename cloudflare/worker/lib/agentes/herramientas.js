@@ -12,6 +12,8 @@ import { TOOLS as TOOLS_TAREAS, crearLlamador as llamadorTareas } from '../../..
 import { TOOLS as TOOLS_CONTENIDO, crearLlamador as llamadorContenido } from '../../../../contenido-tools.mjs';
 import { TOOLS as TOOLS_HABILIDADES, crearLlamador as llamadorHabilidades } from '../../../../habilidades-tools.mjs';
 import { TOOLS as TOOLS_ANUNCIOS, crearLlamador as llamadorAnuncios } from '../../../../anuncios-tools.mjs';
+import { VER_IMAGEN } from '../../../../ver-imagen-core.mjs';
+import { verImagen } from './imagenes.js';
 import { json, error, prohibido, cuerpo } from '../respuesta.js';
 import { uuid, ahora } from '../ids.js';
 
@@ -24,6 +26,7 @@ const SIN_BANDEJA = new Set(['ver_bandeja', 'crear_borrador_respuesta', 'sugerir
 export const OMITIDAS = Object.freeze({
   anuncios: 'Anuncios de Meta: las herramientas para leer la cuenta y las campañas son del departamento de Marketing (su puesto de anuncios). Si esta tarea necesita cifras de Meta, déjalo dicho y pásala a Marketing; no hay un «conector de Meta» que conectar.',
   bandeja: 'La Bandeja (responder comentarios y mensajes) es de la fase 7.',
+  ver_imagen: 'Este modelo no mira imágenes: no tienes ver_imagen. Si el texto depende de lo que muestra una foto, déjalo dicho en tu entrega.',
   'estudio:lotes y presets': 'Los presets, los lotes y entender video o audio del Estudio todavía no están en la nube (fase 8b).',
 });
 
@@ -47,18 +50,20 @@ export function crearOffice({ env, db, usuario, modulos }) {
 const esquema = t => ({ type: 'object', properties: {}, ...(t.inputSchema || {}) });
 
 /** Las del Estudio que sí existen en la nube. `gasto`: ¿esta ejecución puede gastar en un motor de pago? (solo la aprobada) */
-function herramientasEstudio({ office, tarea, gasto }) {
+function herramientasEstudio({ office, tarea, gasto, env, db }) {
   const defs = [
     { name: 'generar_imagen', description: 'Genera imágenes con el Estudio de la oficina y las guarda en la galería. Úsala cuando la tarea pida imágenes, visuales o piezas para redes. Escribe el prompt completo y concreto. Devuelve la imagen ya hecha (![…](/media/…)) o una línea ⏳ que pones TAL CUAL en tu entregable: la oficina la cambia por el archivo cuando termine. Los motores de pago solo corren en una ejecución aprobada por el dueño; antes, solo la tarjeta de «prueba».',
       inputSchema: { type: 'object', properties: { prompt: { type: 'string' }, cantidad: { type: 'number', description: '1 a 4.' }, modelo: { type: 'string', description: 'Un id de modelo del Estudio; sin él, el del dueño.' }, proporcion: { type: 'string', description: '1:1, 4:5, 9:16, 16:9…' } }, required: ['prompt'] } },
     { name: 'buscar_en_galeria', description: 'Busca en la galería del Estudio (lo generado y lo que subió el dueño: productos, logos, fotos) y devuelve ids para usar en un borrador o como referencia.',
       inputSchema: { type: 'object', properties: { buscar: { type: 'string' }, cantidad: { type: 'number', description: 'Hasta 30.' }, solo_subidas: { type: 'boolean' } } } },
+    VER_IMAGEN, // «ver_imagen» (28 oct 2026): la MISMA definición que en local; la imagen no se guarda en la conversación, solo su referencia (imagenes.js)
     { name: 'estado_trabajo', description: 'Cómo va un trabajo del Estudio (el id que salió en una línea ⏳).',
       inputSchema: { type: 'object', properties: { trabajo: { type: 'string' } }, required: ['trabajo'] } },
     { name: 'estado_estudio', description: 'Qué motores y modelos tiene listos el dueño y cuánto queda del tope diario y del presupuesto. Consúltalo antes de un pedido grande.',
       inputSchema: { type: 'object', properties: {} } },
   ];
-  async function llamar(nombre, a = {}) {
+  async function llamar(nombre, a = {}, ctx = {}) {
+    if (nombre === 'ver_imagen') return verImagen({ env, db, id: a.id, yaMiradas: ctx.imagenesVistas || 0, bytesVistos: ctx.bytesVistos || 0 });
     if (nombre === 'generar_imagen') {
       const prompt = String(a.prompt || '').trim(); if (!prompt) throw new Error('falta el prompt');
       const pedido = { prompt, n: Math.min(4, Math.max(1, Math.round(+a.cantidad || 1))), kind: 'image', ...(a.modelo ? { model: String(a.modelo) } : {}), ...(a.proporcion ? { ratio: String(a.proporcion) } : {}), task: tarea || undefined, wait: 0 };
@@ -110,7 +115,7 @@ export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = 
   if (habilidades) sumar('habilidades', TOOLS_HABILIDADES, llamadorHabilidades({ office, agente: agente.id })); // la Biblioteca: solo lee (el agente que tiene habilidades)
   if (deptsContenido.includes(agente.department)) sumar('contenido', TOOLS_CONTENIDO.filter(t => !SIN_BANDEJA.has(t.name)), llamadorContenido({ office, agente: agente.id, tarea }));
   if (deptsEstudio.includes(agente.department)) {
-    const e = herramientasEstudio({ office: gasto ? officeGasto : office, tarea, gasto });
+    const e = herramientasEstudio({ office: gasto ? officeGasto : office, tarea, gasto, env, db });
     sumar('estudio', e.defs, e.llamar);
     omitidas.push(OMITIDAS['estudio:lotes y presets']);
   }
@@ -120,9 +125,11 @@ export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = 
 
   return {
     defs, omitidas,
-    async llamar(nombre, args) {
+    /** `ctx.imagenesVistas` y `ctx.bytesVistos`: cuántas imágenes lleva ya miradas esta tarea y cuánto pesan (el tope lo pone ver_imagen). → texto, o { texto, imagenes: [{ ref, media_type }] } si la herramienta devuelve imágenes (solo ver_imagen) */
+    async llamar(nombre, args, ctx = {}) {
       const r = rutas.get(nombre); if (!r) throw new Error('herramienta desconocida: ' + nombre);
-      return String(await r.llamar(r.original, args && typeof args === 'object' ? args : {}));
+      const v = await r.llamar(r.original, args && typeof args === 'object' ? args : {}, ctx);
+      return v && typeof v === 'object' && Array.isArray(v.imagenes) ? { texto: String(v.texto ?? ''), imagenes: v.imagenes } : String(v);
     },
   };
 }

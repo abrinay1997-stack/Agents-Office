@@ -74,7 +74,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         }
       }
     } catch (e) { return json(res, e.status || 500, { error: e.message }), true; }
-    const r = await ctl.responder({ metodo: req.method, p, query: url.searchParams, cuerpo: () => body(req) });
+    const r = await ctl.responder({ metodo: req.method, p, query: url.searchParams, cuerpo: limite => body(req, limite) });
     return json(res, r.status, r.datos), true;
   };
 }
