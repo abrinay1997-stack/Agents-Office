@@ -23,7 +23,7 @@ import { elegirModelo, modeloPorId, llamarModelo, aliasDeHerramienta, textoDe, u
 import { leerModelos } from '../modelos.js';
 import { conectoresActivos } from '../conectores-acceso.js';
 import { capazDe, sirvePara, delAjuste } from '../../../../modelos-core.mjs';
-import { herramientasInternas } from './herramientas.js';
+import { herramientasInternas, OMITIDAS } from './herramientas.js';
 import { armarEjecucion, leerMemoria, guardarMemoria } from './contexto.js';
 import { cargarBibliotecaNube } from '../biblioteca.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
@@ -43,6 +43,11 @@ const RESERVA = { llamadas: 3, consultas: 14 };
 const clonar = x => JSON.parse(JSON.stringify(x));
 class PerdiElCandado extends Error { constructor() { super('perdí el candado de la corrida'); this.perdido = true; } }
 class FalloFatal extends Error { constructor(m) { super(m); this.fatal = true; } }
+
+/** Una tarea que habla de Meta o de anuncios pero cae en un agente SIN las herramientas de Anuncios (no es de Marketing): se lo dice, para que pase la tarea a quien las tiene en lugar de pedirle al dueño «un conector de Meta que conectar» (caso real: Líder Operaciones, 27 oct 2026). */
+function notaDeAnuncios(internas, task) {
+  return internas.omitidas.includes(OMITIDAS.anuncios) && /meta\b|anuncio|publicidad|campa[ñn]a|\bads?\b/i.test(`${task.title || ''}\n${task.text || ''}`) ? `\n\nNOTE ABOUT YOUR TOOLS: ${OMITIDAS.anuncios}` : '';
+}
 
 /** Lo que el dueño lee cuando un turno no cabe ni con el límite alto: qué pasó y qué hacer, con lo que había dentro (para saber si se fue en razonamiento o en llamadas a herramientas). < 400 letras: es lo que guarda la tarea. */
 export function mensajeDeCorte(resp, limite) {
@@ -118,9 +123,9 @@ async function aprender(db, task) { // learnFrom: lo que se leyó enseña al Cer
 /* ---------- lo que corre en un paso ---------- */
 
 /** Las herramientas que se le dan al modelo: las internas y las de los conectores remotos de su departamento (allowlist; las de envío solo si esta ejecución puede enviar). */
-async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, C }) {
+async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, deptsAnuncios, C }) {
   const habilidades = (await cargarBibliotecaNube({ env, db, agentes: C.agents })).b.de(agente).length > 0; // solo el puesto que tiene habilidades recibe las dos herramientas de la Biblioteca
-  const internas = herramientasInternas({ env, db, agente, tarea: tarea.id, modulos, gasto, quien, deptsEstudio, deptsContenido, habilidades });
+  const internas = herramientasInternas({ env, db, agente, tarea: tarea.id, modulos, gasto, quien, deptsEstudio, deptsContenido, deptsAnuncios, habilidades });
   const defs = internas.defs.map(d => ({ nombre: d.nombre, servidor: d.servidor, descripcion: d.descripcion, esquema: d.esquema, remota: false }));
   const remotas = [];
   const conectores = await conectoresActivos(db, env);
@@ -213,8 +218,9 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     let modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model, modelos });
     const deptsContenido = Array.isArray(aj.contenido?.departments) && aj.contenido.departments.length ? aj.contenido.departments : undefined;
     const deptsEstudio = Array.isArray(aj.media?.departments) && aj.media.departments.length ? aj.media.departments : undefined;
+    const deptsAnuncios = Array.isArray(aj.anuncios?.departments) && aj.anuncios.departments.length ? aj.anuncios.departments : undefined;
     const quien = [...(task.approvals || [])].reverse().find(x => x.action === 'approve')?.by || null;
-    const h = await armarHerramientas({ db, env, agente, tarea: task, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, C });
+    const h = await armarHerramientas({ db, env, agente, tarea: task, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, deptsAnuncios, C });
     // Un modelo sin herramientas (Muse) NO falla en silencio: si el agente tiene conectores a su alcance, la tarea cae a un modelo capaz y la entrega lo dice; si no hay uno, se rechaza con el motivo.
     let avisoModelo = '';
     if (h.defs.some(d => d.remota) && !sirvePara({ herramientas: modelo.caps.herramientas }, { herramientas: true }).ok) {
@@ -225,14 +231,14 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     } else if (modelo.meta && h.defs.length) avisoModelo = `ℹ ${modelo.id} no usa herramientas: esta tarea se redactó sin ellas.`;
     const e = await armarEjecucion({ db, env, C, agente, tarea: task, modo, feedback: fila.feedback, tareas: lista, tieneContenido: h.defs.some(d => d.servidor === 'contenido'), tieneEstudio: h.defs.some(d => d.servidor === 'estudio'), tieneHabilidades: h.defs.some(d => d.servidor === 'habilidades'), ahora: reloj() });
     Object.assign(datos, {
-      base: clonar(task), sistema: e.sistema, usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick }, avisoModelo,
+      base: clonar(task), sistema: e.sistema + notaDeAnuncios(h.internas, task), usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick }, avisoModelo,
       herramientas: modelo.meta ? [] : h.defs, fallosConectores: h.fallos, omitidas: h.internas.omitidas, mensajes: [{ role: 'user', content: e.usuario }],
-      usd: 0, vueltas: 0, usadas: [], skills: [], texto: '', ctx: { deptsEstudio, deptsContenido, quien, writes, gasto },
+      usd: 0, vueltas: 0, usadas: [], skills: [], texto: '', ctx: { deptsEstudio, deptsContenido, deptsAnuncios, quien, writes, gasto },
     });
     await guardarAvance(db, task.id, token, datos, reloj());
   }
   const ctxEj = datos.ctx || {};
-  const internas = herramientasInternas({ env, db, agente, tarea: task.id, modulos, gasto: !!ctxEj.gasto, quien: ctxEj.quien, deptsEstudio: ctxEj.deptsEstudio, deptsContenido: ctxEj.deptsContenido, habilidades: datos.herramientas.some(d => d.servidor === 'habilidades') });
+  const internas = herramientasInternas({ env, db, agente, tarea: task.id, modulos, gasto: !!ctxEj.gasto, quien: ctxEj.quien, deptsEstudio: ctxEj.deptsEstudio, deptsContenido: ctxEj.deptsContenido, deptsAnuncios: ctxEj.deptsAnuncios, habilidades: datos.herramientas.some(d => d.servidor === 'habilidades') });
   const conectores = await conectoresActivos(db, env);
   const conectoresPorNombre = new Map(conectores.map(c => [c.nombre, c])), clientes = new Map();
   const servers = [...new Set(datos.herramientas.map(d => d.servidor))];

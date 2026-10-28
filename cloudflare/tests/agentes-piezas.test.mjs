@@ -82,9 +82,9 @@ test('HERRAMIENTAS INTERNAS: por departamento, ninguna aprueba ni publica, y se 
   const mod = [TAREAS, CONTENIDO, ESTUDIO], pedir = (id, dept, gasto = false) => herramientasInternas({ env, db: d1, agente: { id, department: dept }, tarea: 'abc12345', modulos: mod, gasto });
   const e = pedir('elead', 'emails'), m = pedir('mlead', 'marketing');
   assert.ok(e.defs.every(d => d.servidor === 'tareas') && m.defs.some(d => d.servidor === 'contenido') && m.defs.some(d => d.servidor === 'estudio'));
-  for (const d of [...e.defs, ...m.defs]) { assert.match(d.nombre, /^mcp__(tareas|contenido|estudio)__[a-z_]+$/); assert.ok(!/aprob|publicar|programar|pagar|borrar|enviar/.test(d.nombre), d.nombre); }
+  for (const d of [...e.defs, ...m.defs]) { assert.match(d.nombre, /^mcp__(tareas|contenido|estudio|anuncios)__[a-z_]+$/); assert.ok(!/aprob|publicar|programar|pagar|borrar|enviar/.test(d.nombre), d.nombre); }
   assert.ok(!m.defs.some(d => /bandeja|ocultar/.test(d.nombre)), 'la Bandeja no se ofrece (fase 7)');
-  assert.ok(m.omitidas.includes(OMITIDAS.anuncios) && !('habilidades' in OMITIDAS), 'la Biblioteca ya está en la nube: no se anuncia como faltante');
+  assert.ok(!m.omitidas.includes(OMITIDAS.anuncios) && e.omitidas.includes(OMITIDAS.anuncios) && !('habilidades' in OMITIDAS), 'Anuncios ya está en la nube para Marketing (los demás saben a quién pedirlo) y la Biblioteca no se anuncia como faltante');
   assert.ok(m.defs.every(d => d.esquema && d.esquema.type === 'object'));
 });
 

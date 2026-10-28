@@ -5,20 +5,24 @@
 //  · Ninguna aprueba, programa ni publica (tests/contenido-mcp.test.mjs y tests/nube-agentes-herramientas.test.mjs lo vigilan).
 //  · El Estudio gasta: un motor de pago solo corre en una ejecución APROBADA (aunque safety.mjs lo deje pasar antes del OK en local); la «Prueba» es gratis.
 //  · La Biblioteca de habilidades (ver_habilidades, leer_habilidad: solo leen) se ofrece al agente que tiene habilidades (`habilidades: true`, lo decide el ejecutor).
-//  · Lo que no está portado (anuncios, la bandeja, lotes y presets) no se ofrece, y `omitidas` dice por qué.
+//  · Anuncios de Meta (27 oct 2026): el agente de un departamento de `anuncios.departments` (Marketing por defecto) LEE la cuenta, las campañas y sus cifras y DEJA borradores y sugerencias EN LA OFICINA
+//    (`anuncios-tools.mjs`, las mismas que en local): nada crea en Meta, activa, pausa ni gasta, y la ruta le da 403 a quien llega como agente (rol editor + `por: agente`).
+//  · Lo que no está portado (la bandeja, lotes y presets) no se ofrece, y `omitidas` dice por qué.
 import { TOOLS as TOOLS_TAREAS, crearLlamador as llamadorTareas } from '../../../../tareas-tools.mjs';
 import { TOOLS as TOOLS_CONTENIDO, crearLlamador as llamadorContenido } from '../../../../contenido-tools.mjs';
 import { TOOLS as TOOLS_HABILIDADES, crearLlamador as llamadorHabilidades } from '../../../../habilidades-tools.mjs';
+import { TOOLS as TOOLS_ANUNCIOS, crearLlamador as llamadorAnuncios } from '../../../../anuncios-tools.mjs';
 import { json, error, prohibido, cuerpo } from '../respuesta.js';
 import { uuid, ahora } from '../ids.js';
 
 /** Los departamentos que reciben las herramientas del Estudio y de Contenido (los de siempre; Ajustes → Estudio / Contenido los cambia en la local). */
 export const DEPTS_ESTUDIO = ['marketing', 'delivery', 'sales', 'ops'];
 export const DEPTS_CONTENIDO = ['marketing', 'delivery'];
+export const DEPTS_ANUNCIOS = ['marketing']; // como en local (`anuncios.departments`): el puesto de anuncios y su jefe
 const SIN_BANDEJA = new Set(['ver_bandeja', 'crear_borrador_respuesta', 'sugerir_ocultar_comentario']); // la Bandeja es de la fase 7
 
 export const OMITIDAS = Object.freeze({
-  anuncios: 'Anuncios de Meta todavía no está en la nube (fase 7).',
+  anuncios: 'Anuncios de Meta: las herramientas para leer la cuenta y las campañas son del departamento de Marketing (su puesto de anuncios). Si esta tarea necesita cifras de Meta, déjalo dicho y pásala a Marketing; no hay un «conector de Meta» que conectar.',
   bandeja: 'La Bandeja (responder comentarios y mensajes) es de la fase 7.',
   'estudio:lotes y presets': 'Los presets, los lotes y entender video o audio del Estudio todavía no están en la nube (fase 8b).',
 });
@@ -94,7 +98,7 @@ function herramientasEstudio({ office, tarea, gasto }) {
  * Todo lo que un agente puede llamar además de los conectores MCP remotos.
  * → { defs: [{ nombre: 'mcp__servidor__herramienta', servidor, descripcion, esquema }], omitidas: [motivo], llamar(nombre, args) → texto }
  */
-export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = false, quien = null, deptsEstudio = DEPTS_ESTUDIO, deptsContenido = DEPTS_CONTENIDO, habilidades = false }) {
+export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = false, quien = null, deptsEstudio = DEPTS_ESTUDIO, deptsContenido = DEPTS_CONTENIDO, deptsAnuncios = DEPTS_ANUNCIOS, habilidades = false }) {
   const usuario = { id: 'agente:' + agente.id, email: `agente:${agente.id}`, rol: gasto ? 'admin' : 'editor', agente: agente.id }; // `agente`: el Estudio anota que lo pidió este agente (by: 'agent')
   // Con rol «admin» solo para el Estudio y solo en una ejecución aprobada: los demás módulos reciben siempre un editor (un agente nunca aprueba en Contenido).
   const office = crearOffice({ env, db, usuario: { ...usuario, rol: 'editor' }, modulos });
@@ -111,7 +115,8 @@ export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = 
     omitidas.push(OMITIDAS['estudio:lotes y presets']);
   }
   if (deptsContenido.includes(agente.department)) omitidas.push(OMITIDAS.bandeja);
-  omitidas.push(OMITIDAS.anuncios);
+  if (deptsAnuncios.includes(agente.department)) sumar('anuncios', TOOLS_ANUNCIOS, llamadorAnuncios({ office, agente: agente.id, tarea })); // solo leer y dejar borradores: `office` es el del editor, que no cambia nada en Meta
+  else omitidas.push(OMITIDAS.anuncios);
 
   return {
     defs, omitidas,
