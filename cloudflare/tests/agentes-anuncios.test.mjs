@@ -58,6 +58,24 @@ test('UNA TAREA de Operaciones que pide cifras de Meta no ve herramientas de Anu
   assert.doesNotMatch(f2.registro.anthropic[0].cuerpo.system, /NOTE ABOUT YOUR TOOLS/);
 });
 
+test('CONFIGURACIÓN: `anuncios.departments` se lee de donde lo guarda la migración (anuncios.ajustes) y de config-local, que gana; sin él, Marketing', { skip: SALTAR }, async () => {
+  const doc = (d1, clave, valor) => d1._db.prepare("insert or replace into docs (clave, json, version, actualizado) values (?, ?, 1, 'x')").run(clave, JSON.stringify(valor));
+  const corre = async (d1, env, dept, agent) => { const f = crearFetch({ guion: [texto('Hecho.\nFuentes: —')] }); await tarea(env, { dept, agent, title: 'Vigilar gasto de Meta', needsOk: false }); await minutos(env, f.fetchFn); return f.registro.anthropic[0].cuerpo; };
+  const tiene = (c) => c.tools.some((h) => /^mcp__anuncios__/.test(h.name));
+  { // lo que subió la migración: Operaciones sí, Marketing no
+    const { d1, env } = await oficina({ env: GRANDE, conector: false }); doc(d1, 'anuncios.ajustes', { anuncios: { departments: ['ops'] } });
+    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(tiene(c), 'Operaciones las recibe'); assert.doesNotMatch(c.system, /NOTE ABOUT YOUR TOOLS/);
+  }
+  { // config-local gana sobre lo migrado
+    const { d1, env } = await oficina({ env: GRANDE, conector: false }); doc(d1, 'anuncios.ajustes', { anuncios: { departments: ['ops'] } }); doc(d1, 'config-local', { anuncios: { departments: ['marketing'] } });
+    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(!tiene(c), 'con config-local = Marketing, Operaciones no'); assert.match(c.system, /NOTE ABOUT YOUR TOOLS/);
+  }
+  { // sin nada: Marketing
+    const { d1, env } = await oficina({ env: GRANDE, conector: false });
+    assert.ok(tiene(await corre(d1, env, 'marketing', 'ada')));
+  }
+});
+
 test('SEGURIDAD: un agente deja una sugerencia pero no la aplica, ni crea en Meta, ni toca presupuestos (403 de la ruta, aunque la herramienta no exista)', { skip: SALTAR }, async () => {
   const { d1, env } = await oficina({ conector: false });
   const h = herramientasInternas({ env, db: d1, agente: { id: 'ada', department: 'marketing' }, tarea: 'abc12345', modulos: MODULOS });

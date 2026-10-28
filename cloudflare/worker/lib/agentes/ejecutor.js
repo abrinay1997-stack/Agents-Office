@@ -24,6 +24,7 @@ import { leerModelos } from '../modelos.js';
 import { conectoresActivos } from '../conectores-acceso.js';
 import { capazDe, sirvePara, delAjuste } from '../../../../modelos-core.mjs';
 import { herramientasInternas, OMITIDAS } from './herramientas.js';
+import { leerConfig as leerConfigAnuncios } from '../anuncios-nube.js';
 import { armarEjecucion, leerMemoria, guardarMemoria } from './contexto.js';
 import { cargarBibliotecaNube } from '../biblioteca.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
@@ -218,7 +219,8 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     let modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model, modelos });
     const deptsContenido = Array.isArray(aj.contenido?.departments) && aj.contenido.departments.length ? aj.contenido.departments : undefined;
     const deptsEstudio = Array.isArray(aj.media?.departments) && aj.media.departments.length ? aj.media.departments : undefined;
-    const deptsAnuncios = Array.isArray(aj.anuncios?.departments) && aj.anuncios.departments.length ? aj.anuncios.departments : undefined;
+    const cfgAnuncios = await leerConfigAnuncios(db).catch(() => ({})); // `anuncios.departments` vive en config / config-local / anuncios.ajustes (la migración), no en los Ajustes de la página: lo lee quien lo lee el módulo de Anuncios
+    const deptsAnuncios = Array.isArray(cfgAnuncios.anuncios?.departments) && cfgAnuncios.anuncios.departments.length ? cfgAnuncios.anuncios.departments : undefined;
     const quien = [...(task.approvals || [])].reverse().find(x => x.action === 'approve')?.by || null;
     const h = await armarHerramientas({ db, env, agente, tarea: task, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, deptsAnuncios, C });
     // Un modelo sin herramientas (Muse) NO falla en silencio: si el agente tiene conectores a su alcance, la tarea cae a un modelo capaz y la entrega lo dice; si no hay uno, se rechaza con el motivo.
