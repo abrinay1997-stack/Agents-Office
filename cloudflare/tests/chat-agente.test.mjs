@@ -83,7 +83,7 @@ test('el bucle es corto: como mucho 4 vueltas y 6 llamadas', { skip: SALTAR }, a
   assert.equal(r.status, 200);
   assert.ok(m.f.registro.anthropic.length <= 4, `vueltas: ${m.f.registro.anthropic.length}`);
   assert.ok(hs.search_threads.llamadas <= 6, `llamadas: ${hs.search_threads.llamadas}`);
-  assert.ok(!m.f.registro.anthropic.at(-1).cuerpo.tools, 'la última vuelta no ofrece herramientas');
+  assert.deepEqual(m.f.registro.anthropic.at(-1).cuerpo.tool_choice, { type: 'none' }, 'la última vuelta no puede llamar a ninguna'); assert.deepEqual(m.f.registro.anthropic.at(-1).cuerpo.tools, m.f.registro.anthropic[0].cuerpo.tools, '…pero la lista de herramientas es la de siempre');
 });
 
 test('INYECCIÓN en un conector: no se ejecuta nada más y se dice', { skip: SALTAR }, async () => {

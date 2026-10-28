@@ -37,10 +37,16 @@ export function aliasDeHerramienta(original, usados = new Set()) {
   usados.add(k); return k;
 }
 
-/** El cuerpo y las cabeceras de la petición (puro: se prueba sin red). `herramientas`: [{ alias, descripcion, esquema }]. */
-export function armarLlamada({ env, modelo, sistema, mensajes, herramientas = [], maxTokens = 4000 }) {
+/** El cuerpo y las cabeceras de la petición (puro: se prueba sin red). `herramientas`: [{ alias, descripcion, esquema }].
+ *  `sinHerramientas`: este turno no puede llamar a ninguna (la última vuelta de un bucle, o lo leído traía órdenes escondidas). NUNCA se logra quitando `tools`: en Claude 5 un bloque de razonamiento (`thinking`)
+ *  solo vale en la conversación exacta que lo produjo, y cambiar la lista de herramientas a mitad la invalida (HTTP 400 «Invalid signature in thinking block… bound to a different conversation»).
+ *  Se deja la lista idéntica y se apaga con `tool_choice: none`, que no forma parte de lo que se compara. */
+export function armarLlamada({ env, modelo, sistema, mensajes, herramientas = [], maxTokens = 4000, sinHerramientas = false }) {
   const cuerpo = { model: modelo.id, max_tokens: maxTokens, system: sistema, messages: mensajes };
-  if (herramientas.length && !modelo.meta) cuerpo.tools = herramientas.map(h => ({ name: h.alias, description: String(h.descripcion || '').slice(0, 1000), input_schema: h.esquema || { type: 'object', properties: {} } }));
+  if (herramientas.length && !modelo.meta) {
+    cuerpo.tools = herramientas.map(h => ({ name: h.alias, description: String(h.descripcion || '').slice(0, 1000), input_schema: h.esquema || { type: 'object', properties: {} } }));
+    if (sinHerramientas) cuerpo.tool_choice = { type: 'none' };
+  }
   const clave = modelo.meta ? (env.META_API_KEY || env.MODEL_API_KEY) : env.ANTHROPIC_API_KEY;
   const cab = { 'content-type': 'application/json', 'anthropic-version': '2023-06-01' };
   if (modelo.meta) cab.authorization = `Bearer ${clave}`; else cab['x-api-key'] = clave;
@@ -48,8 +54,8 @@ export function armarLlamada({ env, modelo, sistema, mensajes, herramientas = []
 }
 
 /** → { content, stop_reason, usage, model }. Lanza Error con un mensaje en español (sin clave ni cuerpo crudo) y el estado HTTP entre corchetes, para que reliability lo clasifique. */
-export async function llamarModelo({ env, modelo, sistema, mensajes, herramientas, maxTokens, fetchFn = (...a) => fetch(...a), presupuesto = null }) {
-  const p = armarLlamada({ env, modelo, sistema, mensajes, herramientas, maxTokens });
+export async function llamarModelo({ env, modelo, sistema, mensajes, herramientas, maxTokens, sinHerramientas = false, fetchFn = (...a) => fetch(...a), presupuesto = null }) {
+  const p = armarLlamada({ env, modelo, sistema, mensajes, herramientas, maxTokens, sinHerramientas });
   if (!p.tieneClave) throw Object.assign(new Error(`Falta el secreto ${p.secreto} en Cloudflare.`), { fatal: true });
   presupuesto?.externa();
   let r;
