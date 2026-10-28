@@ -6,6 +6,7 @@ import { tipoDeMedio } from './src/vision-copia.js';
 export const MAX_POR_TAREA = 6;                 // imágenes que un agente mira en una tarea (cada una se vuelve a enviar en cada vuelta del modelo: pesa)
 export const MAX_BYTES_TAREA = 10 * 1024 * 1024; // en el Worker (128 MB de memoria) las imágenes de una tarea se vuelven a leer y a codificar en CADA vuelta del modelo: entre todas, no más de esto
 export const MAX_BYTES_NUBE = 3.5 * 1024 * 1024; // en el Worker no hay con qué reducir: el original va tal cual si no pasa de aquí (la API admite 5 MB por imagen)
+export const LADO_API_MAX = 8000;                // la API de Claude rechaza TODO el turno si una imagen pasa de 8000 px de lado: en el Worker no se puede reducir, así que no se manda
 export const LADO_MAX = 1568;                    // lo que Claude aprovecha de una imagen (más grande, la API la reduce y solo tarda más)
 export const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
@@ -43,3 +44,8 @@ const mb = (b) => (Math.ceil(b / 104857.6) / 10).toString().replace('.', ','); /
 export const motivoPesada = (id, bytes) => (bytes > MAX_BYTES_NUBE ? `«${nombre(id)}» pesa ${mb(bytes)} MB y aquí solo se miran imágenes de hasta ${mb(MAX_BYTES_NUBE)} MB (no hay con qué reducirla). Pídele al dueño una copia más liviana en la galería, o trabaja sin verla y dilo en tu entrega.` : null);
 /** ¿Cabe esta imagen entre las que ya se miraron en la tarea? (solo la nube: el Worker las vuelve a cargar en cada vuelta) → null | el motivo. */
 export const topeDeBytes = (yaBytes, bytes, id = '') => (yaBytes + bytes > MAX_BYTES_TAREA ? `Con «${nombre(id)}» pasarías de ${mb(MAX_BYTES_TAREA)} MB de imágenes en esta tarea (ya viste ${mb(yaBytes)} MB y cada una se vuelve a enviar en cada vuelta). Trabaja con lo que viste y, si falta algo, déjalo dicho en tu entrega.` : null);
+/** ¿Cabe por sus dimensiones? (solo la nube: la API rechazaría el turno entero con una imagen de más de 8000 px, aunque pese poco) → null | el motivo. `w`/`h` 0 = no se pudo leer su tamaño. */
+export function motivoDimensiones(id, w, h) {
+  if (!(w > 0 && h > 0)) return `No pude leer el tamaño de «${nombre(id)}», y sin saberlo no se puede mirar con seguridad. Trabaja sin verla y dilo en tu entrega, o pídele al dueño que la suba otra vez.`;
+  return Math.max(w, h) > LADO_API_MAX ? `«${nombre(id)}» mide ${w}×${h} px y aquí solo se miran imágenes de hasta ${LADO_API_MAX} px de lado (no hay con qué reducirla). Pídele al dueño una copia más chica en la galería, o trabaja sin verla y dilo en tu entrega.` : null;
+}

@@ -2,7 +2,8 @@
 // guarda una REFERENCIA —{ type: 'ao_imagen', ref: '2026-10/foto.jpg' }— y esa referencia se cambia por la imagen de verdad justo antes de cada llamada al modelo.
 // Por qué así y no editando lo guardado: en Claude 5 el razonamiento de una vuelta solo vale si el prefijo de la conversación (herramientas → sistema → mensajes) es idéntico en la vuelta siguiente.
 // La expansión es determinista (el mismo archivo de la galería, los mismos bytes, el mismo orden): lo que se envía en la vuelta 5 empieza igual que lo de la vuelta 4.
-import { tipoDe, motivoSinMirar, motivoPesada, textoVista, topeDeTarea, topeDeBytes } from '../../../../ver-imagen-core.mjs';
+import { tipoDe, motivoSinMirar, motivoPesada, motivoDimensiones, textoVista, topeDeTarea, topeDeBytes } from '../../../../ver-imagen-core.mjs';
+import { dims } from '../../../../media/galeria-core.mjs';
 import * as galeria from '../estudio/galeria.js';
 
 export const BLOQUE = 'ao_imagen';
@@ -60,5 +61,8 @@ export async function verImagen({ env, db, id, yaMiradas = 0, bytesVistos = 0 })
   const pesada = motivoPesada(clave, cab.size); if (pesada) throw new Error(pesada);
   const demasiado = topeDeBytes(bytesVistos, cab.size, clave); if (demasiado) throw new Error(demasiado);
   const ficha = await galeria.item(db, clave).catch(() => null);
-  return { texto: textoVista(clave, { w: ficha?.w, h: ficha?.h, bytes: cab.size }), imagenes: [{ ref: clave, media_type: tipoDe(clave).mime, bytes: cab.size }] };
+  let w = Number(ficha?.w) || 0, h = Number(ficha?.h) || 0;
+  if (!(w > 0 && h > 0)) { const o = await env.MEDIA.get(clave); const wh = o ? dims(Buffer.from(await o.arrayBuffer()), clave.split('.').pop().toLowerCase().replace('jpeg', 'jpg')) : null; [w, h] = wh || [0, 0]; } // la ficha casi siempre lo trae; si no, se lee de la cabecera del archivo
+  const grande = motivoDimensiones(clave, w, h); if (grande) throw new Error(grande);
+  return { texto: textoVista(clave, { w, h, bytes: cab.size }), imagenes: [{ ref: clave, media_type: tipoDe(clave).mime, bytes: cab.size }] };
 }

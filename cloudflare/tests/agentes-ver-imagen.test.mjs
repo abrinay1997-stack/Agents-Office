@@ -13,12 +13,14 @@ import * as galeria from '../worker/lib/estudio/galeria.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
 import * as CONTENIDO from '../worker/modulos/contenido.js';
 import * as ESTUDIO from '../worker/modulos/estudio.js';
-import { VER_IMAGEN, MAX_BYTES_NUBE, MAX_BYTES_TAREA, MAX_POR_TAREA } from '../../ver-imagen-core.mjs';
+import { VER_IMAGEN, MAX_BYTES_NUBE, MAX_BYTES_TAREA, MAX_POR_TAREA, LADO_API_MAX } from '../../ver-imagen-core.mjs';
 import * as S from '../../safety.mjs';
 
 const GRANDE = { AGENTES_MAX_CONSULTAS: '5000', AGENTES_MAX_LLAMADAS: '500' };
 const MODULOS = [TAREAS, CONTENIDO, ESTUDIO];
-const foto = (marca, extra = 3000) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]), Buffer.from(marca), Buffer.alloc(extra, 7)]);
+/** Un JPEG de mentira con su cabecera de verdad (APP0 + SOF0 con el tamaño): la galería lee de ahí el ancho y el alto, y `ver_imagen` los comprueba. */
+const foto = (marca, extra = 3000, w = 1200, h = 900) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]), Buffer.from('JFIF\0'), Buffer.from([1, 1, 0, 0, 1, 0, 1, 0, 0]),
+  Buffer.from([0xff, 0xc0, 0, 0x11, 8, h >> 8, h & 255, w >> 8, w & 255, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.from(marca), Buffer.alloc(extra, 7)]);
 const resultadosDe = (c) => c.messages.filter((m) => m.role === 'user' && Array.isArray(m.content)).flatMap((m) => m.content).filter((b) => b.type === 'tool_result');
 
 async function mundo() {
@@ -123,4 +125,26 @@ test('MEMORIA: entre todas las imágenes de una tarea no pasan de 10 MB (el Work
   for (const r of rs.slice(2)) { assert.match(r.content, new RegExp(`pasarías de ${(MAX_BYTES_TAREA / 1048576).toString().replace('.', ',')} MB de imágenes en esta tarea`)); assert.equal(r.is_error, true); }
   const r = resumenImagenes([{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: [{ type: 'text', text: 'x' }, { type: BLOQUE, ref: 'a.jpg', media_type: 'image/jpeg', bytes: 1000 }, { type: BLOQUE, ref: 'b.jpg', media_type: 'image/jpeg' }] }] }]);
   assert.deepEqual(r, { n: 2, bytes: 1000 }, 'una referencia sin peso cuenta como imagen y pesa 0');
+});
+
+test('DIMENSIONES: la API rechaza el turno entero con una imagen de más de 8000 px aunque pese poco: aquí no se manda, se dice; sin ficha se lee la cabecera; sin poder leerla, tampoco', { skip: SALTAR }, async () => {
+  const { d1, env } = await mundo();
+  const enorme = await galeria.store(env, d1, foto('ENORME', 2000, 9000, 5000), 'jpg', { prompt: 'enorme', model: 'upload', by: 'dueno' }); // pesa ~2 KB, mide 9000×5000
+  const limite = await galeria.store(env, d1, foto('LIMITE', 2000, LADO_API_MAX, 100), 'jpg', { prompt: 'limite', model: 'upload', by: 'dueno' });
+  const sinFicha = await galeria.store(env, d1, foto('SINFICHA', 2000, 1000, 800), 'jpg', { prompt: 'sin ficha', model: 'upload', by: 'dueno' });
+  d1._db.prepare("update estudio_archivos set json = json_remove(json, '$.w', '$.h') where file = ?").run(sinFicha.file); // una ficha que no trae el tamaño
+  const ilegible = await galeria.store(env, d1, Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]), Buffer.from('JFIF\0'), Buffer.alloc(3000, 7)]), 'jpg', { prompt: 'ilegible', model: 'upload', by: 'dueno' }); // sin SOF: no se sabe cuánto mide
+  const png = (w, h) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]), Buffer.from([w >>> 24, w >>> 16 & 255, w >>> 8 & 255, w & 255, h >>> 24, h >>> 16 & 255, h >>> 8 & 255, h & 255]), Buffer.alloc(200, 1)]);
+  const pngGrande = await galeria.store(env, d1, png(8001, 10), 'png', { prompt: 'png grande', model: 'upload', by: 'dueno' });
+  const t = await tarea(env, { dept: 'marketing', agent: 'ada', title: 'Mirar tamaños', needsOk: false });
+  const f = crearFetch({ guion: [usar(...[enorme, limite, sinFicha, ilegible, pngGrande].map((x) => ['mcp__estudio__ver_imagen', { id: x.file }])), texto('Listo.\nFuentes: —')] });
+  await minutos(env, f.fetchFn);
+  assert.equal((await tareaEnDisco(d1, t.id)).state, 'done');
+  const [r1, r2, r3, r4, r5] = f.registro.anthropic[1].cuerpo.messages.at(-1).content.filter((b) => b.type === 'tool_result');
+  assert.equal(r1.is_error, true); assert.match(r1.content, /mide 9000×5000 px y aquí solo se miran imágenes de hasta 8000 px de lado/);
+  assert.ok(Array.isArray(r2.content), 'justo en el límite (8000 px) sí');
+  assert.ok(Array.isArray(r3.content), 'sin tamaño en la ficha se lee de la cabecera del archivo'); assert.match(r3.content[0].text, /1000×800/);
+  assert.equal(r4.is_error, true); assert.match(r4.content, /No pude leer el tamaño de/);
+  assert.equal(r5.is_error, true); assert.match(r5.content, /mide 8001×10 px/, 'también un PNG');
+  assert.ok(!JSON.stringify(f.registro.anthropic[1].cuerpo).includes('ENORME'), 'la imagen enorme nunca llegó al proveedor');
 });
