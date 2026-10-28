@@ -121,7 +121,7 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
   const t0 = Date.now();
   for (let vuelta = 0; vuelta < MAX_VUELTAS; vuelta++) {
     const conTools = vuelta < MAX_VUELTAS - 1 && llamadas < MAX_LLAMADAS && presupuesto.puedeSeguir(2);
-    const r = await llamarModelo({ env, modelo, sistema, mensajes, herramientas: conTools ? herramientas : [], maxTokens: MAX_TOKENS, fetchFn: fetchFn || env.__pruebas?.fetch || undefined, presupuesto });
+    const r = await llamarModelo({ env, modelo, sistema, mensajes, herramientas, sinHerramientas: !conTools, maxTokens: MAX_TOKENS, fetchFn: fetchFn || env.__pruebas?.fetch || undefined, presupuesto });
     try { usd += await anotarCosto(db, { agente: a.id, dept: a.department, tipo: 'chat', modelo: r.model || modelo.id, proveedor: modelo.meta ? 'meta' : 'anthropic', usage: r.usage, cfgPrices: cfgCostos?.prices, ms: Date.now() - t0 }); } catch (e) { console.warn('[chat] costo:', e?.message ?? e); }
     const usos = usosDe(r.content);
     if (!usos.length || r.stop_reason !== 'tool_use' || modelo.meta) { respuesta = textoDe(r.content); break; }

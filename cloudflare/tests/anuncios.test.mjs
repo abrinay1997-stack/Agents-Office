@@ -20,6 +20,8 @@ test('el rol decide quién cambia algo en Meta (puro)', () => {
   assert.equal(permitido('lectura', 'POST', '/api/anuncios/borradores'), false);
   assert.equal(permitido('editor', 'POST', '/api/anuncios/borradores'), true);
   assert.equal(permitido('editor', 'PATCH', '/api/anuncios/borradores/abc'), true);
+  assert.equal(permitido('editor', 'POST', '/api/anuncios/sugerencias'), true, 'dejar una sugerencia (lo que hace un agente)');
+  assert.equal(permitido('lectura', 'POST', '/api/anuncios/sugerencias'), false);
   assert.equal(permitido('editor', 'POST', '/api/anuncios/borradores/abc/validar'), true);
   for (const r of ['/api/anuncios/borradores/abc/crear', '/api/anuncios/accion', '/api/anuncios/deshacer', '/api/anuncios/sincronizar', '/api/anuncios/impulsar', '/api/anuncios/conversiones', '/api/anuncios/sugerencias/x/aplicar']) assert.equal(permitido('editor', 'POST', r), false, r);
   assert.equal(permitido('editor', 'DELETE', '/api/anuncios/borradores/abc'), false);

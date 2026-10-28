@@ -25,6 +25,7 @@ import { resumenMcp } from '../lib/mcp-estado.js';
 import { adjuntarTerminados } from '../lib/agentes/estudio-adjuntos.js';
 import * as contenido from './contenido.js';
 import * as estudio from './estudio.js';
+import * as anuncios from './anuncios.js';
 import * as tareas from './tareas.js';
 import { normModel } from '../../../src/models.js';
 
@@ -32,7 +33,7 @@ export const nombre = 'agentes';
 export const grupos = ['costs', 'costs.csv', 'quality', 'status', 'notices', 'usage', 'mcp'];
 
 /** Los módulos a los que las herramientas de un agente pueden llamar por función (sin pasar por sí mismo). */
-const MODULOS_HERRAMIENTAS = [tareas, contenido, estudio];
+const MODULOS_HERRAMIENTAS = [tareas, contenido, estudio, anuncios];
 
 const PROVEEDOR = env => (/^muse-/i.test(String(env.AI_MODELO || '')) ? { id: 'meta', name: 'Meta Muse' } : { id: 'anthropic', name: 'Claude (API de Anthropic)' });
 const hayLlave = env => !!env.ANTHROPIC_API_KEY || !!(env.META_API_KEY || env.MODEL_API_KEY);

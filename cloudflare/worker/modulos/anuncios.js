@@ -27,7 +27,9 @@ export function permitido(rol, metodo, ruta) {
   if (metodo === 'GET' || metodo === 'HEAD') return true;
   if (rol === 'admin') return true;
   if (rol !== 'editor') return false;
-  // el editor prepara borradores (crear, cambiar, validar con Meta); no los crea en Meta, no los quita, no toca nada más
+  // el editor prepara borradores (crear, cambiar, validar con Meta); no los crea en Meta, no los quita, no toca nada más.
+  // Y deja una SUGERENCIA nueva (lo que hace un agente con `sugerir_mejora_anuncio`, que corre como editor): nunca la aplica ni la descarta, y la ruta solo la acepta con `por: 'agente'`.
+  if (metodo === 'POST' && ruta === '/api/anuncios/sugerencias') return true;
   return /^\/api\/anuncios\/borradores(\/[A-Za-z0-9_-]{1,60}(\/validar)?)?$/.test(ruta) && (metodo === 'POST' || metodo === 'PATCH');
 }
 

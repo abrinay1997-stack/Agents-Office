@@ -97,7 +97,7 @@ test('el bucle tiene tope: tras las vueltas permitidas se le pide contestar sin 
   const pide = () => usar(['ver_tarea', { id: 'no-existe' }]);
   const m = await mundo({ guion: [pide(), pide(), pide(), pide(), pide(), dimitri({ reply: 'Con lo que tengo: no está.' })] });
   const r = await chat(m, 'Busca la tarea fantasma'); assert.equal(r.status, 200, JSON.stringify(r.j));
-  assert.equal(m.f.registro.anthropic.length, 6, 'seis llamadas como mucho'); assert.equal(m.f.registro.anthropic.at(-1).cuerpo.tools, undefined, 'la última va sin herramientas');
+  assert.equal(m.f.registro.anthropic.length, 6, 'seis llamadas como mucho'); assert.deepEqual(m.f.registro.anthropic.at(-1).cuerpo.tool_choice, { type: 'none' }, 'la última no puede llamar a ninguna'); assert.deepEqual(m.f.registro.anthropic.at(-1).cuerpo.tools, m.f.registro.anthropic[0].cuerpo.tools, '…pero la lista de herramientas es la de siempre (cambiarla invalida el razonamiento)');
   assert.match(resultados(m.f.registro.anthropic[1].cuerpo)[0].content, /No hay una tarea con el id «no-existe»/); assert.deepEqual(sub(r).pasos.map((p) => p.estado), Array(5).fill('error'));
   assert.match(sub(r).text, /no está/);
 });

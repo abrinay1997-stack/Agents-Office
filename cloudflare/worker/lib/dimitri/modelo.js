@@ -73,7 +73,7 @@ export async function preguntarConHerramientas(ctx, sistema, usuario, { maxToken
   for (let vuelta = 0; vuelta < maxVueltas; vuelta++) {
     const conTools = vuelta < maxVueltas - 1 && llamadas < maxLlamadas && !inyeccion;
     const t0 = Date.now();
-    const r = await llamarModelo({ env: ctx.env, modelo, sistema: sis, mensajes, herramientas: conTools ? herramientas : [], maxTokens, fetchFn: ff });
+    const r = await llamarModelo({ env: ctx.env, modelo, sistema: sis, mensajes, herramientas, sinHerramientas: !conTools, maxTokens, fetchFn: ff }); // la lista de herramientas no cambia entre vueltas: ver armarLlamada
     usd += await anotarCosto(ctx, tipo, modelo, r, t0);
     stop = r.stop_reason;
     const usos = usosDe(r.content);
