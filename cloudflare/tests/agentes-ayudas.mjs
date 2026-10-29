@@ -29,7 +29,7 @@ export function crearFetch({ guion = [], herramientasMcp = {}, tokenMcp = 'tok-m
       const rpc = (result) => new Response(JSON.stringify({ jsonrpc: '2.0', id: cuerpo.id, result }), { status: 200, headers: { 'content-type': 'application/json', 'mcp-session-id': 's1' } });
       if (cuerpo.method === 'initialize') return rpc({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'gmail', version: '1' } });
       if (cuerpo.method === 'notifications/initialized') return new Response(null, { status: 202 });
-      if (cuerpo.method === 'tools/list') return rpc({ tools: Object.entries(herramientasMcp).map(([name, h]) => ({ name, description: h.descripcion || name, inputSchema: { type: 'object', properties: {} } })) });
+      if (cuerpo.method === 'tools/list') return rpc({ tools: Object.entries(herramientasMcp).map(([name, h]) => ({ name, description: h.descripcion || name, inputSchema: h.esquema || { type: 'object', properties: {} } })) });
       if (cuerpo.method === 'tools/call') { const h = herramientasMcp[cuerpo.params.name]; if (!h) return rpc({ content: [{ type: 'text', text: 'no existe' }], isError: true }); h.llamadas = (h.llamadas || 0) + 1; h.ultimo = cuerpo.params.arguments; if (h.alLlamar) await h.alLlamar(cuerpo.params.arguments); return rpc({ content: [{ type: 'text', text: h.salida ?? 'ok' }] }); }
     }
     registro.otros.push(u);

@@ -115,7 +115,7 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
   const usados = new Set(), porAlias = new Map();
   const herramientas = h.defs.map((d) => { const alias = aliasDeHerramienta(d.nombre, usados); porAlias.set(alias, d); return { alias, descripcion: d.descripcion, esquema: d.esquema }; });
   const estado = {}; // el taint y los bloqueos del guardián
-  const guardian = crearGuardian({ db, estado, ctx: { run: 'chat-' + ahora.toString(36), tarea: null, agente: a.id, dept: a.department, writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: aj.safety || {}, amountLimit: 0, servers: [...new Set(h.defs.map((d) => d.servidor))] } });
+  const guardian = crearGuardian({ db, estado, ctx: { run: 'chat-' + ahora.toString(36), tarea: null, agente: a.id, dept: a.department, writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: aj.safety || {}, amountLimit: 0, servers: [...new Set(h.defs.map((d) => d.servidor))], urls: Object.fromEntries(h.conectores.map((c) => [c.nombre, c.url])) } });
   const clientes = new Map(), conPorNombre = new Map(h.conectores.map((c) => [c.nombre, c])), toolsUsados = new Set();
   let usd = 0, llamadas = 0, respuesta = '', inyeccion = null;
   const t0 = Date.now();
@@ -178,7 +178,7 @@ async function herramientasDeLectura({ db, env, agente, fetchFn, presupuesto, sa
     try {
       const lista = await crearClienteMcp({ conector: c, env, fetchFn, presupuesto }).listar();
       usables.push(c);
-      for (const t of lista) if (permitidas.has(t.name)) defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema });
+      for (const t of lista) if (permitidas.has(t.name)) { { const urls = safety.parametrosUrl(t.inputSchema); if (urls.length) { fallos.push({ servidor: c.nombre, motivo: `la herramienta ${t.name} no se ofrece en el chat porque acepta una dirección libre (${urls.slice(0, 3).map((u) => `«${u.nombre}»: ${u.motivo}`).join('; ')})` }); continue; } } defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema }); }
     } catch (e) { fallos.push({ servidor: c.nombre, motivo: limpiarSecretos(String(e.message)).slice(0, 160) }); }
   }
   return { defs, fallos, conectores: usables };

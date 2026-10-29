@@ -162,9 +162,84 @@ const INJECTION = [
   [/\b(forward|send|reenv[ií]a|env[ií]a|exporta|export)\b.{0,50}\b(all|every|todos|todas|cada)\b.{0,40}\b(emails?|correos|messages|mensajes|contacts|contactos|files|archivos|passwords?|contraseñas|invoices|facturas)\b/i, 'pide sacar datos en bloque'],
   [/\b(do not|don't|never|no)\s+(tell|inform|mention|notify|le digas|avises|menciones|informes)\b.{0,40}\b(user|owner|human|dueño|usuario|jefe)\b/i, 'pide ocultarle algo al dueño'],
 ];
+/* SEG-02 · ninguna regex es frontera: el texto se NORMALIZA antes (NFKC, sin caracteres invisibles ni de dirección, homoglifos
+   comunes pasados a latino, sin tildes) y se prueba el original y cada forma. Quien escribe a mano «ígnora», «ignоre» (о cirílica)
+   o «ig\u200bnore» no esquiva la lista. Sigue siendo una heurística: el candado real son el guardián y el OK del dueño. */
+const INVISIBLES = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDDEF]/g; // ancho cero, bidi, selectores de variación, caracteres «tag»
+const HOMOGLIFOS = (() => { // confusables que NFKC no toca: cirílico, griego, versalitas y latinas raras que se ven como una letra latina
+  const m = {}; const par = (de, a) => { for (let i = 0; i < de.length; i++) m[de[i]] = a[i]; };
+  par('асеорхуіїјѕԁԛѵһԝкмнтвьӏүɡӓёАВЕКМНОРСТХУІЈЅҮӀЗ', 'aceopxyiijsdqvhwkmhtbblygaeABEKMHOPCTXYIJSYIZ');
+  for (const x of 'αa βb γy εe ηn ιi κk μu νv οo ρp τt υu χx ωw ΑA ΒB ΕE ΖZ ΗH ΙI ΚK ΜM ΝN ΟO ΡP ΤT ΥY ΧX'.split(' ')) m[x[0]] = x[1];
+  par('ɪɢɴᴏʀᴇᴀʙᴄᴅᴊᴋʟᴍᴘᴛᴜᴠᴡʏᴢꜰʜıłøđɑɩ', 'ignoreabcdjklmptuvwyzfhilodai');
+  return m;
+})();
+export function normalizarParaDeteccion(text) {
+  let s = String(text ?? '').slice(0, 200000);
+  try { s = s.normalize('NFKC'); } catch { /* texto roto: se sigue con lo que hay */ }
+  s = s.replace(INVISIBLES, '');
+  s = s.replace(/[^\u0000-\u007F]/g, ch => HOMOGLIFOS[ch] ?? ch);
+  return s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
+}
+const sinTildes = s => { try { return s.normalize('NFD').replace(/\p{M}+/gu, ''); } catch { return s; } };
 export function injectionIn(text) {
-  const s = String(text || '').slice(0, 200000);
-  for (const [re, why] of INJECTION) if (re.test(s)) return why;
+  const crudo = String(text || '').slice(0, 200000);
+  const a = normalizarParaDeteccion(crudo), b = sinTildes(a);
+  const formas = a === crudo ? [crudo, b] : [crudo, a, b];
+  for (const s of formas) for (const [re, why] of INJECTION) if (re.test(s)) return why;
+  return null;
+}
+
+/* ---------- SEG-02 · herramientas con URL libre: un argumento «url» es un canal de salida (exfiltración por la dirección) ---------- */
+const NOMBRE_URL = /^(url|uri|href|link|links|endpoint|webhook|callback|redirect|host|hostname|domain|website|src|source_url|target_url|image_url|file_url|page_url|base_url|proxy)s?$|(_|\b)(url|uri|href|webhook|endpoint|callback)s?$/i; // nombres que casi siempre son una dirección
+const NOMBRE_AMBIGUO = /^(source|target|location|resource|origin|feed|destination|forward|referer|site|address)s?$/i; // pueden ser un id, una carpeta, un nombre…: solo cuentan si el parámetro dice que es una dirección
+const DICE_URL = /\b(url|uri|https?|web ?address|hyperlink|link to)\b/i; // «Any URL to fetch», «page address»
+const clavesUrl = k => NOMBRE_URL.test(k) || NOMBRE_AMBIGUO.test(k); // para el valor de una llamada: en un campo con ese nombre, un host sin esquema también es una dirección
+/** Los parámetros que hacen de una herramienta un canal de salida: [{ nombre, motivo }]. Nombre típico de dirección, `format: uri`, o una descripción que pide una URL; los nombres ambiguos
+ *  (source, target, location…) solo cuentan con `format: uri` o con la descripción. Heurística: un parámetro de texto libre que acepte una dirección sin decirlo no se atrapa aquí sino en la llamada (`urlAjenaEn`). */
+export function parametrosUrl(schema, hondo = 0, ruta = '') {
+  const out = [];
+  if (!schema || typeof schema !== 'object' || hondo > 6) return out;
+  if (/^(uri|url|uri-reference|iri|hostname)$/i.test(String(schema.format || ''))) out.push({ nombre: ruta || '(valor)', motivo: 'formato uri' });
+  for (const [k, v] of Object.entries(schema.properties || {})) {
+    const nombre = ruta ? `${ruta}.${k}` : k, numerico = v && /^(number|integer|boolean)$/.test(String(v.type));
+    const dice = v && typeof v.description === 'string' && (!v.type || v.type === 'string') && DICE_URL.test(v.description), uri = v && /^(uri|url|uri-reference|iri|hostname)$/i.test(String(v.format || ''));
+    if (!numerico && NOMBRE_URL.test(k)) out.push({ nombre, motivo: 'su nombre es el de una dirección' });
+    else if (!numerico && (uri || dice) && (NOMBRE_AMBIGUO.test(k) || dice)) out.push({ nombre, motivo: uri ? 'formato uri' : 'su descripción pide una URL' });
+    else out.push(...parametrosUrl(v, hondo + 1, nombre));
+  }
+  for (const k of ['items', 'additionalProperties']) if (schema[k] && typeof schema[k] === 'object') out.push(...parametrosUrl(schema[k], hondo + 1, ruta));
+  for (const k of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(schema[k])) for (const x of schema[k]) out.push(...parametrosUrl(x, hondo + 1, ruta));
+  return out;
+}
+export const esquemaConUrlLibre = schema => parametrosUrl(schema).length > 0;
+/** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
+ *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
+ *  una barra de ancho completo— cuenta como ajeno. → el host (o un trozo) ajeno, o null. */
+export function urlAjenaEn(args, urlConector) {
+  const propio = hostOf(urlConector || '');
+  if (!propio) return null;
+  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: clavesUrl(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
+  visita(args);
+  const ajena = (token, conEsquema) => {
+    const sinEsquema = token.replace(/^[a-z][a-z0-9+.-]{1,12}:\/\//i, '').replace(/^\/\//, '');
+    const autoridad = sinEsquema.split(/[/?#]/)[0];
+    if (/[^\x21-\x7e]|[\\@]/.test(autoridad)) return autoridad.slice(0, 60) || token.slice(0, 40); // no ASCII, controles, espacios, «@» o «\\» en el host
+    const h = hostOf(conEsquema ? token : 'https://' + sinEsquema);
+    if (!h) return autoridad.slice(0, 60);
+    return h === propio || h.endsWith('.' + propio) ? null : h;
+  };
+  for (const { t, claveUrl } of textos) {
+    const texto = t.slice(0, 20000);
+    if (/(?:[a-z][a-z0-9+.-]{1,12}:)?\/\/\[/i.test(texto)) return '[IPv6]'; // una dirección IPv6 literal nunca es el conector
+    if (claveUrl && texto.trim() && !/\s/.test(texto.trim())) { const r = ajena(texto.trim(), /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(texto.trim())); if (r) return r; continue; }
+    for (const m of texto.matchAll(/[^\s\x00-\x1f"'<>()[\]{},;]+/g)) {
+      let tok = m[0].replace(/[.:!?]+$/, ''); const e = tok.search(/[a-z][a-z0-9+.-]{1,12}:\/\//i); if (e > 0) tok = tok.slice(e); // «xhttps://…» y similares
+      const conEsquema = /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(tok);
+      const pareceHost = !conEsquema && /^(\/\/|www\.)/i.test(tok); // en texto libre solo cuenta lo que lleva esquema, «//» o «www.»: «Hola.Cómo», «index.php» o «abc.def» no son hosts
+      if (!conEsquema && !pareceHost) continue;
+      const r = ajena(tok.replace(/^\/\//, ''), conEsquema); if (r) return r;
+    }
+  }
   return null;
 }
 
