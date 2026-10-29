@@ -25,9 +25,9 @@ export function passFilter(f, it) {
 /** La carpeta de verdad de una ficha (una carpeta borrada fuera ya no cuenta), o null. */
 export const folderIn = (it, ids) => (it.folder && ids.has(it.folder) ? it.folder : null);
 /** ¿Entra en la carpeta elegida? 'all' · 'none' (sin carpeta) · un id */
-export function passFolder(folder, it, ids) {
+export function passFolder(folder, it, ids, sub) {
   if (!folder || folder === 'all') return true;
-  const f = folderIn(it, ids); return folder === 'none' ? !f : f === folder;
+  const f = folderIn(it, ids); return folder === 'none' ? !f : sub ? !!f && sub.has(f) : f === folder; // sub: la carpeta y sus descendientes (árbol, recursivo)
 }
 /** Las palabras de una búsqueda: todas deben estar (sin mayúsculas ni acentos). */
 export const words = q => fold(q).split(/\s+/).filter(Boolean);
@@ -42,9 +42,9 @@ export function passQuery(ws, it, extra) { if (!ws.length) return true; const h 
 export const passKind = (kinds, it) => !kinds || !kinds.length || kinds.includes(it.kind || 'image');
 
 /** Un predicado con todo lo de una vista: { filter, folder, q, kind } */
-export function matcher({ filter = 'all', folder = 'all', q = '', kind = null } = {}, folderIds = new Set(), extra) {
+export function matcher({ filter = 'all', folder = 'all', q = '', kind = null, sub = null } = {}, folderIds = new Set(), extra) {
   const ws = words(q), kinds = Array.isArray(kind) ? kind : kind ? String(kind).split(',').filter(Boolean) : null;
-  return it => passKind(kinds, it) && passFolder(folder, it, folderIds) && passFilter(filter, it) && passQuery(ws, it, extra);
+  return it => passKind(kinds, it) && passFolder(folder, it, folderIds, sub) && passFilter(filter, it) && passQuery(ws, it, extra);
 }
 /** Los recuentos de las pestañas y de «Sin carpeta», sobre lo que se le pase (la galería entera). */
 export function counts(items, folderIds = new Set()) {

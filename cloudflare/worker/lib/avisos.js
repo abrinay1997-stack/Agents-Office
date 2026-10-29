@@ -5,6 +5,7 @@
 // Lo mismo dicho dos veces en 6 horas (misma `key`) se dice una. La futura tabla `notificaciones` será una proyección ADICIONAL (por persona) que cuelgue de
 // emitirAvisos(); no reemplaza a estos dos: el `read` global y los ids siguen donde estaban.
 import { leerDoc, mutarDoc } from './almacen.js';
+import { proyectar } from './notificaciones.js';
 
 export const VENTANA_DEDUPE_MS = 6 * 3600e3;
 export const TOPE_DOC = 200;      // lo último que guarda el doc `notices`
@@ -27,7 +28,9 @@ export async function emitirAvisos(db, avisos, { ahora = Date.now(), destino = '
   const t = typeof ahora === 'function' ? ahora() : ahora;
   const lista = (avisos || []).filter(Boolean).map(({ kind, text, level = 'info', task = null, key = null, ...resto }) => ({ kind, level, text: maxTexto ? String(text).slice(0, maxTexto) : text, task, key, ...resto }));
   if (!lista.length) return [];
-  return destino === 'doc' ? emitirEnDoc(db, lista, t, largoId) : emitirEnFilas(db, lista, t);
+  const guardados = destino === 'doc' ? await emitirEnDoc(db, lista, t, largoId) : await emitirEnFilas(db, lista, t);
+  if (guardados.length) await proyectar(db, guardados, { ahora: t }); // N0: por persona, solo con el flag encendido; atrapa sus errores (un aviso no tumba la acción)
+  return guardados;
 }
 
 async function emitirEnFilas(db, lista, t) {
