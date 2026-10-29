@@ -85,6 +85,12 @@ export async function resumen(db, usuario) {
   return { canales, total };
 }
 
+/** Las cuentas activas con las que se puede abrir un directo o armar un canal (id, nombre, color), sin el correo ni la que pregunta. */
+export async function personasChat(db, usuario) {
+  const { results } = await db.prepare('select u.id, u.email, u.rol, p.nombre, p.color from users u left join perfiles p on p.user_id = u.id where p.baja_at is null and u.id != ? order by lower(coalesce(p.nombre, u.email)) limit 200').bind(usuario.id).all();
+  return results.map((r) => ({ id: r.id, nombre: nombreDe(r), color: r.color || null }));
+}
+
 /** Canales públicos (nombre y cuántos son), para unirse. Nunca los privados ni los directos. */
 export async function publicos(db, usuario) {
   const { results } = await db.prepare("select c.id, c.nombre, (select count(*) from chat_miembros x where x.canal_id = c.id) miembros, exists (select 1 from chat_miembros y where y.canal_id = c.id and y.user_id = ?) yo from chat_canales c where c.tipo in ('general','canal') and c.privado = 0 and c.archivado_at is null order by c.nombre").bind(usuario.id).all();

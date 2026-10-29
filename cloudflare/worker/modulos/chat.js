@@ -1,5 +1,6 @@
 // C0 (Fase 8): el chat interno del equipo — modelo y rutas, SIN pantalla ni sockets (C1 y C2). Todo detrás de `chat.config.activo` (apagado). Plan: docs/plan-chat-interno.md.
 //   GET  /api/chat/resumen                       → { activo, canales: [{ id, tipo, nombre, privado, miembros, noLeidos, menciones, silenciado, ultimo }], total }
+//   GET  /api/chat/personas                      → { personas: [{ id, nombre, color }] }   (a quién se le puede escribir)
 //   GET  /api/chat/canales                       → { publicos: [{ id, nombre, miembros, yoSoy }] }
 //   POST /api/chat/canales { nombre, privado?, miembros? } · POST /api/chat/directo { con }
 //   GET  /api/chat/canales/<id>/mensajes?antes=&limite=      POST …/mensajes { cuerpo, respondeA? }
@@ -31,6 +32,7 @@ export async function manejar(ctx) {
   }
   await C.asegurarGeneral(db, usuario.id); // #general existe desde el primer día y toda cuenta está en él
   if (metodo === 'GET' && resto === '/resumen') return json({ activo: true, ...(await C.resumen(db, usuario)) });
+  if (metodo === 'GET' && resto === '/personas') return json({ personas: await C.personasChat(db, usuario) });
   if (metodo === 'GET' && resto === '/canales') return json({ publicos: await C.publicos(db, usuario) });
   if (metodo === 'GET' && resto === '/novedades') { return json(await C.novedades(db, usuario, url.searchParams.get('desde'))); }
   if (metodo === 'GET' && resto === '/admin') return usuario.rol === 'admin' ? json({ canales: await C.adminCanales(db) }) : prohibido('Solo un administrador ve el estado del chat.');
