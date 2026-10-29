@@ -115,7 +115,7 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
   const usados = new Set(), porAlias = new Map();
   const herramientas = h.defs.map((d) => { const alias = aliasDeHerramienta(d.nombre, usados); porAlias.set(alias, d); return { alias, descripcion: d.descripcion, esquema: d.esquema }; });
   const estado = {}; // el taint y los bloqueos del guardián
-  const guardian = crearGuardian({ db, estado, ctx: { run: 'chat-' + ahora.toString(36), tarea: null, agente: a.id, dept: a.department, writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: aj.safety || {}, amountLimit: 0, servers: [...new Set(h.defs.map((d) => d.servidor))] } });
+  const guardian = crearGuardian({ db, estado, ctx: { run: 'chat-' + ahora.toString(36), tarea: null, agente: a.id, dept: a.department, writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: aj.safety || {}, amountLimit: 0, servers: [...new Set(h.defs.map((d) => d.servidor))], urls: Object.fromEntries(h.conectores.map((c) => [c.nombre, c.url])) } });
   const clientes = new Map(), conPorNombre = new Map(h.conectores.map((c) => [c.nombre, c])), toolsUsados = new Set();
   let usd = 0, llamadas = 0, respuesta = '', inyeccion = null;
   const t0 = Date.now();
@@ -135,8 +135,7 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
       else {
         llamadas++;
         const entrada = u.input && typeof u.input === 'object' ? u.input : {};
-        const ajena = safety.urlAjenaEn(entrada, conPorNombre.get(def.servidor)?.url);
-        const d = ajena ? { allow: false, why: `Bloqueado: el argumento lleva una dirección a ${ajena}, que no es del conector. En un chat las consultas no mandan direcciones a otros sitios.` } : await guardian.antes(def.nombre, entrada);
+        const d = await guardian.antes(def.nombre, entrada);
         if (!d.allow || d.kind !== 'read') res = { texto: d.allow ? 'Bloqueado: en un chat solo se leen datos.' : d.why, esError: true };
         else {
           let cli = clientes.get(def.servidor);

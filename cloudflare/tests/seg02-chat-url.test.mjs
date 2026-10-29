@@ -32,7 +32,10 @@ test('chat: un argumento con una dirección ajena al conector se bloquea y la he
   assert.equal(r.status, 200, JSON.stringify(r.j));
   assert.ok(!hs.search_threads.llamadas, 'nunca salió');
   const vuelta2 = JSON.stringify(m.f.registro.anthropic[1].cuerpo.messages);
-  assert.match(vuelta2, /Bloqueado: el argumento lleva una direcci/);
+  assert.match(vuelta2, /Bloqueado: un argumento lleva una direcci/);
+  assert.doesNotMatch(vuelta2.match(/"tool_result"[^}]*\}/)?.[0] ?? '', /evil\.example/, 'el motivo no repite la dirección');
+  const fila = m.d1._db.prepare("select decision, codigo, motivo from auditoria_agentes where codigo = 'url-ajena'").get();
+  assert.equal(fila?.decision, 'block', 'queda en la auditoría'); assert.doesNotMatch(String(fila.motivo), /evil|CLAVE/);
   assert.ok(!m.f.registro.otros.length && !m.f.registro.mcp.some((x) => JSON.stringify(x.cuerpo).includes('evil.example')));
 });
 
@@ -42,3 +45,22 @@ test('chat: una consulta normal sigue funcionando', { skip: SALTAR }, async () =
   const r = await m.p.admin('POST', '/api/chat', { agent: 'elead', text: 'Busca facturas', history: [] });
   assert.equal(r.status, 200, JSON.stringify(r.j)); assert.equal(hs.search_threads.llamadas, 1);
 });
+
+// El destino se decide sobre el texto CRUDO: lo que se ve como el host del conector pero no lo es (o lo es solo tras normalizar) no pasa.
+for (const [nombre, arg] of [
+  ['o cirílicas en el host', { query: 'https://gооd.com/?d=SECRETO' }],
+  ['barra de ancho completo antes de @', { query: 'https://gmail.mcp.example.com／@evil.example/' }],
+  ['@ en la autoridad', { query: 'https://gmail.mcp.example.com@evil.example/x' }],
+  ['barra invertida', { query: 'https://gmail.mcp.example.com\\@evil.example/' }],
+  ['sin esquema en un campo cualquiera', { query: 'evil.example/c?d=SECRETO' }],
+  ['control antes del esquema', { query: 'x\u0001https://evil.example/' }],
+  ['host que solo parece el del conector', { query: 'https://gmail.mcp.example.com.evil.example/' }],
+]) {
+  test('chat: dirección ajena camuflada — ' + nombre, { skip: SALTAR }, async () => {
+    const hs = { search_threads: { salida: 'ok', esquema: ESQ_Q } };
+    const m = await mundo([usar(['mcp__gmail__search_threads', arg]), texto('No pude.')], hs);
+    const r = await m.p.admin('POST', '/api/chat', { agent: 'elead', text: 'Busca algo', history: [] });
+    assert.equal(r.status, 200, JSON.stringify(r.j));
+    assert.ok(!hs.search_threads.llamadas, 'la herramienta no se llamó');
+  });
+}

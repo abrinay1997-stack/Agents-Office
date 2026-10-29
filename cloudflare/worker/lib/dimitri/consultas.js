@@ -208,9 +208,9 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
     if (llamadasConector >= MAX_LLAMADAS_CONECTOR) return falla('Ya hiciste las consultas a conectores que caben en un turno; contesta con lo que tienes.');
     if (!clientes.has(c.nombre) && clientes.size >= MAX_CONECTORES) return falla(`Ya consultaste ${MAX_CONECTORES} conectores en este turno; contesta con lo que tienes.`);
     llamadasConector++;
-    guardian ||= crearGuardian({ db, estado: estadoGuardian, ctx: { run: 'dimitri-' + Date.now().toString(36), tarea: null, agente: 'dimitri', dept: 'direccion', writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: cfg.safety || {}, amountLimit: 0, servers: [...new Set((await lisos()).map((x) => x.nombre))] } });
+    guardian ||= crearGuardian({ db, estado: estadoGuardian, ctx: { run: 'dimitri-' + Date.now().toString(36), tarea: null, agente: 'dimitri', dept: 'direccion', writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: cfg.safety || {}, amountLimit: 0, servers: [...new Set((await lisos()).map((x) => x.nombre))], urls: Object.fromEntries((await lisos()).map((x) => [x.nombre, x.url])) } });
     const args = e.argumentos && typeof e.argumentos === 'object' && !Array.isArray(e.argumentos) ? e.argumentos : {};
-    const tool = `mcp__${c.nombre}__${nombreH}`, ajena = safety.urlAjenaEn(args, c.url), d = ajena ? { allow: false, why: `Bloqueado: el argumento lleva una dirección a ${ajena}, que no es del conector.` } : await guardian.antes(tool, args);
+    const tool = `mcp__${c.nombre}__${nombreH}`, d = await guardian.antes(tool, args);
     if (!d.allow || d.kind !== 'read') return falla(d.allow ? 'Bloqueado: Dimitri solo lee datos.' : d.why);
     const x = await clienteDe(c).llamar(nombreH, args), aviso = await guardian.despues(tool, args, x.texto);
     const why = estadoGuardian.taint?.why || safety.injectionIn(x.texto);
