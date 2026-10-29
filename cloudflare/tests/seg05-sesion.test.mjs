@@ -67,13 +67,39 @@ test('flag ENCENDIDO: si faltan menos de 24 h se renueva 7 días y la MISMA resp
   const r3 = await m.yo(s2.t); assert.equal(r3.headers.get('set-cookie'), null); assert.equal(m.db.prepare('select expires_at e from sessions where token_hash = ?').get(s2.h).e, e0);
 });
 
+test('flag ENCENDIDO (BLOQUEANTE de la revisión): una sesión de 30 días creada hace 20 días, de admin y de editor, SIN fila de uso, sigue valiendo; y al apagar y volver a encender también', { skip: SALTAR }, async () => {
+  const m = await mundo({ flag: true });
+  const a = await m.sesion(m.ana, { creada: Date.now() - 20 * DIA, expira: Date.now() + 10 * DIA }), e = await m.sesion(m.beto, { creada: Date.now() - 25 * DIA, expira: Date.now() + 5 * DIA });
+  assert.equal((await m.yo(a.t)).status, 200); assert.equal((await m.yo(e.t)).status, 200);
+  assert.equal(m.db.prepare('select count(*) n from sesiones_uso').get().n, 2, 'la fila se graba en esa misma petición');
+  // apagado un tiempo (la fila queda vieja) y vuelto a encender: lo único que cuenta es lo que dice la fila
+  await guardarDoc(m.d1, 'config-local', {}); olvidarFlagSesion(m.d1);
+  m.db.prepare('update sesiones_uso set last_used_at = ?').run(iso(Date.now() - 3 * DIA));
+  await guardarDoc(m.d1, 'config-local', { sesion: { deslizante: true } }); olvidarFlagSesion(m.d1);
+  assert.equal((await m.yo(a.t)).status, 200); assert.equal((await m.yo(e.t)).status, 200);
+});
+
+test('flag ENCENDIDO y migración 0300 SIN aplicar: nadie recibe un 500, se sigue como con el flag apagado', { skip: SALTAR }, async () => {
+  const m = await mundo({ flag: true });
+  const s = await m.sesion(m.ana); m.db.exec('pragma foreign_keys = off; drop table sesiones_uso');
+  const r = await m.yo(s.t); assert.equal(r.status, 200);
+  assert.equal((await m.yo(s.t, '/api/yo/sesiones')).status, 200);
+});
+
+test('cerrar una sesión cierra también el socket en vivo de esa persona', { skip: SALTAR }, async () => {
+  const m = await mundo({ flag: true }), llamadas = [];
+  m.env.HUB = { idFromName: () => 'h', get: () => ({ fetch: async (rq) => { llamadas.push(new URL(rq.url).pathname); return new Response('{}'); } }) };
+  const a1 = await m.sesion(m.ana), a2 = await m.sesion(m.ana);
+  assert.equal((await m.yo(a1.t, '/api/yo/sesiones/cerrar', 'POST', { id: a2.h.slice(0, 16) })).status, 200);
+  assert.ok(llamadas.includes('/cerrar'), JSON.stringify(llamadas));
+});
+
 test('flag ENCENDIDO: admin y editor pierden la sesión tras 14 días sin usarla; lectura no tiene ese tope', { skip: SALTAR }, async () => {
   const m = await mundo({ flag: true });
   const a = await m.sesion(m.ana, { creada: Date.now() - 20 * DIA, expira: Date.now() + 10 * DIA, uso: Date.now() - 15 * DIA });
-  const e = await m.sesion(m.beto, { creada: Date.now() - 16 * DIA, expira: Date.now() + 14 * DIA }); // nunca usada: cuenta desde su creación
   const l = await m.sesion(m.leo, { creada: Date.now() - 20 * DIA, expira: Date.now() + 10 * DIA, uso: Date.now() - 15 * DIA });
   const ok = await m.sesion(m.ana, { creada: Date.now() - 20 * DIA, expira: Date.now() + 10 * DIA, uso: Date.now() - 13 * DIA });
-  assert.equal((await m.yo(a.t)).status, 401); assert.equal((await m.yo(e.t)).status, 401);
+  assert.equal((await m.yo(a.t)).status, 401);
   assert.equal((await m.yo(l.t)).status, 200); assert.equal((await m.yo(ok.t)).status, 200);
   assert.equal(m.db.prepare('select count(*) n from sessions where token_hash = ?').get(a.h).n, 0, 'la inactiva se borra');
 });

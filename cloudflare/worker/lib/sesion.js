@@ -90,21 +90,28 @@ const COLUMNAS_USUARIO = 'u.id, u.email, u.rol, p.nombre, p.color, p.foto_clave,
 export async function usuarioDeLaPeticion(db, req) {
   const bruto = leerCookie(req);
   if (!bruto) return null;
-  const hash = await sha256(bruto), desliza = await sesionDeslizante(db);
-  const f = await db.prepare(
-    `select ${COLUMNAS_USUARIO}, s.created_at as s_creada, s.expires_at as s_expira${desliza ? ', su.last_used_at as s_uso' : ''}
-       from sessions s join users u on u.id = s.user_id left join perfiles p on p.user_id = u.id${desliza ? ' left join sesiones_uso su on su.token_hash = s.token_hash' : ''}
+  const hash = await sha256(bruto);
+  const consulta = (conUso) => db.prepare(
+    `select ${COLUMNAS_USUARIO}, s.created_at as s_creada, s.expires_at as s_expira${conUso ? ', su.last_used_at as s_uso' : ''}
+       from sessions s join users u on u.id = s.user_id left join perfiles p on p.user_id = u.id${conUso ? ' left join sesiones_uso su on su.token_hash = s.token_hash' : ''}
       where s.token_hash = ? and s.expires_at > ? and p.baja_at is null`).bind(hash, ahora()).first();
+  let desliza = await sesionDeslizante(db), f;
+  if (desliza) { try { f = await consulta(true); } catch (e) { console.warn('[sesión] sesiones_uso no está (¿migración 0300 sin aplicar?); sigo como con el flag apagado:', e?.message ?? e); desliza = false; } }
+  if (!desliza) f = await consulta(false);
   if (!f) return null;
   if (desliza) {
-    const t = Date.now(), ultimo = Date.parse(f.s_uso || f.s_creada) || 0, faltan = (Date.parse(f.s_expira) || 0) - t;
+    const t = Date.now(), faltan = (Date.parse(f.s_expira) || 0) - t;
+    // Sin fila de uso (sesiones de antes de encender el flag, o filas viejas tras apagarlo y volver a encenderlo) NO se sabe cuándo se usó por última vez: cuenta como «ahora».
+    // Contar desde su creación desconectaba a quien tenía una sesión de 30 días de hace más de 14 aunque la hubiera usado ayer. La fila se graba en esta misma petición.
+    const ultimo = f.s_uso ? Date.parse(f.s_uso) || t : t;
     if (f.rol !== 'lectura' && t - ultimo > INACTIVIDAD_MS) { await db.prepare('delete from sessions where token_hash = ?').bind(hash).run(); return null; }
     const renovar = faltan < RENOVAR_SI_FALTAN_MS;
-    if (renovar || t - ultimo > RENOVAR_SI_FALTAN_MS) { // una escritura por día y sesión
+    if (!f.s_uso || renovar || t - ultimo > RENOVAR_SI_FALTAN_MS) { // una escritura por día y sesión
       try {
-        if (renovar) await db.prepare('update sessions set expires_at = ? where token_hash = ?').bind(enHoras(HORAS_DESLIZANTE), hash).run();
+        let renovada = false;
+        if (renovar) renovada = ((await db.prepare('update sessions set expires_at = ? where token_hash = ? and expires_at = ?').bind(enHoras(HORAS_DESLIZANTE), hash, f.s_expira).run()).meta?.changes ?? 1) > 0; // solo si nadie la renovó entre medias
         await db.prepare('insert into sesiones_uso (token_hash, last_used_at) values (?,?) on conflict (token_hash) do update set last_used_at = excluded.last_used_at').bind(hash, new Date(t).toISOString()).run();
-        if (renovar) renovadas.set(req, cookieSesion(bruto, HORAS_DESLIZANTE * 3600));
+        if (renovada) renovadas.set(req, cookieSesion(bruto, HORAS_DESLIZANTE * 3600));
       } catch (e) { console.warn('[sesión] renovar:', e?.message ?? e); } // renovar no puede tumbar la petición
     }
   }
@@ -114,9 +121,11 @@ export async function usuarioDeLaPeticion(db, req) {
 /** Las sesiones de una persona, para «dónde tengo la sesión abierta». El id es un prefijo del hash (no sirve para entrar). */
 export async function sesionesDe(db, userId, req) {
   const propia = await sha256(leerCookie(req) ?? '');
-  const desliza = await sesionDeslizante(db);
-  const filas = (await db.prepare(`select s.token_hash, s.created_at, s.expires_at, s.user_agent${desliza ? ', su.last_used_at' : ''} from sessions s${desliza ? ' left join sesiones_uso su on su.token_hash = s.token_hash' : ''}
+  const leer = async (conUso) => (await db.prepare(`select s.token_hash, s.created_at, s.expires_at, s.user_agent${conUso ? ', su.last_used_at' : ''} from sessions s${conUso ? ' left join sesiones_uso su on su.token_hash = s.token_hash' : ''}
       where s.user_id = ? and s.expires_at > ? order by s.created_at desc limit 50`).bind(userId, ahora()).all()).results ?? [];
+  let filas;
+  if (await sesionDeslizante(db)) { try { filas = await leer(true); } catch { filas = null; } }
+  filas ??= await leer(false);
   return filas.map((f) => ({ id: f.token_hash.slice(0, 16), dispositivo: dispositivoDe(f.user_agent), creada: f.created_at, ultimoUso: f.last_used_at || f.created_at, expira: f.expires_at, actual: f.token_hash === propia }));
 }
 /** «Chrome en Windows», «Safari en iPhone»… sin guardar ni mostrar el texto crudo del navegador. */

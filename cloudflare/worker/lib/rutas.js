@@ -111,6 +111,7 @@ async function manejarInterno(req, env, exec = null) {
     const b = await cuerpo(req);
     if (!(await cerrarSesionPorId(db, usuario.id, b?.id, req))) return error('Esa sesión no existe o es la que estás usando (para esa, usa «Salir»).', 404);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'sesion', usuario.email, JSON.stringify({ cerro: 'una' })).run();
+    await cerrarDe(env, usuario.id, 'sesión cerrada desde otro dispositivo'); // el socket de ese dispositivo cae; las demás pestañas de esta persona reconectan con su sesión vigente
     return json({ ok: true, sesiones: await sesionesDe(db, usuario.id, req) });
   }
   if (ruta === '/api/yo/sesiones/cerrar-todas' && req.method === 'POST') {
