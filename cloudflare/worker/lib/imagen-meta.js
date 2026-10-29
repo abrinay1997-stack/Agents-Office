@@ -93,3 +93,23 @@ export async function obtener({ crudo, bucket, fetchFn, cupo, ifNoneMatch }) {
   if (bucket) { try { await bucket.put(`${RAIZ}${clave}.${r.tipo}`, r.bytes, { httpMetadata: { contentType: `image/${r.tipo}` } }); } catch { /* sin copia: se sirve igual */ } }
   return { estado: 200, tipo: r.tipo, bytes: r.bytes, etag: clave };
 }
+
+/* ---------- SEG-09 · la copia en R2 no crece sin tope ----------
+   Antes: ninguna expiración ni tope total. Ahora la poda diaria (lib/rutas.js → correrReloj, a la hora de `tocaPodar`) borra lo subido hace más de 30 días y, si aún pasa de 200 MB, lo más viejo hasta bajar a 160 MB.
+   Lo borrado se vuelve a bajar si Meta aún entrega la URL (si no, 404 y el avatar vuelve a su inicial). Como mucho 5 páginas de 1.000 objetos por pasada: una poda atrasada se pone al día en los días siguientes. */
+export const DIAS_COPIA = 30, TOPE_TOTAL_BYTES = 200 * 1024 * 1024, BAJAR_A_BYTES = 160 * 1024 * 1024, PAGINAS_PODA = 5;
+export async function podarImagenesMeta(bucket, ahoraMs = Date.now(), { dias = DIAS_COPIA, tope = TOPE_TOTAL_BYTES, objetivo = BAJAR_A_BYTES } = {}) {
+  if (!bucket?.list) return { vistas: 0, borradas: 0, bytes: 0 };
+  const objetos = []; let cursor;
+  for (let i = 0; i < PAGINAS_PODA; i++) {
+    const r = await bucket.list({ prefix: RAIZ, limit: 1000, ...(cursor ? { cursor } : {}) });
+    objetos.push(...(r.objects || [])); if (!r.truncated) { cursor = null; break; } cursor = r.cursor;
+  }
+  const t = (o) => new Date(o.uploaded ?? 0).getTime() || 0, corte = ahoraMs - dias * 864e5, borrar = [];
+  let total = objetos.reduce((a, o) => a + (o.size || 0), 0);
+  const vivos = [];
+  for (const o of objetos) { if (t(o) < corte) { borrar.push(o.key); total -= o.size || 0; } else vivos.push(o); }
+  if (total > tope) for (const o of vivos.sort((a, b) => t(a) - t(b))) { if (total <= objetivo) break; borrar.push(o.key); total -= o.size || 0; }
+  for (let i = 0; i < borrar.length; i += 500) await bucket.delete(borrar.slice(i, i + 500));
+  return { vistas: objetos.length, borradas: borrar.length, bytes: total, incompleta: Boolean(cursor) };
+}
