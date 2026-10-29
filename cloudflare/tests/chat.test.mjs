@@ -165,3 +165,55 @@ test('una persona quitada del equipo deja sus mensajes con su nombre y ya no ent
   o.db.prepare("insert into perfiles (user_id, baja_at) values (?, 1) on conflict (user_id) do update set baja_at = 1").run(o.dani);
   assert.equal((await o.llamar(o.beto, `${C}/directo`, { metodo: 'POST', cuerpo: { con: o.dani } })).status, 404);
 });
+
+test('resumen en una consulta por lote, no una por canal (tope de consultas del plan gratuito)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  for (let i = 0; i < 8; i++) { const id = (await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Canal ' + i, miembros: [o.dani] } })).j.id; await escribe(o, o.beto, id, 'hola ' + i); }
+  let n = 0; const real = o.d1.prepare.bind(o.d1); o.d1.prepare = (sql) => { n++; return real(sql); };
+  const { resumen } = await import('../worker/lib/chat/chat.js'); const r = await resumen(o.d1, { id: o.dani, rol: 'editor' });
+  assert.equal(r.canales.length, 9); assert.ok(r.canales.every((c) => c.id === 'general' || c.ultimo?.texto.startsWith('hola')), 'trae el último mensaje de cada uno'); assert.ok(n <= 6, `consultas: ${n}`);
+});
+
+test('topes al crear: 20 canales por persona, 10 miembros iniciales, 10 altas por minuto (canales y directos)', { skip: SALTAR }, async () => {
+  const o = await oficina(); const ahora = Date.now();
+  const gente = Array.from({ length: 14 }, (_, i) => { const id = crypto.randomUUID(); o.db.prepare("insert into users (id,email,rol,password_hash,salt) values (?,?, 'editor','x','x')").run(id, `p${i}@x.test`); o.db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(id, 'Persona ' + i); return id; });
+  const c = (await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Grande', miembros: gente } })).j; assert.equal(c.miembros, 11, 'tú + 10 como mucho');
+  o.db.prepare('delete from publica_tasa').run();
+  for (let i = 0; i < 19; i++) { o.db.prepare('delete from publica_tasa').run(); assert.equal((await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Extra ' + i } })).status, 201); }
+  o.db.prepare('delete from publica_tasa').run();
+  assert.equal((await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Uno más' } })).status, 429, 'el canal 21');
+  o.db.prepare('delete from publica_tasa').run();
+  for (let i = 0; i < 10; i++) assert.equal((await o.llamar(o.dani, `${C}/directo`, { metodo: 'POST', cuerpo: { con: gente[i] } })).status, 200);
+  assert.equal((await o.llamar(o.dani, `${C}/directo`, { metodo: 'POST', cuerpo: { con: gente[11] } })).status, 429, 'ráfaga de altas'); void ahora;
+});
+
+test('un nombre privado no delata nada: crear un canal con el nombre de uno privado ajeno no da 409', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Despidos', privado: true } });
+  const r = await o.llamar(o.dani, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'despidos' } }); assert.equal(r.status, 201, 'sin pista de que existe');
+  assert.equal((await o.llamar(o.ana, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'DESPIDOS' } })).status, 409, 'público contra público sí (ambos lo ven)');
+});
+
+test('#general: se lee antes de escribir y, al encender el chat, todas las cuentas quedan dentro', { skip: SALTAR }, async () => {
+  const o = await oficina({ activo: false });
+  assert.equal(o.db.prepare('select count(*) n from chat_miembros').get().n, 0);
+  await o.llamar(o.ana, `${C}/config`, { metodo: 'POST', cuerpo: { activo: true } });
+  assert.equal(o.db.prepare("select count(*) n from chat_miembros where canal_id = 'general'").get().n, 4, 'las 4 cuentas, sin que nadie lo haya usado');
+  await o.llamar(o.beto, `${C}/resumen`);
+  const escrituras = []; const real = o.d1.prepare.bind(o.d1); o.d1.prepare = (sql) => { if (/insert|update|delete/i.test(sql) && /chat_/.test(sql)) escrituras.push(sql); return real(sql); };
+  await o.llamar(o.beto, `${C}/resumen`); assert.deepEqual(escrituras, [], 'una petición normal no escribe en el chat');
+});
+
+test('salir de un canal: no se saca a quien no está, el canal nunca queda sin dueño (hereda el más antiguo) y sin nadie se archiva; editar recalcula menciones sin avisar', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const id = (await o.llamar(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Relevo', miembros: [o.dani] } })).j.id;
+  assert.equal((await o.llamar(o.beto, `${C}/canales/${id}/miembros`, { metodo: 'DELETE', cuerpo: { userId: o.ana } })).status, 404, 'Ana no está en el canal');
+  assert.equal((await o.llamar(o.dani, `${C}/canales/${id}/miembros`, { metodo: 'DELETE', cuerpo: { userId: o.beto } })).status, 403);
+  await o.llamar(o.beto, `${C}/canales/${id}/miembros`, { metodo: 'DELETE', cuerpo: {} });
+  assert.equal(o.db.prepare("select rol from chat_miembros where canal_id = ? and user_id = ?").get(id, o.dani).rol, 'dueno', 'heredó');
+  const m = (await escribe(o, o.dani, id, 'hola')).j.mensaje.id;
+  await o.llamar(o.dani, `${C}/mensajes/${m}`, { metodo: 'PATCH', cuerpo: { cuerpo: 'ahora sí @Beto' } }); assert.equal(o.db.prepare('select menciones from chat_mensajes where id = ?').get(m).menciones, '[]', 'Beto ya no es miembro: no se menciona');
+  await o.llamar(o.dani, `${C}/canales/${id}/miembros`, { metodo: 'DELETE', cuerpo: {} });
+  assert.equal(o.db.prepare('select archivado_at a from chat_canales where id = ?').get(id).a != null, true, 'sin nadie, se archiva');
+  assert.equal((await o.llamar(o.dani, `${C}/novedades?desde=0`)).j.mensajes.some((x) => x.canal === id), false, 'lo archivado no aparece en novedades');
+});

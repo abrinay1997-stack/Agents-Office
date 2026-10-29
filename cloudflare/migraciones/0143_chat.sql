@@ -19,7 +19,8 @@ create table if not exists chat_canales (
   ultimo_id integer not null default 0,
   ultimo_at integer
 );
-create unique index if not exists chat_canales_nombre on chat_canales (clave_nombre) where clave_nombre is not null;
+-- el nombre es único solo entre los PÚBLICOS (todos los ven): un 409 nunca confirma que existe un canal privado ajeno
+create unique index if not exists chat_canales_nombre on chat_canales (clave_nombre) where clave_nombre is not null and privado = 0;
 create table if not exists chat_miembros (
   canal_id text not null references chat_canales(id) on delete cascade,
   user_id text not null references users(id) on delete cascade,

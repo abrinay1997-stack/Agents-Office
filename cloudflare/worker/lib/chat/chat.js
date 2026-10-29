@@ -11,7 +11,7 @@ import { tasaPublica } from '../publica.js';
 import { cuerpoValido, nombreCanalValido, claveDirecto, leerMenciones, puedeEditar, tituloAviso, pagina, MAX_MENSAJES_POR_MINUTO } from '../../../../chat-core.mjs';
 
 export const DOC_CONFIG = 'chat.config';
-export const ID_GENERAL = 'general', MAX_MIEMBROS_INICIALES = 50, MAX_CANALES_POR_PERSONA = 200;
+export const ID_GENERAL = 'general', MAX_MIEMBROS_INICIALES = 10, MAX_CANALES_POR_PERSONA = 200, MAX_CANALES_CREADOS = 20, MAX_CREAR_POR_MINUTO = 10;
 const TROZO = 80; // límite de D1: ≤ 100 parámetros por sentencia
 
 export const leerConfig = async (db) => ({ activo: false, ...((await leerDoc(db, DOC_CONFIG, {})).valor || {}) });
@@ -19,6 +19,7 @@ export async function guardarConfig(db, cambios) {
   const nueva = { activo: (await leerConfig(db)).activo === true };
   if (typeof cambios?.activo === 'boolean') nueva.activo = cambios.activo;
   await guardarDoc(db, DOC_CONFIG, nueva);
+  if (nueva.activo) await sembrarGeneral(db); // al encender, todas las cuentas ya están en #general
   return nueva;
 }
 
@@ -46,8 +47,14 @@ async function nombresMensajes(db, ids) { // incluye a quien ya no está (el men
   return m;
 }
 
-/** #general existe desde el primer día y toda cuenta es miembro (se anota al usarlo). */
+/** Al encender el chat: #general y todas las cuentas activas dentro, en una sola sentencia. */
+export async function sembrarGeneral(db, ahora = Date.now()) {
+  await db.prepare("insert or ignore into chat_canales (id, tipo, nombre, clave_nombre, privado, creado_at) values (?, 'general', 'general', 'general', 0, ?)").bind(ID_GENERAL, ahora).run();
+  await db.prepare("insert or ignore into chat_miembros (canal_id, user_id, rol, desde) select ?, u.id, 'miembro', ? from users u left join perfiles p on p.user_id = u.id where p.baja_at is null").bind(ID_GENERAL, ahora).run();
+}
+/** #general existe desde el primer día y toda cuenta es miembro. Lee primero y escribe solo si falta (una cuenta nueva): no son dos escrituras por petición. */
 export async function asegurarGeneral(db, userId, ahora = Date.now()) {
+  if (await db.prepare('select 1 x from chat_miembros where canal_id = ? and user_id = ?').bind(ID_GENERAL, userId).first()) return;
   await db.prepare("insert or ignore into chat_canales (id, tipo, nombre, clave_nombre, privado, creado_at) values (?, 'general', 'general', 'general', 0, ?)").bind(ID_GENERAL, ahora).run();
   await db.prepare('insert or ignore into chat_miembros (canal_id, user_id, rol, desde) values (?,?,?,?)').bind(ID_GENERAL, userId, 'miembro', ahora).run();
 }
@@ -57,10 +64,10 @@ export const miembroDe = (db, canalId, userId) => db.prepare('select m.canal_id,
 export async function resumen(db, usuario) {
   await asegurarGeneral(db, usuario.id);
   const { results } = await db.prepare(`select c.id, c.tipo, c.nombre, c.privado, c.ultimo_id, c.ultimo_at, m.leido_hasta, m.silenciado,
-      (select count(*) from chat_miembros x where x.canal_id = c.id) miembros,
+      (select count(*) from chat_miembros x where x.canal_id = c.id) miembros, u.user_id u_user, u.cuerpo u_cuerpo, u.creado_at u_at, u.borrado_at u_borrado,
       (select count(*) from chat_mensajes g where g.canal_id = c.id and g.id > m.leido_hasta and g.user_id is not ? and g.borrado_at is null) no_leidos,
       (select count(*) from chat_mensajes g where g.canal_id = c.id and g.id > m.leido_hasta and g.user_id is not ? and g.borrado_at is null and exists (select 1 from json_each(g.menciones) j where j.value = ?)) menciones
-      from chat_miembros m join chat_canales c on c.id = m.canal_id where m.user_id = ? and c.archivado_at is null order by coalesce(c.ultimo_at, c.creado_at) desc limit ?`).bind(usuario.id, usuario.id, usuario.id, usuario.id, MAX_CANALES_POR_PERSONA).all();
+      from chat_miembros m join chat_canales c on c.id = m.canal_id left join chat_mensajes u on u.id = c.ultimo_id where m.user_id = ? and c.archivado_at is null order by coalesce(c.ultimo_at, c.creado_at) desc limit ?`).bind(usuario.id, usuario.id, usuario.id, usuario.id, MAX_CANALES_POR_PERSONA).all();
   const directos = results.filter((c) => c.tipo === 'directo');
   const otros = new Map();
   for (const t of trozos(directos.map((c) => c.id))) {
@@ -70,9 +77,8 @@ export async function resumen(db, usuario) {
   const nombres = await nombresMensajes(db, [...otros.values()]);
   const canales = [];
   for (const c of results) {
-    const ultimo = c.ultimo_id ? await db.prepare('select m.user_id, m.cuerpo, m.creado_at, m.borrado_at from chat_mensajes m where m.id = ?').bind(c.ultimo_id).first() : null;
     canales.push({ id: c.id, tipo: c.tipo, nombre: c.tipo === 'directo' ? (nombres.get(otros.get(c.id)) || 'alguien que ya no está') : c.nombre, privado: !!c.privado, miembros: c.miembros, noLeidos: c.no_leidos, menciones: c.menciones, silenciado: !!c.silenciado,
-      ultimo: ultimo && !ultimo.borrado_at ? { texto: ultimo.cuerpo.slice(0, 80), at: ultimo.creado_at, propio: ultimo.user_id === usuario.id } : null });
+      ultimo: c.u_at && !c.u_borrado ? { texto: c.u_cuerpo.slice(0, 80), at: c.u_at, propio: c.u_user === usuario.id } : null });
   }
   // la campanita: lo no leído de canales NO silenciados + las menciones y los directos aunque estén silenciados
   const total = canales.reduce((s, c) => s + (c.tipo === 'directo' || !c.silenciado ? c.noLeidos : c.menciones), 0);
@@ -87,12 +93,14 @@ export async function publicos(db, usuario) {
 
 export async function crearCanal(db, usuario, { nombre, privado, miembros }, ahora = Date.now()) {
   const n = nombreCanalValido(nombre); if (!n.ok) return err(n.error, 400);
-  if (n.clave === 'general') return err('Ese nombre ya lo usa #general.', 409);
+  if (!privado && n.clave === 'general') return err('Ese nombre ya lo usa #general.', 409);
+  if (!(await tasaPublica(db, 'chatcrear:' + usuario.id, MAX_CREAR_POR_MINUTO, ahora)).ok) return err('Vas muy rápido: espera un momento antes de crear otro canal.', 429);
+  if (((await db.prepare("select count(*) n from chat_canales where creado_por = ? and tipo = 'canal' and archivado_at is null").bind(usuario.id).first())?.n ?? 0) >= MAX_CANALES_CREADOS) return err(`Ya creaste ${MAX_CANALES_CREADOS} canales. Archiva o deja uno antes de crear otro.`, 429);
   const otros = [...new Set((Array.isArray(miembros) ? miembros : []).map(String))].filter((id) => id !== usuario.id).slice(0, MAX_MIEMBROS_INICIALES);
   const gente = await personasPorId(db, otros);
   const id = idCorto();
   try { await db.prepare("insert into chat_canales (id, tipo, nombre, clave_nombre, privado, creado_por, creado_at) values (?, 'canal', ?, ?, ?, ?, ?)").bind(id, n.nombre, n.clave, privado ? 1 : 0, usuario.id, ahora).run(); }
-  catch { return err('Ya hay un canal con ese nombre.', 409); }
+  catch { return err('Ya hay un canal público con ese nombre.', 409); } // el índice único es solo de los públicos (visibles para todos): un nombre privado nunca delata nada
   await db.batch([db.prepare("insert into chat_miembros (canal_id, user_id, rol, desde) values (?,?, 'dueno', ?)").bind(id, usuario.id, ahora), ...[...gente.keys()].map((u) => db.prepare("insert or ignore into chat_miembros (canal_id, user_id, rol, desde) values (?,?, 'miembro', ?)").bind(id, u, ahora))]);
   return { id, nombre: n.nombre, privado: !!privado, miembros: 1 + gente.size };
 }
@@ -101,6 +109,7 @@ export async function crearCanal(db, usuario, { nombre, privado, miembros }, aho
 export async function abrirDirecto(db, usuario, conId, ahora = Date.now()) {
   if (!conId || String(conId) === usuario.id) return err('Elige a otra persona.', 400);
   const con = (await personasPorId(db, [String(conId)])).get(String(conId)); if (!con) return err('Esa persona no está en la oficina.', 404);
+  if (!(await tasaPublica(db, 'chatcrear:' + usuario.id, MAX_CREAR_POR_MINUTO, ahora)).ok) return err('Vas muy rápido: espera un momento.', 429);
   const clave = claveDirecto(usuario.id, con.id);
   let c = await db.prepare('select id from chat_canales where clave_directo = ?').bind(clave).first();
   if (!c) {
@@ -126,11 +135,20 @@ export async function anadirMiembro(db, usuario, canalId, { userId } = {}, ahora
   return { ok: true };
 }
 /** Salir de un canal, o sacar a alguien (el dueño). #general y los directos no se dejan. */
-export async function quitarMiembro(db, usuario, canalId, { userId } = {}) {
+export async function quitarMiembro(db, usuario, canalId, { userId } = {}, ahora = Date.now()) {
   const yo = await miembroDe(db, canalId, usuario.id); if (!yo || yo.tipo === 'general' || yo.tipo === 'directo') return err('Canal no encontrado', 404);
   const objetivo = userId && String(userId) !== usuario.id ? String(userId) : usuario.id;
-  if (objetivo !== usuario.id && yo.rol !== 'dueno') return err('Solo quien creó el canal puede sacar a alguien.', 403);
+  if (objetivo !== usuario.id) {
+    if (yo.rol !== 'dueno') return err('Solo quien creó el canal puede sacar a alguien.', 403);
+    if (!(await miembroDe(db, canalId, objetivo))) return err('Esa persona no está en el canal.', 404);
+  }
   await db.prepare('delete from chat_miembros where canal_id = ? and user_id = ?').bind(String(canalId), objetivo).run();
+  // un canal nunca se queda sin dueño: pasa a quien lleva más tiempo; sin nadie, se archiva
+  if (!(await db.prepare("select 1 x from chat_miembros where canal_id = ? and rol = 'dueno'").bind(String(canalId)).first())) {
+    const heredero = await db.prepare('select user_id from chat_miembros where canal_id = ? order by desde, user_id limit 1').bind(String(canalId)).first();
+    if (heredero) await db.prepare("update chat_miembros set rol = 'dueno' where canal_id = ? and user_id = ?").bind(String(canalId), heredero.user_id).run();
+    else await db.prepare('update chat_canales set archivado_at = ? where id = ?').bind(ahora, String(canalId)).run();
+  }
   return { ok: true };
 }
 
@@ -184,7 +202,10 @@ export async function editar(db, usuario, id, cuerpo, ahora = Date.now()) {
   if (!m || !(await miembroDe(db, m.canal_id, usuario.id))) return err('Mensaje no encontrado', 404);
   if (!puedeEditar(m, usuario.id, ahora)) return err('Solo puedes editar lo tuyo, hasta 15 minutos después.', 403);
   const v = cuerpoValido(cuerpo); if (!v.ok) return err(v.error, 400);
-  await db.prepare('update chat_mensajes set cuerpo = ?, editado_at = ? where id = ?').bind(v.cuerpo, ahora, m.id).run();
+  const { results: ms } = await db.prepare('select user_id from chat_miembros where canal_id = ?').bind(m.canal_id).all();
+  const gente = await personasPorId(db, ms.map((x) => x.user_id)), esDirecto = (await miembroDe(db, m.canal_id, usuario.id)).tipo === 'directo';
+  const menciones = esDirecto ? [] : leerMenciones(v.cuerpo, [...gente.values()], usuario.id); // las menciones siguen al texto; editar no vuelve a avisar a nadie
+  await db.prepare('update chat_mensajes set cuerpo = ?, menciones = ?, editado_at = ? where id = ?').bind(v.cuerpo, JSON.stringify(menciones), ahora, m.id).run();
   return { ok: true };
 }
 /** Borrar = lápida. Lo propio; un administrador, en canales PÚBLICOS. */
@@ -212,7 +233,7 @@ export async function silenciar(db, usuario, canalId, silenciado) {
 /** La «puesta al día»: lo que pasó después del mensaje `desde` en MIS canales (hasta 200). */
 export async function novedades(db, usuario, desde) {
   const d = Math.max(Number.parseInt(String(desde), 10) || 0, 0);
-  const { results } = await db.prepare(`select g.id, g.canal_id, g.user_id, g.tipo, g.cuerpo, g.responde_a, g.menciones, g.creado_at, g.editado_at, g.borrado_at from chat_mensajes g join chat_miembros m on m.canal_id = g.canal_id and m.user_id = ? where g.id > ? order by g.id limit 200`).bind(usuario.id, d).all();
+  const { results } = await db.prepare(`select g.id, g.canal_id, g.user_id, g.tipo, g.cuerpo, g.responde_a, g.menciones, g.creado_at, g.editado_at, g.borrado_at from chat_mensajes g join chat_miembros m on m.canal_id = g.canal_id and m.user_id = ? join chat_canales k on k.id = g.canal_id and k.archivado_at is null where g.id > ? order by g.id limit 200`).bind(usuario.id, d).all();
   const nombres = await nombresMensajes(db, results.map((r) => r.user_id));
   return { mensajes: results.map((r) => ({ ...fila(r, nombres, usuario.id), canal: r.canal_id })), ultimo: results.length ? results.at(-1).id : d };
 }
