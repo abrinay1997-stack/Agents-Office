@@ -65,7 +65,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
-import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
+import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -563,6 +563,10 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
 }
 const ask = async (system, user, opts) => (await askX(system, user, { tools: false, ...opts })).text;
 const descripcionLocal = crearDescripcionLocal({ media, copiaParaVer, ask: (sy, u, o) => askX(sy, u, o), auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, activo: () => cfg.estudio?.descripcionesIA === true, topeUsd: () => +cfg.estudio?.descripcionesTopeUsd || 1, modelo: cfg.model, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`, presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) } }); // 11.1
+const biblia = crearBiblia({ BRAIN, DATA, renombrar, ask: (sy, u, o) => askX(sy, u, o), activo: () => cfg.dimitri?.series === true, ahora: () => Date.now(),
+  presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) },
+  imagenes: () => media.list({ limit: 600 }).filter(f => (f.fav || (Array.isArray(f.used) && f.used.length)) && f.desc).slice(0, 12),
+  notas: () => [...vaultIndex().entries()].filter(([n]) => /brand|marca|voice|contexto|guideline|visual/i.test(n)).slice(0, 6).map(([nombre, texto]) => ({ nombre, texto: String(texto) })) }); // 11.2
 function parseJSON(text) {
   const s = text.replace(/```json|```/g, ''); const a = s.indexOf('{'), b = s.lastIndexOf('}');
   return JSON.parse(s.slice(a, b + 1));
@@ -3029,6 +3033,10 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
     }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: STUDIO_DEFAULTS(), ...(minimaxOn() ? { voices: voces.summary() } : {}) });
+    if (url.pathname.startsWith('/api/biblia')) { // 29 oct 2026 (11.2): la biblia visual y las hojas de personaje (notas del Cerebro). Lee y guarda; proponer gasta un poco y es del dueño con el flag dimitri.series
+      const b = req.method === 'GET' ? {} : await body(req), r = await biblia.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
+      if (r) return json(res, r.estado, r.cuerpo);
+    }
     if (url.pathname === '/api/media/describir') { // 29 oct 2026 (11.1): GET = lo descrito y el costo de lo que falta (no gasta) · POST = describir con visión (solo el dueño, con el costo confirmado; apagado por defecto)
       const sel = req.method === 'GET' ? { ids: (url.searchParams.get('ids') || '').split(',').filter(Boolean), folder: url.searchParams.get('folder') || undefined, q: url.searchParams.get('q') || undefined } : null;
       if (sel) return json(res, 200, { ...descripcionLocal.leer(sel, { pagina: +url.searchParams.get('pagina') || 1 }), activo: cfg.estudio?.descripcionesIA === true });
