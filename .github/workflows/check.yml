@@ -23,6 +23,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: "npm audit - falla solo con high o critical en dependencias de producción"
+        # Las `moderate` de hoy (@anthropic-ai/sdk 0.79-0.91 y uuid vía exceljs) NO bloquean: su arreglo exige saltos mayores (sdk 1.x, exceljs 3.x) que se hacen aparte.
+        # Si el registro de npm no contesta (red), es un aviso, no un rojo: lo que bloquea es una vulnerabilidad, no una caída de red.
+        run: |
+          set +e
+          salida=$(npm audit --audit-level=high --omit=dev 2>&1); codigo=$?
+          echo "$salida" | tail -40
+          if [ $codigo -ne 0 ]; then
+            if echo "$salida" | grep -qiE "vulnerabilit"; then exit $codigo; fi
+            echo "::warning::npm audit no pudo consultar el registro (no es una vulnerabilidad); se omite esta vez."
+          fi
       - name: Secrets (keys, cards, ID cards)
         run: npm run secrets
       - name: Unit tests
