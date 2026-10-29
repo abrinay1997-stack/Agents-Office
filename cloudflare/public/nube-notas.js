@@ -7,7 +7,7 @@
   const { api, esc } = N;
   const COLORES = [['amarillo', 'Amarillo'], ['rosa', 'Rosa'], ['verde', 'Verde'], ['azul', 'Azul'], ['lila', 'Lila'], ['naranja', 'Naranja']];
   const TOPE = 500, CADA_MS = 60_000, SI_APAGADO_MS = 300_000;
-  let campana = null, hoja = null, datos = null, activo = false, pref = null, transparencia = '', esAdmin = false, aviso = [], avisoT = 0, timer = 0, personas = null, abierta = false, mensaje = '';
+  let campana = null, hoja = null, datos = null, activo = false, pref = null, tg = null, codigoTg = null, tgT = 0, transparencia = '', esAdmin = false, aviso = [], avisoT = 0, timer = 0, personas = null, abierta = false, mensaje = '';
 
   const cuenta = () => (datos ? (datos.notas?.length || 0) + (datos.notificaciones?.noLeidas || 0) : 0);
   const hace = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
@@ -53,7 +53,26 @@
   function prefsHTML() {
     if (!pref) return '<p class="nt-vacio">Cargando…</p>';
     return `<div class="nt-pref">${esAdmin ? `<label><input type="checkbox" data-p="avisarme"${pref.avisarme ? ' checked' : ''}> Avisarme en la oficina cuando alguien se conecta</label>` : ''}
-      <label><input type="checkbox" data-p="noAvisar"${pref.noAvisar ? ' checked' : ''}> No avisar que me conecto</label><p class="nt-transp">${esc(transparencia)}</p></div>`;
+      ${esAdmin && pref.avisarme ? `<label><input type="checkbox" data-p="telegram"${pref.telegram ? ' checked' : ''}> Avisarme también por Telegram (solo si no estás dentro)</label>` : ''}
+      <label><input type="checkbox" data-p="noAvisar"${pref.noAvisar ? ' checked' : ''}> No avisar que me conecto</label><p class="nt-transp">${esc(transparencia)}</p></div>${tgHTML()}`;
+  }
+  const tgHTML = () => {
+    if (!tg || !tg.activo || !tg.disponible) return '';
+    const e = tg.estado, caja = (t) => `<div class="nt-tg"><b>Telegram</b> ${t}</div>`;
+    if (tg.rol === 'admin') return caja(e === 'admin' ? 'conectado (por la lista de administradores).' : 'sin conectar: pon tu id en Ajustes → Telegram.');
+    if (e === 'activa') return caja(`conectado${tg.username ? ' como @' + esc(tg.username) : ''}. <button type="button" class="sg-btn" data-a="tg-quitar">Desvincular</button>`);
+    if (e === 'pendiente') return caja(`<p>El Telegram <b>${tg.username ? '@' + esc(tg.username) : 'sin nombre de usuario'}</b> quiere vincularse a tu cuenta. ¿Eres tú?</p><button type="button" class="sg-btn pri" data-a="tg-ok">Confirmar</button> <button type="button" class="sg-btn" data-a="tg-no">Rechazar</button>`);
+    if (e === 'codigo' && codigoTg) return caja(`<p>Escríbele al bot de la oficina: <code class="nt-cod">/vincular ${esc(codigoTg)}</code></p><small>Vale 10 minutos y se usa una vez. Después, vuelve aquí a confirmar.</small>`);
+    return caja('sin conectar. <button type="button" class="sg-btn" data-a="tg-codigo">Conectar mi Telegram</button>');
+  };
+  async function cargarTg() { try { tg = await api('/api/vinculo-telegram'); if (tg.estado !== 'codigo') codigoTg = tg.estado === 'pendiente' ? null : codigoTg; } catch { /* sin Telegram: la hoja sigue */ } clearTimeout(tgT); if (abierta && tg && ['codigo', 'pendiente'].includes(tg.estado)) tgT = setTimeout(async () => { await cargarTg(); if (abierta) pintarHoja(); }, 4000); }
+  async function accionTg(a) {
+    try {
+      if (a === 'tg-codigo') { const d = await api('/api/vinculo-telegram/codigo', { metodo: 'POST', cuerpo: {} }); codigoTg = d.codigo; }
+      else if (a === 'tg-ok' || a === 'tg-no') { await api('/api/vinculo-telegram/confirmar', { metodo: 'POST', cuerpo: { aceptar: a === 'tg-ok' } }); codigoTg = null; N.aviso(a === 'tg-ok' ? 'Telegram conectado ✓' : 'Rechazado'); }
+      else if (a === 'tg-quitar') { await api('/api/vinculo-telegram/desvincular', { metodo: 'POST', cuerpo: {} }); N.aviso('Telegram desvinculado'); }
+    } catch (e) { N.aviso(e.message); }
+    await cargarTg(); if (abierta) pintarHoja();
   }
   async function cargarPref() { try { const d = await api('/api/notas-personales/preferencias-conexion'); if (d.activo) { pref = d.pref; esAdmin = d.esAdmin; transparencia = d.transparencia; } } catch { /* sin preferencias: la hoja sigue */ } }
   async function guardarPref(k, v) { try { const d = await api('/api/notas-personales/preferencias-conexion', { metodo: 'POST', cuerpo: { [k]: v } }); pref = d.pref; N.aviso('Guardado ✓'); } catch (e) { N.aviso(e.message); } if (abierta) pintarHoja(); }
@@ -81,7 +100,7 @@
     document.body.appendChild(hoja); pintarHoja(); pintarCampana(); hoja.focus();
     hoja.addEventListener('click', alClic); hoja.addEventListener('input', (e) => { if (e.target.id === 'nt-texto') contar(); }); hoja.addEventListener('submit', alEnviar); hoja.addEventListener('change', (e) => { const p = e.target.dataset?.p; if (p) guardarPref(p, e.target.checked); });
     document.addEventListener('keydown', alTecla);
-    await cargar(); if (!pref) { await cargarPref(); if (abierta) pintarHoja(); }
+    await cargar(); if (!pref) { await Promise.all([cargarPref(), cargarTg()]); if (abierta) pintarHoja(); }
     if (!personas) { try { personas = (await api('/api/notas-personales/personas')).personas; } catch { personas = []; } if (abierta) pintarHoja(); }
   }
   function alTecla(e) { if (e.key === 'Escape' && abierta) { e.stopPropagation(); cerrar(); } }
@@ -91,6 +110,7 @@
     const b = e.target.closest('[data-a]'); if (!b) return;
     const a = b.dataset.a, li = b.closest('[data-id]');
     if (a === 'x') return cerrar();
+    if (a.startsWith('tg-')) return accionTg(a);
     if (a === 'abrir') { const id = b.dataset.e.slice(6); cerrar(); location.hash = `#tareas=lista&t=${encodeURIComponent(id)}`; return; }
     try {
       if (a === 'leidas') await api('/api/notificaciones/leer', { metodo: 'POST', cuerpo: { todas: true } });

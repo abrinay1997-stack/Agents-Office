@@ -19,11 +19,11 @@ const SHIM = `window.AO_NUBE = { esc: (s) => String(s ?? '').replace(/[&<>"']/g,
   api: async (ruta, { metodo = 'GET', cuerpo } = {}) => { const r = await fetch(ruta, { method: metodo, headers: { 'content-type': 'application/json' }, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'falló'); return d; } };`;
 
 async function abrir({ activa, ancho = 1280 }) {
-  const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' }), env = envDePrueba(d1);
+  const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' }), env = envDePrueba(d1, { TELEGRAM_BOT_TOKEN: '123456789:AAFakeTokenFakeTokenFakeTokenFake_abc', TELEGRAM_OWNER_ID: '111222333', TELEGRAM_WEBHOOK_SECRET: 'secreto-del-webhook-de-prueba-123' }); // secrets-ok: de mentira
   const nueva = (email, rol, nombre) => { const id = crypto.randomUUID(); d1._db.prepare("insert into users (id,email,rol,password_hash,salt) values (?,?,?,'x','x')").run(id, email, rol); d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(id, nombre); return id; };
   const ana = d1._db.prepare('select id from users where email = ?').get(c.email).id; d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(ana, 'Ana');
   const beto = nueva('beto@panaclaw.test', 'editor', 'Beto');
-  if (activa) await guardarConfig(d1, { activo: true });
+  if (activa) { await guardarConfig(d1, { activo: true }); await (await import('../worker/lib/notificaciones.js')).guardarConfig(d1, { activo: true }); }
   const cookie = `__Host-sesion=${await abrirSesion(d1, beto)}`;
   const ctx = await nav.newContext({ viewport: { width: ancho, height: 800 } }), p = await ctx.newPage(), errores = [];
   p.on('pageerror', (e) => errores.push(String(e)));
@@ -91,5 +91,19 @@ test('«Ana se conectó»: aviso pequeño con el nombre escapado, se juntan las 
   await p.check('[data-p=noAvisar]'); await p.waitForFunction(() => document.querySelector('[data-p=noAvisar]')?.checked);
   const doc = async () => { for (let i = 0; i < 50; i++) { const f = d1._db.prepare('select json from docs where clave = ?').get('presencia.pref:' + beto); if (f) return JSON.parse(f.json); await new Promise((r) => setTimeout(r, 100)); } return null; }; // el guardado es asíncrono: se espera al hecho
   assert.equal((await doc())?.noAvisar, true);
+  assert.deepEqual(errores, []); await ctx.close();
+});
+
+test('«Conectar mi Telegram»: el editor pide un código, lo ve una vez (10 caracteres) y con él en pantalla el bot lo vincula; la hoja pide confirmar', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const { p, ctx, d1, beto, errores } = await abrir({ activa: true });
+  await p.waitForSelector('#nbCampana'); await p.click('#nbCampana'); await p.waitForSelector('[data-a=tg-codigo]');
+  await p.click('[data-a=tg-codigo]'); await p.waitForSelector('.nt-cod');
+  const cod = (await p.textContent('.nt-cod')).replace('/vincular', '').trim(); assert.match(cod, /^[2-9A-HJKMNP-Z]{10}$/);
+  assert.equal(d1._db.prepare('select count(*) n from cuenta_telegram where user_id = ? and codigo_hmac like ?').get(beto, '%' + cod + '%').n, 0, 'el código no está en claro');
+  const { canjearCodigo } = await import('../worker/lib/telegram-cuentas.js');
+  assert.equal(await canjearCodigo(d1, { TELEGRAM_BOT_TOKEN: 'x', TELEGRAM_WEBHOOK_SECRET: 'secreto-del-webhook-de-prueba-123' }, { telegramId: '700100200', username: 'beto_tg', codigo: cod }), true);
+  await p.waitForSelector('[data-a=tg-ok]', { timeout: 9000 }); assert.match(await p.textContent('.nt-tg'), /@beto_tg/);
+  await p.click('[data-a=tg-ok]'); await p.waitForSelector('[data-a=tg-quitar]');
   assert.deepEqual(errores, []); await ctx.close();
 });

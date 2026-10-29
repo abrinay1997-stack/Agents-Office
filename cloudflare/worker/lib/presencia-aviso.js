@@ -9,6 +9,8 @@
 import { leerDoc, guardarDoc } from './almacen.js';
 import { leerConfig as leerConfigNotif } from './notificaciones.js';
 import { difundir } from './vivo.js';
+import { leerCfg } from './ajustes.js';
+import { avisarPorTelegram, conectadosAhora, escHtml } from './telegram-cuentas.js';
 
 export const PREFIJO_PREF = 'presencia.pref:';
 export const TEXTO_TRANSPARENCIA = 'Se guarda solo cuándo entraste a la oficina y tu última actividad. Nunca qué hiciste, ni tu dirección de red, ni tu dispositivo. Quien lo pidió (un administrador) recibe un aviso cuando entras, salvo que elijas «No avisar que me conecto».';
@@ -31,26 +33,31 @@ export async function guardarPref(db, usuario, cambios) {
 }
 
 /** A quién le toca el aviso de que `quien` entró: administradores activos que lo pidieron, con la oficina como canal, que vigilan a `quien`; nunca al propio. → [ids] */
-export async function receptores(db, quien) {
+export async function receptores(db, quien, canal = 'oficina') {
   const { results } = await db.prepare("select u.id from users u left join perfiles p on p.user_id = u.id where u.rol = 'admin' and p.baja_at is null and u.id != ?").bind(quien.id).all();
   const ids = [];
   for (const { id } of results) {
     const p = await leerPref(db, id);
-    if (!p.avisarme || !p.oficina) continue;
+    if (!p.avisarme || !p[canal]) continue;
     if (p.de !== 'todas' && !p.de.includes(quien.id)) continue;
     ids.push(id);
   }
   return ids;
 }
 
-/** Tras tocarPresencia: si arrancó una visita nueva y la cuenta no pidió ocultarse, avisa a quien corresponde. Atrapa todo error. → cuántos receptores. */
+/** Tras tocarPresencia: si arrancó una visita nueva y la cuenta no pidió ocultarse, avisa a quien corresponde: dentro de la oficina (Hub, solo el id) y, para quien lo pidió, por Telegram
+ *  (una vez por visita, sin socket vivo, con su «no molestar»). Atrapa todo error. → cuántos receptores en la oficina. */
 export async function avisarConexion(db, env, usuario, visita) {
   try {
     if (!visita?.nueva || !(await leerConfigNotif(db)).activo) return 0;
     if ((await leerPref(db, usuario.id)).noAvisar) return 0;
     const para = await receptores(db, usuario);
-    if (!para.length) return 0;
-    difundir(env, { tipo: 'conexion', userId: usuario.id, para, at: Date.now() }); // solo el id: el nombre y la foto los resuelve la página con la presencia que ya tiene
+    if (para.length) difundir(env, { tipo: 'conexion', userId: usuario.id, para, at: Date.now() }); // solo el id: el nombre y la foto los resuelve la página con la presencia que ya tiene
+    const porTg = await receptores(db, usuario, 'telegram');
+    if (porTg.length) {
+      const cfg = await leerCfg(db), conectados = await conectadosAhora(env);
+      for (const id of porTg) await avisarPorTelegram(env, db, cfg, id, `<b>${escHtml(usuario.nombre || 'Alguien')}</b> se conectó a la oficina.`, { conectados });
+    }
     return para.length;
   } catch (e) { console.error('[presencia] no se pudo avisar:', e?.message ?? e); return 0; }
 }

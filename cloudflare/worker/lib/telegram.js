@@ -11,6 +11,7 @@ import { cargarTareas } from './tareas/sesion.js';
 import { leerContexto } from './tareas/contexto.js';
 import { leerCfg } from './ajustes.js';
 import { crearOffice } from './agentes/herramientas.js';
+import { avisarPorTelegram, usuarioPorNombre, conectadosAhora } from './telegram-cuentas.js';
 
 /** Los ids que mandan, AHORA: TELEGRAM_OWNER_ID (secreto) y los administradores que se registraron en Ajustes (`telegram.admins`) CUYO USUARIO SIGUE SIENDO ADMIN. Se mira en cada mensaje: degradar a alguien le quita el bot al instante. */
 export async function idsAdmins(env, db, cfg) {
@@ -115,7 +116,7 @@ export async function armar({ env, db, modulos, fetchFn = null, ahoraFn = () => 
   const refused = { get: (k) => st.refused[k], set: (k, v) => { st.refused[k] = v; } };
   // `saveSt` del bot: el estado vive en el objeto `st` y se guarda al terminar la invocación
   const bot = crearBot({ cfg: { ...cfg, deputy: { name: cfg.deputy?.name || 'Dimitri' } }, who, approvers, st, saveSt: () => {}, local, call, send, sendPieza, flushHeld: av.flushHeld, gastos, refused, silencioExtranos: true, log });
-  return { db, bot, av, st, guardar, send, call, who, notify, approvers, C, cfg, local, ahoraFn };
+  return { db, env, bot, av, st, guardar, send, call, who, notify, approvers, C, cfg, local, ahoraFn };
 }
 
 /** Un update de Telegram (el webhook). Primero se anota su número (Telegram reintenta si tarda: un botón no se pulsa dos veces) y luego `crearBot.procesar` decide quién es y qué hacer:
@@ -170,6 +171,11 @@ export async function salientes(t) {
 
 /** Un aviso para una persona del equipo (con su id de Telegram en Ajustes → Equipo): solo a ella, nunca al dueño. */
 async function alPersona(t, n) {
+  // N2 (D03): si la persona tiene una CUENTA con su Telegram vinculado, el aviso va ahí (con su «no molestar»); si no, el id de Ajustes → Equipo, como siempre.
+  try {
+    const u = await usuarioPorNombre(t.db, n.persona);
+    if (u) { const r = await avisarPorTelegram(t.env, t.db, t.cfg, u.id, esc(n.text), { conectados: await conectadosAhora(t.env) }); if (r !== 'omitido:sin-telegram' && r !== 'omitido:apagado') return; } // con su Telegram de cuenta (aunque esté en silencio) no se le manda también por el viejo
+  } catch { /* cae al camino de siempre */ }
   const p = t.C.persona(n.persona);
   if (p?.telegram && /^-?\d{4,15}$/.test(String(p.telegram))) await t.send(String(p.telegram), esc(n.text));
 }
