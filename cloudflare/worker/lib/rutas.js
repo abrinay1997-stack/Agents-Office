@@ -98,10 +98,13 @@ async function manejarInterno(req, env, exec = null) {
     const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120), ip = ipDe(req), claveFallos = `acc:fallo:${ip}:${huella}`;
     const ms = relojDe(env);
     if (!(await tasa(db, 'acc:ip:' + ip, 20, ms)).ok || (await tasaVer(db, claveFallos, ms)) >= 8) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
-    const retro = await retrocesoActivo(db); // SEG-06: con el flag, cada intento de un correo con muchos fallos (de cualquier IP) espera antes de contestar, bueno o malo; nunca se rechaza por esto
-    if (retro) await dormir(env, esperaMs(await fallosDe(db, huella, ms)));
+    const retro = await retrocesoActivo(db); // SEG-06: con el flag, se VERIFICA primero; solo el 401 de quien falla espera (más cuantos más fallos lleve ese correo, de cualquier IP). Quien acierta entra sin esperar.
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
-    if (!s) { await tasa(db, claveFallos, 8, ms); if (retro) await anotarFallo(db, huella, ms); return error('Usuario o contraseña incorrectos.', 401); }
+    if (!s) {
+      await tasa(db, claveFallos, 8, ms);
+      if (retro) { const previos = await fallosDe(db, huella, ms); await anotarFallo(db, huella, ms); await dormir(env, esperaMs(previos)); }
+      return error('Usuario o contraseña incorrectos.', 401);
+    }
     return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo, s.segundos) });
   }
 

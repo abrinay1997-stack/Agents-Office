@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { SALTAR, crearD1, sembrar, envDePrueba } from './d1-memoria.mjs';
 import { manejar } from '../worker/lib/rutas.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
-import { olvidarRetroceso, esperaMs, GRATIS, ESPERA_MAX_MS } from '../worker/lib/retroceso.js';
+import { olvidarRetroceso, claveDeCorreo, esperaMs, GRATIS, ESPERA_MAX_MS } from '../worker/lib/retroceso.js';
 
 async function mundo({ flag = false } = {}) {
   const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' }), esperas = [];
@@ -17,9 +17,9 @@ async function mundo({ flag = false } = {}) {
 }
 const MALA = 'contraseña-equivocada-1';
 
-test('puro: gratis hasta 3 fallos, luego 1, 2, 4… s con tope de 30 s', () => {
+test('puro: gratis hasta 3 fallos, luego 1, 2, 4… s con tope de 5 s', () => {
   assert.deepEqual([0, 1, 2, 3].map(esperaMs), [0, 0, 0, 0]);
-  assert.deepEqual([4, 5, 6, 7].map(esperaMs), [1000, 2000, 4000, 8000]);
+  assert.deepEqual([4, 5, 6, 7].map(esperaMs), [1000, 2000, 4000, 5000]);
   assert.equal(esperaMs(99), ESPERA_MAX_MS); assert.equal(GRATIS, 3);
 });
 
@@ -34,19 +34,30 @@ test('flag ENCENDIDO: del 4.º fallo en adelante cada intento espera 1, 2, 4 s�
   const m = await mundo({ flag: true });
   for (let i = 0; i < 7; i++) assert.equal((await m.entrar(m.c.email, MALA)).status, 401, 'siempre 401 con la contraseña mala, nunca 429 por este contador');
   assert.deepEqual(m.esperas.filter((x) => x > 0), [1000, 2000, 4000], 'el 5.º, 6.º y 7.º intento esperaron lo que tocaba');
-  assert.equal(Number(m.db.prepare("select sum(n) n from acceso_intentos where clave = ?").get('acc:mail:' + m.c.email).n), 7);
+  assert.equal(Number(m.db.prepare("select sum(n) n from acceso_intentos where clave = ?").get(await claveDeCorreo(m.c.email)).n), 7);
   assert.equal(m.esperas.length, 3, 'los 4 primeros intentos no esperaron');
 });
 
-test('flag ENCENDIDO: quien tiene la contraseña correcta ENTRA aunque otros hayan fallado decenas de veces con su correo', { skip: SALTAR }, async () => {
+test('flag ENCENDIDO: quien tiene la contraseña correcta ENTRA al instante aunque otros hayan fallado decenas de veces con su correo; el 401 del atacante sí espera', { skip: SALTAR }, async () => {
   const m = await mundo({ flag: true });
-  for (let i = 0; i < 14; i++) await m.entrar(m.c.email, MALA);
+  for (let i = 0; i < 30; i++) await m.entrar(m.c.email, MALA);
+  const antes = m.esperas.length, t0 = Date.now();
   const r = await m.entrar(m.c.email, m.c.clave, '203.0.113.9');
   assert.equal(r.status, 200, 'nunca se queda fuera'); assert.match(r.headers.get('set-cookie'), /__Host-sesion=/);
-  assert.equal(m.esperas.at(-1), ESPERA_MAX_MS, 'solo se retrasa, con tope');
+  assert.equal(m.esperas.length, antes, 'acertar no espera nada (se verifica primero)'); assert.ok(Date.now() - t0 < 1500, 'y no tarda');
+  const mala = await m.entrar(m.c.email, MALA); assert.equal(mala.status, 401);
+  assert.equal(m.esperas.at(-1), ESPERA_MAX_MS, 'el fallo sí espera, con tope');
+  assert.ok(ESPERA_MAX_MS <= 5000, 'siempre bajo los 20 s tras los que el cliente aborta');
   // y un correo sin cuenta cuenta igual (no revela si existe) y también espera
   for (let i = 0; i < 6; i++) await m.entrar('nadie@panaclaw.test', MALA);
   assert.ok(m.esperas.at(-1) > 0);
+});
+
+test('el correo no se guarda en claro en acceso_intentos', { skip: SALTAR }, async () => {
+  const m = await mundo({ flag: true });
+  await m.entrar('secreta.persona@panaclaw.test', MALA);
+  const claves = m.db.prepare("select clave from acceso_intentos where clave like 'acc:mail:%'").all().map((x) => x.clave);
+  assert.equal(claves.length, 1); assert.match(claves[0], /^acc:mail:[0-9a-f]{32}$/);
 });
 
 test('flag ENCENDIDO: los fallos caducan (ventana de 15 min, la actual y la anterior)', { skip: SALTAR }, async () => {
