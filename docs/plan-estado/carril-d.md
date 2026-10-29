@@ -24,7 +24,15 @@ Rama `carril-d-presets-nube`. Alcance de esta entrega: fases A y B de §3.4 (EST
 - **NO probado:** el binding IMAGES real de Cloudflare. `wrangler dev --local` contesta `RGB/RGBA output is not supported in local mode`, así que `output({ format: 'rgba' })` y la orientación EXIF solo se podrán confirmar en producción con el interruptor encendido sobre una foto de prueba. Tampoco se midió CPU/tiempo de un retoque de 2048 px en un Worker real.
 - **Sigue sin la nube:** encuadrar, ampliar, nitidez, ruido, enderezar, exportar por canal, LUT de fábrica, igualar serie, y la QA que mide.
 
+## Entrega 3: Fase E, lotes en la nube (rama `carril-d-lotes-nube`)
+- ✅ `lotes-core.mjs` (lo puro de `lotes.mjs`, compartido), `cloudflare/worker/lib/estudio/lotes.js`, rutas `/api/media/lotes*` en `modulos/estudio.js`, interruptor `lotesNube` (**apagado**). Detalle y límites en `docs/cloudflare.md` → «Fase 4 (E)».
+- **Migración reservada: `0150_estudio_lotes.sql`** (rango libre fuera de 0100-0143 y 0200-0219). Tabla `estudio_lotes`: poda a 90 días (lotes terminados) y 2 h (hojas), declarada en `RETENCION_DIAS`, `podar()` y `TABLAS`. Se deshace con `drop table if exists estudio_lotes;`.
+- Delta de bytes de la página: 0 (nada de `src/`).
+- **Probado:** `cloudflare/tests/lotes-nube.test.mjs` (10 casos; ver `docs/cloudflare.md`) y los de lotes locales (`tests/lotes*.test.mjs`, intactos tras mover lo puro a `lotes-core.mjs`).
+- **NO probado:** motores reales, un lote grande en un Worker real, la pestaña Lotes en el navegador contra este Worker; **IMAGES real** (heredado de la Fase D).
+- **No portado:** ZIP de fotos, Excel, imágenes pegadas, URL, QA que mide, nota en el Cerebro, memoria que aprende, `crear_lote` de los agentes de la nube (el motor ya sabe pedir el OK de un agente; falta que las herramientas de los agentes lo llamen).
+
 ## Pendiente (otra entrega)
 - Fase C: sinónimos/búsqueda ya van (`listar` los usa); falta probar con presets propios con IA real.
 - Fase D, lo que falta: encuadrar/exportar/nitidez/ruido/enderezar (necesitan un redimensionado propio o el binding con `fit`/`sharpen`/`rotate` de IMAGES) y la QA que mide.
-- Fase E: lotes por cron (CSV primero), plantillas, entender video/audio.
+- Fase E, lo que falta: plantillas, entender video/audio, y las herramientas de lote para los agentes de la nube.

@@ -30,6 +30,7 @@ export function validarConfig(b) {
   }
   if (b?.carpetasArbol !== undefined) { if (typeof b.carpetasArbol !== 'boolean') return { ok: false, error: 'carpetasArbol: verdadero o falso.' }; out.carpetasArbol = b.carpetasArbol; } // Fase 1.a: carpetas en árbol (apagado por defecto)
   if (b?.retoquesNube !== undefined) { if (typeof b.retoquesNube !== 'boolean') return { ok: false, error: 'retoquesNube: verdadero o falso.' }; out.retoquesNube = b.retoquesNube; } // Fase 4 D: retoques de foto con IMAGES (apagado por defecto)
+  if (b?.lotesNube !== undefined) { if (typeof b.lotesNube !== 'boolean') return { ok: false, error: 'lotesNube: verdadero o falso.' }; out.lotesNube = b.lotesNube; } // Fase 4 E: lotes en la nube (apagado por defecto)
   if (b?.departments !== undefined) {
     if (!Array.isArray(b.departments) || b.departments.some((d) => !['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'].includes(d))) return { ok: false, error: 'departments: una lista de departamentos de la oficina.' };
     out.departments = [...new Set(b.departments)];

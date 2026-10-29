@@ -253,7 +253,7 @@ test('cancelar: uno en cola se cancela sin gastar; olvidar solo lo terminado', {
 
 test('lo que depende de sharp o de otras fases contesta 501 en español; la página no se rompe', { skip: SALTAR }, async () => {
   const { api } = await montar();
-  for (const r of ['/api/media/lotes', '/api/media/plantillas', '/api/media/understand', '/api/media/to-dept']) {
+  for (const r of ['/api/media/plantillas', '/api/media/understand', '/api/media/to-dept']) {
     const x = await api(r); assert.equal(x.status, 501, r); assert.equal(x.j.pendiente, true); assert.match(x.j.error, /nube|equipo|tareas/);
   }
   const loc = await api('/api/media/jobs', { metodo: 'POST', cuerpo: { local: true, prompt: 'x', source: 'a/b.png' } });

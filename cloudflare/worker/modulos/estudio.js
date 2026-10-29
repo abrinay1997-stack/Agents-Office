@@ -18,18 +18,20 @@ import { aJpegDeEnv } from '../lib/contenido/conductores.js';
 import * as trabajos from '../lib/estudio/trabajos.js';
 import * as voces from '../lib/estudio/voces.js';
 import * as presets from '../lib/estudio/presets.js';
+import * as lotes from '../lib/estudio/lotes.js';
+import * as puente from '../../../lotes-puente.mjs';
 import { prepararEstudio, guardarConfig, validarConfig, leerConfig, motoresEncendidos } from '../lib/estudio/entorno.js';
 
 export const nombre = 'estudio';
 export const grupos = ['media', 'voces'];
 
 const NO_ESTA = {
-  lotes: 'Los lotes del Estudio todavía no están en la nube: siguen en la oficina de tu computadora.',
   plantillas: 'Las plantillas del Estudio todavía no están en la nube.',
   understand: 'Entender un video o un audio todavía no está en la nube.',
   'to-dept': 'Mandar una imagen a un departamento necesita las tareas, que todavía no están en la nube.',
 };
 const noEsta = (m) => json({ error: m, pendiente: true }, 501);
+const NO_ESTA_LOTES = 'Los lotes del Estudio en la nube están apagados: un administrador los enciende en los ajustes del Estudio (lotesNube). Mientras, siguen en la oficina de tu computadora.';
 const MAX_JSON_SUBIDA = 24 * 1024 * 1024, MAX_ARCHIVO_PUT = 60 * 1024 * 1024;
 
 /** Cómo se activa un motor EN LA NUBE (la oficina local dice «setx … en Windows»). */
@@ -128,6 +130,47 @@ export async function manejar(ctx) {
         throw e;
       }
       return error('no such route', 404);
+    }
+
+    /* ---- los lotes (Fase 4 E): apagados por defecto (`lotesNube`); nacen «previstos» y no gastan; poner uno a gastar es de un administrador ---- */
+    if (ruta === '/api/media/lotes' || ruta.startsWith('/api/media/lotes/')) {
+      const lm = ruta.match(/^\/api\/media\/lotes(?:\/(L[a-z0-9]{4,30}))?(?:\/(zip|csv|filas))?$/), nombreModelo = (id) => catalogo.models().find((x) => x.id === id)?.name || id;
+      const puedeEscribir = usuario.rol === 'admin' || usuario.rol === 'editor';
+      if (!lotes.hayLotes(await leerConfig(db))) return noEsta(NO_ESTA_LOTES); // apagado: ni una ruta responde (ni siquiera la lista)
+      try {
+        if (ruta === '/api/media/lotes/hoja' && metodo === 'POST') {
+          if (!puedeEscribir) return prohibido('Subir una hoja es de un administrador o un editor.');
+          const b = (await cuerpo(req, 12 * 1024 * 1024)) || {}, r = await lotes.leerHoja(env, db, { name: b.name, data: b.data, columnas: puente.columnasAlMotor(b.columnas) });
+          return json({ ...r, mapa: r.columnas, columnas: puente.columnasParaUI(r) });
+        }
+        if (!lm) return error('no such route', 404);
+        const [, id, sub] = lm;
+        if (!id && metodo === 'GET') return json({ lotes: (await lotes.lista(env, db)).map((l) => puente.paraLista(lotes.pub(l))), budget: await trabajos.budget(env, db) });
+        if (!id && metodo === 'POST') {
+          if (!puedeEscribir) return prohibido('Crear un lote es de un administrador o un editor.');
+          const b = (await cuerpo(req, 12 * 1024 * 1024)) || {}, by = usuario.agente ? 'agent' : 'you';
+          const r = await lotes.crear(env, db, { ...b, ...(by === 'agent' ? { agent: usuario.agente } : {}), origen: puente.origenDelPedido(b.origen) }, { by, usuario });
+          return json({ lote: puente.paraUI(r.lote, r.vista, { nombreModelo }), vista: r.vista, sugerido: r.sugerido, budget: await trabajos.budget(env, db) });
+        }
+        if (id && !sub && metodo === 'GET') return json({ lote: puente.paraUI(await lotes.uno(env, db, id)) });
+        if (id && !sub && metodo === 'PATCH') {
+          if (!puedeEscribir) return prohibido('Cambiar un lote es de un administrador o un editor.');
+          const b = (await cuerpo(req)) || {}, l = await lotes.accion(env, db, id, String(b.accion || ''), { by: usuario.agente ? 'agent' : 'you', usuario });
+          return json({ lote: puente.paraUI(l), budget: await trabajos.budget(env, db) });
+        }
+        if (id && sub === 'filas' && metodo === 'POST') { if (!puedeEscribir) return prohibido('Cambiar las fotos de un lote es de un administrador o un editor.'); const b = (await cuerpo(req)) || {}, r = await lotes.accionFilas(env, db, id, b, { by: usuario.agente ? 'agent' : 'you', usuario }); return json({ ...r, lote: puente.paraUI(r.lote) }); }
+        if (id && sub === 'zip' && metodo === 'GET') {
+          const z = await lotes.zip(env, db, id, { que: puente.queZip(sp.get('que')) });
+          return new Response(z.buf, { status: 200, headers: { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${z.nombre}"`, 'content-length': String(z.buf.length), 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' } });
+        }
+        if (id && sub === 'csv' && metodo === 'GET') { const c = Buffer.from(await lotes.csv(env, db, id), 'utf8'); return new Response(c, { status: 200, headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="lote-${id}.csv"`, 'content-length': String(c.length), 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' } }); }
+        return error('no such route', 404);
+      } catch (e) {
+        if (e?.pendiente) return noEsta(e.message);
+        if (e instanceof trabajos.ErrorPedido) return json({ error: e.message }, e.estado);
+        if (Number.isInteger(e?.status)) return error(e.message, e.status);
+        throw e;
+      }
     }
 
     /* ---- lo que todavía no está ---- */
@@ -364,6 +407,7 @@ export async function cadaMinuto(env) {
   const db = env.DB;
   await prepararEstudio(env, db);
   await trabajos.cadaMinuto(env, db);
+  try { await lotes.cadaMinuto(env, db); } catch (e) { console.warn('lotes:', String(e?.message || e).slice(0, 160)); } // Fase 4 E: apagado por defecto (no hace nada sin `lotesNube`)
   const ahora = Date.now(), min = new Date(ahora).getUTCMinutes();
   if (min === 7) await galeria.purge(env, db, { vencidos: true }); // una vez por hora
 }
