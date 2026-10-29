@@ -1,3 +1,4 @@
+// @ts-check
 // Las CONSULTAS de Dimitri (27 oct 2026) — puro, compartido: el catálogo de herramientas de lectura (nombre, descripción, parámetros) y las funciones que ponen en palabras lo que
 // devuelven. Aprendido de BRIAN (D'CASA): nombres en español con verbo + objeto, pocos parámetros, tipos simples, resultados compactos ya formateados («quién», «cuándo»,
 // sin ids sueltos al hablar) y errores que dicen cómo corregir. Aquí no hay red ni archivos: la nube (cloudflare/worker/lib/dimitri/consultas.js) las ejecuta contra D1 y los

@@ -1,3 +1,4 @@
+// @ts-check
 // (parte pura, sin fs ni path) // Agents Office V3.5 — routines: tasks the office does on its own clock.
 //
 // A routine is a line in <brain>/Agents Office/routines.json (yours: written by the task bar,

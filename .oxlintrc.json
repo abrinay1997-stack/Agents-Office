@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "import"
+  ],
+  "env": {
+    "builtin": true,
+    "browser": true,
+    "node": true,
+    "es2022": true
+  },
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "no-undef": "error",
+    "import/no-cycle": "error"
+  },
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "cloudflare/node_modules/**",
+    "src/braingraph.js",
+    "data/**",
+    "docs/**",
+    "brain/**",
+    "brain-panaclaw/**"
+  ],
+  "globals": {
+    "axe": "readonly",
+    "HTMLRewriter": "readonly",
+    "WebSocketPair": "readonly",
+    "WebSocketRequestResponsePair": "readonly",
+    "__AO_EXTRA_VERSION__": "readonly",
+    "__AO_ANUNCIOS_VERSION__": "readonly",
+    "__AO_PIEZA_VERSION__": "readonly",
+    "__AO_TAREAS_VERSION__": "readonly",
+    "AO_MOVIL": "readonly"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "strict": false
+  },
+  "include": [
+    "arranque-core.mjs",
+    "biblioteca-core.mjs",
+    "consultas-core.mjs",
+    "costs-core.mjs",
+    "cuerpo-core.mjs",
+    "documents-core.mjs",
+    "minimax-voces-core.mjs",
+    "notas-core.mjs",
+    "restablecer-core.mjs",
+    "routines-core.mjs",
+    "telegram-core.mjs",
+    "topes-core.mjs",
+    "triggers-core.mjs",
+    "ver-imagen-core.mjs"
+  ]
+}

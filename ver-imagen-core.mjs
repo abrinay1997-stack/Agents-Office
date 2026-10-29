@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office (28 oct 2026) — «ver_imagen»: el agente MIRA una imagen de la galería del Estudio (la foto de un producto, un logo, lo que el dueño pegó en la tarea, algo que él mismo generó).
 // Puro (sin red ni disco): lo comparten el MCP de la oficina local (estudio-mcp.mjs, que le pide la copia reducida a /api/media/vision) y el Worker (worker/lib/agentes/herramientas.js,
 // que la lee de R2). La definición y los textos son UNA sola, para que no se desvíen. Un video no se mira desde aquí: se dice claro y se señala lo que sí se puede.

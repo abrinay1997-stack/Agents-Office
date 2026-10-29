@@ -12,10 +12,14 @@
     "test": "node --test --test-concurrency=4",
     "secrets": "node scripts/secrets-scan.mjs --all",
     "prepare": "node scripts/install-hooks.mjs",
-    "graph": "node graph-build.mjs"
+    "graph": "node graph-build.mjs",
+    "lint": "oxlint .",
+    "tipos": "tsc -p tsconfig.json",
+    "topes": "node scripts/topes-codigo-nuevo.mjs",
+    "audit:info": "npm audit --omit=dev --audit-level=high || true"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "d3-force": "^3.0.0",
@@ -26,8 +30,10 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
+    "oxlint": "^1.90.0",
     "playwright-core": "^1.62.0",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "typescript": "^5.9.3"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.80.0"
