@@ -29,15 +29,18 @@ async function levantar(contenido) {
   const api = async (m, p, b) => (await fetch(base + p, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined })).json();
   return { base, api, cerrar: () => { srv.kill(); fs.rmSync(dir, { recursive: true, force: true }); } };
 }
-async function abrirPieza(nav, o, titulo) {
+/** Espera al hecho (nunca un tiempo fijo): repite `fn` hasta que dé verdadero o se acabe el tope. */
+async function hasta(fn, que, ms = 20000) { const fin = Date.now() + ms; for (;;) { try { const v = await fn(); if (v) return v; } catch { /* aún no */ } if (Date.now() > fin) assert.fail('no llegó a tiempo: ' + que); await new Promise(r => setTimeout(r, 100)); } }
+async function abrirPieza(nav, o, titulo, esperaAjustes = '') {
   const pz = (await o.api('POST', '/api/contenido/piezas', { titulo, texto: 'Examen visual gratis esta semana en Panamá.', redes: ['facebook'], estado: 'revision' })).pieza;
   const page = await nav.newPage({ viewport: { width: 1512, height: 900 } }); page.setDefaultTimeout(20000);
   await page.addInitScript(() => { try { localStorage.setItem('ao.onboarded', '1'); } catch { /* sin storage */ } });
-  await page.goto(o.base + '/'); await page.waitForTimeout(1500);
+  await page.goto(o.base + '/'); await page.waitForSelector('#ctNew, [data-shell]', { state: 'attached' });
   await page.keyboard.press('Escape'); await page.evaluate(() => document.activeElement?.blur());
-  await page.keyboard.press('k'); await page.waitForSelector('#ctOv .ct-mode', { state: 'visible' }); await page.waitForTimeout(600);
+  await page.keyboard.press('k'); await page.waitForSelector('#ctOv .ct-mode', { state: 'visible' });
   await page.click(`#ctOv [data-id="${pz.id}"], #ctOv :text("${titulo}")`); await page.waitForSelector('.ct-panel:not([hidden]) .pz-comp');
-  await page.waitForTimeout(1200); // los ajustes de Contenido llegan detrás
+  await hasta(() => page.evaluate(() => !!document.querySelector('.ct-panel:not([hidden]) .pz-menu')), 'el menú de Aprobar');
+  if (esperaAjustes) await page.waitForSelector(esperaAjustes, { state: 'attached', timeout: 20000 }); // los ajustes de Contenido llegan detrás: se espera a lo que cambian
   await page.click('.ct-panel:not([hidden]) [data-a="menu"]'); await page.waitForSelector('.ct-panel:not([hidden]) .pz-menu:not([hidden])');
   return { page, pz };
 }
@@ -45,7 +48,7 @@ async function abrirPieza(nav, o, titulo) {
 test('«Publicar ahora» apagado: el menú es el de siempre y no hay botón nuevo', { skip: SALTAR }, async t => {
   const nav = await chromium.launch(); t.after(() => nav.close());
   const o = await levantar({ modo: 'simulacro', redes: ['instagram', 'facebook'] }); t.after(o.cerrar);
-  const { page } = await abrirPieza(nav, o, 'Apagado');
+  const { page } = await abrirPieza(nav, o, 'Apagado', '.ct-panel:not([hidden]) [data-a="ya"]');
   assert.equal(await page.locator('.ct-panel [data-a="ahora"]').count(), 0);
   assert.equal(await page.locator('.ct-panel [data-a="ya"]').count(), 1, 'sigue el «Publicar ya» antiguo');
 });
@@ -53,24 +56,25 @@ test('«Publicar ahora» apagado: el menú es el de siempre y no hay botón nuev
 test('«Publicar ahora» encendido: el segundo clic con el aviso de que no se deshace, y solo entonces el servidor aprueba «ya»', { skip: SALTAR }, async t => {
   const nav = await chromium.launch(); t.after(() => nav.close());
   const o = await levantar({ modo: 'real', conductor: 'meta', publicarYa: true, redes: ['instagram', 'facebook'] }); t.after(o.cerrar);
-  const { page, pz } = await abrirPieza(nav, o, 'Encendido');
+  const { page, pz } = await abrirPieza(nav, o, 'Encendido', '.ct-panel:not([hidden]) [data-a="ahora"]');
   const P = '.ct-panel:not([hidden]) ', boton = P + '[data-a="ahora"]';
   assert.equal(await page.locator(P + '[data-a="ya"]').count(), 0, 'reemplaza al antiguo');
   assert.match(await page.textContent(boton), /Publicar ahora/);
   assert.equal((await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza.estado, 'revision');
-  await page.click(boton); await page.waitForTimeout(200);
+  await page.click(boton);
+  await hasta(async () => /Pulsa otra vez/.test(await page.textContent(boton)), 'la confirmación armada');
   assert.match(await page.textContent(boton), /Pulsa otra vez/);
   assert.match(await page.textContent(P + '.pz-ya-av'), /No se puede deshacer/);
   assert.equal((await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza.estado, 'revision', 'un clic no aprueba nada');
-  await page.click(boton); await page.waitForTimeout(100); // un segundo clic demasiado rápido (doble clic, Enter mantenido) no confirma
+  await page.click(boton); // un segundo clic demasiado rápido (doble clic, Enter mantenido) no confirma
   assert.equal((await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza.estado, 'revision', 'sin haber leído el aviso no se publica');
   await page.waitForTimeout(800);
   assert.match(await page.textContent(P + '.pz-ya-av'), /No se puede deshacer/);
   assert.equal(await page.locator(P + '.pz-menu .pz-ya-av').count(), 0, 'el aviso va fuera del menú');
-  await page.click(boton); await page.waitForTimeout(1500);
-  const { pieza } = await o.api('GET', `/api/contenido/piezas/${pz.id}`);
+  await page.click(boton);
+  const pieza = await hasta(async () => { const x = (await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza; return x.estado === 'aprobada' && x; }, 'la pieza aprobada «ya»');
   assert.equal(pieza.estado, 'aprobada'); assert.equal(pieza.aprobada.ya, true);
-  assert.match(await page.textContent(P + '.pz-state'), /Publicando|Publicada|No se pudo/);
+  await hasta(async () => /Publicando|Publicada|No se pudo|Sigue/.test(await page.textContent(P + '.pz-state')), 'el estado del pie');
 });
 
 test('CON-07: en escritorio el paso marcado sigue lo que se mira (arriba el 1, al final el 4) y al hacer clic sigue siendo el que se pulsó', { skip: SALTAR }, async t => {
@@ -81,10 +85,12 @@ test('CON-07: en escritorio el paso marcado sigue lo que se mira (arriba el 1, a
   const actual = () => page.evaluate(() => document.querySelector('.ct-panel .pz-steps [aria-current="step"]')?.dataset.paso);
   assert.equal(await actual(), '1');
   await page.evaluate(() => { const b = document.querySelector('.ct-panel .pz-scroll'); b.style.maxHeight = '300px'; b.scrollTop = b.scrollHeight; });
-  await page.waitForTimeout(500);
+  await hasta(async () => (await actual()) === '4', 'el paso 4 al final del cuerpo');
   assert.equal(await actual(), '4', 'al final del cuerpo, el paso 4');
-  await page.evaluate(() => { document.querySelector('.ct-panel .pz-scroll').scrollTop = 0; }); await page.waitForTimeout(500);
+  await page.evaluate(() => { document.querySelector('.ct-panel .pz-scroll').scrollTop = 0; });
+  await hasta(async () => (await actual()) === '1', 'el paso 1 arriba');
   assert.equal(await actual(), '1', 'arriba, el 1');
-  await page.click('.ct-panel .pz-steps [data-paso="2"]'); await page.waitForTimeout(700);
+  await page.click('.ct-panel .pz-steps [data-paso="2"]');
+  await hasta(async () => (await actual()) === '2', 'el paso pulsado');
   assert.equal(await actual(), "2", "el clic marca el pulsado");
 });
