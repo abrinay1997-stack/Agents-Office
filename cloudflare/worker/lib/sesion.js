@@ -120,7 +120,7 @@ export async function usuarioDeLaPeticion(db, req) {
     const t = Date.now(), faltan = (Date.parse(f.s_expira) || 0) - t;
     // Sin fila de uso (sesiones de antes de encender el flag, o filas viejas tras apagarlo y volver a encenderlo) NO se sabe cuándo se usó por última vez: cuenta como «ahora».
     // Contar desde su creación desconectaba a quien tenía una sesión de 30 días de hace más de 14 aunque la hubiera usado ayer. La fila se graba en esta misma petición.
-    const ultimo = f.s_uso ? Math.max(Date.parse(f.s_uso) || t, estado.desde) : t; // y una fila anterior al último encendido (el flag estuvo apagado) no cuenta
+    const ultimo = f.s_uso ? Math.max(Date.parse(f.s_uso) || t, estado.desde) : Math.max(estado.desde, Date.parse(f.s_creada) || 0); // y una fila anterior al último encendido (el flag estuvo apagado) no cuenta
     if (f.rol !== 'lectura' && t - ultimo > INACTIVIDAD_MS) { await db.prepare('delete from sessions where token_hash = ?').bind(hash).run(); return null; }
     const renovar = faltan < RENOVAR_SI_FALTAN_MS;
     if (!f.s_uso || renovar || t - ultimo > RENOVAR_SI_FALTAN_MS) { // una escritura por día y sesión

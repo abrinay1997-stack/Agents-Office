@@ -46,3 +46,10 @@ export function conLatencia(d1, { max = 6, semilla = 12345 } = {}) {
   });
   return { ...d1, prepare: (sql) => envolver(d1.prepare(sql)) };
 }
+
+/** Los topes «por minuto» cuentan en la ventana del reloj de pared (`Math.floor(Date.now() / 60e3)`): un test que hace N llamadas seguidas y espera que la N+1 dé 429 falla si las llamadas
+ *  cruzan el cambio de minuto. Esto espera (con tope: como mucho `margenS` segundos) a que al minuto en curso le queden al menos `margenS` segundos. Llámalo ANTES de la primera llamada del test. */
+export async function sinCruzarMinuto(margenS = 20) {
+  const resto = () => 60 - ((Date.now() / 1000) % 60);
+  for (let i = 0; i < 2 * margenS + 4 && resto() < margenS; i++) await new Promise((r) => setTimeout(r, 500));
+}

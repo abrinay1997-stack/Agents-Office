@@ -69,6 +69,7 @@ test('flag ENCENDIDO: si faltan menos de 24 h se renueva 7 días y la MISMA resp
 
 test('flag ENCENDIDO (BLOQUEANTE de la revisión): una sesión de 30 días creada hace 20 días, de admin y de editor, SIN fila de uso, sigue valiendo; y al apagar y volver a encender también', { skip: SALTAR }, async () => {
   const m = await mundo({ flag: true });
+  await guardarDoc(m.d1, 'sesion.estado', { activo: true, desde: iso(Date.now()) }); olvidarFlagSesion(m.d1); // recién encendido
   const a = await m.sesion(m.ana, { creada: Date.now() - 20 * DIA, expira: Date.now() + 10 * DIA }), e = await m.sesion(m.beto, { creada: Date.now() - 25 * DIA, expira: Date.now() + 5 * DIA });
   assert.equal((await m.yo(a.t)).status, 200); assert.equal((await m.yo(e.t)).status, 200);
   assert.equal(m.db.prepare('select count(*) n from sesiones_uso').get().n, 2, 'la fila se graba en esa misma petición');

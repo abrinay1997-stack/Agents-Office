@@ -15,7 +15,7 @@ import { crearMeta } from '../../contenido/meta.mjs';
 import { crearMetaAds } from '../../anuncios/meta-ads.mjs';
 import { crearMetaStand, TOKEN_STAND, CUENTA_STAND } from '../../tests/meta-stand.mjs';
 import { etiqueta } from '../../anuncios/modelo.mjs';
-import { crearD1, conLatencia, SALTAR } from './d1-memoria.mjs';
+import { crearD1, conLatencia, SALTAR, sinCruzarMinuto } from './d1-memoria.mjs';
 import { nube, r2, JPEG } from './ayuda-meta.mjs';
 import fs from 'node:fs';
 
@@ -255,6 +255,7 @@ test('webhook: Authorization Bearer vale; cuerpo de hasta 16 KB (413); un Origin
 });
 
 test('webhook: 60 por minuto en D1 (el 61 es 429); y sin event_id, el hash del cuerpo: el mismo cuerpo dos veces cuenta una', { skip: SALTAR }, async () => {
+  await sinCruzarMinuto(); // el tope cuenta por minuto del reloj: sin esto, si las llamadas cruzan el cambio de minuto, la última no da 429
   const o = await nube(); await conConversiones(o);
   const cuerpo = { evento: 'Purchase', valor: 20, email: 'ana@example.com', url: 'https://tienda.test/p', pedido: 'p-1' }; // secrets-ok: de mentira
   const a = await (await hook(o, cuerpo)).json(), b = await (await hook(o, cuerpo)).json();
