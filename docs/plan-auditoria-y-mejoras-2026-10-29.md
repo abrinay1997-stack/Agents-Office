@@ -21,6 +21,7 @@ Cómo se hizo: seis auditores en paralelo, de solo lectura, sobre `main` (commit
 | 11 | Íconos de conectores: tres sistemas distintos (WebP en escritorio, pictogramas propios en nube/móvil, monogramas); el mismo Gmail se ve distinto | Media-alta | ICO-01..11 | M |
 | 12 | Rendimiento: página de 2,20 MB (tope 2,2 MB, margen 3 KB), 1,88 MB de JS; miniaturas = originales; paquetes sin caché larga | Media-alta | PER-01..11 | S → L |
 | 13 | Seguridad: `/api/chat` sin tope por persona; detector de inyección de 8 regex; workflows sin `permissions`; `Origin: null` aceptado en local | Alta/Media | SEG-01..09 | S |
+| 14 | **Comunicación del equipo** (pedido del dueño, 29 oct): no hay chat en vivo, ni recados para cuando alguien entre, ni centro de notificaciones por persona; Telegram solo conoce al dueño y a los aprobadores, no a las cuentas | **Alta** (pedido) | §3.10, Fase 8 | L (por fases) |
 
 ## 1. Hallazgos por frente
 
@@ -141,7 +142,7 @@ Bien (no tocar): PBKDF2 con huella de sesión y `__Host-`, AES-GCM con HKDF e IV
 
 ## 2. Reglas del plan
 
-1. **Nada de herramientas nuevas hasta cerrar las Fases 0-3.** Cada fase mejora lo que ya existe.
+1. **Nada de herramientas nuevas hasta cerrar las Fases 0-3, salvo lo que el dueño pidió expresamente** (la Fase 8: chat, recados y notificaciones). Cada fase mejora lo que ya existe.
 2. **Toda fase termina con `npm run check` verde, tests nuevos y documentación al día** (`CLAUDE.md`, `README.md`, y este plan con ✅ en cada punto, en el mismo commit).
 3. **Lo que toca la nube se prueba con workerd real** (`cloudflare/tests/vivo-ayudas.mjs`); lo de D1 con los límites conocidos (≤5 términos por SELECT compuesto, ≤100 parámetros).
 4. **Cada pantalla se prueba a 320/360/390/430, 1024, 1366 y 1512, con y sin Dimitri, en claro y oscuro** (`scripts/*-recorrido.mjs`, axe).
@@ -235,6 +236,41 @@ Criterios: arrastrar, teclado y doble clic funcionan; se recuerda entre sesiones
 
 Presupuesto propuesto: página ≤ 2,0 MB bruto / ≤ 650 KB gzip / ≤ 550 KB brotli; cada paquete diferido ≤ 150 KB gzip; objetivos en móvil 4G lento (NV, validar con Lighthouse): LCP ≤ 2,5 s, TTI ≤ 4 s, CLS ≤ 0,1, ≤ 12 peticiones `/api` al arrancar. CI: ampliar `check.mjs:34` (brotli, tamaño de cada `dist/*.js`) y un test de cabeceras en la nube (`content-encoding`, `ETag`, `Cache-Control`, 304 con `If-None-Match`); después, Lighthouse CI opcional con `budget.json`.
 
+### 3.10 Comunicación del equipo: chat en vivo, recados para cuando entren, notificaciones y Telegram (pedido del dueño, 29 oct)
+
+**Lo que ya existe (verificado en este árbol).**
+- **El plan del chat ya está escrito:** `docs/plan-chat-interno.md` (27 oct; fases C0-C6, «nada construido»): canales, directos, `#general`, menciones, reacciones, adjuntos, tiempo real por el `Hub` con envío dirigido, avisos y Telegram, hilos de registros, Dimitri. **Este plan no lo duplica: lo adopta como fuente de verdad del chat** y le añade lo que el dueño pidió y allí no está (recados, hoja de entrada, centro de notificaciones por persona, vinculación de Telegram por cuenta).
+- **Presencia en vivo:** `cloudflare/worker/hub.js` (Durable Object `Hub`, sockets hibernables, `difundir()` a todos; falta envío a algunas personas, como ya anota el plan del chat).
+- **Avisos:** `cloudflare/worker/lib/avisos.js` guarda avisos **de la oficina entera** (`filas('avisos')`, dedupe por `key` en 6 h); no son por persona, no tienen «leído por quién» ni preferencias.
+- **Telegram:** `telegram-core.mjs`/`modulos/telegram.js` atienden **solo** a `TELEGRAM_OWNER_ID`, a administradores registrados en Ajustes y a aprobadores delegados (`telegram.approvers`); a cualquier otro, silencio total. Los ids de Telegram de las personas viven en **Ajustes → Equipo (`team.people`)** como un campo de texto libre: **no están vinculados a las cuentas** (`users`), por eso no se les puede avisar «a ti» de forma fiable ni dejarles recados.
+- Comentarios de tareas con `@nombre` (avisan por Telegram a esa persona si tiene id) y tareas para una persona (`asignadaA`).
+
+**Lo que falta, pieza por pieza.**
+
+1. **Última visita por cuenta.** Columnas `visto_at` (última actividad) y `entro_at` (inicio de la visita actual) en `users` o en una tabla `presencia_cuenta`, escritas al abrir sesión y en el latido del `Hub` (con tope: una escritura cada 5 min). Es la base del «mientras no estabas».
+2. **Recados («notas para cuando entres»).** Tabla `recados`: `id · de_user_id · para` (una persona, un rol o todos) `· cuerpo` (texto plano ≤ 1.000) `· prioridad` (normal · importante) `· vence_at · fijado` `· enlace` (opcional: tarea, pieza, nota o vista) `· requiere_enterado (0/1)`; y `recados_estado(recado_id, user_id, entregado_at, leido_at, enterado_at)`. Se escribe desde la hoja del chat, desde la ficha de una persona, desde un comentario con `@nombre` («Déjale un recado») y desde Telegram (`/recado @ana texto`). Reglas: nunca a quien lo escribió; un recado a «todos» llega una vez a cada persona; **lo privado es privado** (un administrador ve que existe y si se leyó, no el texto de uno ajeno); vence solo; el que «requiere enterado» no se da por entregado hasta el clic «Enterado», y a quien lo dejó se le avisa. Tope de recados abiertos por persona y de largo.
+3. **Hoja «Mientras no estabas»** al entrar (escritorio y móvil, bajo demanda, un paquete aparte como `dist/movil-d.js`): una sola pantalla, ordenada por urgencia, con lo que pasó desde `visto_at`: recados (los importantes arriba, con «Enterado»), menciones y mensajes del chat sin leer, lo que **espera tu OK** y lo **tuyo de hoy y lo vencido**, tareas que te asignaron o delegaron, cambios en lo que tú creaste, fallos de lo que lanzaste, y avisos de la oficina que te tocan por tu rol. Se cierra con un clic, nunca bloquea el trabajo, no sale si no hay nada nuevo, y cada línea abre su destino. Misma información que el centro de notificaciones (no un sistema aparte).
+4. **Centro de notificaciones por persona.** Tabla `notificaciones(id, user_id, tipo, titulo, cuerpo_corto, enlace, clave_dedupe, creada_at, leida_at, canal_entregado)` que **sustituye por persona** lo que hoy es un único montón de la oficina; `avisos.js` sigue existiendo y, para cada aviso, decide **a quién** le toca (por rol y por pertenencia) y escribe una notificación por persona. La campanita (escritorio: dock; móvil: cabecera) lleva el contador del no leído. Categorías: recados · chat · menciones · aprobaciones · tareas · contenido y Bandeja · anuncios · sistema. **Preferencias por persona** (Ajustes → Mi perfil): qué categorías, por qué canal (en la app, Telegram, y push del navegador si se activa), «no molestar» con horario y zona, y resumen diario opcional en lugar de avisos sueltos.
+5. **Reglas de entrega** (las del plan del chat, ampliadas): un aviso por hecho y canal (`clave_dedupe` + tabla de «ya avisé»); **nunca a quien lo causó**; **el aviso que falla no tumba la acción** (`savepoint`/`try`); por Telegram solo si la persona **no tiene un socket vivo hace unos minutos**; agrupar ráfagas («y 4 más»); el socket lleva ids, nunca texto; D1 es la verdad y el sondeo de 30 s y la puesta al día al reconectar recuperan lo perdido. Toda tabla nueva declara su tope y su poda (`cloudflare/tests/auditoria-transversal.test.mjs`, `lib/mantenimiento.js`) y respeta los límites de D1 (≤ 100 parámetros, ≤ 5 términos compuestos).
+6. **Vinculación de Telegram por cuenta** (lo que hoy no existe).
+   - En la app: Ajustes → Mi perfil → «Conectar mi Telegram» genera un **código de un solo uso de 8 caracteres, válido 10 minutos**, atado a la cuenta y a la sesión que lo pidió, guardado con huella (nunca en claro).
+   - La persona le escribe `/vincular CÓDIGO` al bot; el bot lo canjea, guarda `telegram_user_id` y `telegram_username` en una tabla `cuenta_telegram(user_id, telegram_id UNIQUE, vinculada_at, silencio_desde, silencio_hasta, preferencias)`, responde «Listo, <nombre>» y la app muestra «Telegram conectado». Un id de Telegram sirve para **una** cuenta; se puede desvincular desde la app o con `/desvincular`; quitar a la persona del equipo desvincula.
+   - Se mantiene el **silencio total** para quien no esté vinculado ni sea dueño/aprobador: ni su id, ni «bot privado», ni un error. El canje de un código malo o vencido contesta lo mismo que el silencio, con tope de intentos.
+   - **Qué puede hacer cada persona vinculada** (hoy solo el dueño y los aprobadores actúan): según su **rol**: `lectura` recibe avisos; `editor` además `/mias`, `/yo …`, `/recados`, `/recado @persona texto` y `/chat` (los no leídos); `admin` además lo de siempre (`/estado`, `/pendientes`, `/contenido`, `/anuncios`). **Aprobar sigue siendo solo del dueño y de los aprobadores delegados**; el vínculo no da permisos nuevos de envío ni de dinero.
+   - **Qué lleva el aviso:** por defecto «Ana te dejó un recado» / «Ana te escribió en #ventas» **sin el texto** (Telegram es un tercero); que lleve el texto es una decisión del dueño por categoría (decisión 2 del plan del chat). Los botones «Enterado», «Marcar leído» y «Abrir» funcionan por `callback` firmado y de un solo uso.
+   - Responder al aviso desde Telegram queda fuera de esta fase salvo `/recado` y «Enterado».
+7. **Quién entró** (lectura del pedido: «un buen sistema de notificación cuando los usuarios entren» puede ser lo que ve cada persona al entrar —punto 3— y/o que **el dueño sepa cuándo entra alguien**). Para lo segundo: indicador «en línea» y «visto hace…» en la lista del equipo (ya hay presencia), y, **opcional y apagado por defecto**, un aviso al administrador «Ana entró» (una vez al día por persona, con el horario de no molestar). Es seguimiento de personas: se activa por persona y lo ve la propia persona en su perfil. **Decisión del dueño** (§6).
+8. **Seguridad y privacidad de todo esto** (se prueba, no solo se escribe): matriz de roles ejecutada contra cada ruta nueva; un id de recado o de notificación ajeno da 404; ni el id ni el texto de un privado salen por el socket a quien no es destinatario (prueba con workerd real: tres sesiones, la tercera no recibe nada); escapado de nombres y mensajes (`esc()`, marcas bidi); `safety.injectionIn` si Dimitri llega a resumir recados o chat; **los agentes no leen el chat ni los recados del equipo**; el canje de códigos de Telegram con tope de intentos y comparación en tiempo constante; ningún secreto en respuestas ni en el registro.
+
+**Fases de esta pieza (Fase 8):**
+- **N0 — Cimientos (M):** `visto_at`/`entro_at`, tabla `notificaciones` + preferencias, campanita con contador y centro de notificaciones sobre los avisos que ya existen (cada aviso decide a quién le toca). Sin chat todavía.
+- **N1 — Recados y hoja «Mientras no estabas» (M):** tabla `recados`, rutas, hoja de entrada en escritorio y móvil, «Enterado», aviso a quien lo dejó.
+- **N2 — Telegram por cuenta (M):** vinculación con código, comandos por rol (`/recados`, `/recado`, `/chat`, `/mias`, `/yo`), «no molestar» y desvincular; avisos de N0/N1 por Telegram con las reglas de entrega.
+- **C0-C6 — Chat en vivo** según `docs/plan-chat-interno.md` (canales, directos, tiempo real dirigido, menciones con tarea, adjuntos, hilos de tareas, Dimitri), **integradas con las notificaciones de N0**: una mención o un directo son notificaciones, no un sistema paralelo.
+- **N3 — Resumen y push (S-M):** resumen diario opcional, y push del navegador opcional (requiere *service worker* y permiso; hoy el repositorio no tiene uno, así que es trabajo propio).
+
+Criterios de aceptación: un recado dejado desde la app y desde Telegram aparece en la hoja de entrada de la persona correcta y de nadie más; «Enterado» avisa a quien lo dejó; la misma notificación no llega dos veces por el mismo canal; no llega a quien la causó; una persona sin vincular no recibe nada por Telegram y el bot sigue en silencio con extraños; un editor no puede aprobar por Telegram; un código vencido, reutilizado o ajeno no vincula; la oficina local (sin cuentas) no muestra nada de esto sin `window.AO_NUBE`.
+
 ## 4. Fases
 
 Cada fase es un PR (o varios) y termina verde. El orden sigue lo que el dueño llamó urgente y el beneficio/costo.
@@ -295,6 +331,10 @@ Fases A→E de §3.4 (EST-12..16). La A y la B resuelven la queja del dueño; la
 
 SEG-02 (normalizar NFKC y quitar invisibles, no tratar la regex como frontera, excluir herramientas con URL libre del chat), SEG-04 (decidir y documentar lo que ve el rol `lectura`), SEG-05 (sesión deslizante de 7 días, «cerrar en todos los sitios», lista de dispositivos), SEG-06 (contador global por correo, Turnstile), SEG-09 (expiración en R2), revisión de los ~400 `innerHTML`, `?token=` fuera en 2 versiones; UX-05 (un solo patrón «hacer y deshacer» o hoja de confirmación), UX-06 (dock en 4 áreas con etiqueta y teclas homogéneas), UX-07 (bienvenida de 3 pasos, semilla neutra, ayuda en el login), UX-09 (capacidades por `/api/health`), `npm audit` en CI.
 
+### Fase 8 — Comunicación del equipo (pedido del dueño, 29 oct)
+
+Es el único frente que añade capacidad nueva; entra por pedido expreso del dueño y se apoya en lo que ya existe (presencia del `Hub`, avisos, Telegram, tareas para una persona). Orden: **N0 → N1 → N2** (en este orden, cada una útil por sí sola), luego **C0-C6** del chat (`docs/plan-chat-interno.md`) ya integrado con las notificaciones, y al final **N3**. N0-N2 pueden arrancar en paralelo con las Fases 1-3 porque no tocan los archivos grandes de la galería ni de Dimitri (§5, carril H). Detalle en §3.10.
+
 ## 5. Cómo ejecutarlo con varios agentes en paralelo
 
 Carriles que **no comparten archivos grandes**, pensados para correr a la vez (cada uno en su rama y su worktree, un PR por carril):
@@ -308,6 +348,7 @@ Carriles que **no comparten archivos grandes**, pensados para correr a la vez (c
 | E · Íconos | 5 | `src/iconos-registro.mjs`, `redes-iconos.js`, `mcplogos.js`, `connectors.js`, `cloudflare/worker/lib/iconos-conectores.js` | `shell.html` si cambia la fuente |
 | F · Rendimiento y CI | 6 y 0 (PER, SEG-07/08) | `build.mjs`, `check.mjs`, `cloudflare/public/_headers`, `wrangler.jsonc`, `.github/workflows/*` | todos (solo configuración): último en fusionarse |
 | G · Seguridad y UX | 7 | `safety.mjs`, `cloudflare/worker/lib/sesion.js`, `src/detail.js`, `src/dock.js`… | revisar caso a caso |
+| H · Comunicación | 8 | `cloudflare/worker/modulos/{chat,recados,notificaciones}.js`, `lib/notificaciones/*`, `lib/avisos.js`, `hub.js`, `telegram-core.mjs`, `modulos/telegram.js`, `src/notificaciones/*` (paquete aparte, **nunca en la página**) | `hub.js` y `telegram.js` los toca poca gente; la campanita añade un botón al dock (`shell.html`/`dock.js`: avisar); Carril B si se cambia el dock |
 
 Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un PR, o por ítems pequeños); después **A + C + B en paralelo** (A y B comparten `studio.js`: A primero en su parte, B después) y D tras A.a. E y F pueden correr en paralelo con cualquiera. Cada carril entrega con `npm run check` verde y los recorridos que le tocan.
 
@@ -320,6 +361,10 @@ Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un P
 5. **Rol `lectura`** (SEG-04): ¿puede ver los resultados de los agentes y el Cerebro, o solo tareas y calendario?
 6. **Semilla de «Restablecer»**: ¿añadimos una semilla neutra además de «PanaClaw por defecto» y «Vacía»?
 7. **Logos de marca**: usar los logos reales (Simple Icons) implica revisar la guía de cada red; ¿aceptas el uso nominativo y que LinkedIn se quede en la versión retirada del paquete?
+8. **«Cuando los usuarios entren»**: ¿es la hoja «Mientras no estabas» que ve cada persona al entrar (lo propongo como base), y/o un aviso **al administrador** de que alguien entró («Ana entró»)? Lo segundo es seguimiento de personas: lo dejaría apagado y por persona. ¿Qué eliges?
+9. **Quién puede dejar recados**: propongo que cualquier administrador o editor pueda dejarlos a una persona, a un rol o a todos, y que `lectura` solo los reciba. ¿De acuerdo? ¿Y puede un recado «requerir enterado»?
+10. **Telegram por cuenta**: ¿cada persona vincula el suyo con un código de un solo uso? ¿El aviso lleva el texto o solo «te dejaron un recado» (propongo solo el aviso, por privacidad)? ¿Qué puede hacer un editor desde Telegram (propongo: recados, `/mias`, `/yo`, `/chat`; aprobar sigue siendo solo del dueño y de los aprobadores)?
+11. **Orden**: ¿N0-N2 (notificaciones, recados, Telegram por cuenta) antes o después de la galería del Estudio (Fase 1)? Propongo en paralelo, en carriles distintos.
 
 ## 7. Lo que NO está verificado
 
@@ -330,6 +375,7 @@ Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un P
 - Si la Bandeja redacta borradores con un modelo sin pasar por `injectionIn` (SEG-02).
 - Más de 400 `innerHTML` de `src/` sin revisar uno a uno; `npm audit` no se pudo ejecutar (sin red).
 - `agruparGaleria` (carruseles y reels en la galería) no existe en este árbol: confirmar en qué rama vive antes de diseñar su carpeta.
+- Comunicación (§3.10): no se midió cuántas personas usan la nube ni cuántos avisos al día habría; el costo de D1 y del `Hub` con un chat real es NV. No se verificó que los ids de `team.people` estén usados hoy por alguien. Las notificaciones push del navegador no se diseñaron en detalle (no hay *service worker*).
 - Que la nube de verdad devuelva 304 con `If-None-Match` para los paquetes diferidos (la página sí, por test).
 
 ## 8. Seguimiento
@@ -344,3 +390,4 @@ Cada punto lleva su ID (DIM-xx, EST-xx, CON-xx, PER-xx, ICO-xx, SEG-xx, UX-xx). 
 - [ ] Fase 5 — íconos originales
 - [ ] Fase 6 — velocidad
 - [ ] Fase 7 — UX y seguridad restantes
+- [ ] Fase 8 — comunicación del equipo (N0 cimientos · N1 recados · N2 Telegram por cuenta · C0-C6 chat · N3 resumen y push)
