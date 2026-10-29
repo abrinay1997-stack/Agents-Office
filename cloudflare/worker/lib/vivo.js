@@ -43,6 +43,13 @@ export function avisarCambio(env, { ruta, metodo, estado, usuario, req }) {
   return difundir(env, { tipo: 'cambio', area: info.area, nombre: info.nombre, ...(info.soloAdmin ? { soloAdmin: true } : {}), por: { id: usuario?.id ?? null, nombre: usuario?.nombre ?? '', tab: pestanaValida(req?.headers?.get('X-Pestana')) }, at: Date.now() });
 }
 
+/** CON-12: el reloj (cron) cambió algo de `area` sin que nadie escribiera por HTTP: se avisa a todos con UNA señal, solo el área, ningún texto ni id de pieza (la página relee con su API). */
+export function avisarDelReloj(env, area) {
+  const info = Object.values(AREAS).find((a) => a.area === area);
+  if (!info || info.soloAdmin) return null; // un área solo de administradores no se avisa por aquí
+  return difundir(env, { tipo: 'cambio', area, nombre: '', por: { id: null, nombre: '', tab: null }, at: Date.now() });
+}
+
 /** Cierra los sockets de una persona (quitada del equipo, cambió la contraseña…). */
 export function cerrarDe(env, userId, motivo = 'sesión cerrada') { try { return llamar(env, '/cerrar', { userId, motivo }); } catch { return null; } }
 

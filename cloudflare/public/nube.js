@@ -230,6 +230,7 @@
     document.dispatchEvent(new CustomEvent('ao:cambio', { detail: { area: m.area, por: m.por, at: m.at } }));
     window.dispatchEvent(new CustomEvent('ao:cambio', { detail: { area: m.area, por: m.por, at: m.at } }));
     if (m.area === 'estudio') window.dispatchEvent(new CustomEvent('ao:media-changed'));
+    if (m.area === 'contenido') window.dispatchEvent(new Event('ao:contenido-cambio')); // CON-12: Programación y Bandeja se releen sin esperar su sondeo
     if (m.area === 'equipo') cargarEquipo();
     const t = Date.now();
     if (m.nombre && m.por?.id && m.por.id !== yo?.id && t - (avisadas.get(m.area) ?? 0) > 8000) { avisadas.set(m.area, t); avisoBreve(`${m.por.nombre || 'Alguien'} cambió ${m.nombre}.`); } // el nombre legible lo manda el servidor (lista blanca): nunca sale un nombre interno
