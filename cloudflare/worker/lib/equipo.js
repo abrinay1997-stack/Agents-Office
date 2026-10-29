@@ -21,6 +21,20 @@ export async function tasa(db, clave, max, ms = Date.now()) {
   const f = await db.prepare('insert into acceso_intentos (clave, ventana, n) values (?,?,1) on conflict (clave, ventana) do update set n = n + 1 returning n').bind(clave, ventana).first();
   return { ok: Number(f?.n ?? 1) <= max, n: Number(f?.n ?? 1) };
 }
+/** SEG-01: tope por DÍA (UTC) de una clave. Misma tabla: su «ventana» es el minuto en que acaba el día, así la poda por minuto no la borra antes de tiempo y se barre sola al día siguiente. */
+export async function tasaDia(db, clave, max, ms = Date.now()) {
+  const ventana = (Math.floor(ms / 864e5) + 1) * 1440;
+  const f = await db.prepare('insert into acceso_intentos (clave, ventana, n) values (?,?,1) on conflict (clave, ventana) do update set n = n + 1 returning n').bind('dia:' + clave, ventana).first();
+  return { ok: Number(f?.n ?? 1) <= max, n: Number(f?.n ?? 1) };
+}
+/** SEG-01: el cupo de una acción que gasta modelo: por minuto y por día, por persona. Devuelve null si cabe o el mensaje (en español) si no. */
+export async function cupoDeModelo(db, env, que, usuarioId, { porMinuto, porDia }) {
+  const ms = relojDe(env);
+  const topeMin = Number(env?.[`${que.toUpperCase()}_MAX_MINUTO`]) || porMinuto, topeDia = Number(env?.[`${que.toUpperCase()}_MAX_DIA`]) || porDia;
+  if (!(await tasa(db, `${que}:${usuarioId}`, topeMin, ms)).ok) return 'Vas muy rápido: espera un minuto y sigue.';
+  if (!(await tasaDia(db, `${que}:${usuarioId}`, topeDia, ms)).ok) return `Llegaste al tope de hoy (${topeDia} usos al día por persona). Mañana se renueva; si lo necesitas hoy, pídele a un administrador que lo suba.`;
+  return null;
+}
 /** Cuántos intentos lleva esta clave en el minuto, SIN contar este. */
 export async function tasaVer(db, clave, ms = Date.now()) {
   const f = await db.prepare('select n from acceso_intentos where clave = ? and ventana = ?').bind(clave, Math.floor(ms / 60e3)).first();

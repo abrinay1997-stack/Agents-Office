@@ -147,6 +147,7 @@ import * as business from './business.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 import { extraAlDia } from './estudio-extra-version.mjs'; // 1 oct 2026: the page and its on-demand part, of the same build
+import { rechazoDeEscritura } from './origen-core.mjs'; // SEG-03 (29 oct 2026)
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const cfg = loadConfig();
@@ -2242,9 +2243,7 @@ function trusted(req) {
   const host = String(req.headers.host || '');
   if (!cfg.host && !LOCAL_NAME.test(host)) return 'host';
   if (req.method === 'GET' || req.method === 'HEAD') return '';
-  const o = req.headers.origin;
-  if (o && o !== 'null') { try { if (new URL(o).host.toLowerCase() !== host.toLowerCase()) return 'origin'; } catch { return 'origin'; } }
-  if ((req.method === 'POST' || req.method === 'PATCH') && req.headers['content-length'] !== '0' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return 'content-type';
+  return rechazoDeEscritura(req.headers, host, req.method); // SEG-03: origen-core.mjs (Origin null, Sec-Fetch-Site y cuerpo vacío)
   return '';
 }
 // the page, gzipped once per build (1.5 MB → ~0.6 MB); re-read when dist/ changes. 25 oct 2026: with one line at its end that loads Ajustes' «Restablecer oficina» and «Revisar lo que leí» (dist/ajustes-extra.js), so the page itself does not grow
