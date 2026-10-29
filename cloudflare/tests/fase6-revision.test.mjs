@@ -9,7 +9,7 @@ import { crearEjecutor } from '../worker/lib/dimitri/ops.js';
 import { podarRefused } from '../worker/lib/telegram.js';
 import * as T from '../../triggers-core.mjs';
 import * as business from '../../business.mjs';
-import { SALTAR } from './d1-memoria.mjs';
+import { SALTAR, sinCruzarMinuto } from './d1-memoria.mjs';
 
 const EXTRA = { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG, TELEGRAM_WEBHOOK_SECRET: SECRETO_WEBHOOK };
 const S = { 'x-telegram-bot-api-secret-token': SECRETO_WEBHOOK }, H = { 'x-office-token': HOOK };
@@ -49,6 +49,7 @@ test('H2: los extraños tienen su propio tope y no agotan el del dueño; refused
   assert.equal(Object.keys(p).length, 200); assert.ok(!('viejo' in p)); assert.ok('0' in p);
 });
 test('tasaPublica: el tope de Telegram del dueño y el del hook cuentan en D1', { skip: SALTAR }, async () => {
+  await sinCruzarMinuto(); // el tope cuenta por minuto del reloj: sin esto, si las llamadas cruzan el cambio de minuto, la última no da 429
   const o = await oficina6({ extraEnv: EXTRA }); const v = Math.floor(Date.now() / 60e3);
   o.d1._db.prepare("insert into publica_tasa (clave, ventana, n) values ('telegram', ?, 999)").run(v);
   await enviar(o, msg(DUENO_TG, '/estado')); assert.equal(llamadasTg(o), 0, 'pasado el tope no se atiende');

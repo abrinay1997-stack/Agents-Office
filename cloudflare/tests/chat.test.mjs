@@ -7,7 +7,7 @@ import { guardarConfig } from '../worker/lib/chat/chat.js';
 import { guardarConfig as notif } from '../worker/lib/notificaciones.js';
 import { podar } from '../worker/lib/mantenimiento.js';
 import { limpiarCuerpo, cuerpoValido, nombreCanalValido, claveDirecto, leerMenciones, puedeEditar, noLeidos, tituloAviso, pagina, MAX_CUERPO } from '../../chat-core.mjs';
-import { SALTAR, crearD1, sembrar, envDePrueba } from './d1-memoria.mjs';
+import { SALTAR, crearD1, sembrar, envDePrueba, sinCruzarMinuto } from './d1-memoria.mjs';
 
 async function oficina({ activo = true } = {}) {
   const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' }), env = envDePrueba(d1);
@@ -145,6 +145,7 @@ test('avisos por `notificaciones` (un solo sistema): directo y mención, sin el 
 });
 
 test('topes: 30 mensajes por minuto y persona; el cuerpo, 4.000; HTML y marcas bidi se guardan como texto plano limpio', { skip: SALTAR }, async () => {
+  await sinCruzarMinuto(); // el tope cuenta por minuto del reloj: sin esto, si las llamadas cruzan el cambio de minuto, la última no da 429
   const o = await oficina();
   assert.equal((await escribe(o, o.beto, 'general', 'x'.repeat(4001))).status, 400); assert.equal((await escribe(o, o.beto, 'general', '   ')).status, 400);
   await escribe(o, o.beto, 'general', '<img src=x onerror=1> hola‮'); assert.equal((await o.llamar(o.beto, `${C}/canales/general/mensajes`)).j.mensajes[0].cuerpo, '<img src=x onerror=1> hola');

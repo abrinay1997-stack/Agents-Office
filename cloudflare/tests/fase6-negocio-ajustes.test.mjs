@@ -5,11 +5,12 @@ import { oficina6, contandoD1, filas, todoD1, HOOK, TOKEN_BOT, dimitriDice } fro
 import { manejar } from '../worker/lib/rutas.js';
 import { MODULOS } from '../worker/modulos/index.js';
 import { conSesion } from '../worker/lib/tareas/sesion.js';
-import { SALTAR } from './d1-memoria.mjs';
+import { SALTAR, sinCruzarMinuto } from './d1-memoria.mjs';
 
 const H = { 'x-office-token': HOOK };
 
 test('indicadores: crear, valor a mano, webhook con token (sin él D1 intacta), tope por minuto y solo admin escribe', { skip: SALTAR }, async () => {
+  await sinCruzarMinuto(); // el tope cuenta por minuto del reloj: sin esto, si las llamadas cruzan el cambio de minuto, la última no da 429
   const o = await oficina6();
   assert.equal((await o.editor('POST', '/api/business/kpi', { id: 'ventas_semana', name: 'Ventas' })).status, 403);
   assert.equal((await o.admin('POST', '/api/business/kpi', { id: 'ventas_semana', name: 'Ventas', unit: '$', goal: 2000 })).status, 200);

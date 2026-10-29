@@ -1,7 +1,7 @@
 // Cerebro en la nube — recalcular el mapa ENTERO (issue #45, idea 1). Con las 59 notas de fábrica de verdad. El mapa es solo el dibujo: las notas jamás se tocan; el anterior se guarda y se puede recuperar.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SALTAR } from './d1-memoria.mjs';
+import { SALTAR, sinCruzarMinuto } from './d1-memoria.mjs';
 import { mundoDelCerebro, crearNota, textoEnDb } from './cerebro-ayudas.mjs';
 import { calcularMapa, recalcularMapa, deshacerMapa, MAX_NOTAS_MAPA } from '../worker/lib/cerebro-mapa.js';
 import { analizarEnlaces } from '../worker/lib/conexiones.js';
@@ -81,6 +81,7 @@ test('el tope de notas se respeta con una explicación; sin notas no hay nada qu
 });
 
 test('solo un administrador; y no más de 4 recálculos por minuto', { skip: SALTAR }, async () => {
+  await sinCruzarMinuto(); // el tope cuenta por minuto del reloj: sin esto, si las llamadas cruzan el cambio de minuto, la última no da 429
   const m = await mundoDelCerebro();
   for (const rol of ['editor', 'lectura']) for (const paso of ['mapa', 'mapa-deshacer']) assert.equal((await m.p[rol]('POST', '/api/brain/actualizar', { paso })).status, 403, `${rol} ${paso}`);
   const estados = []; for (let i = 0; i < 5; i++) estados.push((await m.p.admin('POST', '/api/brain/actualizar', { paso: 'mapa' })).status);
