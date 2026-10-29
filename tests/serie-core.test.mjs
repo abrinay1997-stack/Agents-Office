@@ -92,7 +92,8 @@ test('token: un solo uso, vence, hash, serie, tope y costo', () => {
 });
 test('DINERO: sin token+hash válidos nunca sale una acción de gasto', () => {
   const s = serie({ estado: 'corriendo' });
-  const malas = [undefined, null, {}, { ok: false }, { ok: true }, { ok: true, serieId: 's1', hash: 'falso', topeMax: 10 }, { ok: true, serieId: 'otra', hash: S.hashEscaleta(s), topeMax: 10 }, { ok: true, serieId: 's1', hash: S.hashEscaleta(s), topeMax: 0 }, { ok: 'true', serieId: 's1', hash: S.hashEscaleta(s), topeMax: 10 }];
+  const malas = [undefined, null, {}, { ok: false }, { ok: true }, { ok: true, serieId: 's1', hash: 'falso', topeMax: 10 }, { ok: true, serieId: 'otra', hash: S.hashEscaleta(s), topeMax: 10 }, { ok: true, serieId: 's1', hash: S.hashEscaleta(s), topeMax: 0 },
+    { ok: 'true', serieId: 's1', hash: S.hashEscaleta(s), topeMax: 10 }];
   for (const a of malas) assert.notEqual(S.siguientePaso(s, { autorizacion: a }).tipo, 'gasto');
   const buena = autoriza(s), g = S.siguientePaso(s, { autorizacion: buena });
   assert.equal(g.tipo, 'gasto'); assert.equal(g.n, 1); assert.equal(g.intento, 1);

@@ -27,11 +27,13 @@ export function transicion(serie, a, { autorizacion, motivo } = {}) {
 // ---- Plano y sus versiones ----
 export function crearPlano(d = {}) {
   return { n: d.n, rol: d.rol || 'desarrollo', descripcion: d.descripcion || '', refs: Array.isArray(d.refs) ? [...d.refs] : [], prompt_exacto: d.prompt_exacto || '', texto_en_imagen: d.texto_en_imagen || '',
-    modelo: d.modelo || null, ajustes: d.ajustes || {}, semilla: d.semilla ?? null, clave: !!d.clave, estado: 'previsto', motivo: null, versiones: [], version: 0, aprobada_version: null };
+    modelo: d.modelo || null, ajustes: d.ajustes || {}, semilla: d.semilla ?? null, clave: !!d.clave, 
+    estado: 'previsto', motivo: null, versiones: [], version: 0, aprobada_version: null };
 }
 export function nuevaVersion(plano, datos = {}) { // cada intento o edición es una versión; nada se pisa
   const v = (plano.version || 0) + 1;
-  return { ...plano, version: v, estado: 'listo', versiones: [...plano.versiones, { v, archivo: datos.archivo || null, intento: datos.intento ?? 1, prompt: datos.prompt || plano.prompt_exacto, modelo: datos.modelo || plano.modelo, semilla: datos.semilla ?? plano.semilla, costo_usd: datos.costo_usd ?? 0, qa: datos.qa || null }] };
+  return { ...plano, version: v, estado: 'listo',
+    versiones: [...plano.versiones, { v, archivo: datos.archivo || null, intento: datos.intento ?? 1, prompt: datos.prompt || plano.prompt_exacto, modelo: datos.modelo || plano.modelo, semilla: datos.semilla ?? plano.semilla, costo_usd: datos.costo_usd ?? 0, qa: datos.qa || null }] };
 }
 export function aprobarVersion(plano, v) { // aprobación POR versión: si el plano cambió después, la aprobación vieja no vale
   if (v !== plano.version) return { ok: false, codigo: 'version', motivo: `el plano ya va por la versión ${plano.version}; revisa esa antes de aprobar` };
@@ -68,7 +70,12 @@ export function tandas(total, por = TANDA_MAX) { const t = []; for (let d = 1; d
 export function validarTanda(planosNuevos) { return Array.isArray(planosNuevos) && planosNuevos.length > 0 && planosNuevos.length <= TANDA_MAX ? { ok: true } : { ok: false, codigo: 'tanda', motivo: `una llamada escribe de 1 a ${TANDA_MAX} planos` }; }
 
 // ---- Hash de la escaleta (SHA-256 síncrono, para no depender de node:crypto en el Worker) ----
-const K = Uint32Array.from('428a2f98 71374491 b5c0fbcf e9b5dba5 3956c25b 59f111f1 923f82a4 ab1c5ed5 d807aa98 12835b01 243185be 550c7dc3 72be5d74 80deb1fe 9bdc06a7 c19bf174 e49b69c1 efbe4786 0fc19dc6 240ca1cc 2de92c6f 4a7484aa 5cb0a9dc 76f988da 983e5152 a831c66d b00327c8 bf597fc7 c6e00bf3 d5a79147 06ca6351 14292967 27b70a85 2e1b2138 4d2c6dfc 53380d13 650a7354 766a0abb 81c2c92e 92722c85 a2bfe8a1 a81a664b c24b8b70 c76c51a3 d192e819 d6990624 f40e3585 106aa070 19a4c116 1e376c08 2748774c 34b0bcb5 391c0cb3 4ed8aa4a 5b9cca4f 682e6ff3 748f82ee 78a5636f 84c87814 8cc70208 90befffa a4506ceb bef9a3f7 c67178f2'.split(' ').map(h => parseInt(h, 16)));
+const K = Uint32Array.from([
+  '428a2f98 71374491 b5c0fbcf e9b5dba5 3956c25b 59f111f1 923f82a4 ab1c5ed5 d807aa98 12835b01 243185be 550c7dc3 72be5d74 80deb1fe 9bdc06a7 c19bf174 ' +
+  'e49b69c1 efbe4786 0fc19dc6 240ca1cc 2de92c6f 4a7484aa 5cb0a9dc 76f988da 983e5152 a831c66d b00327c8 bf597fc7 c6e00bf3 d5a79147 06ca6351 14292967 ' +
+  '27b70a85 2e1b2138 4d2c6dfc 53380d13 650a7354 766a0abb 81c2c92e 92722c85 a2bfe8a1 a81a664b c24b8b70 c76c51a3 d192e819 d6990624 f40e3585 106aa070 ' +
+  '19a4c116 1e376c08 2748774c 34b0bcb5 391c0cb3 4ed8aa4a 5b9cca4f 682e6ff3 748f82ee 78a5636f 84c87814 8cc70208 90befffa a4506ceb bef9a3f7 c67178f2 '
+].join('').trim().split(/\s+/).map(h => parseInt(h, 16)));
 export function sha256(texto) {
   const b = new TextEncoder().encode(String(texto)), len = b.length, tot = ((len + 9 + 63) >> 6) << 6, m = new Uint8Array(tot);
   m.set(b); m[len] = 0x80; const dv = new DataView(m.buffer); dv.setUint32(tot - 8, Math.floor((len * 8) / 2 ** 32)); dv.setUint32(tot - 4, (len * 8) >>> 0);
@@ -77,7 +84,9 @@ export function sha256(texto) {
     for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
     for (let i = 16; i < 64; i++) { const a = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3), c = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10); w[i] = (w[i - 16] + a + w[i - 7] + c) >>> 0; }
     let [a, b2, c, d, e, f, g, hh] = h;
-    for (let i = 0; i < 64; i++) { const t1 = (hh + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0, t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b2) ^ (a & c) ^ (b2 & c))) >>> 0; hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b2; b2 = a; a = (t1 + t2) >>> 0; }
+    for (let i = 0; i < 64; i++) { const t1 = (hh + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0;
+      const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b2) ^ (a & c) ^ (b2 & c))) >>> 0;
+      hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b2; b2 = a; a = (t1 + t2) >>> 0; }
     h = Uint32Array.of(h[0] + a, h[1] + b2, h[2] + c, h[3] + d, h[4] + e, h[5] + f, h[6] + g, h[7] + hh);
   }
   return [...h].map(x => x.toString(16).padStart(8, '0')).join('');
