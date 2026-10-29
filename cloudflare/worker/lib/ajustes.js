@@ -117,7 +117,7 @@ export async function guardarCambios(db, cambios, { quien = 'alguien' } = {}) {
     await mutarDoc(db, DOC_AJUSTES, {}, aplicar);
     await mutarDoc(db, DOC_LOCAL, {}, aplicar); // el espejo que lee Anuncios: mismos valores, mismas rutas
   }
-  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'ajustes', String(quien).slice(0, 120), JSON.stringify({ cambia: rutas })).run();
+  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'ajustes', String(quien).slice(0, 120), JSON.stringify({ cambia: rutas, ...(rutas.includes('hooks.tokenEnQuery') ? { 'hooks.tokenEnQuery': buenos['hooks.tokenEnQuery'] } : {}) })).run(); // el valor nuevo solo de este interruptor (sí/no, no es un secreto): para saber quién lo apagó
   return { ok: true, errors, restart: false, guardados: rutas };
 }
 

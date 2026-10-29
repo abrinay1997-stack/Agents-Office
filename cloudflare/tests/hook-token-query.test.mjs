@@ -15,7 +15,7 @@ test('por defecto ?token= sigue valiendo: se cuenta, avisa (Deprecation) y no de
   assert.equal(r.cabeceras.get('deprecation'), 'true'); assert.match(r.cabeceras.get('x-ao-aviso'), /X-Office-Token/);
   assert.ok(!r.texto.includes(HOOK), 'la respuesta no repite el token');
   await o.anon('POST', `/api/hook/formulario-web?token=${HOOK}`, { name: 'B', message: 'hola', id: 'q2' });
-  const f = filas(o.d1, "select clave, n from hook_token_query"); assert.equal(f.length, 1); assert.equal(f[0].clave, 'hook'); assert.equal(f[0].n, 2);
+  const f = filas(o.d1, "select clave, sum(n) n from hook_token_query group by clave"); assert.equal(f.length, 1); assert.equal(f[0].clave, 'hook'); assert.equal(f[0].n, 2); // suma por clave: no depende del día (medianoche UTC)
   assert.ok(!JSON.stringify(filas(o.d1, 'select * from hook_token_query')).includes(HOOK));
   const t = (await o.admin('GET', '/api/triggers')).j; assert.deepEqual(t.tokenEnQuery, { permitido: true, usos30d: 2 });
 });
@@ -66,6 +66,7 @@ test('se apaga de verdad desde Ajustes (POST /api/settings) y el valor por defec
   assert.equal(g.fields.find((f) => f.path === 'hooks.tokenEnQuery')?.group, 'seguridad'); assert.equal(g.fields.find((f) => f.path === 'hooks.tokenEnQuery').default, true); assert.notEqual(g.values['hooks.tokenEnQuery'], false);
   assert.equal((await o.editor('POST', '/api/settings', { changes: { 'hooks.tokenEnQuery': false } })).status, 403);
   const r = await o.admin('POST', '/api/settings', { changes: { 'hooks.tokenEnQuery': false } }); assert.equal(r.status, 200); assert.deepEqual(r.j.errors, []);
+  const aud = filas(o.d1, "select quien, detalle from auditoria where tipo = 'ajustes' order by rowid desc limit 1")[0]; assert.equal(JSON.parse(aud.detalle)['hooks.tokenEnQuery'], false, 'la auditoría guarda quién y el valor nuevo'); assert.match(aud.quien, /@/);
   assert.equal((await o.admin('GET', '/api/settings')).j.values['hooks.tokenEnQuery'], false);
   assert.equal((await o.anon('POST', `/api/hook/formulario-web?token=${HOOK}`, { name: 'A', message: 'h', id: 's1' })).status, 401);
   assert.equal((await o.anon('POST', '/api/hook/formulario-web', { name: 'A', message: 'h', id: 's2' }, H)).status, 200);
