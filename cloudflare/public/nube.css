@@ -159,3 +159,6 @@ body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset
 body.movil .nt-conexion { bottom: calc(76px + env(safe-area-inset-bottom)); } .nt-conexion .sg-btn { min-height: 36px; } body.movil .nt-conexion .sg-btn { min-height: 44px; }
 .nt-pref { display: grid; gap: 8px; } .nt-pref label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; } .nt-pref input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; }
 .nt-transp { margin: 0; font-size: 12px; color: var(--grey); }
+/* N2 — Tu Telegram */
+.nt-tg { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 14px; } .nt-tg p { margin: 0 0 8px; } .nt-tg .sg-btn { min-height: 36px; } body.movil .nt-tg .sg-btn { min-height: 44px; }
+.nt-cod { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #f1f1f1; color: #111; font: 700 15px/1.4 ui-monospace, monospace; letter-spacing: .04em; user-select: all; overflow-wrap: anywhere; }

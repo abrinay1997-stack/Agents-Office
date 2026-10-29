@@ -106,8 +106,8 @@ export async function manejar(ctx) {
     if (ruta === '/api/media/presets' || ruta.startsWith('/api/media/presets/')) {
       const pm = ruta.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/), puedeEscribir = usuario.rol === 'admin' || usuario.rol === 'editor';
       try {
-        if (ruta === '/api/media/presets' && metodo === 'GET') return json(await presets.lista(db, { medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
-        if (ruta === '/api/media/presets/compile' && metodo === 'POST') { const { plan } = await presets.compilar(db, (await cuerpo(req)) || {}); return json({ plan, budget: await trabajos.budget(env, db) }); }
+        if (ruta === '/api/media/presets' && metodo === 'GET') return json(await presets.lista(db, { medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }, env));
+        if (ruta === '/api/media/presets/compile' && metodo === 'POST') { const { plan } = await presets.compilar(db, (await cuerpo(req)) || {}, env); return json({ plan, budget: await trabajos.budget(env, db) }); }
         if (ruta === '/api/media/presets/apply' && metodo === 'POST') {
           const out = await presets.aplicar(env, db, (await cuerpo(req)) || {}, { usuario });
           return json({ ...out, budget: await trabajos.budget(env, db) });

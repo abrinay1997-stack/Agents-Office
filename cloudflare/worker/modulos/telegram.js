@@ -11,6 +11,10 @@ import { tokenValido, tasaPublica, leerConTope } from '../lib/publica.js';
 import { armar, atenderUpdate, salientes, idsAdmins } from '../lib/telegram.js';
 import { configured, aprobadoresDe } from '../../../telegram-core.mjs';
 import { leerCfg } from '../lib/ajustes.js';
+import { leerConfig as leerConfigNotif } from '../lib/notificaciones.js';
+import { canjearCodigo, cuentaPorTelegram, RESPUESTA_UNIFORME, enviarTelegram, MAX_FALLOS_POR_ID, MAX_FALLOS_GLOBAL } from '../lib/telegram-cuentas.js';
+import { atenderCuenta } from '../lib/telegram-cuentas-bot.js';
+import { emitirAviso } from '../lib/avisos.js';
 import * as tareas from './tareas.js';
 import * as agentes from './agentes.js';
 import * as contenido from './contenido.js';
@@ -44,7 +48,29 @@ export async function publica({ req, env, db, url, ruta, exec }) {
   const OK = () => json({ ok: true }, 200);
   const m = update.message || update.callback_query?.message, de = String(update.message?.from?.id ?? update.callback_query?.from?.id ?? '');
   const cfg = await leerCfg(db), aprobadores = aprobadoresDe(cfg.telegram);
-  if (!(await idsAdmins(env, db, cfg)).includes(de) && !aprobadores[de]) { await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO); return OK(); }
+  if (!(await idsAdmins(env, db, cfg)).includes(de) && !aprobadores[de]) {
+    // N2: un id que no es del dueño, de un administrador ni de un aprobador solo puede (a) canjear un código de vinculación o (b) ser una CUENTA ya vinculada. Todo lo demás: silencio total, como siempre.
+    if (m?.chat?.type === 'private' && !(update.message && reenviado(update.message)) && (await leerConfigNotif(db)).activo) {
+      const texto = String(update.message?.text || ''), vinc = /^\/vincular(?:@\w+)?\s+(\S+)\s*$/i.exec(texto);
+      const nuevo = async () => (await db.prepare('insert or ignore into telegram_updates (update_id, t) values (?,?)').bind(update.update_id, Date.now()).run()).meta?.changes > 0; // Telegram reintenta: un update, una vez
+      if (vinc) { // /vincular usa SOLO sus cubos: no gasta el de los extraños ni el de las cuentas
+        const propio = await tasaPublica(db, 'telegram-vincular:' + de, MAX_FALLOS_POR_ID), global = await tasaPublica(db, 'telegram-vincular', MAX_FALLOS_GLOBAL);
+        if (!propio.ok || !global.ok) { if (!global.ok) await emitirAviso(db, { kind: 'login', level: 'warn', text: 'Hubo demasiados intentos de vincular un Telegram en un minuto. Revisa que no sea un ataque.', key: 'telegram-vincular-ataque' }).catch(() => {}); return OK(); }
+        if (!(await nuevo())) return OK();
+        try { await canjearCodigo(db, env, { telegramId: de, username: update.message?.from?.username, codigo: vinc[1] }); } catch { /* igual que un código malo */ }
+        await enviarTelegram(env, de, RESPUESTA_UNIFORME); // la MISMA respuesta con un código bueno, malo, vencido o ajeno: sin oráculo
+        return OK();
+      }
+      const cuenta = await cuentaPorTelegram(db, de); // primero se sabe si es una cuenta: solo los que NO lo son gastan el cubo de los extraños
+      if (cuenta) {
+        if (!(await tasaPublica(db, 'telegram-cuentas', MAX_POR_MINUTO)).ok || !(await nuevo())) return OK();
+        const trabajo = atenderCuenta({ env, db, cfg, update, cuenta, modulos: MODULOS_BOT }).catch((e) => console.warn('[telegram] cuenta:', String(e?.message || e).slice(0, 200)));
+        if (exec?.waitUntil) { exec.waitUntil(trabajo); return OK(); }
+        await trabajo; return OK();
+      }
+    }
+    await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO); return OK(); // un extraño se cuenta UNA vez, y sin escribir nada en D1
+  }
   if (!(await tasaPublica(db, 'telegram', MAX_POR_MINUTO)).ok) return OK();
   if (m?.chat?.type !== 'private') return OK();
   if (update.message && reenviado(update.message)) return OK();

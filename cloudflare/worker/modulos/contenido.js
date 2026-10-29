@@ -9,6 +9,7 @@
 //  · el token de Meta (META_ACCESS_TOKEN) y el de Metricool son secretos del Worker: nunca están en D1, ni en una respuesta, ni en un registro.
 import { json, error, prohibido, noEncontrado } from '../lib/respuesta.js';
 import { conZona } from '../lib/zona.js';
+import { avisarDelReloj } from '../lib/vivo.js';
 import { crearServicio } from '../lib/contenido/servicio.js';
 import { leerConfig, validarCambio, guardarConfig, MODOS } from '../lib/contenido/config.js';
 import { candadoVigente, tomarCandado, soltarCandado } from '../lib/contenido/cola.js';
@@ -129,6 +130,7 @@ export async function cadaMinuto(env) {
     if (svc.adoptando) return { ocupada: false, adoptando: true, cambios: 0 }; // ni cola ni Meta ni Analíticas hasta que lo mudado esté entero (una cola sin su pieza se soltaría)
     const v = await svc.vuelta();
     const huboTrabajo = v.ocupada || (v.tick?.acciones || 0) > 0 || (v.cambios || 0) > 0;
+    if ((v.tick?.acciones || 0) > 0 || (v.cambios || 0) > 0) avisarDelReloj(env, 'contenido'); // CON-12: la cola o Meta cambió algo; las páginas abiertas lo releen sin esperar su sondeo
     if (!huboTrabajo) await tickAnaliticas(svc, env);
     const t = Date.now();
     if (t - ultimaLimpieza > 3600e3) { ultimaLimpieza = t; await svc.almacen.purgarPapelera().catch(() => {}); } // lo que lleva 30 días en la papelera se va
