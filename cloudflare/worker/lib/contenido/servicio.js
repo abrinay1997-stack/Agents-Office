@@ -80,13 +80,13 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
    * UNA vuelta de la cola: entregar lo aprobado, el pulso de Meta (programar en Facebook, preparar y publicar en Instagram a su hora) y, si Meta publicó o falló algo, mirar la cola otra vez.
    * Tiene el candado «vuelta» (dos invocaciones a la vez no entregan ni publican dos veces); lo que se leyó antes de tenerlo se vuelve a leer.
    */
-  async function vuelta({ pulso = true } = {}) {
+  async function vuelta({ pulso = true, solo = '' } = {}) {
     if (config.modo === 'apagado') return { ok: true, apagado: true, tick: { at: ahora(), acciones: 0, error: '' } };
     const dueno = 'vuelta:' + crypto.randomUUID();
     if (!(await tomarCandado(db, 'vuelta', dueno, 5 * 60e3, ahora))) return { ok: false, ocupada: true, tick: { at: ahora(), acciones: 0, error: 'otra vuelta está trabajando; esta espera a la próxima' } };
     try {
       await cond.cargar(); // con el candado en la mano: lo de Meta y la agenda se leen de nuevo (otra vuelta pudo cambiarlos)
-      const tick = await programadorInterno.tick();
+      const tick = await programadorInterno.tick({ solo });
       let cambios = 0;
       if (pulso && config.modo === 'real') {
         const r = await cond.conductores.meta.pulso().catch(e => ({ cambios: 0, error: e.message }));
@@ -96,13 +96,13 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
       return { ok: true, tick, cambios };
     } finally { await soltarCandado(db, 'vuelta', dueno).catch(() => {}); }
   }
-  const programador = { ...programadorInterno, async tick() { const r = await vuelta(); return r.tick; } }; // lo que llama la página ("Entregar ya") pasa por el candado
+  const programador = { ...programadorInterno, async tick(o = {}) { const r = await vuelta({ solo: o?.solo || '' }); return r.tick; } }; // lo que llama la página ("Entregar ya") pasa por el candado
 
   const controlador = crearControlador({
     almacen, notice: aviso, programador, metricool: cond.metricool, conductorMeta: () => (config.conductor === 'meta' ? cond.conductores.meta : null),
     mejorHora, informe, guardados, mejorar: mejorar.mejorar, publicadas, plantillas, analiticasTexto, quienLlena: mejorar.quien, ahora,
     cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: config.metaPagina || '', conductor: cond.actual().id }),
-    ajustes: () => ({ departamentos: config.departamentos, modo: config.modo, conductor: cond.actual().id, zona: describirZona(config.zona, ahora()), redes: config.redes }),
+    ajustes: () => ({ publicarYa: config.publicarYa === true, departamentos: config.departamentos, modo: config.modo, conductor: cond.actual().id, zona: describirZona(config.zona, ahora()), redes: config.redes }),
     // Con ctx.waitUntil la respuesta sale ya y lo demás sigue detrás (y al terminar vacía lo pendiente); sin él (pruebas), se espera antes de contestar, en `vaciar()`.
     segundoPlano: p => { const q = Promise.resolve(p).catch(() => {}); if (!(waitUntil && waitUntil(q.then(() => vaciar())))) pendientes.push(q); },
     ...(inyectados.controlador || {}),

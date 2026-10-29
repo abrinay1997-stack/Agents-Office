@@ -587,17 +587,24 @@ export function medidaDeItem(it) {
 }
 
 /** Meta programa una publicación de Página entre 10 minutos y 75 días antes; aquí, lo mismo para todo. */
-export const PROGRAMAR = Object.freeze({ minMin: 10, maxDias: 75 });
+export const PROGRAMAR = Object.freeze({ minMin: 10, maxDias: 75, pronto: 5 });
+/** CON-14: ÚNICA fuente de «unos 5 minutos» (aprobar «para ya» por el camino antiguo: sale pasados `pronto` minutos). Todo texto y todo cálculo la importan; un test busca el literal. */
+export const PRONTO_MIN = PROGRAMAR.pronto;
+export const PRONTO_TXT = `unos ${PRONTO_MIN} minutos`;
 
 /**
  * ¿Se puede aprobar para ESE momento? Sin hora no (la hora la decide el dueño, no un «9:00» de relleno); una hora que ya pasó (o a menos de
  * 10 minutos), tampoco: nunca saldría. Más allá de 75 días, un aviso. Devuelve { errores, avisos, momento } (momento en ms, o null).
  */
-export function revisarMomento(fecha, hora, ahora = Date.now(), { minMin = PROGRAMAR.minMin } = {}) { // C1: «Publicar ya» aprueba para dentro de 5 minutos (minMin: 4)
+export function revisarMomento(fecha, hora, ahora = Date.now(), { minMin = PROGRAMAR.minMin, ya = false } = {}) { // `minMin`: el camino «pronto» (PRONTO_MIN - 1) · `ya`: «Publicar ahora» (CON-04), el momento es el minuto en curso
   const errores = [], avisos = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha ?? ""))) return { errores: ["Ponle un día para poder aprobarla."], avisos, momento: null };
   if (!/^\d{2}:\d{2}$/.test(String(hora ?? ""))) return { errores: ["Ponle una hora: sin hora no se sabe cuándo sale."], avisos, momento: null };
   const momento = new Date(`${fecha}T${hora}:00`).getTime();
+  if (ya) { // «Publicar ahora»: el minuto actual hacia abajo (nunca el futuro ni un minuto que ya pasó hace rato)
+    if (!(momento <= ahora && momento > ahora - 60_000)) errores.push("Esa hora ya no es «ahora»: vuelve a pulsar Publicar ahora.");
+    return { errores, avisos, momento };
+  }
   if (momento < ahora + minMin * 60_000) errores.push(momento < ahora ? "Esa hora ya pasó: elige un día y una hora que vengan." : `Sale en menos de ${minMin} minutos: Meta pide al menos ${minMin} de margen.`);
   else if (momento > ahora + PROGRAMAR.maxDias * 864e5) avisos.push(`Sale dentro de más de ${PROGRAMAR.maxDias} días: Meta no programa con tanta antelación; quedará esperando aquí hasta entonces.`);
   return { errores, avisos, momento };

@@ -140,7 +140,7 @@ try {
       step(/Pulsa otra vez/.test(await page.textContent(P + '[data-a="ya"]')), `${tag}: «Publicar ya» pide un segundo clic`);
       await page.click(P + '[data-a="ya"]'); await page.waitForTimeout(1200);
       const ap = await page.evaluate(() => ({ chip: document.querySelector('.pz-chip').textContent, st: document.querySelector('.pz-state').textContent }));
-      step(/APROBADA/.test(ap.chip) && /sale en unos 5 minutos/.test(ap.st), `${tag}: queda aprobada para dentro de unos minutos («${ap.st}»)`);
+      step(/APROBADA/.test(ap.chip) && /sale en unos \d+ minutos/.test(ap.st), `${tag}: queda aprobada para dentro de unos minutos («${ap.st}»)`);
       const { piezas } = await api('GET', '/api/contenido?sin_fecha=1'); const pz = piezas.find(x => x.estado === 'aprobada');
       const falta = pz ? new Date(`${pz.fecha}T${pz.hora}:00`).getTime() - Date.now() : 0;
       step(pz && falta > 3 * 60e3 && falta < 7 * 60e3 && JSON.stringify(pz.formatos) === '{}' && pz.formato === 'carrusel' && pz.textoFacebook && pz.medios.length === 2, `${tag}: lo guardado vuelve igual (${pz ? `${pz.formato}, ${pz.medios.length} archivos, sale en ${Math.round(falta / 1000)} s` : 'no está'})`);

@@ -57,7 +57,8 @@ export function crearProgramadorD1({ db, almacen, conductor, porId = null, modo 
   const lectura = async () => (foto ??= await cola.leer());
   const olvidar = () => { foto = null; };
   return {
-    tick: async () => { try { return await nucleo.tick(); } finally { olvidar(); } },
+    tick: async o => { try { return await nucleo.tick(o); } finally { olvidar(); } },
+    retirarAhora: id => conCandado(async () => { try { return await nucleo.retirarAhora(id); } finally { olvidar(); } }), // B05
     refrescar: async id => { try { return await nucleo.refrescar(id); } finally { olvidar(); } },
     ultimo: nucleo.ultimo,
     salidaDe: async id => publica((await lectura()).entradas?.[id]) || null,

@@ -19,6 +19,7 @@ import { ESTADO, FORMATO, RED, FICON, nbRed, HORAS_RAPIDAS, mediaUrl, thumbHTML 
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { etiquetaDia } from '../tareas/etiqueta-dia.mjs';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, FORMATOS_RED, formatoDe, formatoValido, nombreFormato, ponFormato, formatosConRedes } from './contenido-reglas.js';
+import { PRONTO_MIN, PRONTO_TXT } from './contenido-reglas.js'; // CON-14: el plazo de «pronto» sale de UNA constante
 import { initPreview } from './contenido-preview.js';
 import { iconoRed } from './redes-iconos.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
@@ -380,7 +381,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const sal = textoSalida(p); // M1: lo que pasó al entregarla, cuando la cola la conoce
     const veredicto = p.estado === 'aprobada' && sal ? `<span class="pz-verd ${sal.malo ? 'bad' : 'ok'}">${esc(sal.texto)}</span>${sal.enlaces.map(l => ` <a class="pz-lk" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">Ver en ${esc(l.red)}</a>`).join('')}` : p.estado === 'aprobada' ? (paso ? `<span class="pz-verd bad">Vencida: era para el ${esc(cuandoL)} y no salió. Cámbiale el día.</span>` : `<span class="pz-when">✓ Sale ${esc(cuandoL)}</span>`) : listo ? `<span class="pz-verd ok">✓ Lista para salir${p.fecha ? ' el ' + esc(cuandoL) : ''}</span>` : `<button type="button" class="pz-verd bad" data-a="ver-problemas">${n === 1 ? '1 problema' : n + ' problemas'}: ${esc(r.errores[0])}</button>`;
     const reglas = revisarPublicacion(postDePieza(p), p.redes), puedeYa = !reglas.errores.length;
-    const yaTxt = confirmaYa > Date.now() ? `Pulsa otra vez: sale en unos 5 minutos en ${p.redes.map(x => RED[x].name).join(', ')}` : 'Publicar ya · sale en unos 5 minutos';
+    const yaTxt = confirmaYa > Date.now() ? `Pulsa otra vez: sale en ${PRONTO_TXT} en ${p.redes.map(x => RED[x].name).join(', ')}` : `Publicar ya · sale en ${PRONTO_TXT}`;
     const menuHTML = `<div class="pz-menu" role="menu" id="${I('menu')}" aria-label="Más formas de guardarla"${menu ? '' : ' hidden'}>
         ${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" role="menuitem" data-a="review">Pasar a revisión</button>' : '<button type="button" role="menuitem" data-a="draft">Volver a borrador</button>'}
         <button type="button" role="menuitem" data-a="ya"${puedeYa ? '' : ` aria-disabled="true" title="${esc('Todavía no puede salir: ' + (reglas.errores[0] || ''))}"`}>${esc(yaTxt)}</button>
@@ -490,7 +491,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   async function aprobar(o = {}) {
     await flush(); if (!cur.id) { setState('Escribe algo antes de aprobarla.', true); return; }
     if (!o.pronto) { const r = rev(); if (r.errores.length) { setState(r.errores[0], true); abrirAvisos(true); return; } }
-    try { setState(o.pronto ? 'Aprobando para dentro de 5 minutos…' : 'Aprobando…'); const res = await datos.approve(cur.id, o); cur.fecha = res.pieza.fecha; cur.hora = res.pieza.hora; adopt(res.pieza); paintBody(); onChange(res.pieza, { aprobada: true }); setState(o.pronto ? `Aprobada para las ${res.pieza.hora}: sale en unos 5 minutos.` : 'Aprobada'); note(o.pronto ? `Aprobada para las ${res.pieza.hora}. Sale sola en unos minutos (Programación dice cómo va).` : 'Aprobada. Queda lista en Programación.'); }
+    try { setState(o.pronto ? `Aprobando para dentro de ${PRONTO_MIN} minutos…` : 'Aprobando…'); const res = await datos.approve(cur.id, o); cur.fecha = res.pieza.fecha; cur.hora = res.pieza.hora; adopt(res.pieza); paintBody(); onChange(res.pieza, { aprobada: true }); setState(o.pronto ? `Aprobada para las ${res.pieza.hora}: sale en ${PRONTO_TXT}.` : 'Aprobada'); note(o.pronto ? `Aprobada para las ${res.pieza.hora}. Sale sola en unos minutos (Programación dice cómo va).` : 'Aprobada. Queda lista en Programación.'); }
     catch (err) { setState(err.message, true); }
   }
   host.addEventListener('click', async e => {
@@ -555,7 +556,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (a === 'menu') { menu = !menu; const m = foot.querySelector('.pz-menu'); if (m) m.hidden = !menu; b.setAttribute('aria-expanded', menu); if (menu) m?.querySelector('[role="menuitem"]')?.focus(); return; }
     if (a === 'ya') {
       if (b.getAttribute('aria-disabled') === 'true') { setState(b.title, true); abrirAvisos(false); return; }
-      if (confirmaYa < Date.now()) { confirmaYa = Date.now() + 6000; b.textContent = `Pulsa otra vez: sale en unos 5 minutos en ${cur.redes.map(x => RED[x].name).join(', ')}`; setTimeout(() => { if (confirmaYa && confirmaYa <= Date.now() && b.isConnected) b.textContent = 'Publicar ya · sale en unos 5 minutos'; }, 6100); return; }
+      if (confirmaYa < Date.now()) { confirmaYa = Date.now() + 6000; b.textContent = `Pulsa otra vez: sale en ${PRONTO_TXT} en ${cur.redes.map(x => RED[x].name).join(', ')}`; setTimeout(() => { if (confirmaYa && confirmaYa <= Date.now() && b.isConnected) b.textContent = `Publicar ya · sale en ${PRONTO_TXT}`; }, 6100); return; }
       confirmaYa = 0; cerrarMenu(false); await aprobar({ pronto: true }); return;
     }
     if (a === 'impulsar') { // A4: a Anuncios → Borradores con el borrador de esta publicación (lo hace la vista de Anuncios: servida o en su demo)

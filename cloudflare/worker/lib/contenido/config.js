@@ -8,7 +8,7 @@ import { ZONA_POR_DEFECTO, zonaValida } from '../zona.js';
 export const CLAVE_CONFIG = 'config.contenido';
 export const MODOS = ['apagado', 'simulacro', 'real'];
 export const CONDUCTORES = ['metricool', 'meta'];
-export const DEFECTO = Object.freeze({ modo: 'simulacro', conductor: 'metricool', entregarHorasAntes: 24, metaPagina: '', redes: ['instagram', 'facebook'], departamentos: ['marketing', 'delivery'], zona: ZONA_POR_DEFECTO, bandejaFuente: 'auto' });
+export const DEFECTO = Object.freeze({ modo: 'simulacro', conductor: 'metricool', entregarHorasAntes: 24, metaPagina: '', redes: ['instagram', 'facebook'], departamentos: ['marketing', 'delivery'], zona: ZONA_POR_DEFECTO, bandejaFuente: 'auto', publicarYa: false });
 
 /** Lo guardado, con lo que falte puesto a su valor de siempre y lo que no valga descartado. */
 export function completar(guardado) {
@@ -24,6 +24,7 @@ export function completar(guardado) {
     departamentos: Array.isArray(g.departamentos) && g.departamentos.length ? g.departamentos.filter(d => /^[a-z]{2,20}$/.test(d)) : [...DEFECTO.departamentos],
     zona: zonaValida(g.zona) ? g.zona : DEFECTO.zona,
     bandejaFuente: ['auto', 'meta', 'metricool', 'ambas'].includes(g.bandejaFuente) ? g.bandejaFuente : DEFECTO.bandejaFuente,
+    publicarYa: g.publicarYa === true, // CON-04: «Publicar ahora», apagado hasta que el dueño lo encienda
   };
 }
 export async function leerConfig(db) { return completar((await leerDoc(db, CLAVE_CONFIG, {})).valor); }
@@ -31,7 +32,7 @@ export async function leerConfig(db) { return completar((await leerDoc(db, CLAVE
 /** Valida un cambio de PUT /api/contenido/config (solo lo que viene) → { ok, valor } | { error } en palabras. */
 export function validarCambio(entrada, actual) {
   if (!entrada || typeof entrada !== 'object' || Array.isArray(entrada)) return { error: 'manda un objeto con los ajustes que cambian' };
-  const ok = ['modo', 'conductor', 'entregarHorasAntes', 'metaPagina', 'redes', 'departamentos', 'zona', 'bandejaFuente'];
+  const ok = ['modo', 'conductor', 'entregarHorasAntes', 'metaPagina', 'redes', 'departamentos', 'zona', 'bandejaFuente', 'publicarYa'];
   const raro = Object.keys(entrada).find(k => !ok.includes(k)); if (raro) return { error: `«${raro}» no es un ajuste de Contenido (son: ${ok.join(', ')})` };
   if ('modo' in entrada && !MODOS.includes(entrada.modo)) return { error: `el modo es uno de: ${MODOS.join(', ')}` };
   if ('conductor' in entrada && !CONDUCTORES.includes(entrada.conductor)) return { error: `el conductor es uno de: ${CONDUCTORES.join(', ')}` };
@@ -41,6 +42,7 @@ export function validarCambio(entrada, actual) {
   if ('departamentos' in entrada && (!Array.isArray(entrada.departamentos) || entrada.departamentos.some(d => !/^[a-z]{2,20}$/.test(d)))) return { error: 'departamentos es una lista de claves como marketing, delivery' };
   if ('zona' in entrada && !zonaValida(entrada.zona)) return { error: 'zona es un nombre de zona horaria como America/Panama' };
   if ('bandejaFuente' in entrada && !['auto', 'meta', 'metricool', 'ambas'].includes(entrada.bandejaFuente)) return { error: 'bandejaFuente es: auto, meta, metricool o ambas' };
+  if ('publicarYa' in entrada && typeof entrada.publicarYa !== 'boolean') return { error: 'publicarYa es verdadero o falso' };
   return { ok: true, valor: completar({ ...actual, ...entrada }) };
 }
 export async function guardarConfig(db, valor) { await guardarDoc(db, CLAVE_CONFIG, valor); return valor; }

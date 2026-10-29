@@ -19,7 +19,7 @@ import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento } from '.
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 import { limpiarCuentas, cuentasLimpias, cuentasDeRedes } from '../src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada red (qué página, qué Instagram)
 // Salió el núcleo puro a piezas-core.mjs (lo usa también el Worker de Cloudflare); aquí se re-exporta igual que siempre.
-import { ESTADOS, FORMATOS, REDES, NOMBRE_RED, parsear, serializar, huella, normalizar, ID_RE, FECHA_RE, SIN_FECHA, mesDe, PRONTO_MIN, ahoraMas, nuevoId as nuevoIdCore } from './piezas-core.mjs';
+import { ESTADOS, FORMATOS, REDES, NOMBRE_RED, parsear, serializar, huella, normalizar, ID_RE, FECHA_RE, SIN_FECHA, mesDe, PRONTO_MIN, ahoraMas, ahoraAbajo, nuevoId as nuevoIdCore } from './piezas-core.mjs';
 export { ESTADOS, FORMATOS, REDES, NOMBRE_RED, parsear, serializar, huella, normalizar, PRONTO_MIN, ahoraMas };
 
 /* ---------- el almacén: los archivos ---------- */
@@ -97,14 +97,15 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
       escribir(p, previa.fecha); return { pieza: conEstado(p), soltada };
     },
     /** El OK del dueño: solo si puede salir (sin errores de las reglas de cada red), tiene día y hora, y ese momento todavía no pasó. */
-    aprobar(id, { por = 'dueno', pronto = false } = {}) {
+    aprobar(id, { por = 'dueno', pronto = false, ya = false } = {}) {
       const f = buscar(id), p = f && deArchivo(f); if (!p) return { error: 'esa pieza ya no existe', nada: true };
-      if (pronto) { const t = ahoraMas(ahora(), PRONTO_MIN); p.fecha = t.fecha; p.hora = t.hora; } // C1: «Publicar ya» — sale dentro de unos 5 minutos
+      if (ya) { const t = ahoraAbajo(ahora()); p.fecha = t.fecha; p.hora = t.hora; } // CON-04: «Publicar ahora» — el minuto en curso; solo lo pide la ruta publicar-ya
+      else if (pronto) { const t = ahoraMas(ahora(), PRONTO_MIN); p.fecha = t.fecha; p.hora = t.hora; } // C1: aprobar «para ya» por el camino antiguo (PRONTO_MIN minutos)
       if (!p.fecha) return { error: 'ponle un día antes de aprobarla', errores: ['Sin día'] };
-      const cuando = revisarMomento(p.fecha, p.hora, ahora(), pronto ? { minMin: PRONTO_MIN - 1 } : undefined); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
+      const cuando = revisarMomento(p.fecha, p.hora, ahora(), ya ? { ya: true } : pronto ? { minMin: PRONTO_MIN - 1 } : undefined); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
       const { errores, avisos } = revisar(p); if (errores.length) return { error: 'todavía no puede salir: ' + errores[0], errores, avisos: [...avisos, ...cuando.avisos] };
       const mal = medios(p); if (mal) return { error: mal };
-      p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por }; p.actualizada = p.aprobada.cuando;
+      p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por, ...(ya ? { ya: true } : {}) }; p.actualizada = p.aprobada.cuando; // `ya` solo vive aquí: lo lee la cola, nunca la petición
       escribir(p, f && previaFecha(f)); return { pieza: conEstado(p), avisos: [...avisos, ...cuando.avisos] };
     },
     /** Devolver una pieza a revisión (o a borrador): quita el OK. */
