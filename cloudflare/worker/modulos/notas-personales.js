@@ -11,7 +11,8 @@
 import { json, error, prohibido, noEncontrado } from '../lib/respuesta.js';
 import { leerConfig, guardarConfig, crear, listarMias, marcar, retirar, listarEnviadas, listarParaAdmin, personas, tocarPresencia, parsePara } from '../lib/notas-personales.js';
 import { leerConfig as leerConfigNotif, listar as listarNotif } from '../lib/notificaciones.js';
-import { difundir } from '../lib/vivo.js';
+import { avisarNotaNueva } from '../lib/notas-avisos.js';
+import { leerCfg } from '../lib/ajustes.js';
 import { avisarConexion, leerPref, guardarPref, TEXTO_TRANSPARENCIA } from '../lib/presencia-aviso.js';
 
 export const nombre = 'notas-personales';
@@ -66,7 +67,7 @@ export async function manejar(ctx) {
     const r = await crear(db, usuario, b);
     if (r.error) return error(r.error, r.estado);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'notas', usuario.email, JSON.stringify({ id: r.id, para: String(b.para).slice(0, 90) })).run(); // el texto no entra en la auditoría
-    difundir(env, { tipo: 'nota', para: r.para, at: Date.now() }); // el aviso en vivo lleva solo la señal y a quién va: nunca el texto
+    await avisarNotaNueva(env, db, await leerCfg(db), usuario, r); // el aviso en vivo lleva solo ids; el de Telegram, «te dejó una nota» sin el texto
     return json({ id: r.id }, 201);
   }
   const m = /^\/([0-9a-f-]{8,40})(?:\/(leer|cerrar|reportar))?$/.exec(resto);
