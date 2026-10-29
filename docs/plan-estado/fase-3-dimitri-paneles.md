@@ -12,6 +12,6 @@ Migraciones reservadas: ninguna. Flags nuevos: ninguno (todo es aditivo y el com
 - ✅ **3.3 / DIM-04** Cerebro: `.bv-top` mide el % del Cerebro, no `vw`; el panel `.bv-side` se pliega solo con la vista < 800 px.
 - 🟡 **3.3 / UX-10** Controles de Dimitri a 44 px con `pointer: coarse`. NO hecho: las ~55 reglas con fuente ≤ 10,5 px (backlog).
 - ⏳ **3.4 / DIM-09/10** (contexto con `ids`/`resumen` y acción «navegar») NO hecho: toca el prompt/OPS de Dimitri y esta fase tiene prohibido tocarlo (`sub-conversacion` y `dimitri-auditoria` topan su tamaño).
-- ⏳ **3.5 / DIM-03** PR aparte (`fase-3-5-vistas-dimitri-ancho`).
+- ✅ **3.5 / DIM-03** (rama `fase-3-5-vistas-dimitri-ancho`, PR aparte apilado sobre este): `scripts/vistas-dimitri-recorrido.mjs` abre `#calOv #ctOv #anOv #anuOv #tvOv` con Dimitri al máximo (760 a 1366 y 1512; 544 a 1024). Resultado: a 1024 y a 1366 **las cinco aguantan sin tocar un `@container`** (sin scroll horizontal, ningún control pasa de su borde). 1512 no se corrió aquí (ver informe).
 
 Delta de la página (`dist/command-centre-v2.html`): ver informe del PR.
