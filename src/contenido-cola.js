@@ -2,6 +2,7 @@
 // cuándo sale una pieza, cuánto falta, si pisa a otra, cuál es el siguiente día libre y qué pide una acción del dueño.
 // Lo usan la Programación (src/contenido.js) y el panel de la pieza (src/pieza.js).
 import { revisarMomento } from './contenido-reglas.js';
+import { diaEnZona, sumarDias, diaSemana } from '../tareas/etiqueta-dia.mjs';
 
 const DIA = 864e5;
 const pad = n => String(n).padStart(2, '0');
@@ -108,12 +109,12 @@ export function colaPorDia(piezas = [], ahora = Date.now(), n = 14) {
  */
 export function diasRapidos(redes = [], otras = [], { ahora = Date.now(), dias = 7, excluir = '' } = {}) {
   const DOWC = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], out = [];
-  const t0 = new Date(ahora); t0.setHours(0, 0, 0, 0);
+  const hoy = diaEnZona(ahora);
   for (let i = 0; i < dias; i++) {
-    const d = new Date(t0); d.setDate(d.getDate() + i); const f = ymd(d);
+    const f = sumarDias(hoy, i), dow = diaSemana(f), dnum = Number(f.slice(8)); // CON-08/CON-15: por calendario, no sumando 24 h
     const n = otras.filter(o => o.id !== excluir && o.fecha === f && o.estado !== 'idea' && (o.redes || []).some(r => redes.includes(r))).length;
-    const corto = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${DOWC[d.getDay()]} ${d.getDate()}`;
-    out.push({ fecha: f, corto, largo: `${i === 0 ? 'hoy, ' : i === 1 ? 'mañana, ' : ''}${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][d.getDay()]} ${d.getDate()}`, n });
+    const corto = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${DOWC[dow]} ${dnum}`;
+    out.push({ fecha: f, corto, largo: `${i === 0 ? 'hoy, ' : i === 1 ? 'mañana, ' : ''}${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][dow]} ${dnum}`, n });
   }
   return out;
 }
