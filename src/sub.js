@@ -16,6 +16,7 @@ import { modal } from './modal.js';
 import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes, loteVivo, esHoja } from './sub-studio.js'; // F3: the lote's live card and a sheet attached
 import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS, gastoBody, gastoHecho } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
 import { alertasIa, avisosParaHilo, popoverHTML } from './dimitri-ia.js';
+import { initDimitriAncho } from './dimitri-ancho.js'; // Fase 3: ancho, plegado y ampliado
 import { isQuickStatus } from './sub-stream.js'; // Auditoría 1 oct 2026: «¿Cómo vamos?» at once (DIM-10); the answer arrives while it is written, with «Detener» (DIM-14)
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
@@ -50,6 +51,7 @@ export function initSub(ctx) {
     <datalist id="scFolders"></datalist>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
+  const ancho = initDimitriAncho({ el, modal }); // Fase 3 (29 oct 2026): el borde que se arrastra, plegar y ampliar
   const box = $('.sb-msgs'), input = $('.sb-in textarea'), sendBtn = $('.sb-send'), live = $('.sb-live'), fileIn = $('.sb-file');
   /** UX-11 (29 oct 2026): sin línea fija. El ⓘ abre un popover con el modelo, las consultas y el gasto; solo una alerta real pinta su punto y se dice una vez en el hilo. */
   let iaFallo = null; const iaAvisos = []; // los avisos de alerta viven aparte del hilo del servidor: el sondeo de cada 3 s no los borra
@@ -108,7 +110,7 @@ export function initSub(ctx) {
     if (key !== ctxKey) { ctxKey = key; ctxOff = false; }
     ctxSel = c;
     const a = document.activeElement, held = !!(a && a.closest && el.contains(a) && a.closest('.sb-chips, .sb-ctx')); // never redraw a button under the keyboard's focus (it fell to <body> and the office's one-letter keys woke up)
-    const view = c ? c.view : '', sig = `${key}|${ctxOff}|${attachments.map(x => x.file || '').join(',')}`, chipSig = `${view}|${messages.length ? 1 : 0}`;
+    const view = c ? c.view : '', sig = `${key}|${ctxOff}|${document.body.classList.contains('subMax')}|${attachments.map(x => x.file || '').join(',')}`, chipSig = `${view}|${messages.length ? 1 : 0}`;
     if (!held && sig !== ctxDrawn) { ctxDrawn = sig; renderCtx(); }
     if (!held && chipSig !== chipsDrawn) { chipsDrawn = chipSig; renderChips(); }
   }
@@ -119,7 +121,7 @@ export function initSub(ctx) {
     const fresh = ctxFiles(c).filter(f => !attachments.some(a => a.file === f));
     const what = fresh.length !== 1 ? `Adjuntar los ${fresh.length}` : /\.(mp4|webm)$/i.test(fresh[0]) ? 'Adjuntar el video' : /\.(mp3|wav|flac|m4a|ogg)$/i.test(fresh[0]) ? 'Adjuntar el audio' : 'Adjuntarla'; // DIM-09: a video or an audio is attached by its id
     box2.hidden = false;
-    box2.innerHTML = `<span class="sb-ctxl" title="${esc(c.label)}"><span aria-hidden="true">👁</span> Viendo: <b>${esc(c.label)}</b></span>${fresh.length ? `<button type="button" class="sb-ctxadd">${what}</button>` : ''}<button type="button" class="sb-ctxx" aria-label="No enviar lo que estoy viendo" title="No enviar lo que estoy viendo">✕</button>`;
+    box2.innerHTML = `<span class="sb-ctxl" title="${esc(c.label)}"><span aria-hidden="true">👁</span> Viendo: <b>${esc(c.label)}</b>${document.body.classList.contains('subMax') ? ' · tapada' : ''}</span>${fresh.length ? `<button type="button" class="sb-ctxadd">${what}</button>` : ''}<button type="button" class="sb-ctxx" aria-label="No enviar lo que estoy viendo" title="No enviar lo que estoy viendo">✕</button>`;
   }
   function renderChips() {
     const v = ctxSel && ctxSel.view, list = v === 'studio' ? STUDIO_CHIPS : VIEW_CHIPS[v] || BASE_CHIPS;
@@ -680,8 +682,8 @@ export function initSub(ctx) {
   function open(o = {}) {
     if (o && Array.isArray(o.attach) && o.attach.length) addGallery(o.attach);
     if (o && o.text) input.value = String(o.text);
-    if (isOn()) { input.focus(); return; }
-    clearTimeout(hideT); opener = document.activeElement; el.hidden = false; document.body.classList.add('subOpen');
+    if (isOn()) { ancho.desplegar(false); input.focus(); return; }
+    clearTimeout(hideT); opener = document.activeElement; el.hidden = false; document.body.classList.add('subOpen'); ancho.alAbrir();
     if (narrow.matches) { modal.open(el); el.setAttribute('aria-modal', 'true'); }
     requestAnimationFrame(() => el.classList.add('on'));
     refreshContext();
@@ -693,9 +695,9 @@ export function initSub(ctx) {
   }
   function close() {
     if (!isOn()) return; if (el.contains(document.activeElement)) document.activeElement.blur(); /* a focused box inside a hidden panel kept eating the office's keys */
-    el.classList.remove('on'); document.body.classList.remove('subOpen'); modal.close(el); el.removeAttribute('aria-modal'); clearInterval(timer); hideT = setTimeout(() => { el.hidden = true; }, 250); relayout();
+    el.classList.remove('on'); document.body.classList.remove('subOpen'); ancho.alCerrar(); modal.close(el); el.removeAttribute('aria-modal'); clearInterval(timer); hideT = setTimeout(() => { el.hidden = true; }, 250); relayout();
     if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true });
   }
   renderChips();
-  return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn, isWindow: () => isOn() && narrow.matches };
+  return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn, isWindow: () => isOn() && (narrow.matches || ancho.ampliado()) };
 }
