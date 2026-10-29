@@ -39,7 +39,7 @@ export function aJpegDeEnv(env) {
     const IMAGES = env['IMAGES']; // el binding de imágenes de Cloudflare (hay que declararlo en wrangler.jsonc: ver docs/cloudflare.md, Fase 5); con corchetes porque no es un secreto
     if (!IMAGES?.input) throw propio('Instagram solo acepta JPEG y esta imagen no lo es. En la nube no hay con qué convertirla (falta el binding IMAGES del Worker): guárdala como JPEG en el Estudio o publícala solo en Facebook.');
     try {
-      const salida = await IMAGES.input(new Blob([datos]).stream()).output({ format: 'image/jpeg', quality: 90 });
+      const salida = await IMAGES.input(new Blob([datos]).stream()).transform({ background: '#ffffff' }).output({ format: 'image/jpeg', quality: 90 }); // la transparencia sobre blanco (un PNG con alfa a JPEG quedaría negro)
       return new Uint8Array(await salida.response().arrayBuffer());
     } catch (e) { throw propio(`no pude convertir la imagen a JPEG: ${String(e?.message || e).slice(0, 160)}`); }
   };

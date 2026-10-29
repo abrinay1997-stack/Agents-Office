@@ -27,6 +27,7 @@ import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a v
 // bank, the 3D stage or Lotes is asked for — never with the office alone. Until then a stand-in with the same face
 // (src/estudio-carga.js) says «Cargando…», or why it failed with «Reintentar»
 import { initPaneles } from './studio-paneles.js';
+import { necesitaJpeg, aJpegArchivo } from './imagen-jpeg.js'; // CON-02: gif/avif/bmp/tiff/heic → JPEG al subir
 import { bancoDiferido as initBanco, lotesDiferidos as initLotes } from './estudio-carga.js';
 const LBL = { seed: 'Semilla (vacía = al azar; un número repite el resultado)', aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
@@ -138,7 +139,7 @@ export function initStudio(ctx) {
       <p class="st-hsub">La key se guarda en Windows una sola vez (con el comando de su línea en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
       <p class="st-hsub">El tope de generaciones al día y el gasto máximo (del día y del mes) se cambian en <button type="button" class="st-lk" data-open="settings">Ajustes → Estudio</button> (un video cuenta como 5 imágenes).</p></div></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button><button type="button" class="st-tback" hidden>VOLVER A LA IMAGEN</button></div>
-    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a" multiple hidden>`;
+    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
@@ -1536,7 +1537,8 @@ export function initStudio(ctx) {
   }
   async function uploadFiles(files, role) {
     let ok = 0, placed = 0; const done = [];
-    for (const file of files) {
+    for (const file0 of files) {
+      let file = file0; if (necesitaJpeg(file0)) { try { file = await aJpegArchivo(file0); } catch (e) { say(e.message, true); continue; } } // el original no se toca: se sube su JPEG
       const vid = /^video\//.test(file.type), aud = /^audio\//.test(file.type) || /\.(mp3|wav|m4a)$/i.test(file.name); // V5.0: an audio too (to clone a voice, to transcribe), up to 20 MB
       if (!aud && !/^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/.test(file.type)) { say(`«${file.name}»: solo PNG, JPG, WEBP, MP4, WEBM, MP3, WAV o M4A.`, true); continue; }
       if (aud && SV.checkCloneFile(file)) { say(`«${file.name}»: ${SV.checkCloneFile(file)}`, true); continue; }
@@ -1937,7 +1939,7 @@ export function initStudio(ctx) {
     if (e.target.classList.contains('st-fsel')) { filter = e.target.value; requery(); return; } // IMG-23
     if (e.target.classList.contains('st-plsel')) { const p = plantillasL.find(x => x.id === e.target.value); $('.st-pldel').hidden = !p; if (p) aplicarPlantilla(p); return; } // IMG-46
 
-    if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
+    if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
     if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
     if (e.target.classList.contains('st-vsel')) { if (e.target.value) setVoice(e.target.value); return; } // V5.0: a voice from the list fills the field
     if (e.target.classList.contains('st-vid')) { setVoice(e.target.value.trim()); return; }

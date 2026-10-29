@@ -100,7 +100,7 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
 
   const controlador = crearControlador({
     almacen, notice: aviso, programador, metricool: cond.metricool, conductorMeta: () => (config.conductor === 'meta' ? cond.conductores.meta : null),
-    mejorHora, informe, guardados, mejorar: mejorar.mejorar, publicadas, plantillas, analiticasTexto, quienLlena: mejorar.quien, ahora,
+    puedeConvertir: () => !!env['IMAGES'], mejorHora, informe, guardados, mejorar: mejorar.mejorar, publicadas, plantillas, analiticasTexto, quienLlena: mejorar.quien, ahora,
     cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: config.metaPagina || '', conductor: cond.actual().id }),
     ajustes: () => ({ departamentos: config.departamentos, modo: config.modo, conductor: cond.actual().id, zona: describirZona(config.zona, ahora()), redes: config.redes }),
     // Con ctx.waitUntil la respuesta sale ya y lo demás sigue detrás (y al terminar vacía lo pendiente); sin él (pruebas), se espera antes de contestar, en `vaciar()`.

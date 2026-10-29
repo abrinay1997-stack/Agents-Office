@@ -15,7 +15,7 @@ async function conMetricool(fn) {
   const mc = await levantarMetricool();
   try {
     const jpegs = [];
-    const IMAGES = { input: () => ({ output: async () => ({ response: () => { jpegs.push(1); return new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 9, 9])); } }) }) };
+    const IMAGES = { input: () => ({ transform: () => ({ output: async () => ({ response: () => { jpegs.push(1); return new Response(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 9, 9])); } }) }) }) };
     const t = await montar({ env: { ...mc.env, IMAGES } });
     const mundo = (u, init) => (String(u).startsWith(mc.base) ? fetch(u, init) : t.env.AO_FETCH0(u, init)); // Metricool es un servidor de verdad; Meta, el de mentira
     t.env.AO_FETCH0 = t.env.AO_FETCH; t.env.AO_FETCH = mundo;

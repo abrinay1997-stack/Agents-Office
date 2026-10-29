@@ -22,20 +22,20 @@ test('CON-01: wrangler.jsonc declara el binding IMAGES (el código lo lee con en
 test('CON-01: aJpegDeEnv convierte con el binding (éxito), dice qué hacer sin él y traduce el fallo del binding', async () => {
   const JPEG = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
   const visto = [];
-  const IMAGES = { input: () => ({ output: async o => { visto.push(o); return { response: () => new Response(JPEG) }; } }) };
+  const IMAGES = { input: () => ({ transform: t => { visto.push(t); return { output: async o => { visto.push(o); return { response: () => new Response(JPEG) }; } }; } }) };
   const salida = await aJpegDeEnv({ IMAGES })(Uint8Array.from([0x89, 0x50, 0x4e, 0x47]));
-  assert.deepEqual([...salida], [...JPEG]); assert.equal(visto[0].format, 'image/jpeg');
+  assert.deepEqual([...salida], [...JPEG]); assert.equal(visto[0].background, '#ffffff', 'la transparencia va sobre blanco'); assert.equal(visto[1].format, 'image/jpeg');
   await assert.rejects(aJpegDeEnv({})(new Uint8Array(4)), /falta el binding IMAGES/);
-  const roto = { input: () => ({ output: async () => { throw new Error('formato no soportado'); } }) };
+  const roto = { input: () => ({ transform: () => ({ output: async () => { throw new Error('formato no soportado'); } }) }) };
   await assert.rejects(aJpegDeEnv({ IMAGES: roto })(new Uint8Array(4)), /no pude convertir la imagen a JPEG: formato no soportado/);
 });
 
-test('CON-01: al aprobar avisa de CUALQUIER imagen que no sea JPEG que no se pueda convertir (sin binding: todas; con binding: las que no son PNG/WebP)', () => {
+test('CON-01/13: al aprobar avisa, archivo por archivo, de CUALQUIER imagen que no sea JPEG (convertible o no), sin depender del binding', () => {
   const pz = medios => ({ redes: ['instagram'], medios });
   assert.equal(avisoDeFormato(pz(['2026-10/a.jpg', '2026-10/b.JPEG', '2026-10/c.mp4']), false), null, 'JPEG y video: nada que decir');
-  for (const f of ['png', 'webp', 'gif', 'heic', 'avif', 'bmp']) assert.match(avisoDeFormato(pz([`2026-10/x.${f}`]), false), /binding IMAGES/, f);
-  assert.equal(avisoDeFormato(pz(['2026-10/x.png', '2026-10/y.webp']), true), null, 'con binding, PNG y WebP se convierten');
-  for (const f of ['gif', 'heic', 'avif']) assert.match(avisoDeFormato(pz([`2026-10/x.${f}`]), true), /no sabe convertir/, f);
+  for (const f of ['png', 'webp']) { assert.match(avisoDeFormato(pz([`2026-10/x.${f}`]), false), /binding IMAGES/, f); assert.match(avisoDeFormato(pz([`2026-10/x.${f}`]), true), /se convertirá a JPEG/, f); }
+  for (const f of ['gif', 'heic', 'avif', 'bmp']) assert.match(avisoDeFormato(pz([`2026-10/x.${f}`]), true), /no sé convertirla/, f);
+  assert.match(avisoDeFormato(pz(['2026-10/x.svg']), true), /SVG/);
   assert.equal(avisoDeFormato({ redes: ['facebook'], medios: ['2026-10/x.gif'] }, false), null, 'solo importa si va a Instagram');
 });
 
