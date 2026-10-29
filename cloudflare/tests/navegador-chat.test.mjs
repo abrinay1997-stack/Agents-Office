@@ -25,9 +25,9 @@ async function mundo() {
   const ana = d1._db.prepare('select id from users where email = ?').get(c.email).id; d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(ana, 'Ana');
   return { d1, env, ana, beto: nueva('beto@panaclaw.test', 'editor', 'Beto'), carla: nueva('carla@panaclaw.test', 'lectura', 'Carla'), dani: nueva('dani@panaclaw.test', 'editor', 'Dani') };
 }
-async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0, falla = false } = {}) {
+async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0, falla = false, reducido = false } = {}) {
   if (activo) await guardarConfig(o.d1, { activo: true });
-  const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 } }), p = await ctx.newPage(), errores = [];
+  const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 }, ...(reducido ? { reducedMotion: 'reduce' } : {}) }), p = await ctx.newPage(), errores = [];
   const peticiones = []; p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (r) => {
     const req = r.request(), u = new URL(req.url());
@@ -217,4 +217,27 @@ test('durante una composición (IME) no se repinta la caja; al terminar, sí; y 
   await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'otro más' }); await visible(p);
   await p.waitForFunction(() => /otro más/.test(document.getElementById('ch-hilo').textContent));
   assert.equal(await p.inputValue('#ch-ed'), 'editado a medias'); await ctx.close();
+});
+
+test('C2 en vivo: el aviso (solo ids) refresca el hilo y la lista al instante; «escribiendo» sale y se va; el contador late salvo con «reducir movimiento»', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'ya estoy aquí' });
+  const { p, ctx, peticiones } = await pagina(o, o.beto, 'editor');
+  await p.waitForSelector('#nbChatBtn .ch-n'); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector('.ch-n')).animationName), 'ch-late', 'el contador late');
+  await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('.ch-m');
+  const n0 = peticiones.filter((x) => /^GET .*\/mensajes$/.test(x)).length;
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'esto llegó por el socket' });
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { tipo: 'chat', evento: 'mensaje', canal: 'general', id: 99, de: dani } })), o.dani);
+  await p.waitForFunction(() => /llegó por el socket/.test(document.getElementById('ch-hilo').textContent), null, { timeout: 3000 });
+  assert.ok(peticiones.filter((x) => /^GET .*\/mensajes$/.test(x)).length > n0);
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { tipo: 'chat', evento: 'escribiendo', canal: 'general', de: dani } })), o.dani);
+  await p.waitForFunction(() => /Dani está escribiendo/.test(document.getElementById('ch-escribe').textContent));
+  assert.equal(await p.getAttribute('#ch-escribe', 'aria-hidden'), 'true');
+  await p.waitForFunction(() => document.getElementById('ch-escribe').textContent === '', null, { timeout: 9000 });
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { evento: 'escribiendo', canal: 'otro', de: dani } })), o.dani); assert.equal(await p.textContent('#ch-escribe'), '', 'otro canal: nada');
+  await ctx.close();
+  const q = await pagina(o, o.carla, 'lectura', { reducido: true }); await q.p.waitForSelector('#nbChatBtn .ch-n');
+  assert.equal(await q.p.evaluate(() => getComputedStyle(document.querySelector('.ch-n')).animationName), 'none', 'con «reducir movimiento» no late'); assert.ok((await q.p.textContent('.ch-n')).trim().length > 0, 'pero el número está');
+  await q.ctx.close();
 });

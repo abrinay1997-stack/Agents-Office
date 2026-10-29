@@ -5,18 +5,28 @@
 //   POST /api/chat/canales { nombre, privado?, miembros? } · POST /api/chat/directo { con }
 //   GET  /api/chat/canales/<id>/mensajes?antes=&limite=      POST …/mensajes { cuerpo, respondeA? }
 //   POST /api/chat/canales/<id>/leido { hasta } · …/silenciar { silenciado } · …/miembros { userId? } (unirse o añadir) · DELETE …/miembros { userId? } (salir o sacar)
+//   POST …/escribiendo (sin tocar la base; ~1 cada 3 s)
+//   Aviso en vivo (Hub, `para` = los miembros): { tipo: 'chat', evento: 'mensaje'|'cambio'|'escribiendo', canal, id?, de } — SOLO ids.
 //   PATCH|DELETE /api/chat/mensajes/<id> · GET /api/chat/novedades?desde=<id> · GET /api/chat/admin (metadatos) · GET|POST /api/chat/config (admin)
 // Quien solo lee (rol `lectura`) lee los canales en que está y NO escribe. Un id ajeno da 404; los administradores no leen lo privado.
 import { json, error, prohibido, noEncontrado } from '../lib/respuesta.js';
 import * as C from '../lib/chat/chat.js';
+import { difundir } from '../lib/vivo.js';
 
 export const nombre = 'chat';
 export const grupos = []; // /api/chat (exacto, POST) es del chat con un agente (chat-agente.js): este módulo solo posee /api/chat/*
 export const rutasExtra = ['/api/chat/'];
 const resp = (r, ok = 200) => (r.error ? error(r.error, r.estado || 400) : json(r, ok));
+/** El aviso en vivo (C2): SOLO a los miembros del canal y SOLO ids (canal, mensaje, quién): nunca texto. Un fallo aquí no tumba lo que lo causó (difundir lo atrapa); el sondeo lo recupera. */
+async function avisoVivo(ctx, evento, canal, id, { conAutor = true } = {}) {
+  try {
+    const para = (await C.miembrosIds(ctx.db, canal)).filter((u) => conAutor || u !== ctx.usuario.id);
+    if (para.length) await difundir(ctx.env, { tipo: 'chat', evento, canal, id: id ?? null, de: ctx.usuario.id, para, at: Date.now() });
+  } catch { /* el sondeo de la página lo recupera */ }
+}
 
 export async function manejar(ctx) {
-  const { req, db, ruta, usuario, url } = ctx;
+  const { req, db, env, ruta, usuario, url } = ctx;
   if (!ruta.startsWith('/api/chat/')) return null;
   const resto = ruta.slice('/api/chat'.length), metodo = req.method, escribe = usuario.rol !== 'lectura';
   if (resto === '/config') {
@@ -38,11 +48,12 @@ export async function manejar(ctx) {
   if (metodo === 'GET' && resto === '/admin') return usuario.rol === 'admin' ? json({ canales: await C.adminCanales(db) }) : prohibido('Solo un administrador ve el estado del chat.');
   if (metodo === 'POST' && resto === '/canales') { if (!escribe) return prohibido('Con acceso de lectura no se crean canales.'); const b = (await ctx.cuerpo(req)) || {}; return resp(await C.crearCanal(db, usuario, b), 201); }
   if (metodo === 'POST' && resto === '/directo') { if (!escribe) return prohibido('Con acceso de lectura no se abren chats directos.'); const b = (await ctx.cuerpo(req)) || {}; return resp(await C.abrirDirecto(db, usuario, b.con)); }
-  let m = /^\/canales\/([a-z0-9]{3,12})\/(mensajes|leido|silenciar|miembros)$/.exec(resto);
+  let m = /^\/canales\/([a-z0-9]{3,12})\/(mensajes|leido|silenciar|miembros|escribiendo)$/.exec(resto);
   if (m) {
     const [, id, que] = m;
     if (que === 'mensajes' && metodo === 'GET') return resp(await C.mensajes(db, usuario, id, { antes: url.searchParams.get('antes'), limite: url.searchParams.get('limite') }));
-    if (que === 'mensajes' && metodo === 'POST') { if (!escribe) return prohibido('Con acceso de lectura no se escribe en el chat.'); const b = (await ctx.cuerpo(req)) || {}; return resp(await C.escribir(db, usuario, id, b), 201); }
+    if (que === 'mensajes' && metodo === 'POST') { if (!escribe) return prohibido('Con acceso de lectura no se escribe en el chat.'); const b = (await ctx.cuerpo(req)) || {}; const r = await C.escribir(db, usuario, id, b); if (!r.error) await avisoVivo(ctx, 'mensaje', id, r.mensaje.id); return resp(r, 201); }
+    if (que === 'escribiendo' && metodo === 'POST') { const r = await C.escribiendo(db, usuario, id); if (r.error) return resp(r); if (r.para?.length) await difundir(env, { tipo: 'chat', evento: 'escribiendo', canal: id, de: usuario.id, para: r.para, at: Date.now() }); return json({ ok: true }); }
     if (que === 'leido' && metodo === 'POST') return resp(await C.marcarLeido(db, usuario, id, ((await ctx.cuerpo(req)) || {}).hasta));
     if (que === 'silenciar' && metodo === 'POST') return resp(await C.silenciar(db, usuario, id, ((await ctx.cuerpo(req)) || {}).silenciado === true));
     if (que === 'miembros' && metodo === 'POST') { if (!escribe) return prohibido('Con acceso de lectura no se cambian los canales.'); return resp(await C.anadirMiembro(db, usuario, id, (await ctx.cuerpo(req)) || {})); }
@@ -51,8 +62,8 @@ export async function manejar(ctx) {
   m = /^\/mensajes\/(\d{1,12})$/.exec(resto);
   if (m) {
     if (!escribe) return metodo === 'PATCH' || metodo === 'DELETE' ? prohibido('Con acceso de lectura no se cambian los mensajes.') : null;
-    if (metodo === 'PATCH') return resp(await C.editar(db, usuario, m[1], ((await ctx.cuerpo(req)) || {}).cuerpo));
-    if (metodo === 'DELETE') return resp(await C.borrar(db, usuario, m[1]));
+    if (metodo === 'PATCH') { const r = await C.editar(db, usuario, m[1], ((await ctx.cuerpo(req)) || {}).cuerpo); if (!r.error) await avisoVivo(ctx, 'cambio', r.canal, Number(m[1])); return resp(r); }
+    if (metodo === 'DELETE') { const r = await C.borrar(db, usuario, m[1]); if (!r.error) await avisoVivo(ctx, 'cambio', r.canal, Number(m[1])); return resp(r); }
   }
   void noEncontrado;
   return null;

@@ -28,6 +28,19 @@ const idCorto = () => { const a = 'abcdefghijkmnpqrstuvwxyz23456789', b = crypto
 const err = (error, estado) => ({ error, estado });
 export const idCanalValido = (s) => /^[a-z0-9]{3,12}$/.test(String(s));
 
+/** Los ids de cuenta que son miembros de un canal (para el aviso en vivo: SOLO ellos reciben nada). */
+export async function miembrosIds(db, canalId) {
+  const { results } = await db.prepare('select m.user_id from chat_miembros m join users u on u.id = m.user_id left join perfiles p on p.user_id = u.id where m.canal_id = ? and p.baja_at is null').bind(String(canalId)).all();
+  return results.map((r) => r.user_id);
+}
+
+/** «Está escribiendo…»: no toca la base de datos. Solo un miembro; como mucho ~1 cada 3 s (20 por minuto); lo que pasa del tope se calla sin error. → { para } | { omitido } | { error, estado } */
+export async function escribiendo(db, usuario, canalId, ahora = Date.now()) {
+  if (!idCanalValido(canalId) || !(await miembroDe(db, canalId, usuario.id))) return err('Canal no encontrado', 404);
+  if (!(await tasaPublica(db, 'chat-esc:' + usuario.id, 20, ahora)).ok) return { omitido: true };
+  return { para: (await miembrosIds(db, canalId)).filter((u) => u !== usuario.id) };
+}
+
 /** Cuentas activas por id → Map(id → { id, nombre, rol }). */
 export async function personasPorId(db, ids) {
   const m = new Map();
@@ -212,7 +225,7 @@ export async function editar(db, usuario, id, cuerpo, ahora = Date.now()) {
   const gente = await personasPorId(db, ms.map((x) => x.user_id)), esDirecto = (await miembroDe(db, m.canal_id, usuario.id)).tipo === 'directo';
   const menciones = esDirecto ? [] : leerMenciones(v.cuerpo, [...gente.values()], usuario.id); // las menciones siguen al texto; editar no vuelve a avisar a nadie
   await db.prepare('update chat_mensajes set cuerpo = ?, menciones = ?, editado_at = ? where id = ?').bind(v.cuerpo, JSON.stringify(menciones), ahora, m.id).run();
-  return { ok: true };
+  return { ok: true, canal: m.canal_id };
 }
 /** Borrar = lápida. Lo propio; un administrador, en canales PÚBLICOS. */
 export async function borrar(db, usuario, id, ahora = Date.now()) {
@@ -220,7 +233,7 @@ export async function borrar(db, usuario, id, ahora = Date.now()) {
   if (!m || !(await miembroDe(db, m.canal_id, usuario.id))) return err('Mensaje no encontrado', 404);
   if (m.user_id !== usuario.id && !(usuario.rol === 'admin' && !m.privado && m.tipo !== 'directo')) return err('Solo puedes borrar lo tuyo.', 403);
   await db.prepare("update chat_mensajes set cuerpo = '', menciones = '[]', borrado_at = ? where id = ?").bind(ahora, m.id).run();
-  return { ok: true };
+  return { ok: true, canal: m.canal_id };
 }
 /** Marcar leído (el cursor nunca baja ni pasa del último mensaje). */
 export async function marcarLeido(db, usuario, canalId, hasta) {

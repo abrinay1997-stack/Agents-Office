@@ -19,7 +19,7 @@ async function oficina({ activo = true } = {}) {
     const r = await manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { cookie: `__Host-sesion=${await abrirSesion(d1, id)}`, ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}) }, body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined }), env);
     return { status: r.status, j: await r.json().catch(() => null) };
   };
-  return { d1, db: d1._db, ana, beto, carla, dani, llamar };
+  return { d1, env, db: d1._db, ana, beto, carla, dani, llamar };
 }
 const C = '/api/chat';
 const escribe = (o, quien, canal, cuerpo, extra = {}) => o.llamar(quien, `${C}/canales/${canal}/mensajes`, { metodo: 'POST', cuerpo: { cuerpo, ...extra } });
@@ -226,4 +226,24 @@ test('GET /personas: las cuentas activas sin la que pregunta ni el correo; a qui
   o.db.prepare("insert into perfiles (user_id, baja_at) values (?, 1) on conflict (user_id) do update set baja_at = 1").run(o.carla);
   assert.equal((await o.llamar(o.beto, `${C}/personas`)).j.personas.length, 2, 'quien ya no está no aparece');
   const off = await oficina({ activo: false }); assert.deepEqual((await off.llamar(off.beto, `${C}/personas`)).j, { activo: false });
+});
+
+test('C2 aviso en vivo: solo a los miembros, solo ids (nunca texto); «escribiendo» no toca la base y se limita', { skip: SALTAR }, async () => {
+  const o = await oficina(); const enviados = [];
+  o.env.HUB = { idFromName: () => 'x', get: () => ({ fetch: async (req) => { enviados.push(await req.json()); return new Response(null, { status: 204 }); } }) };
+  const llamarConHub = o.llamar;
+  const priv = (await llamarConHub(o.beto, `${C}/canales`, { metodo: 'POST', cuerpo: { nombre: 'Reservado', privado: true, miembros: [o.dani] } })).j.id;
+  await llamarConHub(o.beto, `${C}/canales/${priv}/mensajes`, { metodo: 'POST', cuerpo: { cuerpo: 'texto-que-no-debe-viajar' } });
+  const ev = enviados.filter((e) => e.tipo === 'chat'); assert.equal(ev.length, 1);
+  assert.deepEqual([ev[0].evento, ev[0].canal, ev[0].de], ['mensaje', priv, o.beto]); assert.deepEqual([...ev[0].para].sort(), [o.beto, o.dani].sort(), 'ni Ana (administradora) ni Carla');
+  assert.ok(!JSON.stringify(enviados).includes('texto-que-no-debe-viajar'), 'ids, nunca texto');
+  enviados.length = 0; assert.equal((await llamarConHub(o.dani, `${C}/canales/${priv}/escribiendo`, { metodo: 'POST', cuerpo: {} })).status, 200);
+  assert.deepEqual(enviados.map((e) => [e.evento, e.para]), [['escribiendo', [o.beto]]], 'no se avisa a quien escribe');
+  assert.equal((await llamarConHub(o.ana, `${C}/canales/${priv}/escribiendo`, { metodo: 'POST', cuerpo: {} })).status, 404, 'un administrador no es miembro: 404');
+  assert.equal((await llamarConHub(o.carla, `${C}/canales/general/escribiendo`, { metodo: 'POST', cuerpo: {} })).status, 403, 'quien solo lee no escribe');
+  const antes = o.db.prepare('select count(*) n from chat_mensajes').get().n; for (let i = 0; i < 30; i++) await llamarConHub(o.dani, `${C}/canales/${priv}/escribiendo`, { metodo: 'POST', cuerpo: {} });
+  assert.equal(o.db.prepare('select count(*) n from chat_mensajes').get().n, antes); assert.ok(enviados.length <= 20, `tope por minuto (${enviados.length})`);
+  enviados.length = 0; const m = o.db.prepare('select id from chat_mensajes where canal_id = ?').get(priv).id;
+  await llamarConHub(o.beto, `${C}/mensajes/${m}`, { metodo: 'PATCH', cuerpo: { cuerpo: 'editado' } }); await llamarConHub(o.beto, `${C}/mensajes/${m}`, { metodo: 'DELETE' });
+  assert.deepEqual(enviados.map((e) => e.evento), ['cambio', 'cambio']); assert.ok(enviados.every((e) => !e.para.includes(o.ana) && !e.para.includes(o.carla)));
 });

@@ -195,3 +195,7 @@ body.movil #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid
 .ch-izq:empty, .ch-der:empty { display: none; }
 
 .ch-edit textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }
+
+/* C2 — el contador late (como el de D'CASA) y «está escribiendo…»; sin animación con «reducir movimiento». El número siempre está: no depende del movimiento. */
+.ch-escribe { min-height: 1.3em; margin: 2px 0 0; font-size: 12px; color: var(--grey); font-style: italic; }
+@media (prefers-reduced-motion: no-preference) { .ch-n, .ch-bad { animation: ch-late 1.6s ease-in-out infinite; } @keyframes ch-late { 0%, 100% { scale: 1; } 50% { scale: 1.14; } } }

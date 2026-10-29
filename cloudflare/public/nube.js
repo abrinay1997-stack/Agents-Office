@@ -175,9 +175,10 @@
     s.onmessage = (e) => {
       if (e.data === 'pong') { clearTimeout(pongT); return; }
       let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m.tipo === 'hola') { intentos = 0; conexion = 'conectado'; presentes = m.presentes ?? []; ultimaVista = ''; enviarVista(); pintarBarra(); }
+      if (m.tipo === 'hola') { intentos = 0; conexion = 'conectado'; presentes = m.presentes ?? []; ultimaVista = ''; enviarVista(); pintarBarra(); window.dispatchEvent(new Event('ao:chat-conectado')); /* C2: al volver el socket, el chat se pone al día */ }
       else if (m.tipo === 'presencia') { presentes = m.presentes ?? []; pintarBarra(); }
       else if (m.tipo === 'cambio') alCambio(m);
+      else if (m.tipo === 'chat') window.dispatchEvent(new CustomEvent('ao:chat', { detail: m })); // C2: un mensaje, un cambio o «escribiendo» (solo ids)
       else if (m.tipo === 'conexion') window.dispatchEvent(new CustomEvent('ao:conexion', { detail: { userId: m.userId } })); // N2b: alguien entró (solo el id; el nombre sale de la presencia)
       else if (m.tipo === 'nota') window.dispatchEvent(new Event('ao:nota')); // N1: llegó una nota (la señal no lleva texto; la hoja la pide a la API)
     };

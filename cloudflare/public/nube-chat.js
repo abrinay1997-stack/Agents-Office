@@ -5,9 +5,10 @@
   'use strict';
   const N = window.AO_NUBE; if (!N || N.chat) return;
   const { api, esc } = N;
-  const RESUMEN_MS = 60_000, HILO_MS = 10_000, APAGADO_MS = 300_000;
+  const RESUMEN_MS = 60_000, HILO_MS = 10_000, APAGADO_MS = 300_000, RESUMEN_VIVO_MS = 180_000, HILO_VIVO_MS = 30_000, ESCRIBE_CADA_MS = 3000, ESCRIBE_DURA_MS = 6000; // con el socket vivo el sondeo solo es la red de seguridad
   let activo = false, abierto = false, vista = 'lista', res = { canales: [], total: 0 }, canal = null, msgs = [], viejos = [], hayMas = false, hayMasViejos = false, hiloListo = false, cargandoViejos = false, edTexto = null, enviando = false, componiendo = false, repintarLuego = false, editando = null, borrando = null, firma = '', personas = null, publicos = null, nuevoTab = 'directo', msg = '';
-  let boton = null, panel = null, tRes = 0, tHilo = 0, ultimoVisto = 0, vivo = null, alerta = null;
+  let boton = null, panel = null, tRes = 0, tHilo = 0, tEscribe = 0, ultimoVisto = 0, vivo = null, alerta = null, ultimoEscribi = 0, escribe = null;
+  const enVivo = () => { try { return N.conexion?.() === 'conectado'; } catch { return false; } };
   const borradores = {};
   const todos = () => [...viejos, ...msgs.filter((m) => !viejos.some((v) => v.id === m.id))];
   const firmaDe = (l) => l.map((m) => `${m.id}|${m.editado ? 1 : 0}|${m.borrado ? 1 : 0}`).join(',');
@@ -41,7 +42,7 @@
     clearTimeout(tRes);
     if (!document.hidden) { try { const d = await api('/api/chat/resumen'); activo = d.activo === true; res = { canales: d.canales || [], total: d.total || 0 }; } catch { /* sin red: se reintenta */ } }
     pintarBoton(); if (abierto && vista === 'lista') pintar();
-    tRes = setTimeout(cargarResumen, activo ? RESUMEN_MS : APAGADO_MS);
+    tRes = setTimeout(cargarResumen, activo ? (enVivo() ? RESUMEN_VIVO_MS : RESUMEN_MS) : APAGADO_MS);
   }
 
   async function cargarHilo(id, { marcar = true } = {}) {
@@ -67,7 +68,7 @@
       const ya = new Set(todos().map((m) => m.id)); viejos = [...d.mensajes.filter((m) => !ya.has(m.id)), ...viejos]; hayMasViejos = d.hayMas; firma = firmaDe(todos()); pintar({ anclar: true });
     } catch (e) { fallar(e.message); pintar(); } finally { cargandoViejos = false; }
   }
-  function sondearHilo() { clearTimeout(tHilo); if (!abierto || vista !== 'hilo' || !canal) return; tHilo = setTimeout(async () => { if (!document.hidden) await cargarHilo(canal.id); sondearHilo(); }, HILO_MS); }
+  function sondearHilo() { clearTimeout(tHilo); if (!abierto || vista !== 'hilo' || !canal) return; tHilo = setTimeout(async () => { if (!document.hidden) await cargarHilo(canal.id); sondearHilo(); }, enVivo() ? HILO_VIVO_MS : HILO_MS); }
 
   async function abrirCanal(c) {
     canal = c; msgs = []; viejos = []; hayMas = false; hayMasViejos = false; firma = ''; hiloListo = false; editando = null; borrando = null; ultimoVisto = 0; vista = 'hilo'; msg = ''; pintar();
@@ -98,12 +99,21 @@
     return `${sep}<div class="ch-m${m.mio ? ' mio' : ''}${junto ? ' junto' : ''}" data-m="${m.id}">${junto ? '' : `<div class="ch-quien"><b>${esc(m.de)}</b> <small>${esc(hora(m.at))}${m.editado ? ' · editado' : ''}</small></div>`}<div class="ch-txt">${cuerpoHTML(m.cuerpo)}</div>${acc}</div>`;
   }
 
+  /** «Dani está escribiendo…» (6 s): el nombre sale de lo que la página ya sabe (presencia o autores del hilo); nunca del evento, que solo trae un id. */
+  function nombreDe(uid) { const p = (N.presentes?.() || []).find((x) => x.userId === uid); return p?.nombre || todos().find((m) => m.deId === uid)?.de || 'Alguien'; }
+  const escribePlano = () => (escribe && escribe.canal === canal?.id && escribe.hasta > Date.now() ? `${nombreDe(escribe.de)} está escribiendo…` : '');
+  const escribeTxt = () => esc(escribePlano());
+  function marcaEscribe(d) {
+    escribe = { canal: d.canal, de: d.de, hasta: Date.now() + ESCRIBE_DURA_MS };
+    const el = panel?.querySelector('#ch-escribe'); if (el) el.textContent = escribePlano(); // sin repintar el hilo
+    clearTimeout(tEscribe); tEscribe = setTimeout(() => { const e2 = panel?.querySelector('#ch-escribe'); if (e2) e2.textContent = ''; }, ESCRIBE_DURA_MS + 50);
+  }
   function hiloHTML() {
     const c = canal;
     return `<div class="ch-cab"><span class="ch-tit">${movil() ? '<button type="button" class="sg-btn" data-a="atras" aria-label="Volver a la lista">←</button>' : ''}<h2 id="ch-t" tabindex="-1">${esc(tipoNombre(c))}</h2></span><span>${c.tipo !== 'directo' ? `<button type="button" class="sg-btn" data-a="silenciar" aria-pressed="${c.silenciado ? 'true' : 'false'}">${c.silenciado ? 'Silenciado' : 'Silenciar'}</button> ` : ''}<button type="button" class="sg-btn" data-a="x" aria-label="Cerrar el chat">✕</button></span></div>
       <div class="ch-hilo" id="ch-hilo" tabindex="0" aria-label="Mensajes de ${esc(tipoNombre(c))}">${hayMasViejos ? '<p class="ch-vacio"><button type="button" class="sg-btn" data-a="viejos">Cargar mensajes anteriores</button></p>' : ''}${todos().map(mensajeHTML).join('') || '<p class="ch-vacio">Aquí empieza la conversación.</p>'}</div>
       ${soloLee() ? '<p class="ch-vacio ch-solo">Con acceso de lectura puedes leer este canal, no escribir.</p>' : `<form class="ch-form"><label for="ch-texto" class="ch-oculto">Escribir en ${esc(tipoNombre(c))}</label><textarea id="ch-texto" rows="2" maxlength="4200" placeholder="Escribe un mensaje…"></textarea><button type="submit" class="sg-btn pri">Enviar</button></form>`}
-      <p class="nb-msg" aria-hidden="true">${esc(msg)}</p>`;
+      <p class="ch-escribe" id="ch-escribe" aria-hidden="true">${escribeTxt()}</p><p class="nb-msg" aria-hidden="true">${esc(msg)}</p>`;
   }
 
   function nuevoHTML() {
@@ -141,7 +151,7 @@
     panel = document.createElement('div'); panel.id = 'nbChat'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'false'); panel.setAttribute('aria-labelledby', 'ch-t'); panel.tabIndex = -1;
     document.body.appendChild(panel); pintarBoton(); pintar(); panel.focus();
     panel.addEventListener('click', alClic); panel.addEventListener('submit', alEnviar);
-    panel.addEventListener('input', (e) => { if (e.target.id === 'ch-texto' && canal) borradores[canal.id] = e.target.value; if (e.target.id === 'ch-ed') edTexto = e.target.value; });
+    panel.addEventListener('input', (e) => { if (e.target.id === 'ch-texto' && canal) { borradores[canal.id] = e.target.value; if (e.target.value && enVivo() && Date.now() - ultimoEscribi > ESCRIBE_CADA_MS) { ultimoEscribi = Date.now(); api(`/api/chat/canales/${canal.id}/escribiendo`, { metodo: 'POST', cuerpo: {} }).catch(() => {}); } } if (e.target.id === 'ch-ed') edTexto = e.target.value; });
     panel.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !movil() && e.target.id === 'ch-texto') { e.preventDefault(); panel.querySelector('.ch-form')?.requestSubmit(); } });
     panel.addEventListener('compositionstart', () => { componiendo = true; });
     panel.addEventListener('compositionend', () => { componiendo = false; if (repintarLuego) { repintarLuego = false; pintar(); } });
@@ -198,6 +208,14 @@
   }
 
   document.addEventListener('visibilitychange', () => { if (document.hidden) return; cargarResumen(); if (abierto && vista === 'hilo' && canal) { cargarHilo(canal.id); sondearHilo(); } });
+  /** El aviso en vivo trae SOLO ids: ante un mensaje o un cambio, la página pide el contenido con su sesión (D1 decide qué puede ver). */
+  let tRefresco = 0;
+  window.addEventListener('ao:chat', (e) => {
+    const d = e.detail || {}; if (!activo || document.hidden) return;
+    if (d.evento === 'escribiendo') { if (abierto && vista === 'hilo' && canal?.id === d.canal) marcaEscribe(d); return; }
+    clearTimeout(tRefresco); tRefresco = setTimeout(() => { cargarResumen(); if (abierto && vista === 'hilo' && canal?.id === d.canal) { if (d.evento === 'mensaje' && escribe?.de === d.de) escribe = null; cargarHilo(d.canal); } }, 150); // se juntan las ráfagas
+  });
+  window.addEventListener('ao:chat-conectado', () => { cargarResumen(); if (abierto && vista === 'hilo' && canal) cargarHilo(canal.id); }); // la puesta al día al volver el socket
   N.chat = { abrir, cerrar, recargar: cargarResumen };
   regiones(); cargarResumen();
 })();
