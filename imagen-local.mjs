@@ -31,7 +31,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RAIZ = path.dirname(fileURLToPath(import.meta.url));
+// En el Worker de la nube este módulo también se importa (para sus funciones de píxel puras): ahí import.meta.url puede no existir, y no hay carpeta de LUTs.
+const RAIZ = (() => { try { return path.dirname(fileURLToPath(import.meta.url)); } catch { return '/'; } })();
 
 // ───────────────────────────── sharp (una sola carga; los tests pueden simular su ausencia) ─────────────────────────────
 let sharpMod, sharpError, sharpCargado = false;
@@ -834,7 +835,15 @@ export { DIR_LUTS };
 export async function pipeline(buf, pasos = [], ctx = {}) {
   const sharp = await S();
   const meta = esRaw(buf) ? {} : await sharp(buf, { failOn: 'none' }).metadata();
-  let r = await leer(buf), m = null, formatoSalida = ctx.formato || ({ jpeg: 'jpg', webp: 'webp', png: 'png' })[meta.format] || 'png';
+  const r0 = await leer(buf);
+  const E = await correrPasos(r0, pasos, ctx, ({ jpeg: 'jpg', webp: 'webp', png: 'png' })[meta.format] || 'png');
+  return cerrarPipeline(E);
+}
+
+/** El bucle de pasos sobre un raw ya leído: no toca sharp salvo en los pasos que lo piden (nitidez, ruido, enderezar, encuadrar, exportar). Lo usa también la nube (cloudflare/worker/lib/estudio/retoques.js)
+ *  con los pasos que no lo necesitan. `ctx.original` y `ctx.referencia` pueden ser raw o buffers. → el estado para `cerrarPipeline`. */
+export async function correrPasos(r, pasos = [], ctx = {}, formatoEntrada = 'png') {
+  let m = null, formatoSalida = ctx.formato || formatoEntrada;
   const intensidad = ctx.intensidad || 'normal', canal = ctx.canal || null, avisos = [], hechos = [], res = {};
   const original = ctx.original ? await leer(ctx.original) : null, referencia = ctx.referencia ? await leer(ctx.referencia) : null;
   let medido = {}, sombraModo = ctx.sombra || 'conservar', exportado = null;
@@ -904,6 +913,11 @@ export async function pipeline(buf, pasos = [], ctx = {}) {
     if (GEOMETRIA.has(op) && reg.hecho) m = null;
     reg.ms = Date.now() - t0; hechos.push(reg);
   }
+  return { r, m, medido, hechos, avisos, res, exportado, formatoSalida };
+}
+
+/** El final del pipeline de sharp: mide el resultado y lo codifica. */
+async function cerrarPipeline({ r, medido, hechos, avisos, res, exportado, formatoSalida }) {
   const fin = await mascaraParaMedir(r);
   const caja = fin.bbox;
   medido = { ...medido, fondoBorde: +fondoBordeBlanco(r, fin.m).toFixed(4),
