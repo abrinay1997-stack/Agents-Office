@@ -11,6 +11,7 @@ import { conBandeja, asegurarCuentas, pareceDeAgente } from '../lib/anuncios-nub
 import { resolverBandeja, analizarRuta } from '../lib/bandeja-rutas.js';
 import { candados } from '../lib/tokens.js';
 import { uuid } from '../lib/ids.js';
+import { avisarDelReloj } from '../lib/vivo.js';
 
 export const nombre = 'bandeja';
 export const grupos = [];
@@ -54,7 +55,8 @@ export async function cadaMinuto(env) {
     await conBandeja({ db, env }, async ({ bandeja, meta }) => {
       if (!meta.configurado()) return;
       try { await asegurarCuentas(meta); } catch (e) { console.warn('[bandeja] cuentas:', e?.message ?? e); }
-      await bandeja.tick();
+      const r = await bandeja.tick();
+      if (r && (r.nuevos || 0) > 0) avisarDelReloj(env, 'contenido'); // CON-12: llegó algo a la Bandeja (solo la señal)
     });
   } finally { await cand.soltar('bandeja:cron', yo); }
 }

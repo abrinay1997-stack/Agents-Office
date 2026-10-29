@@ -702,6 +702,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { lastGrid = ''; lastProg = ''; render(); }
   }
 
+  let avisoT = 0; window.addEventListener('ao:contenido-cambio', () => { clearTimeout(avisoT); avisoT = setTimeout(() => { if (openNow && !document.hidden && !panel.isOpen()) load(true); }, 800); }); // CON-12: otra persona o el reloj cambió algo (solo la señal)
+
   /* ---------- abrir y cerrar ---------- */
   const isOn = () => openNow;
   function open() {
@@ -709,7 +711,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     mode = store.get('mode', 'cal'); view = store.get('view', 'month'); if (narrow() && (view === 'month' || view === 'week')) view = 'agenda';
     ov.inert = false; modal.open(ov); cuentas.empresa = empresa(); $('#ctCo').textContent = cuentas.empresa; ov.classList.add('on'); document.body.classList.add('ctOpen');
     lastGrid = ''; lastProg = ''; render(); load(true); loadResumen(); loadCuentas(); ov.tabIndex = -1; ov.focus();
-    timer = setInterval(() => { if (!document.hidden && !panel.isOpen()) load(true); }, 20000); // lo que dejan los agentes aparece solo
+    // lo que dejan los agentes aparece solo. CON-12: en la nube, con el socket vivo el aviso (`ao:contenido-cambio`) manda y el sondeo baja a 60 s (1 de cada 3 vueltas)
+    let vuelta = 0; timer = setInterval(() => { if (!document.hidden && !panel.isOpen() && (window.AO_NUBE?.conexion?.() !== 'conectado' || ++vuelta % 3 === 0)) load(true); }, 20000);
     panel.precargar(); // C1: el editor de piezas se trae ya, mientras miras el calendario
   }
   async function close(o = {}) {
