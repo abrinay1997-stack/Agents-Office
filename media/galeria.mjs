@@ -278,7 +278,7 @@ export function resolve(id) {
   const p = path.join(root, rel); return fs.existsSync(p) ? p : null;
 }
 export function item(id) { const p = resolve(id); if (!p) return null; try { return JSON.parse(fs.readFileSync(p.replace(/\.[^.]+$/, '.json'), 'utf8')); } catch { return null; } }
-export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); bump(path.dirname(j)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
+export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j + '.tmp', JSON.stringify(it, null, 2)); renombrar(j + '.tmp', j); bump(path.dirname(j)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
 /** To <media>/.papelera (emptied after 30 days). Returns what `restore` needs to bring it back, or null. */
 export function trash(id) {
   const p = resolve(id); if (!p) return null;

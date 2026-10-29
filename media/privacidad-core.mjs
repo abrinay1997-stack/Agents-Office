@@ -5,7 +5,7 @@
 // (entrena con lo que recibe). Quien llama deja la auditoría `envio-tercero` con lo que esta función contesta.
 
 /** Destinos de visión que existen hoy. `meta-contributor` nunca recibe una imagen. */
-export const DESTINOS = ['anthropic', 'google', 'meta', 'meta-contributor'];
+export const DESTINOS = ['anthropic', 'google', 'meta', 'meta-contributor', 'compatible'];
 
 /**
  * @param {{ ficha?: any, carpeta?: any, destino?: string }} p  ficha = la ficha de la galería (puede traer `privada`, `personas`, `consentimiento_rostros`);
@@ -24,3 +24,15 @@ export function puedeEnviar({ ficha = {}, carpeta = null, destino = '' } = {}) {
 
 /** La línea de auditoría `envio-tercero` (sin la imagen ni su contenido). */
 export const lineaAuditoria = (file, destino, por) => ({ kind: 'envio-tercero', file: String(file || '').slice(0, 300), destino, por: por || 'dimitri' });
+
+/**
+ * A dónde va de verdad una imagen según el proveedor del modelo de esta oficina (serve.mjs → PROVIDER). Nunca se asume Anthropic.
+ * Meta cuenta como «Contributor» (no recibe nada) salvo que el modelo configurado diga otra cosa; un proveedor compatible (DeepSeek, Kimi…) es «compatible».
+ * @param {{ id?: string, model?: string }} provider
+ */
+export function destinoDeProveedor(provider = {}) {
+  const id = String(provider.id || ''), modelo = String(provider.model || '');
+  if (id === 'anthropic') return 'anthropic';
+  if (id === 'meta') return /contributor/i.test(modelo) || !modelo ? 'meta-contributor' : 'meta';
+  return 'compatible';
+}
