@@ -15,6 +15,7 @@ export function nombreValido(n) {
   if (!nombre) return { ok: false, error: 'La nota necesita un nombre.' };
   if (nombre.length > MAX_NOMBRE) return { ok: false, error: `El nombre es muy largo (máximo ${MAX_NOMBRE} letras).` };
   if (PROHIBIDO.test(nombre)) return { ok: false, error: 'El nombre no puede llevar \\ / : * ? " < > | # ^ [ ] (rompen los enlaces y las carpetas).' };
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(nombre.split('.')[0].trim())) return { ok: false, error: 'Ese nombre está reservado por Windows (CON, PRN, AUX, NUL, COM1…): elige otro.' };
   if (nombre.startsWith('.') || nombre.endsWith('.') || /^\.+$/.test(nombre)) return { ok: false, error: 'El nombre no puede empezar ni terminar con un punto.' };
   return { ok: true, nombre };
 }

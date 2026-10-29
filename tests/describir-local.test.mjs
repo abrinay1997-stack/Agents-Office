@@ -84,7 +84,7 @@ test('la ruta y el MCP de lectura con la oficina de verdad: GET no gasta, POST s
   const post = (b) => fetch(base + '/api/media/describir', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
   assert.equal((await post({ by: 'agent' })).status, 403); assert.equal((await post({ confirmarUsd: 5, forzar: true })).status, 409, 'con el flag apagado no describe');
   const { HERRAMIENTAS, llamar } = await import('../dimitri-lectura-mcp.mjs'); process.env.AO_OFFICE = base;
-  assert.deepEqual(HERRAMIENTAS.map(h => h.name), ['ver_galeria', 'ver_descripciones', 'ver_imagen']);
+  assert.deepEqual(HERRAMIENTAS.map(h => h.name), ['ver_galeria', 'ver_descripciones', 'ver_biblia', 'ver_imagen']);
   const mcp = spawn(process.execPath, ['dimitri-lectura-mcp.mjs'], { cwd: ROOT, env: { ...process.env, AO_OFFICE: base }, stdio: ['pipe', 'pipe', 'ignore'] }); t.after(() => mcp.kill());
   const salida = await new Promise(r => { let b = ''; mcp.stdout.on('data', d => { b += d; if (b.includes('\n')) r(JSON.parse(b.split('\n')[0])); }); mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'ver_descripciones', arguments: {} } }) + '\n'); });
   assert.match(salida.result.content[0].text, /Un cuadro rojo[\s\S]*Faltan por describir 1/);
