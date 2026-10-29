@@ -211,7 +211,7 @@ test('un envío que se cayó a medias no se repite: se busca por la marca del lo
     await patch(api, id, 'iniciar');
     const fila = await d1.prepare('select json from estudio_lotes where id = ?').bind(id).first(); const l = JSON.parse(fila.json);
     // la fila 1 quedó «editando» hace 5 minutos y SU trabajo existe (con la marca); la 2, también, pero sin trabajo
-    for (const f of l.filas) { f.estado = 'editando'; f.envio = Date.now() - 5 * 60e3; f.intentos = 1; f.job = null; }
+    for (const f of l.filas) { f.estado = 'editando'; f.envio = Date.now() - 5 * 60e3; f.intentos = 1; f.envios = 1; f.job = null; }
     const marca1 = lotes.proposito(l, l.filas[0]);
     const j1 = await api('/api/media/jobs', { metodo: 'POST', cuerpo: { prompt: 'x', kind: 'image', model: 'prueba', purpose: marca1 } });
     assert.equal(j1.status, 200);
@@ -271,7 +271,16 @@ test('el dinero lo gasta un administrador VIGENTE: si quien inició deja de serl
     const pa = (await lotes.uno(env, env.DB, a.j.lote.id)); assert.equal(pa.estado, 'pausado'); assert.match(pa.motivo, /ya no es administrador/); assert.equal(g.seen.length, 0);
     assert.equal((await api('/api/media/jobs')).j.jobs.length, 0);
     // 2) el usuario se borró (otro lote, iniciado por quien ya no existe)
+    // 1b) dado de baja (la cuenta se conserva, pero no entra ni gasta)
     d1._db.prepare("update users set rol = 'admin' where email = ?").run(admin.email);
+    const bj = await crearLote(api, ids); assert.equal(bj.status, 200); const lb = bj.j.lote.id; // se crea ANTES de la baja (después la sesión ya no entra)
+    const uid = d1._db.prepare('select id from users where email = ?').get(admin.email).id;
+    d1._db.prepare("insert or replace into perfiles (user_id, nombre, color, updated_at, baja_at) values (?, 'Dueño', '#1E6FD9', ?, ?)").run(uid, new Date().toISOString(), new Date().toISOString());
+    const lj0 = JSON.parse(d1._db.prepare('select json from estudio_lotes where id = ?').get(lb).json); lj0.estado = 'corriendo'; lj0.inicioPor = { email: admin.email, nombre: 'Dueño' };
+    d1._db.prepare("update estudio_lotes set json = ?, estado = 'corriendo', version = version + 1 where id = ?").run(JSON.stringify(lj0), lb);
+    await lotes.cadaMinuto(env, env.DB);
+    const pb0 = await lotes.uno(env, env.DB, lb); assert.equal(pb0.estado, 'pausado'); assert.match(pb0.motivo, /ya no es administrador/); assert.equal(g.seen.length, 0);
+    d1._db.prepare('update perfiles set baja_at = null where user_id = ?').run(uid);
     const b = await crearLote(api, ids); await patch(api, b.j.lote.id, 'iniciar');
     const fila = d1._db.prepare('select json from estudio_lotes where id = ?').get(b.j.lote.id); const l = JSON.parse(fila.json); l.inicioPor = { email: 'ya-no-existe@panaclaw.test', nombre: 'Fantasma' };
     d1._db.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').run(JSON.stringify(l), b.j.lote.id);
@@ -313,12 +322,12 @@ test('una fila «editando» cuyo trabajo ya se podó, o con un reintento, no se 
     const c = await crearLote(api, await fotos(api, 2), { muestra: 0 }); const id = c.j.lote.id;
     await patch(api, id, 'pausar').catch(() => {}); await patch(api, id, 'iniciar');
     const l = JSON.parse(d1._db.prepare('select json from estudio_lotes where id = ?').get(id).json);
-    l.filas[0].estado = 'editando'; l.filas[0].job = 'jbbbbbbbbbbb'; l.filas[0].envio = Date.now() - 10 * 60e3; l.filas[0].intentos = 1;
+    l.filas[0].estado = 'editando'; l.filas[0].job = 'jbbbbbbbbbbb'; l.filas[0].envio = Date.now() - 10 * 60e3; l.filas[0].intentos = 1; l.filas[0].envios = 1;
     d1._db.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').run(JSON.stringify(l), id);
     await lotes.cadaMinuto(env, env.DB);
     const u = await lotes.uno(env, env.DB, id);
     assert.notEqual(u.filas[0].job, 'jbbbbbbbbbbb'); assert.ok(['en_cola', 'editando'].includes(u.filas[0].estado));
-    assert.notEqual(lotes.proposito(u, { n: 1, intentos: 1 }), lotes.proposito(u, { n: 1, intentos: 2 }), 'cada intento tiene su marca');
+    assert.notEqual(lotes.proposito(u, { n: 1, envios: 1 }), lotes.proposito(u, { n: 1, envios: 2 }), 'cada intento tiene su marca');
   } finally { await g.close(); }
 });
 
@@ -340,5 +349,34 @@ test('el goteo es por turnos y acotado: 3 fotos por minuto como mucho, y un lote
     const csv = dataUrl(Buffer.from('foto,sku\na.png,1\n'), 'text/csv');
     for (let i = 0; i < lotes.MAX_HOJAS; i++) assert.equal((await api('/api/media/lotes/hoja', { metodo: 'POST', cuerpo: { name: 'h.csv', data: csv } })).status, 200);
     const tope = await api('/api/media/lotes/hoja', { metodo: 'POST', cuerpo: { name: 'h.csv', data: csv } }); assert.equal(tope.status, 429); assert.match(tope.j.error, /demasiadas hojas/);
+  } finally { await g.close(); }
+});
+
+test('Reintentar no toma el trabajo viejo ya terminado: cada envío tiene su marca y el rescate mira solo lo nacido después', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, d1 } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const c = await crearLote(api, await fotos(api, 1), { muestra: 0 }); const id = c.j.lote.id;
+    await patch(api, id, 'iniciar');
+    const h = await avanzar(env, api, id, (x) => x.estado === 'hecho'); const viejo = h.filas[0].job, imagenVieja = h.filas[0].out;
+    assert.equal(h.filas[0].envios, 1);
+    const re = await api('/api/media/lotes/' + id + '/filas', { metodo: 'POST', cuerpo: { accion: 'reintentar', filas: [1] } }); assert.equal(re.status, 200);
+    assert.equal(re.j.lote.filas[0].intentos, 0, 'Reintentar pone los intentos a 0…'); assert.equal(re.j.lote.filas[0].envios, 1, '…pero los envíos no bajan');
+    // D1 se cae justo ANTES de crear el trabajo nuevo: no hay trabajo nuevo, y el viejo (misma marca de antes) no se toma por él
+    let cae = true; const real = env.DB;
+    env.DB = new Proxy(real, { get: (t, k) => (k === 'prepare' ? (sql) => (cae && /insert into estudio_trabajos/.test(sql) ? { bind: () => ({ run: async () => { throw new Error('D1 se cayó'); } }) } : t.prepare(sql)) : (typeof t[k] === 'function' ? t[k].bind(t) : t[k])) });
+    await lotes.cadaMinuto(env, env.DB);
+    cae = false; env.DB = real;
+    const l = await lotes.uno(env, env.DB, id), f = l.filas[0];
+    assert.notEqual(f.job, viejo, 'no tomó el trabajo viejo'); assert.notEqual(f.estado, 'lista', 'no quedó «lista» con la imagen vieja'); assert.equal(f.envios, 2, 'el envío fallido gastó una marca');
+    // y al seguir, el trabajo nuevo lleva la marca 3 (nunca repite una)
+    await api('/api/media/lotes/' + id + '/filas', { metodo: 'POST', cuerpo: { accion: 'reintentar', filas: [1] } }); // si quedó en «fallo», el dueño reintenta otra vez
+    const lj = JSON.parse(d1._db.prepare('select json from estudio_lotes where id = ?').get(id).json); lj.filas[0].despues = 0; d1._db.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').run(JSON.stringify(lj), id);
+    await avanzar(env, api, id, (x) => x.filas[0].estado === 'lista');
+    const marcas = (await api('/api/media/jobs')).j.jobs.map((j) => j.purpose).filter(Boolean);
+    assert.equal(new Set(marcas).size, marcas.length, 'ninguna marca repetida: ' + marcas.join(' | '));
+    assert.ok(marcas.some((m) => m.endsWith(':1')) && marcas.some((m) => m.endsWith(':3')));
+    void imagenVieja; void d1;
   } finally { await g.close(); }
 });

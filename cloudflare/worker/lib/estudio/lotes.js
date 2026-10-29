@@ -325,7 +325,7 @@ export async function accionFilas(env, db, id, b = {}, { by = 'you', usuario = n
 /* ---------- el goteo (el reloj de cada minuto) ---------- */
 const enVuelo = (l) => l.filas.filter((f) => f.estado === 'editando' || f.estado === 'verificando').length;
 const comprometido = (l) => +(l.filas.reduce((s, f) => s + (+f.comprometido || 0) + (f.estado === 'editando' ? +f.estimado || 0 : 0), 0)).toFixed(4);
-const marca = (l, f) => `lote ${l.id}:${f.n}:${f.intentos || 0}`; // con el número de intento: un reintento tiene su propia marca y no confunde el trabajo de antes
+const marca = (l, f) => `lote ${l.id}:${f.n}:${f.envios || 0}`; // `envios` NUNCA baja (los reintentos del dueño, las pausas y los errores no lo tocan): cada envío tiene su propia marca y no confunde el trabajo de antes
 export const proposito = (l, f) => `banco de presets · ${marca(l, f)}`;
 function fallar(l, f, msg, definitivo, cfg) {
   const paso = definitivo ? { retry: false, why: 'el pedido no sirve así' } : nextStep({ attempts: f.intentos - 1 }, msg, cfg.retries, ahoraMs());
@@ -361,7 +361,7 @@ async function reconciliar(env, db, id, cfg) {
   for (const f of pend) {
     let j = f.job ? await trabajos.job(db, f.job) : null;
     if (!j && !f.job) { // se cayó entre marcarla y apuntar el trabajo: se busca por la marca del lote
-      const r = await db.prepare(`select id from estudio_trabajos where json like ? order by at desc limit 1`).bind(`%"purpose":"${proposito(f0.l, f)}"%`).first();
+      const r = await db.prepare(`select id from estudio_trabajos where json like ? and at >= ? order by at desc limit 1`).bind(`%"purpose":"${proposito(f0.l, f)}"%`, (f.envio || 0) - 2000).first(); // y nacido DESPUÉS de este envío
       if (r) j = await trabajos.job(db, r.id);
     }
     vistos.set(f.n, j);
@@ -382,9 +382,9 @@ async function enviarFila(env, db, cargado, id, n, cfg) {
   const l0 = f0.l, f = l0.filas.find((x) => x.n === n);
   if (!f || f.estado !== 'en_cola' || !ESTADOS_ACTIVOS.includes(l0.estado)) return false;
   // el dinero lo gasta un administrador VIGENTE: quien inició el lote se vuelve a leer en cada foto (si ya no es administrador, o se borró, o nadie lo inició, el lote se pausa)
-  const quien = l0.inicioPor?.email ? await db.prepare('select rol from users where email = ?').bind(l0.inicioPor.email).first() : null;
+  const quien = l0.inicioPor?.email ? await db.prepare('select u.rol from users u left join perfiles p on p.user_id = u.id where u.email = ? and p.baja_at is null').bind(l0.inicioPor.email).first() : null; // una cuenta dada de baja tampoco gasta
   if (!quien || quien.rol !== 'admin') {
-    const motivo = l0.inicioPor?.email ? 'quien lo inició ya no es administrador: un administrador debe reanudarlo.' : 'ningún administrador lo ha puesto a trabajar: un administrador debe iniciarlo o reanudarlo.';
+    const motivo = l0.inicioPor?.email ? 'quien lo inició ya no es administrador (o se dio de baja): un administrador debe reanudarlo.' : 'ningún administrador lo ha puesto a trabajar: un administrador debe iniciarlo o reanudarlo.';
     await mutar(db, id, (l) => { if (ESTADOS_ACTIVOS.includes(l.estado)) pausar(l, motivo); });
     return false;
   }
@@ -407,13 +407,13 @@ async function enviarFila(env, db, cargado, id, n, cfg) {
     return false;
   }
   // se marca «editando» y se GUARDA antes de mandar: si el Worker muere después, la marca del trabajo permite no repetirla
-  f.estado = 'editando'; f.envio = ahoraMs(); f.intentos++; f.estimado = cost; f.job = null; delete f.procesado;
+  f.estado = 'editando'; f.envio = ahoraMs(); f.envios = (f.envios || 0) + 1; f.intentos++; f.estimado = cost; f.job = null; delete f.procesado;
   try { await guardarCas(db, l0, f0.version); } catch (e) { if (e.conflicto) return false; throw e; }
   let r = null, error = null, rescatado = null;
   const clave = proposito(l0, f); // con el intento: un reintento no confunde el trabajo de antes
   try { r = await presets.aplicar(env, db, pedidoDe(l0, f, cargado.banco), { usuario, cargado, purpose: clave }); } catch (e) { error = e; }
   if (error) { // aplicar pudo fallar DESPUÉS de crear el trabajo (p. ej. al registrar algo): si el trabajo existe, esa foto ya va; no se reintenta ni se da por fallada
-    try { const w = await db.prepare(`select id from estudio_trabajos where json like ? order by at desc limit 1`).bind(`%"purpose":"${clave}"%`).first(); if (w) rescatado = await trabajos.job(db, w.id); } catch { /* sin poder mirar: se trata como el error que fue */ }
+    try { const w = await db.prepare(`select id from estudio_trabajos where json like ? and at >= ? order by at desc limit 1`).bind(`%"purpose":"${clave}"%`, (f.envio || 0) - 2000).first(); if (w) rescatado = await trabajos.job(db, w.id); } catch { /* sin poder mirar: se trata como el error que fue */ }
     if (rescatado) { r = { jobs: [rescatado], plan: null }; error = null; }
   }
   await mutar(db, id, (l) => {
