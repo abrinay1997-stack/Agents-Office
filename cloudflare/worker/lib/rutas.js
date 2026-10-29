@@ -17,6 +17,7 @@ import * as equipo from '../modulos/equipo.js';
 import { tasa, tasaVer, ipDe, relojDe, cupoDeModelo } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 import { podar, tocaPodar } from './mantenimiento.js';
+import { podarImagenesMeta } from './imagen-meta.js';
 import { registrarSecretos } from './secretos.js';
 import { uidDe, PREFIJO_SALA, PREFIJO_DOC_ARCHIVO } from './dimitri/chat.js';
 
@@ -45,7 +46,7 @@ export async function correrReloj(env, ahoraMs = Date.now()) {
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
   await conciliarFlagSesion(env.DB).catch(() => {}); // SEG-05: apunta si el flag se apagó
   await env.DB.prepare('delete from sesiones_uso where token_hash not in (select token_hash from sessions)').run().catch(() => {}); // SEG-05: sin migración aplicada no hace nada
-  if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
+  if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } try { await podarImagenesMeta(env.MEDIA, ahoraMs); } catch (e) { console.error('[cron] poda de imágenes de Meta:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
   for (const mod of ordenDelReloj(MODULOS)) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
 }

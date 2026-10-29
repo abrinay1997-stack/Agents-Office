@@ -102,3 +102,34 @@ test('la URL (con su firma) no se registra: ningún console.* la lleva', { skip:
   try { await o.pedir(OK); o.poner(() => new Response('x', { status: 500 })); await o.pedir('https://scontent.fbcdn.net/zz.jpg?stp=1'); } finally { Object.assign(console, orig); }
   assert.ok(!vistos.some((v) => /fbcdn|cdninstagram|oh=/.test(v)), vistos.join('\n'));
 });
+
+// SEG-09: la copia en R2 expira (30 días) y tiene tope total (200 MB → baja a 160 MB, borrando lo más viejo)
+import { podarImagenesMeta, RAIZ, DIAS_COPIA } from '../worker/lib/imagen-meta.js';
+test('SEG-09: la poda borra lo subido hace más de 30 días y solo bajo contenido/imagen-meta/', async () => {
+  const r2 = crearR2(), ahora = Date.now(), dia = 864e5;
+  await r2.put(RAIZ + 'vieja.jpeg', JPEG, { __subida: new Date(ahora - (DIAS_COPIA + 1) * dia) });
+  await r2.put(RAIZ + 'reciente.jpeg', JPEG, { __subida: new Date(ahora - 5 * dia) });
+  await r2.put('clientes/otra/foto.jpeg', JPEG, { __subida: new Date(ahora - 90 * dia) });
+  const x = await podarImagenesMeta(r2, ahora);
+  assert.equal(x.borradas, 1); assert.deepEqual([...r2._m.keys()].sort(), ['clientes/otra/foto.jpeg', RAIZ + 'reciente.jpeg']);
+});
+test('SEG-09: pasado el tope total se borra lo más viejo hasta el objetivo; bajo el tope no se toca nada', async () => {
+  const r2 = crearR2(), ahora = Date.now(), dia = 864e5, grande = new Uint8Array(1000).fill(1);
+  for (let i = 0; i < 10; i++) await r2.put(RAIZ + `f${i}.jpeg`, grande, { __subida: new Date(ahora - (i + 1) * dia) }); // f9 es la más vieja
+  assert.equal((await podarImagenesMeta(r2, ahora, { tope: 10_000, objetivo: 5000 })).borradas, 0, 'justo en el tope: nada');
+  const x = await podarImagenesMeta(r2, ahora, { tope: 9000, objetivo: 5000 });
+  assert.equal(x.borradas, 5); assert.ok(!r2._m.has(RAIZ + 'f9.jpeg') && !r2._m.has(RAIZ + 'f5.jpeg') && r2._m.has(RAIZ + 'f4.jpeg') && r2._m.has(RAIZ + 'f0.jpeg'));
+  assert.equal((await podarImagenesMeta(null, ahora)).borradas, 0, 'sin R2 no hace nada');
+});
+
+test('SEG-09: sin `uploaded` no se borra por edad; la lista pagina (1.000 por página) y la poda se detiene en 5 páginas', async () => {
+  const r2 = crearR2(), ahora = Date.now();
+  await r2.put(RAIZ + 'sinfecha.jpeg', JPEG); r2._m.get(RAIZ + 'sinfecha.jpeg').up = undefined;
+  assert.equal((await podarImagenesMeta(r2, ahora, { dias: 0 })).borradas, 0, 'sin fecha, viva');
+  const grande = crearR2(); const dia = 864e5;
+  for (let i = 0; i < 5400; i++) grande._m.set(`${RAIZ}${String(i).padStart(5, '0')}.jpeg`, { buf: Buffer.alloc(1), meta: {}, up: new Date(ahora - 60 * dia) });
+  const p1 = await grande.list({ prefix: RAIZ, limit: 1000 }); assert.equal(p1.objects.length, 1000); assert.equal(p1.truncated, true); assert.equal(p1.cursor, '1000');
+  const x = await podarImagenesMeta(grande, ahora);
+  assert.equal(x.vistas, 5000, 'solo 5 páginas'); assert.equal(x.borradas, 5000); assert.equal(x.incompleta, true); assert.equal(grande._m.size, 400, 'el resto queda para mañana');
+  assert.equal((await podarImagenesMeta(grande, ahora)).borradas, 400, 'y se pone al día');
+});
