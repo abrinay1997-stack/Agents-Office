@@ -2,7 +2,7 @@
 // (workerd rechaza una constante exportada: «Incorrect type for map entry»).
 import { json, error, noAutenticado, prohibido, cuerpo } from './respuesta.js';
 const TOPE_PUBLICO = 16_000; // bytes de un cuerpo SIN sesión (acceso)
-import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada } from './sesion.js';
+import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada, conCookieRenovada, sesionesDe, cerrarSesionPorId, cerrarTodas } from './sesion.js';
 import { agentes, ejecutar } from './agentes.js';
 import { uuid, ahora } from './ids.js';
 import * as cerebro from './cerebro.js';
@@ -43,12 +43,15 @@ export async function correrReloj(env, ahoraMs = Date.now()) {
   registrarSecretos(env); // `ahoraMs`: solo las pruebas lo cambian
   instalarZona(env.ZONA_HORARIA);
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+  await env.DB.prepare('delete from sesiones_uso where token_hash not in (select token_hash from sessions)').run().catch(() => {}); // SEG-05: sin migración aplicada no hace nada
   if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
   for (const mod of ordenDelReloj(MODULOS)) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
 }
 
-export async function manejar(req, env, exec = null) {
+/** SEG-05: si la sesión se renovó en esta petición, la respuesta lleva la cookie nueva. */
+export async function manejar(req, env, exec = null) { return conCookieRenovada(req, await manejarInterno(req, env, exec)); }
+async function manejarInterno(req, env, exec = null) {
   registrarSecretos(env);
   instalarZona(env.ZONA_HORARIA); // la hora «local» de las reglas de la oficina es la de su zona (lib/zona.js), no la UTC del Worker
   const url = new URL(req.url);
@@ -95,13 +98,27 @@ export async function manejar(req, env, exec = null) {
     if (!(await tasa(db, 'acc:ip:' + ip, 20, ms)).ok || (await tasaVer(db, claveFallos, ms)) >= 8) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
     if (!s) { await tasa(db, claveFallos, 8, ms); return error('Usuario o contraseña incorrectos.', 401); }
-    return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo) });
+    return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo, s.segundos) });
   }
 
   const usuario = await usuarioDeLaPeticion(db, req);
   if (!usuario) return noAutenticado();
 
   if (ruta === '/api/salir' && req.method === 'POST') { await cerrarSesion(db, req); await cerrarDe(env, usuario.id, 'sesión cerrada'); return json({ ok: true }, 200, { 'Set-Cookie': cookieBorrada() }); }
+  // SEG-05: dónde tengo la sesión abierta, cerrar una y cerrar todas (de cada quien, cualquier rol)
+  if (ruta === '/api/yo/sesiones' && req.method === 'GET') return json({ sesiones: await sesionesDe(db, usuario.id, req) });
+  if (ruta === '/api/yo/sesiones/cerrar' && req.method === 'POST') {
+    const b = await cuerpo(req);
+    if (!(await cerrarSesionPorId(db, usuario.id, b?.id, req))) return error('Esa sesión no existe o es la que estás usando (para esa, usa «Salir»).', 404);
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'sesion', usuario.email, JSON.stringify({ cerro: 'una' })).run();
+    return json({ ok: true, sesiones: await sesionesDe(db, usuario.id, req) });
+  }
+  if (ruta === '/api/yo/sesiones/cerrar-todas' && req.method === 'POST') {
+    const n = await cerrarTodas(db, usuario.id);
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'sesion', usuario.email, JSON.stringify({ cerro: 'todas', n })).run();
+    await cerrarDe(env, usuario.id, 'sesión cerrada en todos los sitios');
+    return json({ ok: true, cerradas: n }, 200, { 'Set-Cookie': cookieBorrada() });
+  }
   if (ruta === '/api/yo' && req.method === 'GET') return json({ usuario });
   if (ruta === '/api/agentes' && req.method === 'GET') return json({ agentes: agentes() });
 
