@@ -1,20 +1,9 @@
 // v1 data extracted VERBATIM from command-centre.html (lines 646-666, 671-1095, 2176, 2975-3021).
+// SOLO DE LA DEMO file:// (Fase 0.0, 29 oct 2026): esto NO entra en la página. build.mjs lo empaqueta en dist/v1demo.js y la página lo pide con
+// un <script> sincrónico únicamente si se abre como archivo; lo guarda en window.AO_V1DEMO. Lo compartido con la oficina servida está en v1base.js.
 import { applyV1 } from './profile.js';
+import { clockStr, slug, P, rnd, ri, person, money } from './v1base.js';
 // Do not hand-edit agent content here — it is the single source of truth shared with v1.
-export const clockStr = () => new Date().toLocaleTimeString("en-NZ",{hour:"2-digit",minute:"2-digit",hour12:false});
-export const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-");
-export const P = {
-  first:['Sarah','Mike','Priya','Tom','Aroha','Ben','Chloe','Dev','Emma','Finn','Grace','Hemi','Isla','Jake','Kiri','Liam','Mia','Nikau','Olivia','Pete','Ruby','Sam','Tane','Zoe','Harper','Josh','Nina','Ravi','Sofia','Callum'],
-  last:['Walker','Patel','Thompson','Ngata','Chen','Murphy','Kaur','Wilson','Fraser','Hohepa','Brooks','Sharma','Reid','Tui','Marsh','Oduya','King','Parata','Lowe','Baxter'],
-  co:['Harbour City Roofing','Southern Cross Fitness','Kea Logistics','Fern & Field Landscaping','Ridgeline Property Group','BlueWater Marine','Totara Legal','Summit HVAC','GoldCoast Solar','Pounamu Recruitment','Marlborough Wines Direct','UrbanNest Realty','Silver Fern Security','Bay Plumbing Co','Crestline Finance','Mako Digital','Kauri Dental Group','Westhaven Charters','Alpine Freight','Nectar Foods'],
-  plan:['Starter','Growth','Scale','Enterprise'],
-  competitor:['CallForge','RingPilot','Quotient CRM','DialAxis','Velora'],
-  city:['Auckland','Wellington','Christchurch','Sydney','Melbourne','Brisbane','Hamilton','Tauranga','Perth','Dunedin'],
-};
-export const rnd = a => a[Math.floor(Math.random()*a.length)];
-export const ri = (a,b) => a + Math.floor(Math.random()*(b-a+1));
-export const person = () => rnd(P.first)+' '+rnd(P.last);
-export const money = n => '$'+n.toLocaleString('en-NZ');
 /* ---------- KPIs ---------- */
 export const KPIS = [
   { id:'leads',     label:'Leads enriquecidos',  val:47,   fmt:v=>v },
@@ -842,3 +831,4 @@ export const FILE_GEN = {
 
 // INDUSTRY PROFILE (12 Sep 2026): the fake world + every persona come from the profile in a per-industry demo file. No-op otherwise.
 applyV1({ P, V1, FILE_GEN, clockStr });
+if (typeof window !== 'undefined') window.AO_V1DEMO = { V1, FILE_GEN, STATS, KPIS };
