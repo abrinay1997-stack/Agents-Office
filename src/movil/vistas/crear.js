@@ -97,7 +97,7 @@ export function registrar(shell) {
         return `<h2 class="md-q">¿Qué dice?</h2>
           <label class="mv-lab" for="mdTexto">Texto de la publicación</label>
           <textarea id="mdTexto" class="mv-campo" rows="7" data-campo="texto" placeholder="Escribe lo que va debajo de la imagen…" autocomplete="off">${esc(S.p.texto)}</textarea>
-          <div class="md-conts" data-conts aria-live="polite">${rs.map(r => { const c = cont(r); return `<span class="md-cont${c.max && c.n > c.max ? ' mal' : ''}" data-cont="${r}">${iconoRed(r, { tam: 14 })} ${c.n}${c.max ? ' / ' + c.max : ''}</span>`; }).join('')}</div>
+          <div class="md-conts" data-conts aria-live="polite">${rs.map(r => { const c = cont(r); return `<span class="md-cont${c.max && c.n > c.max ? ' mal' : ''}" data-cont="${r}">${iconoRed(r, { tam: 16, titulo: NOMBRE_RED[r] || r })} ${c.n}${c.max ? ' / ' + c.max : ''}</span>`; }).join('')}</div>
           <button type="button" class="mv-btn md-ancho" data-mejorar>✨ Mejorar con Marketing</button>${legibles().length ? `<p class="mv-meta">Mira ${esc(quePuede())} de la publicación para escribir.</p>` : ''}
           <label class="mv-lab" for="mdHash">Hashtags</label><input id="mdHash" type="text" class="mv-campo" data-campo="hashtags" value="${esc(S.p.hashtags)}" placeholder="#negocio #panamá" autocapitalize="none" autocomplete="off">
           ${rs.includes('instagram') ? `<label class="md-sw-l"><input type="checkbox" aria-label="Poner los hashtags en el primer comentario" data-campo="hashtagsEnComentario"${S.p.hashtagsEnComentario ? ' checked' : ''}><span>Poner los hashtags en el primer comentario (Instagram)</span></label>` : ''}

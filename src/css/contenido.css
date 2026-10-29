@@ -268,7 +268,7 @@ body.dark .pz-cnt.over { color: #FF8A73; }
 body.dark .pz-h { color: #ECEAE3; }
 .cv-ev.pz.pz-venc { border-left-color: #B4391E; } body.dark .cv-ev.pz.pz-venc { border-left-color: #FF8A73; }
 @container ctday (max-width: 118px) { #ctOv .cv-ev.line.pz2 .pz-ct { display: none; } #ctOv .cv-ev.line.pz2 { padding-left: 6px; } }
-@container ctday (max-width: 150px) { #ctOv .cv-ev.line.pz2 .pz-nb { width: 14px; height: 14px; } }
+@container ctday (max-width: 150px) { #ctOv .cv-ev.line.pz2 .pz-nb { width: 16px; height: 16px; } }
 body.dark #ctOv .cv-ev.pz { border-left-color: var(--chipd, var(--chip)); }
 
 /* ---------- «+ Crear» (CON-16) ---------- */

@@ -70,7 +70,7 @@ body.dark .pz-avchip.bad { color: #FF8A73; } body.dark .pz-avchip.warn { color: 
 .pz-cnts { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
 .pz-cc { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; padding: 1px 7px 1px 3px; border: 1px solid var(--hairline); border-radius: 99px; font-family: var(--ui); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .pz-cc[data-cc="hashtags"] { padding-left: 7px; }
-.pz-cc .pz-nb { width: 15px; height: 15px; }
+.pz-cc .pz-nb { width: 16px; height: 16px; }
 .pz-cc.dim { color: var(--grey); border-style: dashed; } body.dark .pz-cc.dim { color: #C2C0B9; }
 .pz-cc.over { color: #B4391E; border-color: #B4391E; font-weight: 800; } body.dark .pz-cc.over { color: #FF8A73; border-color: #FF8A73; }
 

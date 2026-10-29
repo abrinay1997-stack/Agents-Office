@@ -25,10 +25,10 @@ const escTitulo = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 
 export function iconoRed(red, { tam = 16, titulo, monocromo = false } = {}) {
   const id = String(red || '').toLowerCase(), e = REDES.includes(id) && ICONOS[id], [c0, c1] = e ? e.capas : [{ d: GENERICO[1], fill: '' }];
-  if (e && e.placa) { const a = titulo ? `role="img" aria-label="${escTitulo(titulo)}"><title>${escTitulo(titulo)}</title>` : 'aria-hidden="true">'; return `<svg class="ao-red" width="${Math.max(14, Number(tam) || 16)}" height="${Math.max(14, Number(tam) || 16)}" viewBox="0 0 24 24" focusable="false" ${a}<rect width="24" height="24" rx="5" fill="${monocromo ? 'currentColor' : e.placa}"/><g transform="translate(4 4) scale(.67)" fill="none" stroke="${monocromo ? 'var(--bg,#fff)' : '#fff'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${c0.d}"/></g></svg>`; }
+  if (e && e.placa) { const a = titulo ? `role="img" aria-label="${escTitulo(titulo)}"><title>${escTitulo(titulo)}</title>` : 'aria-hidden="true">'; return `<svg class="ao-red" data-r="${e ? id : ''}" width="${Math.max(16, Number(tam) || 16)}" height="${Math.max(16, Number(tam) || 16)}" viewBox="0 0 24 24" focusable="false" ${a}<rect width="24" height="24" rx="5" fill="${monocromo ? 'currentColor' : e.placa}"/><g transform="translate(4 4) scale(.67)" fill="none" stroke="${monocromo ? 'var(--bg,#fff)' : '#fff'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${c0.d}"/></g></svg>`; }
   const color = c0.degradado ? `url(#ao-ig) ${c0.fill}` : c0.fill, d = c0.d, encima = c1 && c1.d;
   if (c0.degradado && !monocromo) ponDefs();
-  const fill = monocromo || !color ? 'currentColor' : color, n = Math.max(14, Number(tam) || 16);
+  const fill = monocromo || !color ? 'currentColor' : color, n = Math.max(16, Number(tam) || 16);
   const a11y = titulo ? `role="img" aria-label="${escTitulo(titulo)}"><title>${escTitulo(titulo)}</title>` : 'aria-hidden="true">';
-  return `<svg class="ao-red" width="${n}" height="${n}" viewBox="0 0 24 24" focusable="false" fill="${fill}" ${a11y}<path d="${d}"/>${encima && !monocromo ? `<path fill="#fff" d="${encima}"/>` : ''}</svg>`;
+  return `<svg class="ao-red" data-r="${e ? id : ''}" width="${n}" height="${n}" viewBox="0 0 24 24" focusable="false" fill="${fill}" ${a11y}<path d="${d}"/>${encima && !monocromo ? `<path fill="#fff" d="${encima}"/>` : ''}</svg>`;
 }
