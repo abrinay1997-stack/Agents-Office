@@ -406,9 +406,9 @@ await step('browser: tools.browser puts --chrome and the Chrome server in the ag
   m.configure({ mcp: {}, tools: { browser: false } });
   if (m.cliArgs().join() !== '--no-chrome') throw new Error('cliArgs off: ' + m.cliArgs());
   m.configure(cfg); // back to the office's own config
-  const logos = fs.readFileSync(path.join(ROOT, 'src', 'mcplogos.js'), 'utf8'); if (!/\n  chrome: \{ name: 'Chrome'/.test(logos)) throw new Error('no Chrome tile in src/mcplogos.js');
+  const { ICONOS } = await import('./src/iconos-registro.mjs'); if (ICONOS.chrome?.nombre !== 'Chrome' || !ICONOS.chrome.capas?.[0]?.d) throw new Error('no Chrome icon in src/iconos-registro.mjs'); // Fase 5: ya no hay teselas WebP
   const b = m.browserState();
-  return `--chrome · mcp__claude-in-chrome allowed · deny works · --no-chrome when off · tile baked · this machine: ${b.installed ? 'extension paired' + (b.device ? ' (' + b.device + ')' : '') : 'extension NOT paired'}`;
+  return `--chrome · mcp__claude-in-chrome allowed · deny works · --no-chrome when off · icon in the registry · this machine: ${b.installed ? 'extension paired' + (b.device ? ' (' + b.device + ')' : '') : 'extension NOT paired'}`;
 });
 await step('calendar: a routine can start on a date, and projects forward day by day', async () => { // V3.2.1
   const w = await import('./src/when.js');
