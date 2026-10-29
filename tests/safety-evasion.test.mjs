@@ -76,12 +76,28 @@ test('urlAjenaEn: el destino se decide sobre el texto CRUDO (SEG-02, revisión)'
   assert.ok(S.urlAjenaEn({ url: 'https://good.com／@evil.com/' }, con), 'barra de ancho completo');
   assert.ok(S.urlAjenaEn({ url: 'https://good.com@evil.com/' }, con));
   assert.ok(S.urlAjenaEn({ url: 'https://good.com\\@evil.com/' }, con));
-  assert.ok(S.urlAjenaEn({ q: 'evil.com/x' }, con), 'sin esquema en un campo cualquiera');
+  assert.ok(S.urlAjenaEn({ target: 'evil.com/x' }, con), 'sin esquema en un campo con nombre de dirección');
+  assert.ok(S.urlAjenaEn({ q: '//evil.com/x' }, con), '«//» sin esquema');
   assert.ok(S.urlAjenaEn({ q: 'xhttps://evil.com' }, con));
   assert.ok(S.urlAjenaEn({ q: 'a\u0001https://evil.com' }, con), 'control antes del esquema');
-  assert.ok(S.urlAjenaEn({ q: 'ｇood.com/x' }, con), 'host de ancho completo');
+  assert.ok(S.urlAjenaEn({ q: 'https://ｇood.com/x' }, con), 'host de ancho completo');
   assert.equal(S.urlAjenaEn({ q: 'https://good.com:8443/x' }, con), null);
   for (const t of ['busca ventas.pdf de ayer', 'versión 1.2.3', 'hola.', 'precio 12.50 hoy', 'nota.md']) assert.equal(S.urlAjenaEn({ q: t }, con), null, t);
+});
+
+test('IPv6 literal y límites documentados de urlAjenaEn', () => {
+  const con = 'https://good.com/mcp';
+  assert.ok(S.urlAjenaEn({ q: 'http://[2001:db8::1]:8080/x?d=SECRET' }, con));
+  assert.ok(S.urlAjenaEn({ q: '//[::1]/x' }, con));
+  assert.ok(S.urlAjenaEn({ url: 'https://[::ffff:1.2.3.4]/' }, con));
+  // lo que NO se mira (documentado en CLAUDE.md): un host sin esquema en texto libre, mailto:, javascript:, data: y direcciones codificadas
+  for (const q of ['evil.com/x', 'mailto:a@evil.com', 'javascript:fetch(1)', 'data:text/plain;base64,QQ==', 'https%3A%2F%2Fevil.com']) assert.equal(S.urlAjenaEn({ q }, con), null, q);
+});
+
+test('texto normal con puntos NO es una dirección (un falso positivo metería al chat en un bucle de «bloqueado»)', () => {
+  const con = 'https://good.com/mcp';
+  for (const q of ['Hola.Cómo estás', 'Sr.Lopez pidió el informe', 'clientes.Revisar mañana', 'ids abc.def.ghi y x.y.z', 'abre index.php, app.html y main.rs', 'archivo informe.final.v2', 'e.g. precios, i.e. todo', 'Dr.Pérez@clinica', 'v1.2.3-beta', 'US$12.50.', 'ver https://good.com/a y luego good.com/b', 'correo ana@good.com', 'la red 10.0.0.1 está caída'])
+    assert.equal(S.urlAjenaEn({ q, nota: [q] }, con), null, q);
 });
 
 test('control C0, versalitas, cirílico y griego completos', () => {
@@ -96,7 +112,14 @@ test('control C0, versalitas, cirílico y griego completos', () => {
 
 test('esquemaConUrlLibre: más nombres, descripciones y sin falsos positivos numéricos', () => {
   const u = p => ({ type: 'object', properties: p });
-  for (const k of ['target', 'location', 'resource', 'page_url', 'destination']) assert.ok(S.esquemaConUrlLibre(u({ [k]: { type: 'string' } })), k);
+  for (const k of ['page_url', 'webhook', 'href']) assert.ok(S.esquemaConUrlLibre(u({ [k]: { type: 'string' } })), k);
+  // nombres ambiguos: solo con formato uri o con una descripción que dice «URL»; si no, la herramienta se queda
+  for (const k of ['source', 'target', 'location', 'resource', 'origin', 'feed', 'destination']) {
+    assert.ok(!S.esquemaConUrlLibre(u({ [k]: { type: 'string' } })), k + ' a secas no se oculta');
+    assert.ok(S.esquemaConUrlLibre(u({ [k]: { type: 'string', format: 'uri' } })), k + ' uri');
+    assert.ok(S.esquemaConUrlLibre(u({ [k]: { type: 'string', description: 'The http link to read' } })), k + ' con descripción');
+  }
+  assert.deepEqual(S.parametrosUrl(u({ target: { type: 'string', format: 'uri' }, q: { type: 'string' } })), [{ nombre: 'target', motivo: 'formato uri' }]);
   assert.ok(S.esquemaConUrlLibre(u({ x: { type: 'string', description: 'Any URL to fetch' } })));
   assert.ok(!S.esquemaConUrlLibre(u({ page: { type: 'integer' }, location: { type: 'number' }, q: { type: 'string', description: 'texto a buscar' } })));
 });

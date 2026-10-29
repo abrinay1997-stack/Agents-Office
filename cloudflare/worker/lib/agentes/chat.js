@@ -178,7 +178,7 @@ async function herramientasDeLectura({ db, env, agente, fetchFn, presupuesto, sa
     try {
       const lista = await crearClienteMcp({ conector: c, env, fetchFn, presupuesto }).listar();
       usables.push(c);
-      for (const t of lista) if (permitidas.has(t.name)) { if (safety.esquemaConUrlLibre(t.inputSchema)) { fallos.push({ servidor: c.nombre, motivo: `la herramienta ${t.name} acepta una dirección libre y no se ofrece en el chat` }); continue; } defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema }); }
+      for (const t of lista) if (permitidas.has(t.name)) { { const urls = safety.parametrosUrl(t.inputSchema); if (urls.length) { fallos.push({ servidor: c.nombre, motivo: `la herramienta ${t.name} no se ofrece en el chat porque acepta una dirección libre (${urls.slice(0, 3).map((u) => `«${u.nombre}»: ${u.motivo}`).join('; ')})` }); continue; } } defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema }); }
     } catch (e) { fallos.push({ servidor: c.nombre, motivo: limpiarSecretos(String(e.message)).slice(0, 160) }); }
   }
   return { defs, fallos, conectores: usables };

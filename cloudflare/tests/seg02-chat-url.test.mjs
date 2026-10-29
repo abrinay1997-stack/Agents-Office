@@ -52,7 +52,8 @@ for (const [nombre, arg] of [
   ['barra de ancho completo antes de @', { query: 'https://gmail.mcp.example.com／@evil.example/' }],
   ['@ en la autoridad', { query: 'https://gmail.mcp.example.com@evil.example/x' }],
   ['barra invertida', { query: 'https://gmail.mcp.example.com\\@evil.example/' }],
-  ['sin esquema en un campo cualquiera', { query: 'evil.example/c?d=SECRETO' }],
+  ['«//» sin esquema', { query: '//evil.example/c?d=SECRETO' }],
+  ['IPv6 literal', { query: 'http://[2001:db8::1]:8080/x?d=SECRETO' }],
   ['control antes del esquema', { query: 'x\u0001https://evil.example/' }],
   ['host que solo parece el del conector', { query: 'https://gmail.mcp.example.com.evil.example/' }],
 ]) {
@@ -64,3 +65,19 @@ for (const [nombre, arg] of [
     assert.ok(!hs.search_threads.llamadas, 'la herramienta no se llamó');
   });
 }
+
+test('chat: texto normal con puntos y una dirección del propio conector NO se bloquean', { skip: SALTAR }, async () => {
+  const hs = { search_threads: { salida: 'ok', esquema: ESQ_Q } };
+  const m = await mundo([usar(['mcp__gmail__search_threads', { query: 'Hola.Cómo estás, revisa index.php y clientes.Revisar' }]), usar(['mcp__gmail__search_threads', { query: 'ver https://gmail.mcp.example.com/a' }]), texto('Listo.')], hs);
+  const r = await m.p.admin('POST', '/api/chat', { agent: 'elead', text: 'Busca algo', history: [] });
+  assert.equal(r.status, 200, JSON.stringify(r.j)); assert.equal(hs.search_threads.llamadas, 2);
+});
+
+test('chat: una herramienta con parámetro ambiguo (source) y sin formato uri SÍ se ofrece; con formato uri no, y el aviso dice cuál parámetro y por qué', { skip: SALTAR }, async () => {
+  const hs = { search_threads: { salida: 'ok', esquema: { type: 'object', properties: { source: { type: 'string' } } } }, fetch_page: { salida: 'p', esquema: { type: 'object', properties: { target: { type: 'string', format: 'uri' } } } } };
+  const m = await mundo([texto('Listo.')], hs);
+  const r = await m.p.admin('POST', '/api/chat', { agent: 'elead', text: 'Busca algo', history: [] });
+  const ofrecidas = (m.f.registro.anthropic[0].cuerpo.tools || []).map((t) => t.name).join(' ');
+  assert.match(ofrecidas, /search_threads/); assert.doesNotMatch(ofrecidas, /fetch_page/);
+  assert.match(r.j.reply, /«target»: formato uri/);
+});

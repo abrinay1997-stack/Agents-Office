@@ -190,30 +190,35 @@ export function injectionIn(text) {
 }
 
 /* ---------- SEG-02 · herramientas con URL libre: un argumento «url» es un canal de salida (exfiltración por la dirección) ---------- */
-const NOMBRE_URL = /^(url|uri|href|link|links|endpoint|webhook|callback|redirect|address|host|hostname|domain|website|site|src|source|source_url|target|target_url|image_url|file_url|page_url|base_url|proxy|location|resource|destination|feed|forward|origin|referer)s?$|(_|\b)(url|uri|href|webhook|endpoint|callback)s?$/i;
+const NOMBRE_URL = /^(url|uri|href|link|links|endpoint|webhook|callback|redirect|host|hostname|domain|website|src|source_url|target_url|image_url|file_url|page_url|base_url|proxy)s?$|(_|\b)(url|uri|href|webhook|endpoint|callback)s?$/i; // nombres que casi siempre son una dirección
+const NOMBRE_AMBIGUO = /^(source|target|location|resource|origin|feed|destination|forward|referer|site|address)s?$/i; // pueden ser un id, una carpeta, un nombre…: solo cuentan si el parámetro dice que es una dirección
 const DICE_URL = /\b(url|uri|https?|web ?address|hyperlink|link to)\b/i; // «Any URL to fetch», «page address»
-/** ¿Esta herramienta acepta una dirección escrita por el modelo? (nombre de parámetro típico, formato uri, descripción que la pide, o un objeto/array que la lleva). Heurística: un parámetro de texto libre
- *  que acepte una dirección sin decirlo se atrapa en la llamada (`urlAjenaEn`), no aquí. */
-export function esquemaConUrlLibre(schema, hondo = 0) {
-  if (!schema || typeof schema !== 'object' || hondo > 6) return false;
-  if (/^(uri|url|uri-reference|iri|hostname)$/i.test(String(schema.format || ''))) return true;
+const clavesUrl = k => NOMBRE_URL.test(k) || NOMBRE_AMBIGUO.test(k); // para el valor de una llamada: en un campo con ese nombre, un host sin esquema también es una dirección
+/** Los parámetros que hacen de una herramienta un canal de salida: [{ nombre, motivo }]. Nombre típico de dirección, `format: uri`, o una descripción que pide una URL; los nombres ambiguos
+ *  (source, target, location…) solo cuentan con `format: uri` o con la descripción. Heurística: un parámetro de texto libre que acepte una dirección sin decirlo no se atrapa aquí sino en la llamada (`urlAjenaEn`). */
+export function parametrosUrl(schema, hondo = 0, ruta = '') {
+  const out = [];
+  if (!schema || typeof schema !== 'object' || hondo > 6) return out;
+  if (/^(uri|url|uri-reference|iri|hostname)$/i.test(String(schema.format || ''))) out.push({ nombre: ruta || '(valor)', motivo: 'formato uri' });
   for (const [k, v] of Object.entries(schema.properties || {})) {
-    const numerico = v && /^(number|integer|boolean)$/.test(String(v.type));
-    if (!numerico && (NOMBRE_URL.test(k) || (v && typeof v.description === 'string' && (!v.type || v.type === 'string') && DICE_URL.test(v.description)))) return true;
-    if (esquemaConUrlLibre(v, hondo + 1)) return true;
+    const nombre = ruta ? `${ruta}.${k}` : k, numerico = v && /^(number|integer|boolean)$/.test(String(v.type));
+    const dice = v && typeof v.description === 'string' && (!v.type || v.type === 'string') && DICE_URL.test(v.description), uri = v && /^(uri|url|uri-reference|iri|hostname)$/i.test(String(v.format || ''));
+    if (!numerico && NOMBRE_URL.test(k)) out.push({ nombre, motivo: 'su nombre es el de una dirección' });
+    else if (!numerico && (uri || dice) && (NOMBRE_AMBIGUO.test(k) || dice)) out.push({ nombre, motivo: uri ? 'formato uri' : 'su descripción pide una URL' });
+    else out.push(...parametrosUrl(v, hondo + 1, nombre));
   }
-  for (const k of ['items', 'additionalProperties']) if (schema[k] && typeof schema[k] === 'object' && esquemaConUrlLibre(schema[k], hondo + 1)) return true;
-  for (const k of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(schema[k]) && schema[k].some(x => esquemaConUrlLibre(x, hondo + 1))) return true;
-  return false;
+  for (const k of ['items', 'additionalProperties']) if (schema[k] && typeof schema[k] === 'object') out.push(...parametrosUrl(schema[k], hondo + 1, ruta));
+  for (const k of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(schema[k])) for (const x of schema[k]) out.push(...parametrosUrl(x, hondo + 1, ruta));
+  return out;
 }
-const ARCHIVO = /\.(txt|pdf|docx?|xlsx?|csv|json|md|png|jpe?g|gif|webp|svg|zip|js|ts|py|log|xml|yml|yaml)$/i;
+export const esquemaConUrlLibre = schema => parametrosUrl(schema).length > 0;
 /** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
  *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
  *  una barra de ancho completo— cuenta como ajeno. → el host (o un trozo) ajeno, o null. */
 export function urlAjenaEn(args, urlConector) {
   const propio = hostOf(urlConector || '');
   if (!propio) return null;
-  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: NOMBRE_URL.test(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
+  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: clavesUrl(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
   visita(args);
   const ajena = (token, conEsquema) => {
     const sinEsquema = token.replace(/^[a-z][a-z0-9+.-]{1,12}:\/\//i, '').replace(/^\/\//, '');
@@ -225,11 +230,12 @@ export function urlAjenaEn(args, urlConector) {
   };
   for (const { t, claveUrl } of textos) {
     const texto = t.slice(0, 20000);
+    if (/(?:[a-z][a-z0-9+.-]{1,12}:)?\/\/\[/i.test(texto)) return '[IPv6]'; // una dirección IPv6 literal nunca es el conector
     if (claveUrl && texto.trim() && !/\s/.test(texto.trim())) { const r = ajena(texto.trim(), /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(texto.trim())); if (r) return r; continue; }
     for (const m of texto.matchAll(/[^\s\x00-\x1f"'<>()[\]{},;]+/g)) {
       let tok = m[0].replace(/[.:!?]+$/, ''); const e = tok.search(/[a-z][a-z0-9+.-]{1,12}:\/\//i); if (e > 0) tok = tok.slice(e); // «xhttps://…» y similares
       const conEsquema = /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(tok);
-      const pareceHost = !conEsquema && !/^[a-z]+:/i.test(tok) && (/^(\/\/|www\.)/i.test(tok) || (/^[^\s/@]{1,63}(\.[^\s/@.]{1,63})+(?::\d+)?(?:[/?#].*)?$/.test(tok) && /[a-z\u00a1-\uffff]{2,}(?::\d+)?(?:[/?#]|$)/i.test(tok.split(/[/?#]/)[0]) && !ARCHIVO.test(tok.split(/[/?#]/)[0]) && !/^\d+(\.\d+)+$/.test(tok.split(/[/?#]/)[0])));
+      const pareceHost = !conEsquema && /^(\/\/|www\.)/i.test(tok); // en texto libre solo cuenta lo que lleva esquema, «//» o «www.»: «Hola.Cómo», «index.php» o «abc.def» no son hosts
       if (!conEsquema && !pareceHost) continue;
       const r = ajena(tok.replace(/^\/\//, ''), conEsquema); if (r) return r;
     }
