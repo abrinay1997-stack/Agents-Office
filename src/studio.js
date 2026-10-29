@@ -9,6 +9,7 @@
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
+import { textoFalloPapelera } from './estudio-papelera.js'; // EST-08: el motivo del 409 de la papelera
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
 const NB = () => !!globalThis.AO_NUBE, minus = t => String(t || '').replace(/^G/, 'g'); // en la nube una key es un secreto del repositorio en GitHub (el servidor trae la frase en `how`), no un comando de Windows
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
@@ -203,7 +204,7 @@ export function initStudio(ctx) {
   function clearFieldErr() { el.querySelectorAll('.st-need').forEach(n => n.classList.remove('st-need')); $('.st-ferr').hidden = true; const pr = $('.st-prompt'); pr.removeAttribute('aria-invalid'); pr.removeAttribute('aria-describedby'); }
   const say = (t, bad) => { $('.st-msg').textContent = t; $('.st-msg').className = 'st-msg' + (bad ? ' bad' : ''); };
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-  const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
+  const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || r.statusText); e.status = r.status; if (j.piezas) e.piezas = j.piezas; throw e; } return j; };
   const price = m => SV.priceText(m); // V5.0: per image, video, audio, song, second or 1000 characters
   const tags = m => [m.roles.reference && (m.kind === 'image' ? 'Edita o combina imágenes' : 'Referencias'), m.kind === 'video' && m.roles.start && 'Anima una imagen', m.kind === 'video' && m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
     (m.settings.sound || m.settings.generateAudio) && 'Sonido', /texto/i.test(m.note) && 'Texto legible', m.cost && m.cost < 0.012 && m.per !== 's' && 'Muy barato'].filter(Boolean);
@@ -1398,12 +1399,13 @@ export function initStudio(ctx) {
     pintarVolver(); clearTimeout(toastT); toastT = setTimeout(() => { T.hidden = true; }, 9000);
   }
   async function trashMany(files) {
-    const undo = []; let failed = 0;
-    for (const f of files) { try { const r = await api('DELETE', '/api/media/item/' + encodeURIComponent(f)); if (r.undo) undo.push(r.undo); } catch { failed++; } }
+    const undo = [], fallos = []; let failed = 0;
+    for (const f of files) { try { const r = await api('DELETE', '/api/media/item/' + encodeURIComponent(f)); if (r.undo) undo.push(r.undo); } catch (e) { failed++; fallos.push(e); } }
     items = items.filter(x => !undo.some(u => u.id === x.file)); for (const u of undo) { sel.delete(u.id); known.delete(u.id); gone.add(u.id); } if (undo.length) { total = Math.max(0, total - undo.length); refreshCounts(); }
     for (const r of Object.keys(media)) media[r] = media[r].filter(f => !undo.some(u => u.id === f));
     renderGrid(); renderModel(); closeLight();
-    if (!undo.length) return say(`No se pudo mover ${failed === 1 ? 'el archivo' : `ninguno de los ${failed}`} a la papelera.`, true);
+    if (!undo.length) return say(textoFalloPapelera(fallos, files.length), true);
+    if (failed) say(textoFalloPapelera(fallos, files.length), true);
     toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''}: está en «Papelera», 30 días.`, async () => {
       let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; gone.delete(u.id); } catch {} }
       await load({ full: false }); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
