@@ -77,14 +77,14 @@ class ErrorPedido extends Error { constructor(m, estado = 400, extra = {}) { sup
 export { ErrorPedido };
 
 /** Pone en cola una generación. `usuario`: quien la pide (los motores de pago son del administrador). → el trabajo */
-export async function pedir(env, db, req, { usuario } = {}) {
+export async function pedir(env, db, req, { usuario, presets = false } = {}) { // `presets`: solo lo pasa lib/estudio/presets.js (y retry, con lo que ya guardó el propio trabajo); un body crudo de /api/media/jobs nunca trae el rastro del banco
   const hay = (v) => Array.isArray(v) && v.length > 0;
   // el rastro del banco de presets (preset, receta, canal) SÍ viaja; los pasos que necesitan sharp (retoques locales, QA) todavía no existen en la nube
   if (req.local === true || hay(req.post) || hay(req.pre) || hay(req.qa)) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
   const pedido = limpiarPedido(req, { por: usuario?.agente ? 'agent' : 'you' });
   if (usuario?.agente) pedido.agent = String(usuario.agente); // lo pidió un agente: la galería, la tarjeta y el rastro lo dicen (by/agent)
   if (req.versionOf != null) pedido.versionOf = req.versionOf;
-  for (const k of ['preset', 'receta', 'canal', 'esEscena']) if (req[k] !== undefined) pedido[k] = req[k]; // armarTrabajo los valida (presetTrail)
+  if (presets) for (const k of ['preset', 'receta', 'canal', 'esEscena']) if (req[k] !== undefined) pedido[k] = req[k]; // armarTrabajo los valida (presetTrail)
   if (typeof req.purpose === 'string') pedido.purpose = req.purpose;
   const ids = [...Object.values(pedido.media).flat(), ...(pedido.versionOf != null ? [String(pedido.versionOf).replace(/\\/g, '/')] : [])];
   const existen = await galeria.cuales(db, ids), carpeta = pedido.folder ? await galeria.folderOf(db, pedido.folder) : null, b = await budget(env, db);
@@ -139,7 +139,7 @@ async function propiaCancelacion(env, engine, url) {
 export async function retry(env, db, id, { usuario } = {}) {
   const j = await cargar(db, id); if (!j) return null;
   if (j.state !== 'failed' && j.state !== 'done') throw new ErrorPedido('ese trabajo sigue en marcha: espera a que termine para reintentarlo', 409);
-  return pedir(env, db, { model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, task: j.task, folder: j.folder, versionOf: j.versionOf, purpose: j.purpose, preset: j.preset, receta: j.receta, canal: j.canal, esEscena: j.esEscena, retryOf: j.id }, { usuario });
+  return pedir(env, db, { model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, task: j.task, folder: j.folder, versionOf: j.versionOf, purpose: j.purpose, preset: j.preset, receta: j.receta, canal: j.canal, esEscena: j.esEscena, retryOf: j.id }, { usuario, presets: true });
 }
 export async function forget(db, id) { const r = await db.prepare(`delete from estudio_trabajos where id = ? and estado in ('done','failed')`).bind(id).run(); return !!r.meta?.changes; }
 export async function markAttached(db, id) { const j = await cargar(db, id); if (j) { j.attached = true; await guardarFila(db, j); } }

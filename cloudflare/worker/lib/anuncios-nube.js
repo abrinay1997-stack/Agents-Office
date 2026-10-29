@@ -243,6 +243,26 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
   return { meta, ads, sync, acc, borr, creador, sug, piloto, impulsor, conv, ind, informe, aplicador, bandeja: bandejaLect, galeria, rutas, tras, cerrar, umbrales, pendiente, tokens, estadoKpis };
 }
 
+/**
+ * CON-11 paso 2: el almacén de `bandeja.json` en la nube. Lee el archivo del espejo UNA vez por petición (antes, cada `leer()` volvía a leer y a parsear hasta ~1,9 MB)
+ * y devuelve copias; cada `escribir` va al archivo en el acto (el diario «enviando» tiene que estar en el espejo antes del volcado que precede a Meta), igual que antes.
+ * `lecturas`/`escrituras` solo sirven para medir. El archivo es de esta petición: nadie más lo escribe mientras corre.
+ */
+export function almacenEnMemoria(archivo) {
+  let d, cargado = false; const cuenta = { lecturas: 0, escrituras: 0 };
+  return {
+    cuenta,
+    leer() {
+      if (!cargado) { cuenta.lecturas++; try { d = JSON.parse(fs.readFileSync(archivo, 'utf8')) ?? {}; } catch { d = {}; } cargado = true; }
+      return structuredClone(d);
+    },
+    escribir(nuevo) {
+      cuenta.escrituras++; d = structuredClone(nuevo); cargado = true;
+      fs.mkdirSync(path.dirname(archivo), { recursive: true }); fs.writeFileSync(archivo + '.tmp', JSON.stringify(nuevo, null, 1)); fs.renameSync(archivo + '.tmp', archivo);
+    },
+  };
+}
+
 /** La Bandeja sobre un espejo abierto (la misma de contenido/bandeja.mjs; su fuente de Meta, con el volcado antes de escribir). */
 export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avisos, abiertaAt = 0, tokens = null }) {
   const fuente0 = crearFuenteMeta({ meta, archivo: path.join(esp.ruta(DIR_ANALITICAS), 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(esp.ruta(DIR_ANUNCIOS), 'cuenta.json'), 'utf8')); } catch { return null; } }, ahora });
@@ -251,7 +271,7 @@ export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avi
   const antes = (f) => async (...a) => { await esp.flush(); return f(...a); };
   const fuente = { ...fuente0, responder: antes(fuente0.responder), ocultar: antes(fuente0.ocultar) };
   const av = (kind) => (t, o) => (avisos ? avisos.avisar(kind, t, o) : undefined);
-  return crearBandeja({ metricool: null, meta: fuente, elegir: () => cfg.contenido?.bandejaFuente || 'auto', archivo: path.join(esp.ruta(DIR_ANALITICAS), 'bandeja.json'),
+  return crearBandeja({ metricool: null, meta: fuente, elegir: () => cfg.contenido?.bandejaFuente || 'auto', almacen: almacenEnMemoria(path.join(esp.ruta(DIR_ANALITICAS), 'bandeja.json')),
     modo: () => cfg.contenido?.modo || 'simulacro', ahora, avisar: av('contenido'), avisarComentario: av('bandeja-comentario'), avisarMensaje: av('bandeja-mensaje'),
     injectionIn, undoSeconds: () => Number(cfg.approvals?.undoSeconds ?? 30), tokens, abiertaAtInicial: abiertaAt });
 }

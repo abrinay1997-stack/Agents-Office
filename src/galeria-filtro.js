@@ -34,7 +34,7 @@ export const words = q => fold(q).split(/\s+/).filter(Boolean);
 /** El texto en el que se busca una ficha. `extra(it)` añade lo que solo sabe quien llama (el nombre del agente, el título de la tarea). */
 const HS = new WeakMap(); // the folded text of a record, worked out once (the index keeps the same objects until one changes)
 export function haystack(it, extra) {
-  let h = HS.get(it); if (h === undefined) { h = fold(`${it.prompt || ''} ${it.name || ''} ${it.modelName || it.model || ''} ${it.file || ''} ${it.agent || ''} ${it.taskTitle || ''}`); HS.set(it, h); }
+  let h = HS.get(it); if (h === undefined) { h = fold(`${it.prompt || ''} ${it.name || ''} ${it.modelName || it.model || ''} ${it.file || ''} ${it.agent || ''} ${it.taskTitle || ''} ${it.desc && !it.desc_sospecha ? [it.desc, (it.etiquetas || []).join(' '), it.texto_visible, it.producto].join(' ') : ''}`); HS.set(it, h); } // 11.1: lo descrito se busca (nunca lo sospechoso)
   const x = extra ? extra(it) : ''; return x && x.trim() ? h + ' ' + fold(x) : h;
 }
 export function passQuery(ws, it, extra) { if (!ws.length) return true; const h = haystack(it, extra); return ws.every(w => h.includes(w)); }

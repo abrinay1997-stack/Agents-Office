@@ -93,7 +93,7 @@ export async function aplicar(env, db, b = {}, { usuario } = {}) {
     if (c.guia?.pendiente) { const g = await guiaDe(env, db, P.escena); if (g.nueva) creados.push(g.file); c = core.ponerGuia(c, g.file); }
     const { pre, post, qa, ...req } = c.request; // pre/post/qa necesitan sharp: aquí no hay (el plan ya no los trae cuando local=false; esto lo asegura)
     void pre; void post; void qa;
-    const j = await trabajos.pedir(env, db, { ...req, canal: A.canal, esEscena: A.esEscena, receta: A.receta, folder: P.folder, purpose: 'banco de presets' }, { usuario });
+    const j = await trabajos.pedir(env, db, { ...req, canal: A.canal, esEscena: A.esEscena, receta: A.receta, folder: P.folder, purpose: 'banco de presets' }, { usuario, presets: true });
     const plan = conAvisos(c);
     return { plan, jobs: [j], avisos: plan.avisos };
   } catch (e) {
@@ -145,6 +145,7 @@ export async function borrar(db, id, { usuario } = {}) {
   if (!p) return false;
   const r = await cerebro.mandarAPapelera(db, sinMd(p.archivo.split('/').pop()), { por: String(usuario?.nombre || usuario?.email || 'alguien').slice(0, 80) });
   if (r.error) throw Object.assign(new Error(r.error), { status: r.estado || 400 });
+  await db.prepare('delete from filas where coleccion = ? and id like ?').bind(COLECCION_VERSIONES, `${tapaDeVersiones(id)}%`).run(); // sus versiones no quedan huérfanas
   return true;
 }
 

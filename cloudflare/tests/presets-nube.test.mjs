@@ -185,3 +185,17 @@ test('una nota de preset migrada desde la computadora (grupo «Estudio», sin es
   assert.ok(l.j.propios.includes('mio-bodega')); assert.ok(l.j.problemas.some((p) => /^Rota\.md:/.test(p)), l.j.problemas.join('|'));
   assert.equal(l.j.presets.filter((p) => p.id === 'enc-desde-arriba').length, 1);
 });
+
+test('un editor no puede colar una receta enorme por /api/media/jobs: el rastro del banco solo lo pone el módulo de presets; borrar un preset purga sus versiones', { skip: SALTAR }, async () => {
+  const { api, d1 } = await montar({});
+  const grande = { pila: [{ id: 'x', params: { t: 'x'.repeat(900000) } }] };
+  const r = await api('/api/media/jobs', { metodo: 'POST', cuerpo: { prompt: 'x', kind: 'image', model: 'prueba', receta: grande, preset: [{ id: 'enc-desde-arriba' }], canal: 'web' } });
+  assert.equal(r.status, 200);
+  const fila = await d1.prepare('select json from estudio_trabajos limit 1').first();
+  assert.ok(fila.json.length < 5000 && !/receta|preset|canal/.test(fila.json.replace(/"preset":\s*undefined/, '')), 'el body crudo no guarda receta ni preset');
+  await api('/api/media/presets', { metodo: 'POST', cuerpo: { nombre: 'Uno', receta: { pila: ['enc-desde-arriba'] } } });
+  await api('/api/media/presets', { metodo: 'POST', cuerpo: { nombre: 'Uno', receta: { pila: ['enc-desde-arriba'] } } });
+  assert.equal((await d1.prepare("select count(*) n from filas where coleccion = 'presets-versiones'").first()).n, 1);
+  await api('/api/media/presets/mio-uno', { metodo: 'DELETE' });
+  assert.equal((await d1.prepare("select count(*) n from filas where coleccion = 'presets-versiones'").first()).n, 0);
+});
