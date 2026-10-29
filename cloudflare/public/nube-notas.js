@@ -1,0 +1,104 @@
+/* N1 (Fase 8) — la campanita y la hoja «Mientras no estabas» (solo en la nube). Paquete bajo demanda: lo trae nube.js después de saber quién eres; la página no lo lleva.
+   Todo lo decide el servidor (flag `notas.config.activo` apagado por defecto: sin él, esta pieza no pinta nada). Aquí solo se pinta y se manda; todo dato se escapa con esc().
+   El aviso en vivo (`ao:nota`) lleva solo la señal: el texto de una nota se pide siempre a la API. */
+(() => {
+  'use strict';
+  const N = window.AO_NUBE; if (!N || N.notas) return;
+  const { api, esc } = N;
+  const COLORES = [['amarillo', 'Amarillo'], ['rosa', 'Rosa'], ['verde', 'Verde'], ['azul', 'Azul'], ['lila', 'Lila'], ['naranja', 'Naranja']];
+  const TOPE = 500, CADA_MS = 60_000, SI_APAGADO_MS = 300_000;
+  let campana = null, hoja = null, datos = null, activo = false, timer = 0, personas = null, abierta = false, mensaje = '';
+
+  const cuenta = () => (datos ? (datos.notas?.length || 0) + (datos.notificaciones?.noLeidas || 0) : 0);
+  const hace = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
+
+  function pintarCampana() {
+    if (!activo) { campana?.remove(); campana = null; return; }
+    if (!campana) {
+      campana = document.createElement('button'); campana.type = 'button'; campana.id = 'nbCampana'; campana.className = 'nt-campana';
+      campana.setAttribute('aria-haspopup', 'dialog'); campana.addEventListener('click', () => (abierta ? cerrar() : abrir()));
+      document.body.appendChild(campana);
+    }
+    const n = cuenta();
+    campana.setAttribute('aria-label', n ? `Notas y avisos: ${n} sin leer` : 'Notas y avisos');
+    campana.setAttribute('aria-expanded', String(abierta));
+    campana.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>${n ? `<span class="nt-n" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}`;
+  }
+
+  async function cargar() {
+    if (document.hidden) { clearTimeout(timer); timer = setTimeout(cargar, activo ? CADA_MS : SI_APAGADO_MS); return; } // una pestaña olvidada no marca presencia ni «visita nueva»
+    try { datos = await api('/api/notas-personales/entrada'); activo = datos.activo === true; } catch { return; }
+    pintarCampana(); if (abierta) pintarHoja();
+    clearTimeout(timer); timer = setTimeout(cargar, activo ? CADA_MS : SI_APAGADO_MS);
+  }
+
+  const tarjetaNota = (n) => `<li class="nt-nota c-${esc(n.color)}" data-id="${esc(n.id)}"><p class="nt-de"><b>${esc(n.de)}</b> <small>${esc(hace(n.t))}${n.grupal ? ' · para varios' : ''}</small></p>
+      <p class="nt-cuerpo">${esc(n.cuerpo)}</p>
+      <div class="nt-acc">${/^tarea:/.test(n.enlace || '') ? `<button type="button" class="sg-btn" data-a="abrir" data-e="${esc(n.enlace)}">Abrir la tarea</button>` : ''}<button type="button" class="sg-btn" data-a="cerrar">Cerrar</button><button type="button" class="nt-rep" data-a="reportar" title="Avisar a un administrador de que esta nota no debería haberse enviado">Reportar</button></div></li>`;
+  const filaAviso = (a) => `<li class="nt-aviso ${esc(a.nivel)}"><span>${esc(a.titulo)}</span> <small>${esc(hace(a.t))}</small></li>`;
+
+  function formulario() {
+    const rol = N.yo()?.rol;
+    const opts = (personas || []).map((p) => `<option value="persona:${esc(p.id)}">${esc(p.nombre)}</option>`).join('')
+      + (rol !== 'lectura' ? '<option value="todos">Todas las personas</option><option value="rol:editor">Los editores</option><option value="rol:admin">Los administradores</option>' : '');
+    if (!personas) return '<p class="nt-vacio">Cargando a quién puedes escribirle…</p>';
+    if (!opts) return '<p class="nt-vacio">Todavía no hay a quién dejarle una nota.</p>';
+    return `<form class="nt-form" autocomplete="off"><label for="nt-para">Para</label><select id="nt-para" name="para">${opts}</select>
+      <label for="nt-texto">Tu nota</label><textarea id="nt-texto" name="cuerpo" rows="3" maxlength="${TOPE + 200}" placeholder="Algo corto: lo verá cuando entre."></textarea><div class="nt-cont" id="nt-cont" aria-live="polite">0 / ${TOPE}</div>
+      <fieldset class="nt-colores"><legend>Color</legend>${COLORES.map(([id, n], i) => `<label class="nt-sw c-${id}"><input type="radio" name="color" value="${id}"${i === 0 ? ' checked' : ''}><span>${n}</span></label>`).join('')}</fieldset>
+      <div class="nt-enviar"><button type="submit" class="sg-btn pri">Dejar la nota</button><span class="nb-msg" role="status">${esc(mensaje)}</span></div></form>`;
+  }
+
+  function pintarHoja() {
+    if (!hoja) return;
+    const notas = datos?.notas || [], av = datos?.notificaciones?.items?.filter((a) => !a.leida) || [];
+    const guardado = hoja.querySelector('#nt-texto')?.value, para = hoja.querySelector('#nt-para')?.value, color = hoja.querySelector('input[name=color]:checked')?.value;
+    hoja.innerHTML = `<div class="nt-cab"><h2 id="nt-t">Mientras no estabas</h2><button type="button" class="sg-btn" data-a="x" aria-label="Cerrar">✕</button></div>
+      ${notas.length ? `<h3>Notas para ti</h3><ul class="nt-lista">${notas.map(tarjetaNota).join('')}</ul>` : ''}
+      ${av.length ? `<h3>Avisos <button type="button" class="sg-btn" data-a="leidas">Marcar todo como leído</button></h3><ul class="nt-avisos">${av.map(filaAviso).join('')}</ul>` : ''}
+      ${!notas.length && !av.length ? '<p class="nt-vacio"><b>Estás al día.</b> No hay notas ni avisos nuevos.</p>' : ''}
+      <h3>Dejar una nota</h3>${formulario()}`;
+    const t = hoja.querySelector('#nt-texto'); if (t && guardado) { t.value = guardado; contar(); }
+    const sel = hoja.querySelector('#nt-para'); if (sel && para) sel.value = para; // el destinatario elegido se conserva al repintar
+    if (color) { const r = hoja.querySelector(`input[name=color][value="${color}"]`); if (r) r.checked = true; }
+    if (document.activeElement === document.body) hoja.focus(); // el foco no se pierde al repintar
+  }
+  function contar() { const t = hoja?.querySelector('#nt-texto'), c = hoja?.querySelector('#nt-cont'); if (t && c) { const l = t.value.trim().length; c.textContent = l > TOPE ? `Te sobran ${l - TOPE}` : `${l} / ${TOPE}`; c.classList.toggle('mal', l > TOPE); } }
+
+  async function abrir() {
+    abierta = true; mensaje = '';
+    hoja = document.createElement('section'); hoja.id = 'nbNotas'; hoja.className = 'nt-hoja'; hoja.setAttribute('role', 'dialog'); hoja.setAttribute('aria-modal', 'false'); /* no modal: no bloquea la oficina */ hoja.setAttribute('aria-labelledby', 'nt-t'); hoja.tabIndex = -1;
+    document.body.appendChild(hoja); pintarHoja(); pintarCampana(); hoja.focus();
+    hoja.addEventListener('click', alClic); hoja.addEventListener('input', (e) => { if (e.target.id === 'nt-texto') contar(); }); hoja.addEventListener('submit', alEnviar);
+    document.addEventListener('keydown', alTecla);
+    await cargar();
+    if (!personas) { try { personas = (await api('/api/notas-personales/personas')).personas; } catch { personas = []; } if (abierta) pintarHoja(); }
+  }
+  function alTecla(e) { if (e.key === 'Escape' && abierta) { e.stopPropagation(); cerrar(); } }
+  function cerrar() { document.removeEventListener('keydown', alTecla); abierta = false; hoja?.remove(); hoja = null; pintarCampana(); campana?.focus(); }
+
+  async function alClic(e) {
+    const b = e.target.closest('[data-a]'); if (!b) return;
+    const a = b.dataset.a, li = b.closest('[data-id]');
+    if (a === 'x') return cerrar();
+    if (a === 'abrir') { const id = b.dataset.e.slice(6); cerrar(); location.hash = `#tareas=lista&t=${encodeURIComponent(id)}`; return; }
+    try {
+      if (a === 'leidas') await api('/api/notificaciones/leer', { metodo: 'POST', cuerpo: { todas: true } });
+      else if (li && (a === 'cerrar' || a === 'reportar')) { await api(`/api/notas-personales/${li.dataset.id}/${a}`, { metodo: 'POST' }); if (a === 'reportar') N.aviso('Cerré la nota. Un administrador podrá leerla porque la reportaste.'); if (a === 'reportar') await api(`/api/notas-personales/${li.dataset.id}/cerrar`, { metodo: 'POST' }); }
+    } catch (err) { N.aviso(err.message); }
+    await cargar();
+  }
+  async function alEnviar(e) {
+    e.preventDefault(); const f = e.target, btn = f.querySelector('button[type=submit]'), msg = f.querySelector('.nb-msg');
+    const cuerpo = f.cuerpo.value.trim(); if (!cuerpo) { msg.textContent = 'Escribe la nota.'; return; }
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); msg.textContent = 'Enviando…';
+    try { await api('/api/notas-personales', { metodo: 'POST', cuerpo: { para: f.para.value, cuerpo, color: f.color.value } }); mensaje = 'Nota dejada ✓'; f.cuerpo.value = ''; contar(); msg.textContent = mensaje; }
+    catch (err) { msg.textContent = err.message; }
+    btn.disabled = false; btn.removeAttribute('aria-busy');
+  }
+
+  window.addEventListener('ao:nota', () => cargar());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar(); });
+  N.notas = { abrir, cerrar, recargar: cargar };
+  cargar();
+})();

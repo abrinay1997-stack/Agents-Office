@@ -130,3 +130,26 @@ body.movil .cx-b { flex: 1 1 100%; font-size: 16px; min-height: 48px; }
 .cx-gira { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--cx-linea); border-top-color: currentColor; border-radius: 50%; animation: cxgira .8s linear infinite; vertical-align: -2px; }
 @keyframes cxgira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .cx-gira { animation: none; border-top-color: var(--cx-linea); } }
+/* N1 — campanita y hoja «Mientras no estabas» (se añade al final de nube.css). Colores de las notas con texto oscuro (AA); nada se atenúa con opacity; sin animación con «reducir movimiento». */
+.nt-campana { position: fixed; right: 16px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+body.movil .nt-campana { bottom: calc(76px + env(safe-area-inset-bottom)); }
+.nt-campana:focus-visible, .nt-hoja button:focus-visible, .nt-hoja select:focus-visible, .nt-hoja textarea:focus-visible, .nt-sw input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nt-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
+.nt-hoja { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(400px, calc(100vw - 32px)); max-height: min(78vh, 640px); max-height: min(78dvh, 640px); overflow: auto; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
+body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); width: auto; max-height: calc(86dvh - 64px); border-radius: 16px 16px 0 0; padding-bottom: 16px; } /* deja libre la barra de pestañas */
+.nt-cab { display: flex; justify-content: space-between; align-items: center; } .nt-cab h2 { margin: 0; font-size: 17px; }
+.nt-hoja h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
+.nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; }
+.nt-lista, .nt-avisos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.nt-nota { border-radius: 10px; padding: 10px 12px; color: #1b1b1b; box-shadow: 0 1px 3px rgba(0,0,0,.16); } .nt-nota .nt-de { margin: 0 0 4px; } .nt-nota small { color: #3d3d3d; } .nt-cuerpo { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nt-nota .sg-btn { background: rgba(255,255,255,.7); color: #1b1b1b; border-color: rgba(0,0,0,.25); }
+.nt-acc { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .nt-rep { background: none; border: 0; color: #3d3d3d; text-decoration: underline; cursor: pointer; min-height: 36px; padding: 0 6px; font-size: 12px; }
+.c-amarillo { background: #FFF2A8; } .c-rosa { background: #FFC9DD; } .c-verde { background: #C7F0C2; } .c-azul { background: #BFE0FF; } .c-lila { background: #DCCBFF; } .c-naranja { background: #FFD3A6; }
+.nt-aviso { padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; } .nt-aviso.error { border-left: 4px solid #B3261E; } .nt-aviso.warn { border-left: 4px solid #B26A00; } .nt-aviso small { color: var(--grey); }
+.nt-vacio { color: var(--grey); margin: 12px 0; }
+.nt-form { display: grid; gap: 6px; } .nt-form label, .nt-form legend { font-size: 13px; } .nt-form select, .nt-form textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }
+.nt-cont { font-size: 12px; color: var(--grey); text-align: right; } .nt-cont.mal { color: #B3261E; }
+.nt-colores { display: flex; flex-wrap: wrap; gap: 6px; border: 0; padding: 0; margin: 0; } .nt-sw { position: relative; } .nt-sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.nt-sw span { display: inline-block; min-height: 36px; line-height: 36px; padding: 0 12px; border-radius: 18px; color: #1b1b1b; font-size: 13px; border: 2px solid transparent; } .nt-sw input:checked + span { border-color: #1b1b1b; font-weight: 700; }
+.nt-enviar { display: flex; align-items: center; gap: 10px; }
+@media (prefers-reduced-motion: no-preference) { .nt-hoja { transition: none; } }

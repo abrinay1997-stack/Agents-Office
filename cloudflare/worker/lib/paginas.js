@@ -16,7 +16,7 @@ export function cacheDePaquete(p, url, resp) {
   const h = new Headers(resp.headers); h.set('cache-control', 'private, max-age=31536000, immutable');
   return new Response(resp.body, { status: resp.status, headers: h });
 }
-const NUBE = new Set(['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión (/nube-cerebro.js no se inyecta: lo trae nube.js la primera vez que alguien abre «Actualizar conexiones»)
+const NUBE = new Set(['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js', '/nube-notas.js']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión (/nube-cerebro.js no se inyecta: lo trae nube.js la primera vez que alguien abre «Actualizar conexiones»)
 const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script><script src="/ajustes-extra.js" defer></script><script src="/nube-modelos.js" defer></script><script src="/nube-conectores.js" defer></script>'; // + «Restablecer oficina» y «Revisar lo que leí» (src/ajustes-extra.js)
 
 /** La oficina real con las dos líneas de la nube añadidas al final del <body>. La página local NO las lleva: sin Worker no hay presencia ni equipo. */

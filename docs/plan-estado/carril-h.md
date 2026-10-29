@@ -19,3 +19,9 @@
   - `para:[userIds]` en `Hub.difundir` (3 líneas en `hub.js`, test en `hub.test.mjs`); la nota difunde `{tipo:'nota', para}` sin texto.
   - Delta de bytes de la página: 0 (solo Worker).
   - ⬜ Presencia filtrada por política (D08) y `visible`: NO hecha (cambia lo que ven hoy todos los roles; va con N2b). ⬜ Notificaciones ya existentes no generan aún «nota» ni campanita (UI = PR 2).
+- ✅ **N1 (interfaz)** (rama `carril-h-n1-ui`, PR 2 de 2, apilado sobre `carril-h-n1`).
+  - `cloudflare/public/nube-notas.js` (campanita + hoja «Mientras no estabas» + formulario para dejar una nota) lo trae `nube.js` tras saber quién eres; con el flag apagado no pinta nada. Estilos `.nt-*` al final de `nube.css`. `nube.js`: 2 líneas (cargar el paquete y reaccionar al evento `nota` del socket). `paginas.js`: `/nube-notas.js` solo con sesión.
+  - Delta de bytes de `dist/command-centre-v2.html`: 0 (la UI vive en `cloudflare/public`, fuera de la página de la oficina). Test: `cloudflare/tests/navegador-notas.test.mjs` (Chromium: apagado, 390 y 1280 px, escapado, foco, Escape).
+  - ⬜ No hecho: versión móvil propia dentro de `src/movil` (la hoja se adapta con `body.movil`), «Enterado»/Telegram (N2), presencia filtrada D08.
+  - Revisión: arreglado el repintado de la hoja (conservaba mal el destinatario por código pegado a un comentario), sondeo en pausa con la pestaña oculta, hoja declarada no modal y sin tapar la barra móvil, texto honesto de «Reportar».
+  - ⬜ Anotado de #77: los topes de `crear` (par/día/grupales) cuentan y luego insertan sin atomicidad; una carrera podría pasarse por 1-2 notas. Pendiente: pasarlo a una sola sentencia `insert … select … where`.
