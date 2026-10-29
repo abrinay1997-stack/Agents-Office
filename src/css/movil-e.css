@@ -183,3 +183,8 @@
 .mv-paso { display: flex; gap: 8px; margin: 3px 0; } .mv-paso-i { flex: none; width: 1.2em; font-weight: 700; } .mv-paso.error .mv-paso-i { color: var(--mv-rojo); } .mv-paso.ok .mv-paso-i { color: var(--mv-acc); }
 .mv-paso.en_curso .mv-paso-i { animation: mvPaso 1s ease-in-out infinite; } @keyframes mvPaso { 50% { opacity: .35; } } @media (prefers-reduced-motion: reduce) { .mv-paso.en_curso .mv-paso-i { animation: none; } }
 .mv-ia { margin: 6px 0 0; font-size: 13px; color: var(--mv-grey); } .mv-ia b { color: var(--mv-ink); }
+
+/* UX-11: el ⓘ de Dimitri lleva un punto cuando hay una alerta real, y el aviso se dice una vez al final del hilo */
+.mv-ic { position: relative; } .mv-ic-punto { position: absolute; top: 9px; right: 9px; width: 10px; height: 10px; border-radius: 50%; background: var(--mv-rojo); border: 2px solid var(--mv-bg, #fff); box-sizing: content-box; }
+.mv-ia-aviso { margin: 8px 0; padding: 10px 12px; border-radius: 14px; background: var(--mv-ambar-bg); color: var(--mv-ink); font-size: 14px; line-height: 1.4; }
+.mv-ia-dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 15px; } .mv-ia-dl dt { color: var(--mv-grey); } .mv-ia-dl dd { margin: 0; font-weight: 600; } .mv-ia-al { margin: 0 0 12px; padding-left: 18px; font-weight: 600; } .mv-ia-nota { margin: 12px 0 0; font-size: 13px; color: var(--mv-grey); }

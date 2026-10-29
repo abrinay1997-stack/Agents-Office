@@ -21,7 +21,7 @@ import * as chat from './chat.js';
 import { preguntar, preguntarConHerramientas, resolverModelo, descripcionModelo } from './modelo.js';
 import { crearConsultas } from './consultas.js';
 import { guiaPara } from '../../../../guia-oficina.mjs';
-import { listarFilas } from '../almacen.js';
+import { listarFilas, leerDoc, mutarDoc } from '../almacen.js';
 import { estadoDelMes } from '../agentes/costos.js';
 import { cargarBibliotecaNube } from '../biblioteca.js';
 import { listarHabilidades } from '../../../../biblioteca-core.mjs';
@@ -133,13 +133,25 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
 }
 
-/** Qué IA corre Dimitri (para su cabecera y para GET /api/sub): { id, nombre, de, herramientas, consultas, gasto }. `gasto`: lo que lleva gastado la oficina en IA este mes frente a su tope (la pastilla de su cabecera). */
+export const DOC_ESTADO_IA = 'dimitri-ia-estado';
+/** UX-11 (29 oct 2026): lo que el ⓘ de Dimitri necesita saber del último turno y que no se deduce del modelo: `fallo` { at, motivo } (el último turno falló por la IA; se limpia al contestar bien)
+ *  y `respaldo` { de, a, motivo } (hoy ningún camino cambia de modelo solo: queda el campo, cableado hasta el ⓘ y probado, para cuando lo haya). Un documento chico en D1; nunca lanza. */
+export async function anotarEstadoIa(db, cambio) {
+  try { await mutarDoc(db, DOC_ESTADO_IA, {}, (e) => { for (const [k, v] of Object.entries(cambio)) { if (v == null) delete e[k]; else e[k] = v; } return e; }); } catch (e) { console.warn('[dimitri] estado de IA:', e?.message ?? e); }
+}
+const MOTIVO_AJENO = /Cambiaste de conversaci/; // no es un fallo de la IA
+
+/** Qué IA corre Dimitri (para su cabecera y para GET /api/sub): { id, nombre, de, herramientas, consultas, gasto, fallo?, respaldo? }. `gasto`: lo que lleva gastado la oficina en IA este mes frente a su tope (el aviso del ⓘ). */
 export async function infoModelo({ env, db }) {
   const cfg = await leerCfg(db), r = await resolverModelo({ env, db, cfg }, { tipo: 'dimitri' });
-  const e = await estadoDelMes(db, cfg.costs).catch(() => null);
+  const [e, est] = await Promise.all([estadoDelMes(db, cfg.costs).catch(() => null), leerDoc(db, DOC_ESTADO_IA, {}).then((d) => d.valor || {}).catch(() => ({}))]);
   return { id: r.modelo.id, nombre: r.nombre, de: r.modelo.de || '', herramientas: !!r.modelo.caps?.herramientas && !r.modelo.meta, consultas: cfg.deputy?.consultas !== false && !!r.modelo.caps?.herramientas && !r.modelo.meta,
-    ...(e ? { gasto: { usd: Math.round((+e.spent || 0) * 100) / 100, tope: +e.budget > 0 ? +e.budget : null, nivel: e.level || 'none' } } : {}) };
+    ...(e ? { gasto: { usd: Math.round((+e.spent || 0) * 100) / 100, tope: +e.budget > 0 ? +e.budget : null, nivel: e.level || 'none' } } : {}),
+    ...(est.fallo?.at ? { fallo: { at: +est.fallo.at, motivo: String(est.fallo.motivo || '').slice(0, 160) } } : {}),
+    ...(est.respaldo?.a || est.respaldo?.de ? { respaldo: { de: String(est.respaldo.de || ''), a: String(est.respaldo.a || ''), motivo: String(est.respaldo.motivo || '').slice(0, 160) } } : {}) };
 }
+/** Llamada por el módulo tras cada turno: anota el fallo de la IA (o lo limpia si salió bien). */
+export const turnoTerminado = (db, error) => anotarEstadoIa(db, error ? (MOTIVO_AJENO.test(String(error)) ? {} : { fallo: { at: Date.now(), motivo: String(error).slice(0, 160) } }) : { fallo: null });
 
 /** «Detener»: el mensaje queda «Detenido por ti» y nada de lo que propuso se guarda. */
 async function detenido({ sala, text, attach, context, quien = null }) {
