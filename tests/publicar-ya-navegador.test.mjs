@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 let chromium = null;
 for (const base of [import.meta.url, 'file:///opt/node22/lib/node_modules/']) { for (const m of ['playwright', 'playwright-core']) { try { ({ chromium } = createRequire(base)(m)); break; } catch { /* siguiente */ } } if (chromium) break; }
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const SALTAR = !chromium ? 'sin Playwright' : false;
+let hayChromium = false; if (chromium) { try { const b = await chromium.launch(); await b.close(); hayChromium = true; } catch { /* sin Chromium instalado (el runner de CI no lo trae) */ } }
+const SALTAR = !chromium ? 'sin Playwright' : !hayChromium ? 'no hay Chromium' : false;
 const listen = srv => new Promise(r => srv.listen(0, '127.0.0.1', () => r(srv.address().port)));
 
 async function levantar(contenido) {
