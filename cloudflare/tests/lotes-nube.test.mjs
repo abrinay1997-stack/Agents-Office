@@ -48,6 +48,17 @@ test('lotes-core: lo puro compartido no toca archivos ni red, y lotes.mjs (local
   for (const k of ['ESTADOS', 'transicion', 'pideOkAgente', 'zipDe', 'nombresPorSku', 'celdaCsv', 'cuentas']) assert.equal(local[k], C[k], k);
 });
 
+test('el Worker no alcanza exceljs, mammoth ni pdfjs (lotes-hoja.mjs y documents.mjs son de la oficina local): el empaquetado de Cloudflare no los trae', async () => {
+  const { dirname, resolve, relative } = await import('node:path'), raiz = resolve(dirname(new URL(import.meta.url).pathname), '../..');
+  const vistos = new Set(), cola = [resolve(raiz, 'cloudflare/worker/index.js')], malos = [];
+  while (cola.length) {
+    const f = cola.pop(); if (vistos.has(f)) continue; vistos.add(f); let t; try { t = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    for (const m of t.matchAll(/(?:from|import\()\s*['"]([^'"]+)['"]/g)) { if (m[1].startsWith('.')) cola.push(resolve(dirname(f), m[1])); else if (/^(exceljs|mammoth|pdfjs-dist)/.test(m[1])) malos.push(`${relative(raiz, f)} → ${m[1]}`); }
+  }
+  assert.deepEqual(malos, [], 'un módulo del Worker importa una librería que el paquete del Worker no tiene (prueba SIEMPRE `cd cloudflare && npx wrangler deploy --dry-run` sin el node_modules de la raíz)');
+  assert.ok(![...vistos].some((f) => /lotes-hoja\.mjs$|\/documents\.mjs$/.test(f)));
+});
+
 test('apagado por defecto: ni una ruta de lotes responde, y el reloj no hace nada', { skip: SALTAR }, async () => {
   const { api, env } = await montar({ GEMINI_API_KEY: CLAVE });
   for (const [m, r] of [['GET', '/api/media/lotes'], ['POST', '/api/media/lotes'], ['POST', '/api/media/lotes/hoja'], ['GET', '/api/media/lotes/Lzzzzz']]) { const x = await api(r, { metodo: m, cuerpo: m === 'POST' ? {} : undefined }); assert.equal(x.status, 501, r); assert.equal(x.j.pendiente, true); assert.match(x.j.error, /apagados/); }

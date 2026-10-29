@@ -3,7 +3,7 @@
 // { tipo: 'carpeta' | 'seleccion' | 'subidas' | 'hoja', … } y lee la vista previa en lote.previa; el motor quiere { carpeta | ids | hoja, … }
 // y devuelve la vista aparte. Aquí, y solo aquí, se traduce de uno a otro. Todo es puro (tests/lotes-puente.test.mjs); serve.mjs lo usa
 // en las rutas /api/media/lotes*.
-import { CAMPOS } from './lotes-hoja.mjs';
+import { CAMPOS } from './lotes-hoja-core.mjs';
 
 const arr = v => (Array.isArray(v) ? v : []);
 const err400 = msg => Object.assign(new Error(msg), { status: 400 });

@@ -14,7 +14,7 @@
 //   · El dinero lo gasta un administrador VIGENTE (se vuelve a leer antes de cada foto) y el reloj no inventa uno.
 //   · No están (se dice): ZIP de fotos y Excel (.xlsx) como entrada (CSV sí), la QA que mide, la nota en el Cerebro y la memoria que aprende al aprobar.
 import * as C from '../../../../lotes-core.mjs';
-import * as H from '../../../../lotes-hoja.mjs';
+import * as H from '../../../../lotes-hoja-core.mjs';
 import columnasJson from '../../../../presets/columnas.json' with { type: 'json' };
 import { buscar } from '../../../../src/presets-buscar.js';
 import { nextStep, retryConfig } from '../../../../reliability.mjs';
