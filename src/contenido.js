@@ -33,7 +33,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem('ao.ct.' + k); 
 // sin hora, la pieza se pinta al principio del día y dice «sin hora» (no se inventa un 09:00 ni un 23:59): no puede aprobarse así
 const at = p => { if (!p.fecha) return 0; const [h, m] = (p.hora || '00:00').split(':').map(Number); return new Date(`${p.fecha}T00:00:00`).setHours(h, m, 0, 0); };
 // C2 (8 oct 2026): una red que sale con OTRO formato (reel en Instagram, post en Facebook) lleva su icono al lado
-const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${iconoRed(r)}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
+const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}">${iconoRed(r, { titulo: RED[r]?.name || r })}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
 const redesTxt = p => p.redes.map(r => `${RED[r]?.name || r}${p.formatos?.[r] ? ` (${(FORMATO[p.formatos[r]] || p.formatos[r]).toLowerCase()})` : ''}`).join(' y ');
 /** C2 (8 oct 2026): lo ya publicado — una publicación de Meta (Analíticas) que no salió de ninguna pieza, y los resultados de las que sí. */
 const TIPO_PUB = { imagen: 'post', carrusel: 'carrusel', reel: 'reel', video: 'reel', texto: 'post' };

@@ -57,3 +57,42 @@ test('el monograma es el único respaldo: estable, distinto por nombre, sin HTML
   assert.equal(tile('Zapier MCP', 'zapier'), uriDeSvg(iconoTesela('zapier')), 'un servicio del registro enseña su logo, no un monograma');
   assert.equal(tile('Mi CRM'), uriDeSvg(monograma('Mi CRM')));
 });
+
+// ---- Fase 5, segunda entrega (ICO-05, 08, 09, 10, 11) ----
+import { iconoRed } from '../src/redes-iconos.js';
+const leer = (r) => fs.readFileSync(new URL('../' + r, import.meta.url), 'utf8');
+const lum = (hex) => { const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+const contraste = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+
+test('ICO-09: un logo de red nunca se dibuja bajo 16 px y lleva su id para el CSS', () => {
+  for (const r of REDES) { assert.match(iconoRed(r, { tam: 10 }), /width="16" height="16"/, r); assert.match(iconoRed(r), new RegExp(`data-r="${r}"`)); }
+  assert.match(iconoRed('instagram', { tam: 22 }), /width="22"/);
+  assert.doesNotMatch(leer('src/css/contenido.css') + leer('src/css/editor-contenido.css'), /\.pz-nb\s*\{\s*width:\s*1[0-5]px/, 'ninguna regla encoge el logo de una red bajo 16 px');
+});
+
+test('ICO-11: cada logo de red llega a 3:1 sobre el fondo oscuro (con su `oscuro` si lo necesita) y el CSS lo aplica', () => {
+  const fondo = '#1E1F24';
+  for (const id of [...REDES, 'whatsapp', 'messenger']) {
+    const e = ICONOS[id]; const c = e.placa || e.capas[0].oscuro || e.capas[0].fill; if (!c) continue; // currentColor: sale claro
+    assert.ok(contraste(c, fondo) >= 3, `${id} ${c} sobre ${fondo}: ${contraste(c, fondo).toFixed(2)}:1`);
+  }
+  assert.ok(contraste(ICONOS.imessage.capas[0].fill, fondo) >= 3 && contraste(ICONOS.instagram.capas[0].fill, fondo) >= 3);
+  const css = leer('src/css/iconos.css');
+  for (const [id, e] of Object.entries(ICONOS)) for (const c of e.capas) if (c.oscuro) assert.ok(css.includes(`[data-r="${id}"] { fill: ${c.oscuro}; }`), `${id}: falta su regla oscura en src/css/iconos.css`);
+  assert.equal((css.match(/\[data-r=/g) || []).length, Object.values(ICONOS).flatMap(e => e.capas).filter(c => c.oscuro).length, 'una regla de más');
+});
+
+test('ICO-08: LinkedIn lleva pictograma propio (su marca pidió retirar el logo) y la placa pasa 4,5:1', () => {
+  assert.equal(ICONOS.linkedin.origen, 'propio'); assert.match(ICONOS.linkedin.fuente, /Simple Icons|ICO-08/); assert.ok(contraste(ICONOS.linkedin.placa, '#ffffff') >= 4.5);
+  assert.match(iconoRed('linkedin'), /<rect[^>]*fill="#0C7BB8"/);
+});
+
+test('ICO-05: los logos de red sin su nombre al lado llevan nombre accesible', () => {
+  assert.match(leer('src/contenido.js').split('\n').find(l => l.startsWith('const netBadges')), /iconoRed\(r, \{ titulo: /, 'las insignias de red de las tarjetas dicen qué red son');
+  assert.match(leer('src/movil/vistas/crear.js'), /iconoRed\(r, \{ tam: 16, titulo: NOMBRE_RED\[r\] \|\| r \}\)\} \$\{c\.n\}/, 'los contadores por red del móvil');
+  assert.match(iconoRed('pinterest', { titulo: 'Pinterest' }), /role="img" aria-label="Pinterest"/);
+});
+
+test('ICO-10: las pestañas de la vista previa miden 44 px en táctil o estrecho (30 en escritorio)', () => {
+  assert.match(leer('src/css/contenido-preview.css'), /@media \(pointer: coarse\), \(max-width: 820px\) \{ \.pv-tabs \[role="tab"\] \{ min-height: 44px; \} \}/);
+});
