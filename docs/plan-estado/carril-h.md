@@ -10,3 +10,12 @@
   - Flags (doc `notificaciones.config`, apagados): `activo` y `lecturaVeResultados` (SEG-04, supuesto del plan: `lectura` ve tareas y calendario, no agentes/Cerebro/anuncios).
   - Delta de bytes en la página: 0 (solo Worker). Test: `cloudflare/tests/notificaciones.test.mjs`.
   - Pendiente: `visto_at`/`entro_at`, preferencias, `para:[userIds]` del Hub, campanita/push (paquete aparte).
+- ✅ **N1 (parte servidor): notas para cuando entres + última visita** (rama `carril-h-n1`, PR 1 de 2).
+  - Migración reservada: `cloudflare/migraciones/0141_notas_personales.sql` (tablas `notas_personales`, `notas_estado`, `presencia_cuenta`; deshacer: `drop table if exists notas_estado; drop table if exists notas_personales; drop table if exists presencia_cuenta;`).
+  - Poda: `notas_personales` 30 días DESPUÉS de vencer (`mantenimiento.js`); `notas_estado` por cascada; `presencia_cuenta` una fila por cuenta. Declaradas en `TABLAS` (auditoría transversal) y en `CONSERVA_TABLAS`/`CONSERVA_DOCS` (`notas.config`).
+  - Flag apagado: doc `notas.config` `{activo:false}` (`POST /api/notas-personales/config`, solo admin). Archivos: `worker/lib/notas-personales.js`, `worker/modulos/notas-personales.js`, `tests/notas-personales.test.mjs`.
+  - D09 aplicado: `lectura` solo a personas concretas; tope 5 abiertas por par, 20/día por remitente, 3 grupales abiertas; texto plano ≤ 500 sin autoenlace; enlace solo `tipo:id`; el administrador ve existencia y estado sin texto (salvo «reportada»); vence a 30 días (máx. 90).
+  - D07 aplicado: `tocarPresencia` (una sentencia, escribe como mucho cada 5 min, visita nueva tras 30 min, guarda `visto_anterior`); la llaman las rutas de notas (no `sesion.js`, no el Hub). `GET /api/notas-personales/entrada` = «mientras no estabas».
+  - `para:[userIds]` en `Hub.difundir` (3 líneas en `hub.js`, test en `hub.test.mjs`); la nota difunde `{tipo:'nota', para}` sin texto.
+  - Delta de bytes de la página: 0 (solo Worker).
+  - ⬜ Presencia filtrada por política (D08) y `visible`: NO hecha (cambia lo que ven hoy todos los roles; va con N2b). ⬜ Notificaciones ya existentes no generan aún «nota» ni campanita (UI = PR 2).
