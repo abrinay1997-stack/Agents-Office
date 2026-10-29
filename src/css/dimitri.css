@@ -1,10 +1,12 @@
 /* V4.8 — Dimitri al lado (src/sub.js, src/sub-studio.js). El panel va pegado a la izquierda bajo la barra y la vista abierta se corre:
    no la tapa. Bajo 900 px ocupa toda la pantalla y es una ventana (modal.js). */
-:root { --subW: min(440px, 34vw); }
-#subOv { top: 52px; left: 0; bottom: 0; width: var(--subW); min-width: 340px; border: 0; border-right: 1px solid var(--hairline); border-radius: 0; box-shadow: 8px 0 30px rgba(21,20,20,.08); transform: translateX(-12px); }
+/* Fase 3 (29 oct 2026): UNA fuente del ancho. `--sub-w` (px) lo escribe src/dimitri-ancho.js al arrastrar el borde; sin él, el de siempre. Plegado: la pestaña. */
+body { --subW: var(--sub-w, max(340px, min(440px, 34vw))); }
+body.subFold { --subW: 44px; }
+#subOv { top: 52px; left: 0; bottom: 0; width: var(--subW); min-width: 0; border: 0; border-right: 1px solid var(--hairline); border-radius: 0; box-shadow: 8px 0 30px rgba(21,20,20,.08); transform: translateX(-12px); }
 #subOv.on { transform: none; }
 @media (min-width: 900px) {
-  body.subOpen :is(#studioOv, #calOv, #ctOv, #anOv, #brainOv, #tvOv, #anuOv) { left: max(var(--subW), 340px); }
+  body.subOpen :is(#studioOv, #calOv, #ctOv, #anOv, #brainOv, #tvOv, #anuOv) { left: var(--subW); }
 }
 @media (max-width: 899px) {
   #subOv { inset: 0; width: auto; min-width: 0; z-index: 66; border-right: 0; box-shadow: none; }
@@ -243,3 +245,32 @@ body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subO
 #subOv .sb-paso.ok .sb-pi { color: var(--ok, #0f7a3d); } #subOv .sb-paso.error .sb-pi { color: var(--bad, #b42318); } #subOv .sb-paso.en_curso .sb-pi { animation: sbPaso 1s ease-in-out infinite; }
 @keyframes sbPaso { 50% { opacity: .35; } } @media (prefers-reduced-motion: reduce) { #subOv .sb-paso.en_curso .sb-pi { animation: none; } }
 #subOv .sb-ia-aviso { margin: 8px 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); font-size: 12.5px; }
+
+/* ---- Fase 3: el borde que se arrastra, plegar y ampliar (src/dimitri-ancho.js) ---- */
+#subOv .sb-rsz { position: absolute; top: 0; bottom: 0; right: -9px; width: 18px; z-index: 12; cursor: col-resize; touch-action: none; display: flex; justify-content: center; }
+#subOv .sb-rsz::after { content: ''; width: 3px; border-radius: 3px; background: transparent; transition: background .15s; }
+#subOv .sb-rsz:hover::after, #subOv .sb-rsz:focus-visible::after, body.sub-rsz-on #subOv .sb-rsz::after { background: var(--ink); }
+#subOv .sb-rsz:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+body.sub-rsz-on, body.sub-rsz-on * { cursor: col-resize !important; user-select: none; }
+body.subFold #subOv .sb-rsz, body.subMax #subOv .sb-rsz { display: none; }
+#subOv :is(.sb-fold, .sb-max) { flex: none; width: 32px; min-width: 32px; min-height: 32px; border-radius: 50%; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 15px; padding: 0; }
+#subOv :is(.sb-fold, .sb-max):hover { border-color: var(--ink); }
+#subOv .sb-ftab { display: none; }
+body.subFold #subOv { box-shadow: 4px 0 14px rgba(21,20,20,.06); }
+body.subFold #subOv > :not(.sb-ftab) { display: none; }
+body.subFold #subOv .sb-ftab { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; height: 100%; padding: 16px 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: 700 12px var(--ui); letter-spacing: .14em; text-transform: uppercase; }
+body.subFold #subOv .sb-ftab span { writing-mode: vertical-rl; }
+body.subFold #subOv .sb-ftab:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+/* ampliado: toda la pantalla bajo la barra; la conversación no se estira más de lo legible */
+body.subMax #subOv { width: auto; right: 0; z-index: 66; border-right: 0; box-shadow: none; }
+body.subMax #subOv :is(.sb-msgs, .sb-chips, .sb-ctx, .sb-atts, .sb-in, .sb-hist) { width: 100%; max-width: 860px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
+body.subMax #subOv .sb-head { padding-left: max(18px, calc((100% - 860px) / 2)); padding-right: max(18px, calc((100% - 860px) / 2)); }
+@media (max-width: 899px) { #subOv :is(.sb-fold, .sb-max, .sb-rsz, .sb-ftab) { display: none !important; } }
+body.movil #subOv :is(.sb-fold, .sb-max, .sb-rsz, .sb-ftab) { display: none !important; }
+@media (prefers-reduced-motion: reduce) { #subOv .sb-rsz::after { transition: none; } }
+/* UX-10 (Fase 3): con el dedo (tableta ≥ 900 px) los controles de Dimitri miden 44 px; la cabecera pasa a dos filas si no caben */
+@media (pointer: coarse) {
+  #subOv :is(.sb-x, .sb-clear, .sb-histb, .sb-iab, .sb-fold, .sb-max, .sb-clip, .sb-ctxx, .sb-send) { min-width: 44px; min-height: 44px; }
+  #subOv .sb-head { flex-wrap: wrap; row-gap: 4px; }
+  #subOv .sb-ctxadd, #subOv .sb-chips button { min-height: 44px; }
+}
