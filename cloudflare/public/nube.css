@@ -153,3 +153,9 @@ body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset
 .nt-sw span { display: inline-block; min-height: 36px; line-height: 36px; padding: 0 12px; border-radius: 18px; color: #1b1b1b; font-size: 13px; border: 2px solid transparent; } .nt-sw input:checked + span { border-color: #1b1b1b; font-weight: 700; }
 .nt-enviar { display: flex; align-items: center; gap: 10px; }
 @media (prefers-reduced-motion: no-preference) { .nt-hoja { transition: none; } }
+
+/* N2b — «Ana se conectó» y las preferencias de conexión */
+.nt-conexion { position: fixed; left: 16px; bottom: 16px; z-index: 127; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 10px 14px; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.25); }
+body.movil .nt-conexion { bottom: calc(76px + env(safe-area-inset-bottom)); } .nt-conexion .sg-btn { min-height: 36px; } body.movil .nt-conexion .sg-btn { min-height: 44px; }
+.nt-pref { display: grid; gap: 8px; } .nt-pref label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; } .nt-pref input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; }
+.nt-transp { margin: 0; font-size: 12px; color: var(--grey); }

@@ -40,10 +40,10 @@ test('encendido: cada aviso llega a quien su rol ve, el aviso global no cambia, 
   await emitirAviso(o.d1, { kind: 'limite', text: 'vence mañana', task: 't2' });                                           // tareas: todos
   await emitirAviso(o.d1, { kind: 'rarisimo', text: 'desconocido' });                                                       // desconocido: sistema, solo admin
   assert.equal(o.d1._db.prepare("select count(*) n from filas where coleccion = 'avisos'").get().n, 4, 'lo global intacto');
-  assert.equal(o.cuantas(o.ana), 4); assert.equal(o.cuantas(o.beto), 2); assert.equal(o.cuantas(o.carla), 1);
+  assert.equal(o.cuantas(o.ana), 4); assert.equal(o.cuantas(o.beto), 2); assert.equal(o.cuantas(o.carla), 2, 'SEG-04: lectura ve tareas y resultados de agentes');
   const carla = (await o.llamar(o.carla, '/api/notificaciones')).j;
-  assert.equal(carla.noLeidas, 1); assert.equal(carla.items[0].categoria, 'tareas'); assert.equal(carla.items[0].enlace, 'tarea:t2');
-  assert.ok(!JSON.stringify(carla).includes('gasto') && !JSON.stringify(carla).includes('falló'), 'lectura no ve anuncios ni fallos de agentes');
+  assert.equal(carla.noLeidas, 2); assert.deepEqual(carla.items.map((i) => i.categoria).sort(), ['agentes', 'tareas']); assert.equal(carla.items.find((i) => i.categoria === 'tareas').enlace, 'tarea:t2');
+  assert.ok(!JSON.stringify(carla).includes('gasto') && !JSON.stringify(carla).includes('desconocido'), 'lectura no ve anuncios (dinero) ni lo de sistema');
 });
 
 test('un aviso dirigido (`persona`) llega solo a esa cuenta; a quien no tiene cuenta no llega; nunca al causante', { skip: SALTAR }, async () => {
@@ -73,19 +73,23 @@ test('leer y marcar leído es por persona: un id ajeno da 404 y no cambia nada; 
   assert.equal(o.d1._db.prepare("select count(*) n from filas where coleccion = 'avisos' and json_extract(json,'$.read') = 1").get().n, 0, 'el read global no se toca');
 });
 
-test('el flag y el supuesto SEG-04 los cambia solo un administrador; lectura ve agentes/contenido únicamente si se enciende `lecturaVeResultados`', { skip: SALTAR }, async () => {
+test('el flag y SEG-04 los cambia solo un administrador; por defecto lectura ve resultados de agentes y Cerebro, y un administrador puede apagarlo', { skip: SALTAR }, async () => {
   const o = await oficina();
   assert.equal((await o.llamar(o.beto, '/api/notificaciones/config')).status, 403); assert.equal((await o.llamar(o.carla, '/api/notificaciones/config', { metodo: 'POST', cuerpo: { activo: true } })).status, 403);
-  assert.deepEqual((await o.llamar(o.ana, '/api/notificaciones/config')).j, { activo: false, lecturaVeResultados: false });
-  assert.deepEqual((await o.llamar(o.ana, '/api/notificaciones/config', { metodo: 'POST', cuerpo: { activo: true, basura: 1, lecturaVeResultados: 'sí' } })).j, { activo: true, lecturaVeResultados: false }, 'solo booleanos');
-  await emitirAviso(o.d1, { kind: 'failed', text: 'falla 1' }); assert.equal(o.cuantas(o.carla), 0);
-  await o.llamar(o.ana, '/api/notificaciones/config', { metodo: 'POST', cuerpo: { lecturaVeResultados: true } });
-  await emitirAviso(o.d1, { kind: 'failed', text: 'falla 2' }); assert.equal(o.cuantas(o.carla), 1);
-  await emitirAviso(o.d1, { kind: 'anuncios', text: 'dinero' }); assert.equal(o.cuantas(o.carla), 1, 'los anuncios nunca');
+  assert.deepEqual((await o.llamar(o.ana, '/api/notificaciones/config')).j, { activo: false, lecturaVeResultados: true });
+  assert.deepEqual((await o.llamar(o.ana, '/api/notificaciones/config', { metodo: 'POST', cuerpo: { activo: true, basura: 1, lecturaVeResultados: 'no' } })).j, { activo: true, lecturaVeResultados: true }, 'solo booleanos');
+  await emitirAviso(o.d1, { kind: 'failed', text: 'falla 1' }); assert.equal(o.cuantas(o.carla), 1, 'por defecto lectura ve los resultados de los agentes');
+  await emitirAviso(o.d1, { kind: 'anuncios', text: 'dinero' }); await emitirAviso(o.d1, { kind: 'budget', text: 'presupuesto' }); await emitirAviso(o.d1, { kind: 'contenido', key: 'bandeja-x', text: 'bandeja' });
+  assert.equal(o.cuantas(o.carla), 1, 'nunca anuncios, dinero ni Bandeja');
+  await o.llamar(o.ana, '/api/notificaciones/config', { metodo: 'POST', cuerpo: { lecturaVeResultados: false } });
+  await emitirAviso(o.d1, { kind: 'failed', text: 'falla 2' }); assert.equal(o.cuantas(o.carla), 1, 'apagado el interruptor, vuelve a lo básico');
 });
 
 test('la matriz de roles: categorías por rol, y lo global de la oficina (aprobaciones, login) solo para administradores', () => {
   assert.deepEqual(POR_ROL.lectura, ['notas', 'chat', 'menciones', 'tareas']);
+  for (const c of ['agentes', 'cerebro', 'contenido']) assert.ok(veCategoria('lectura', c), 'SEG-04: lectura ve ' + c);
+  assert.ok(!veCategoria('lectura', 'agentes', { lecturaVeResultados: false }));
+  for (const c of ['anuncios', 'bandeja', 'aprobaciones', 'sistema']) assert.ok(!veCategoria('lectura', c), 'lectura nunca ve ' + c);
   for (const c of ['anuncios', 'bandeja', 'aprobaciones', 'sistema']) assert.ok(!veCategoria('editor', c) && veCategoria('admin', c), c);
   assert.equal(categoriaDe({ kind: 'contenido', key: 'bandeja-nuevos' }), 'bandeja'); assert.equal(categoriaDe({ kind: 'contenido', key: 'otra' }), 'contenido'); assert.equal(categoriaDe({ kind: '???' }), 'sistema');
   const gente = [{ id: 'a', rol: 'admin', clave: 'ana' }, { id: 'b', rol: 'editor', clave: 'beto' }];

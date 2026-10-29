@@ -12,6 +12,7 @@ import { json, error, prohibido, noEncontrado } from '../lib/respuesta.js';
 import { leerConfig, guardarConfig, crear, listarMias, marcar, retirar, listarEnviadas, listarParaAdmin, personas, tocarPresencia, parsePara } from '../lib/notas-personales.js';
 import { leerConfig as leerConfigNotif, listar as listarNotif } from '../lib/notificaciones.js';
 import { difundir } from '../lib/vivo.js';
+import { avisarConexion, leerPref, guardarPref, TEXTO_TRANSPARENCIA } from '../lib/presencia-aviso.js';
 
 export const nombre = 'notas-personales';
 export const grupos = ['notas-personales'];
@@ -31,17 +32,26 @@ export async function manejar(ctx) {
     return error('GET o POST', 405);
   }
   const cfg = await leerConfig(db);
+  const notifActiva = (await leerConfigNotif(db)).activo === true;
+  const conPresencia = cfg.activo || notifActiva; // la campanita y la presencia viven con cualquiera de los dos flags
+  const latido = async () => { const v = await tocarPresencia(db, usuario.id); await avisarConexion(db, env, usuario, v); return v; };
+  if (resto === '/preferencias-conexion') {
+    if (!conPresencia) return json({ activo: false });
+    if (req.method === 'GET') return json({ activo: true, esAdmin: usuario.rol === 'admin', pref: await leerPref(db, usuario.id), transparencia: TEXTO_TRANSPARENCIA });
+    if (req.method === 'POST') return json({ activo: true, esAdmin: usuario.rol === 'admin', pref: await guardarPref(db, usuario, (await ctx.cuerpo(req)) || {}), transparencia: TEXTO_TRANSPARENCIA });
+    return error('GET o POST', 405);
+  }
   if (req.method === 'GET' && (resto === '' || resto === '/')) {
-    if (!cfg.activo) return json({ activo: false, notas: [] });
-    await tocarPresencia(db, usuario.id);
-    return json({ activo: true, notas: await listarMias(db, usuario) });
+    if (!conPresencia) return json({ activo: false, notas: [] });
+    await latido();
+    return json({ activo: true, notasActivas: cfg.activo, notas: cfg.activo ? await listarMias(db, usuario) : [] });
   }
   if (req.method === 'GET' && resto === '/entrada') {
-    if (!cfg.activo) return json({ activo: false, notas: [], notificaciones: { noLeidas: 0, items: [] }, hay: false });
-    const v = await tocarPresencia(db, usuario.id);
-    const notas = await listarMias(db, usuario);
-    const nf = (await leerConfigNotif(db)).activo ? await listarNotif(db, usuario.id, { limite: 20, soloNoLeidas: true }) : { noLeidas: 0, items: [] };
-    return json({ activo: true, desde: v.anterior, entro: v.entro, notas, notificaciones: nf, hay: notas.length > 0 || nf.noLeidas > 0 });
+    if (!conPresencia) return json({ activo: false, notas: [], notificaciones: { noLeidas: 0, items: [] }, hay: false });
+    const v = await latido();
+    const notas = cfg.activo ? await listarMias(db, usuario) : [];
+    const nf = notifActiva ? await listarNotif(db, usuario.id, { limite: 20, soloNoLeidas: true }) : { noLeidas: 0, items: [] };
+    return json({ activo: true, notasActivas: cfg.activo, desde: v.anterior, entro: v.entro, notas, notificaciones: nf, hay: notas.length > 0 || nf.noLeidas > 0 });
   }
   if (req.method === 'GET' && resto === '/personas') return json({ personas: cfg.activo ? await personas(db, usuario) : [] });
   if (req.method === 'GET' && resto === '/enviadas') return json({ notas: cfg.activo ? await listarEnviadas(db, usuario) : [] });

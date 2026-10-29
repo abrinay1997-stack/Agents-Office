@@ -31,7 +31,7 @@ export const CONSERVA_TABLAS = ['users', 'sessions', 'conectores', 'conectores_e
   'notificaciones', // N0: lo leído y no leído de cada persona no es de la oficina: un restablecimiento no lo toca
   'notas_vectores']; // los vectores de significado son datos derivados que se reconocen por el hash del texto: no entran al respaldo (pesan mucho) y se podan solos al indexar
 export const CONSERVA_DOCS = ['config', 'notificaciones.config', 'notas.config', 'ajustes', 'config-local', 'config.contenido', 'estudio.config', 'estudio.uso', 'estudio.voces', 'triggers', 'telegram.estado', 'tareas.config', 'notices', 'meta.freno', 'bandeja.abierta', 'contenido.meta.cuentas', 'contenido.meta.freno', 'contenido.metricool.subidas', 'contenido.mejores-horas', 'contenido.redes', 'contenido.modo', 'arranque.estado', DOC_RESPALDOS, DOC_PASO];
-export const CONSERVA_PREFIJOS_DOCS = ['fs:', 'anuncios.', 'meta.', 'bandeja.', 'restablecer.', 'telegram.', 'config.'];
+export const CONSERVA_PREFIJOS_DOCS = ['fs:', 'anuncios.', 'meta.', 'bandeja.', 'restablecer.', 'telegram.', 'config.', 'presencia.'];
 export const CONSERVA_FILAS = ['avisos', 'contenido-dias', 'contenido-pubs']; // estas dos son el paso de la foto de Meta (Analíticas): se conservan
 
 const dest = (ambitos) => {

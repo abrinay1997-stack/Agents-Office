@@ -7,7 +7,7 @@
   const { api, esc } = N;
   const COLORES = [['amarillo', 'Amarillo'], ['rosa', 'Rosa'], ['verde', 'Verde'], ['azul', 'Azul'], ['lila', 'Lila'], ['naranja', 'Naranja']];
   const TOPE = 500, CADA_MS = 60_000, SI_APAGADO_MS = 300_000;
-  let campana = null, hoja = null, datos = null, activo = false, timer = 0, personas = null, abierta = false, mensaje = '';
+  let campana = null, hoja = null, datos = null, activo = false, pref = null, transparencia = '', esAdmin = false, aviso = [], avisoT = 0, timer = 0, personas = null, abierta = false, mensaje = '';
 
   const cuenta = () => (datos ? (datos.notas?.length || 0) + (datos.notificaciones?.noLeidas || 0) : 0);
   const hace = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
@@ -39,6 +39,7 @@
 
   function formulario() {
     const rol = N.yo()?.rol;
+    if (datos && datos.notasActivas === false) return '<p class="nt-vacio">Las notas entre personas todavía no están encendidas.</p>';
     const opts = (personas || []).map((p) => `<option value="persona:${esc(p.id)}">${esc(p.nombre)}</option>`).join('')
       + (rol !== 'lectura' ? '<option value="todos">Todas las personas</option><option value="rol:editor">Los editores</option><option value="rol:admin">Los administradores</option>' : '');
     if (!personas) return '<p class="nt-vacio">Cargando a quién puedes escribirle…</p>';
@@ -49,6 +50,14 @@
       <div class="nt-enviar"><button type="submit" class="sg-btn pri">Dejar la nota</button><span class="nb-msg" role="status">${esc(mensaje)}</span></div></form>`;
   }
 
+  function prefsHTML() {
+    if (!pref) return '<p class="nt-vacio">Cargando…</p>';
+    return `<div class="nt-pref">${esAdmin ? `<label><input type="checkbox" data-p="avisarme"${pref.avisarme ? ' checked' : ''}> Avisarme en la oficina cuando alguien se conecta</label>` : ''}
+      <label><input type="checkbox" data-p="noAvisar"${pref.noAvisar ? ' checked' : ''}> No avisar que me conecto</label><p class="nt-transp">${esc(transparencia)}</p></div>`;
+  }
+  async function cargarPref() { try { const d = await api('/api/notas-personales/preferencias-conexion'); if (d.activo) { pref = d.pref; esAdmin = d.esAdmin; transparencia = d.transparencia; } } catch { /* sin preferencias: la hoja sigue */ } }
+  async function guardarPref(k, v) { try { const d = await api('/api/notas-personales/preferencias-conexion', { metodo: 'POST', cuerpo: { [k]: v } }); pref = d.pref; N.aviso('Guardado ✓'); } catch (e) { N.aviso(e.message); } if (abierta) pintarHoja(); }
+
   function pintarHoja() {
     if (!hoja) return;
     const notas = datos?.notas || [], av = datos?.notificaciones?.items?.filter((a) => !a.leida) || [];
@@ -57,7 +66,8 @@
       ${notas.length ? `<h3>Notas para ti</h3><ul class="nt-lista">${notas.map(tarjetaNota).join('')}</ul>` : ''}
       ${av.length ? `<h3>Avisos <button type="button" class="sg-btn" data-a="leidas">Marcar todo como leído</button></h3><ul class="nt-avisos">${av.map(filaAviso).join('')}</ul>` : ''}
       ${!notas.length && !av.length ? '<p class="nt-vacio"><b>Estás al día.</b> No hay notas ni avisos nuevos.</p>' : ''}
-      <h3>Dejar una nota</h3>${formulario()}`;
+      <h3>Dejar una nota</h3>${formulario()}
+      <h3>Tu conexión</h3>${prefsHTML()}`;
     const t = hoja.querySelector('#nt-texto'); if (t && guardado) { t.value = guardado; contar(); }
     const sel = hoja.querySelector('#nt-para'); if (sel && para) sel.value = para; // el destinatario elegido se conserva al repintar
     if (color) { const r = hoja.querySelector(`input[name=color][value="${color}"]`); if (r) r.checked = true; }
@@ -69,9 +79,9 @@
     abierta = true; mensaje = '';
     hoja = document.createElement('section'); hoja.id = 'nbNotas'; hoja.className = 'nt-hoja'; hoja.setAttribute('role', 'dialog'); hoja.setAttribute('aria-modal', 'false'); /* no modal: no bloquea la oficina */ hoja.setAttribute('aria-labelledby', 'nt-t'); hoja.tabIndex = -1;
     document.body.appendChild(hoja); pintarHoja(); pintarCampana(); hoja.focus();
-    hoja.addEventListener('click', alClic); hoja.addEventListener('input', (e) => { if (e.target.id === 'nt-texto') contar(); }); hoja.addEventListener('submit', alEnviar);
+    hoja.addEventListener('click', alClic); hoja.addEventListener('input', (e) => { if (e.target.id === 'nt-texto') contar(); }); hoja.addEventListener('submit', alEnviar); hoja.addEventListener('change', (e) => { const p = e.target.dataset?.p; if (p) guardarPref(p, e.target.checked); });
     document.addEventListener('keydown', alTecla);
-    await cargar();
+    await cargar(); if (!pref) { await cargarPref(); if (abierta) pintarHoja(); }
     if (!personas) { try { personas = (await api('/api/notas-personales/personas')).personas; } catch { personas = []; } if (abierta) pintarHoja(); }
   }
   function alTecla(e) { if (e.key === 'Escape' && abierta) { e.stopPropagation(); cerrar(); } }
@@ -97,6 +107,19 @@
     btn.disabled = false; btn.removeAttribute('aria-busy');
   }
 
+  /* «Ana se conectó» (N2b): un aviso pequeño abajo a la izquierda, sin sonido, que se va a los 6 s. Una vez por visita lo garantiza el servidor; aquí se juntan las ráfagas. */
+  function avisoConexion(id) {
+    const p = (N.presentes?.() || []).find((x) => x.userId === id);
+    if (!aviso.some((x) => x.id === id)) aviso.push({ id, nombre: p?.nombre || 'Alguien' });
+    let el = document.getElementById('nbConexion');
+    if (!el) { el = document.createElement('div'); el.id = 'nbConexion'; el.className = 'nt-conexion'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+    const n = aviso.length, texto = n === 1 ? `${aviso[0].nombre} se conectó` : `${aviso[0].nombre} y ${n - 1} más se conectaron`;
+    el.innerHTML = `<span>${esc(texto)}</span> ${datos?.notasActivas ? `<button type="button" class="sg-btn" data-a="escribir">Escribirle</button>` : ''}`;
+    el.querySelector('[data-a=escribir]')?.addEventListener('click', async () => { const id0 = aviso[0].id; quitarAviso(); if (!abierta) await abrir(); const s = hoja?.querySelector('#nt-para'); const o = s && [...s.options].find((x) => x.value === `persona:${id0}`); if (o) { s.value = o.value; hoja.querySelector('#nt-texto')?.focus(); } });
+    clearTimeout(avisoT); avisoT = setTimeout(quitarAviso, 6000);
+  }
+  function quitarAviso() { aviso = []; document.getElementById('nbConexion')?.remove(); }
+  window.addEventListener('ao:conexion', (e) => { if (activo && e.detail?.userId) avisoConexion(e.detail.userId); });
   window.addEventListener('ao:nota', () => cargar());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar(); });
   N.notas = { abrir, cerrar, recargar: cargar };
