@@ -64,7 +64,8 @@ try {
       const side = p.querySelector('.pz-side'), pv = p.querySelector('.pz-preview'), sr = side.getBoundingClientRect(), vr = pv.getBoundingClientRect();
       const over = [...p.querySelectorAll('.pz-scroll, .pz-side, .pz-head, .pz-foot')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.className);
       return { r: { l: r.left, t: r.top, w: r.width, h: r.height, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }, body: { cx: body.left + body.width / 2, cy: body.top + body.height / 2, w: body.width, h: body.height }, vw: innerWidth, vh: innerHeight,
-        sideShown: sr.width > 0, dbg: [pv.style.zoom, side.clientHeight, Math.round(vr.height), [...side.children].map(c => Math.round(c.getBoundingClientRect().height)).join('/')].join(' '), pvFit: sr.width > 0 ? vr.bottom <= sr.bottom + 1 && vr.top >= sr.top - 1 : null, sideScroll: side.scrollHeight - side.clientHeight, over, hscroll: document.documentElement.scrollWidth > innerWidth + 1,
+        sideShown: sr.width > 0, tabs: (() => { const t = pv.querySelector('.pv-tabs [role="tab"]'); if (!t) return null; const r = t.getBoundingClientRect(); return { h: r.height, fs: parseFloat(getComputedStyle(t).fontSize) }; })(), escala: parseFloat(pv.style.getPropertyValue('--pzs')) || 1,
+        dbg: [pv.style.getPropertyValue('--pzs'), side.clientHeight, Math.round(vr.height), [...side.children].map(c => Math.round(c.getBoundingClientRect().height)).join('/')].join(' '), pvFit: sr.width > 0 ? vr.bottom <= sr.bottom + 1 && vr.top >= sr.top - 1 : null, sideScroll: side.scrollHeight - side.clientHeight, over, hscroll: document.documentElement.scrollWidth > innerWidth + 1,
         role: p.getAttribute('role'), modal: p.getAttribute('aria-modal'), scrim: getComputedStyle(document.querySelector('.ct-scrim')).display, radius: getComputedStyle(p).borderRadius };
     });
     if (process.env.AO_DBG) console.log('GEO', JSON.stringify({ r: geo.r, body: geo.body, vw: geo.vw, radius: geo.radius }));
@@ -75,7 +76,8 @@ try {
       step(Math.abs(geo.r.cx - geo.body.cx) <= 2 && Math.abs(geo.r.cy - geo.body.cy) <= 2, `${tag}: centrada en la vista (Δx ${Math.round(geo.r.cx - geo.body.cx)}, Δy ${Math.round(geo.r.cy - geo.body.cy)})`);
       step(geo.r.w <= Math.min(1120, geo.vw) + 1 && geo.r.h <= geo.vh && geo.r.t >= 0 && geo.r.l >= 0, `${tag}: cabe en la ventana (${Math.round(geo.r.w)}×${Math.round(geo.r.h)})`);
       step(geo.scrim !== 'none', `${tag}: fondo atenuado`);
-      if (geo.r.w >= 780) step(geo.sideShown && geo.pvFit && geo.sideScroll <= 0, `${tag}: vista previa entera sin scroll (sobra ${geo.sideScroll}px; ${geo.dbg})`);
+      if (geo.r.w >= 780 && geo.tabs) step(geo.tabs.h >= 30 && geo.tabs.fs >= 11 && geo.escala >= 0.75, `${tag}: pestañas Feed/Perfil/Facebook a tamaño real (${Math.round(geo.tabs.h)} px de alto, ${geo.tabs.fs} px de letra, maqueta ×${geo.escala})`);
+      if (geo.r.w >= 780) step(geo.sideShown && (geo.escala <= 0.751 || (geo.pvFit && geo.sideScroll <= 0)), `${tag}: vista previa entera sin scroll, o con scroll solo si ya está al piso de 0,75 (sobra ${geo.sideScroll}px; ${geo.dbg})`);
     }
     step(!geo.hscroll && geo.over.length === 0, `${tag}: nada desborda a lo ancho ${geo.over.join(',')}`);
     if (axeSrc) { await page.addScriptTag({ content: axeSrc }); const ax = await page.evaluate(async () => (await axe.run('.ct-panel:not([hidden])', { resultTypes: ['violations'] })).violations.map(v => `${v.id}(${v.nodes.length})`)); step(ax.length === 0, `${tag}: axe sin fallos ${ax.join(' ')}`); }

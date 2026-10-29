@@ -14,6 +14,7 @@ import { modal } from './modal.js';
 import { views } from './views.js';
 import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
+import { relDia, fijarZona } from '../tareas/etiqueta-dia.mjs'; // CON-08: «Hoy»/«Mañana» en la zona de la oficina
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza-base.js';
 import { iconoRed } from './redes-iconos.js';
@@ -152,7 +153,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; if (r.ajustes?.zona) zona = r.ajustes.zona; loadedKey = key; errorMsg = ''; loadHora(); loadPubs(w); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; if (r.ajustes?.zona) { zona = r.ajustes.zona; fijarZona(zona.nombre); } loadedKey = key; errorMsg = ''; loadHora(); loadPubs(w); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
@@ -365,7 +366,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const accion = pide.map(a => [a.pieza, a.motivo]);
     const listasAprobar = pide.filter(a => a.puede).length;
     const futuras = todas.filter(p => p.fecha && p.fecha >= hoyK), dias = new Map(colaPorDia(todas));
-    const rel = k => k === hoyK ? 'Hoy' : k === ymd(new Date(hoy + DAY + 3600e3)) ? 'Mañana' : '';
+    const rel = k => k === hoyK ? 'Hoy' : relDia(k) === 'manana' ? 'Mañana' : '';
     const diaH = k => { const d = new Date(k + 'T00:00:00'); return `${rel(k) ? `<b>${rel(k)}</b> · ` : ''}${DOW_LONG[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}`; };
     const colaHTML = [...dias.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, l]) => l.length
       ? `<section class="ct-day" aria-label="${esc(diaH(k).replace(/<[^>]+>/g, ''))}"><h4>${diaH(k)} <small>${l.length} ${l.length === 1 ? 'pieza' : 'piezas'}</small></h4>${l.map(p => filaCola(p, { accion: true })).join('')}</section>`

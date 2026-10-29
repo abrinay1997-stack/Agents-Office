@@ -10,11 +10,14 @@
 // `view` es 'month' | 'week' | 'day' | 'agenda'; `ws` es el día en que empieza la semana (1 = lunes, 0 = domingo).
 // Cubierto por tests/calendar-core.test.mjs.
 
+import { diaEnZona, relDia } from '../tareas/etiqueta-dia.mjs';
 export const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; // la semana empieza el lunes (AU/NZ/UK)
 export const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 export const DOW_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 export const DOW_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 export const DAY = 864e5;
+/** `ts` + n días de CALENDARIO (la misma hora local): el día del cambio de horario no mide 24 h (CON-15). */
+export const addDays = (ts, n) => { const d = new Date(ts); d.setDate(d.getDate() + n); return d.getTime(); };
 export const AGENDA_DAYS = 14;
 
 export const pad = n => String(n).padStart(2, '0');
@@ -33,12 +36,12 @@ export const isoWeek = ts => { const d = new Date(startOfDay(ts)); d.setDate(d.g
 
 /** Los días que hay en pantalla: [from, to) y cuántos son. El mes se completa hasta semanas enteras. */
 export function rangeOf(view, anchor, ws = 1) {
-  if (view === 'agenda') { const a = startOfDay(anchor); return { from: a, to: a + AGENDA_DAYS * DAY, days: AGENDA_DAYS }; }
-  if (view === 'day') { const a = startOfDay(anchor); return { from: a, to: a + DAY, days: 1 }; }
-  if (view === 'week') { const a = weekStart(anchor, ws); return { from: a, to: a + 7 * DAY, days: 7 }; }
+  if (view === 'agenda') { const a = startOfDay(anchor); return { from: a, to: addDays(a, AGENDA_DAYS), days: AGENDA_DAYS }; }
+  if (view === 'day') { const a = startOfDay(anchor); return { from: a, to: addDays(a, 1), days: 1 }; }
+  if (view === 'week') { const a = weekStart(anchor, ws); return { from: a, to: addDays(a, 7), days: 7 }; }
   const d = new Date(anchor); d.setDate(1); const first = weekStart(d.getTime(), ws);
   const rows = Math.ceil((new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ((d.getDay() - ws + 7) % 7)) / 7);
-  return { from: first, to: first + rows * 7 * DAY, days: rows * 7 };
+  return { from: first, to: addDays(first, rows * 7), days: rows * 7 };
 }
 
 /** A dónde va el ancla al pulsar ‹ o ›: una agenda salta 14 días, un día 1, una semana 7, un mes al mes vecino. */
@@ -54,10 +57,10 @@ export function stepAnchor(view, anchor, n) {
 /** El título de la banda: «Septiembre 2026», «28 sep – 4 octubre 2026 · semana 40», «30 septiembre 2026»… (con <small>). */
 export function titleHTML(view, anchor, { from, to, days }) {
   const a = new Date(anchor);
-  if (view === 'agenda') { const e = new Date(from + (days - 1) * DAY); return `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3).toLowerCase()} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3).toLowerCase()} <small>${e.getFullYear()}</small>`; }
+  if (view === 'agenda') { const e = new Date(addDays(from, days - 1)); return `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3).toLowerCase()} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3).toLowerCase()} <small>${e.getFullYear()}</small>`; }
   if (view === 'day') return `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>`;
   if (view === 'month') return `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>`;
-  const s = new Date(from), e = new Date(to - DAY);
+  const s = new Date(from), e = new Date(addDays(to, -1));
   // una semana dentro de un mes: «14–20 Septiembre»; una que cruza de mes: «28 Sep – 4 Octubre» (antes salía «28–4 Sep – 4 Octubre»)
   return `${s.getMonth() === e.getMonth() ? `${s.getDate()}–${e.getDate()} ${MONTHS[e.getMonth()]}` : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()]}`} <small>${e.getFullYear()} · semana ${isoWeek(from + 3 * DAY)}</small>`;
 }
@@ -77,7 +80,7 @@ const defaultAdd = d => `Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth
 export function monthHTML({ from, days, anchor, by, card, live = () => false, addLabel = defaultAdd, now = Date.now() }) {
   const today = ymd(new Date(now)), a = new Date(anchor); let html = '';
   for (let i = 0; i < days; i++) {
-    const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !live(ev));
+    const ts = addDays(from, i), d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !live(ev));
     const out = d.getMonth() !== a.getMonth(), past = ts < startOfDay(now);
     html += `<div class="cv-day${k === today ? ' today' : ''}${out ? ' out' : ''}${past ? ' past' : ''}${d.getDay() === 0 || d.getDay() === 6 ? ' wknd' : ''}" data-day="${k}">
         <div class="cv-num">${d.getDate() === 1 ? `<span>${MONTHS[d.getMonth()].slice(0, 3)}</span>` : ''}<b>${pad(d.getDate())}</b></div>
@@ -94,7 +97,7 @@ export function monthHTML({ from, days, anchor, by, card, live = () => false, ad
 // `slot(día, hora)` (plan M3, opcional) devuelve una clase más para esa hora: Contenido sombrea las mejores horas. Sin él, el HTML no cambia.
 export function timeGridHTML({ from, days, by, card, live = () => false, now = Date.now(), liveLabel = 'EN MARCHA', slot = null }) {
   const nowD = new Date(now), today = ymd(nowD);
-  const cols = []; for (let i = 0; i < days; i++) { const ts = from + i * DAY, d = new Date(ts); cols.push({ ts, d, k: ymd(d), list: by[ymd(d)] || [] }); }
+  const cols = []; for (let i = 0; i < days; i++) { const ts = addDays(from, i), d = new Date(ts); cols.push({ ts, d, k: ymd(d), list: by[ymd(d)] || [] }); }
   let html = '<div class="cv-tg-c"></div>' + cols.map(({ d, k }) => `<div class="cv-tg-d${k === today ? ' today' : ''}" data-day="${k}"><span>${days === 1 ? DOW_LONG[d.getDay()] : DOW[(d.getDay() + 6) % 7]}</span><b>${d.getDate()}</b>${days === 1 ? `<span>de ${MONTHS[d.getMonth()].toLowerCase()}</span>` : ''}</div>`).join('');
   if (cols.some(c => c.list.some(live)))
     html += `<div class="cv-tg-h lv">${liveLabel}</div>` + cols.map(c => `<div class="cv-tg-lv">${c.list.filter(live).map(ev => card(ev)).join('')}</div>`).join('');
@@ -113,11 +116,11 @@ export function timeGridHTML({ from, days, by, card, live = () => false, now = D
 
 /** V4.2 (auditoría B5): en el teléfono, una lista por día — lo que hay, en orden, legible; hoy siempre sale. */
 export function agendaHTML({ from, days, by, card, live = () => false, addLabel = defaultAdd, now = Date.now(), emptyDay = 'Nada para hoy.', emptyAll = 'Nada en estos días.' }) {
-  const today = ymd(new Date(now)); let html = '', any = false;
+  const today = diaEnZona(now); let html = '', any = false;
   for (let i = 0; i < days; i++) {
-    const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !live(ev));
+    const ts = addDays(from, i), d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !live(ev));
     if (!list.length && k !== today) continue; any = true;
-    const rel = k === today ? 'hoy' : ymd(new Date(now + DAY)) === k ? 'mañana' : '';
+    const rel = k === today ? 'hoy' : relDia(k, now) === 'manana' ? 'mañana' : ''; // CON-08/CON-15: «mañana» por calendario, no sumando 24 h
     html += `<section class="cv-day cv-ag-day${k === today ? ' today' : ''}${ts < startOfDay(now) ? ' past' : ''}" data-day="${k}">
         <div class="cv-ag-h"><b>${d.getDate()}</b><span>${DOW_LONG[d.getDay()]}${rel ? ` · ${rel}` : ''}</span><span class="sp"></span><button class="cv-add" type="button" aria-label="${addLabel(d)}">+</button></div>
         <div class="cv-evs">${list.length ? list.map(ev => card(ev)).join('') : `<div class="cv-empty">${emptyDay}</div>`}</div></section>`;

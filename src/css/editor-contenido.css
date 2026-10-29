@@ -182,7 +182,7 @@ body.dark :is(.pz-ctt small, .pz-cto small, .pz-ctc) { color: #C2C0B9; }
 .pz-ctnone { margin: 0 0 12px; }
 
 /* ---------- la ventana centrada (25 oct 2026): la vista previa se escala sola (src/ventana-ajuste.js) para verse ENTERA ---------- */
-@container pzpanel (min-width: 780px) { .pz-side { display: flex; flex-direction: column; } .pz-side > * { flex: none; } .pz-side .pz-preview { transform-origin: top center; } }
+@container pzpanel (min-width: 780px) { .pz-side { display: flex; flex-direction: column; } .pz-side > * { flex: none; } .pz-side .pz-preview { display: flow-root; } .pz-side .pz-preview .pv-stage { transform: scale(var(--pzs, 1)); transform-origin: top center; margin-bottom: calc(var(--pzm, 0) * 1px); } }
 /* el pie de la ventana, a una sola fila de acciones: cuándo sale · enlaces · Aprobar (más sitio para el cuerpo y la vista previa) */
 @container pzpanel (min-width: 780px) {
   .pz-foot { display: grid; grid-template-columns: auto 1fr auto; grid-auto-flow: row dense; align-items: center; column-gap: 14px; row-gap: 6px; padding: 10px 24px 12px; }
