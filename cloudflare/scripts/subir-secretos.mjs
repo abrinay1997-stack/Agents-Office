@@ -19,6 +19,9 @@ export function elegir(todos, config) {
   return { salida, faltan };
 }
 
+/** El entorno para wrangler: el de este proceso sin SECRETS_JSON (el token y el id de la cuenta de Cloudflare sí se quedan: los necesita). */
+export const entornoSinSecretos = (env = process.env) => { const { SECRETS_JSON, ...resto } = env; return resto; };
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config = JSON.parse(readFileSync(join(AQUI, '..', 'secretos.json'), 'utf8'));
   const { salida, faltan } = elegir(JSON.parse(process.env.SECRETS_JSON || '{}'), config);
@@ -27,7 +30,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const archivo = join(dir, 'secretos.json');
   try {
     writeFileSync(archivo, JSON.stringify(salida), { mode: 0o600 });
-    execFileSync('npx', ['wrangler', 'secret', 'bulk', archivo], { stdio: 'inherit', cwd: join(AQUI, '..') });
+    execFileSync('npx', ['wrangler', 'secret', 'bulk', archivo], { stdio: 'inherit', cwd: join(AQUI, '..'), env: entornoSinSecretos() }); // SEG-07: wrangler (y todo lo que arranque) no hereda el volcado de TODOS los secretos del repositorio
     console.log(`Secretos subidos (${Object.keys(salida).length}): ${Object.keys(salida).sort().join(', ')}`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }

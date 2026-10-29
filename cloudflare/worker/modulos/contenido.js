@@ -99,13 +99,25 @@ export async function manejar(ctx) {
     }
     // ---- todo lo demás: el controlador de la oficina local ----
     const r = await svc.controlador.responder({ metodo, p: ruta, query: url.searchParams, cuerpo: async () => cuerpo });
-    // B4: Instagram solo acepta JPEG y aquí convertir un PNG/WebP necesita el binding IMAGES: si falta, se dice AL APROBAR y no a la hora de salir.
-    if (/\/aprobar$/.test(ruta) && r.status === 200 && r.datos?.pieza && config.modo === 'real' && !env['IMAGES']) {
-      const pz = r.datos.pieza;
-      if ((pz.redes || []).includes('instagram') && (pz.medios || []).some(m => /\.(png|webp)$/i.test(String(m)))) r.datos.avisos = [...(r.datos.avisos || []), 'Esta pieza lleva una imagen PNG o WebP y va a Instagram, que solo acepta JPEG: esta nube todavía no puede convertirla (falta el binding IMAGES de Cloudflare) y a su hora fallaría. Sube la imagen en JPEG o pídele al administrador que active IMAGES.'];
+    // B4 / CON-01: Instagram solo acepta JPEG. Se dice AL APROBAR (no a la hora de salir) si alguna imagen no es JPEG y esta nube no puede convertirla.
+    if (/\/aprobar$/.test(ruta) && r.status === 200 && r.datos?.pieza && config.modo === 'real') {
+      const aviso = avisoDeFormato(r.datos.pieza, !!env['IMAGES']);
+      if (aviso) r.datos.avisos = [...(r.datos.avisos || []), aviso];
     }
     return json(r.datos, r.status);
   }, { waitUntil: ctx.waitUntil });
+}
+
+/** CON-01: el aviso de aprobar una pieza para Instagram con una imagen que no es JPEG. Con el binding IMAGES se convierten PNG y WebP; lo demás (GIF, HEIC, AVIF…) aún no (CON-02). null si no hay nada que decir. */
+export function avisoDeFormato(pz, hayBinding) {
+  if (!(pz?.redes || []).includes('instagram')) return null;
+  const imagenes = (pz.medios || []).map(m => String(m)).filter(m => !/\.(jpe?g|mp4|mov|m4v)$/i.test(m)); // todo lo que no es JPEG ni video
+  if (!imagenes.length) return null;
+  if (hayBinding) {
+    const rara = imagenes.filter(m => !/\.(png|webp)$/i.test(m));
+    return rara.length ? 'Esta pieza lleva una imagen que no es JPEG, PNG ni WebP y va a Instagram, que solo acepta JPEG: esta nube todavía no sabe convertir ese formato y a su hora fallaría. Súbela en JPEG.' : null;
+  }
+  return 'Esta pieza lleva una imagen que no es JPEG y va a Instagram, que solo acepta JPEG: esta nube todavía no puede convertirla (falta el binding IMAGES de Cloudflare) y a su hora fallaría. Sube la imagen en JPEG o pídele al administrador que active IMAGES.';
 }
 
 /** La foto de las cuentas que faltan (o de todas) mientras queden llamadas; con el candado «analiticas» (una a la vez). Después, los indicadores del dueño y aprender. */
