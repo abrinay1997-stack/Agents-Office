@@ -25,9 +25,9 @@ async function mundo() {
   const ana = d1._db.prepare('select id from users where email = ?').get(c.email).id; d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(ana, 'Ana');
   return { d1, env, ana, beto: nueva('beto@panaclaw.test', 'editor', 'Beto'), carla: nueva('carla@panaclaw.test', 'lectura', 'Carla'), dani: nueva('dani@panaclaw.test', 'editor', 'Dani') };
 }
-async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0 } = {}) {
+async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0, falla = false, reducido = false } = {}) {
   if (activo) await guardarConfig(o.d1, { activo: true });
-  const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 } }), p = await ctx.newPage(), errores = [];
+  const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 }, ...(reducido ? { reducedMotion: 'reduce' } : {}) }), p = await ctx.newPage(), errores = [];
   const peticiones = []; p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (r) => {
     const req = r.request(), u = new URL(req.url());
@@ -36,6 +36,7 @@ async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0 } 
     if (u.pathname === '/nube-chat.js') return r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: leer('nube-chat.js') });
     if (lento && req.method() === 'POST' && /\/mensajes$/.test(u.pathname)) await new Promise((r) => setTimeout(r, lento));
     peticiones.push(req.method() + ' ' + u.pathname);
+    if (falla && req.method() === 'POST' && /\/mensajes$/.test(u.pathname)) return r.fulfill({ status: 500, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ error: 'sin red de mentira' }) });
     const resp = await manejar(new Request(u.href, { method: req.method(), headers: { 'content-type': 'application/json', cookie }, body: req.postData() || undefined }), o.env);
     return r.fulfill({ status: resp.status, headers: { 'content-type': 'application/json' }, body: await resp.text() });
   });
@@ -171,4 +172,72 @@ test('editar y borrar son en el propio mensaje (sin ventanas del navegador); y �
   await p.click('.ch-m.mio [data-a=editar]'); await p.fill('#ch-ed', 'mío editado'); await p.click('.ch-edit [type=submit]'); await p.waitForFunction(() => /mío editado/.test(document.querySelector('.ch-m.mio').textContent));
   await p.click('.ch-m.mio [data-a=borrar]'); await p.click('[data-a=borrar-si]'); await p.waitForFunction(() => !document.querySelector('.ch-m.mio'));
   assert.equal(dialogos, 0, 'ni prompt ni confirm'); await ctx.close();
+});
+
+const sembrarViejos = (o, n, quien) => { const ahora = Date.now(); for (let i = 1; i <= n; i++) o.d1._db.prepare("insert into chat_mensajes (canal_id, user_id, cuerpo, creado_at) values ('general', ?, ?, ?)").run(quien, 'mensaje número ' + i, ahora - (n + 10 - i) * 1000); };
+
+test('scroll: quien lee más arriba se queda donde estaba al llegar algo nuevo; «cargar anteriores» no se repite ni salta', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true }); sembrarViejos(o, 70, o.dani);
+  const { p, ctx } = await pagina(o, o.beto, 'editor'); await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('.ch-m');
+  await p.evaluate(() => { const h = document.getElementById('ch-hilo'); h.scrollTop = 120; });
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'llegó algo' }); await visible(p);
+  await p.waitForFunction(() => /llegó algo/.test(document.getElementById('ch-hilo').textContent));
+  const top = await p.evaluate(() => document.getElementById('ch-hilo').scrollTop); assert.ok(top > 60 && top < 200, `se queda arriba (${top})`);
+  // cargar anteriores: doble clic rápido, sin duplicados y anclado
+  await p.evaluate(() => { document.getElementById('ch-hilo').scrollTop = 0; });
+  const antes = await p.evaluate(() => document.querySelector('.ch-m').textContent);
+  await p.evaluate(() => { const b = document.querySelector('[data-a=viejos]'); b.click(); b.click(); });
+  await p.waitForFunction(() => document.querySelectorAll('.ch-m').length > 50);
+  const ids = await p.evaluate(() => [...document.querySelectorAll('.ch-m[data-m]')].map((x) => x.dataset.m)); assert.equal(new Set(ids).size, ids.length, 'sin mensajes repetidos');
+  assert.ok((await p.evaluate(() => document.getElementById('ch-hilo').scrollTop)) > 0, 'anclado al mismo mensaje, no al principio'); void antes;
+  await ctx.close();
+});
+
+test('si el envío falla, lo que se escribió mientras viajaba no se pisa', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const { p, ctx } = await pagina(o, o.beto, 'editor', { falla: true, lento: 0 }); await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('#ch-texto');
+  await p.fill('#ch-texto', 'primero'); await p.evaluate(() => { const f = document.querySelector('.ch-form'); f.requestSubmit(); const t = document.getElementById('ch-texto'); t.value = 'segundo mientras tanto'; t.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.waitForFunction(() => /primero/.test(document.getElementById('ch-texto').value));
+  assert.equal(await p.inputValue('#ch-texto'), 'primero\nsegundo mientras tanto'); await ctx.close();
+});
+
+test('durante una composición (IME) no se repinta la caja; al terminar, sí; y lo escrito al editar sobrevive a un repintado', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  await llamar(o, o.beto, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'mío para editar' });
+  const { p, ctx } = await pagina(o, o.beto, 'editor'); await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('#ch-texto');
+  await p.evaluate(() => { window.__caja = document.getElementById('ch-texto'); window.__caja.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); });
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'nuevo durante IME' }); await visible(p); await p.waitForTimeout(400);
+  assert.equal(await p.evaluate(() => window.__caja === document.getElementById('ch-texto')), true, 'la caja sigue siendo la misma durante la composición');
+  await p.evaluate(() => window.__caja.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })));
+  await p.waitForFunction(() => /nuevo durante IME/.test(document.getElementById('ch-hilo').textContent));
+  await p.click('.ch-m.mio [data-a=editar]'); await p.fill('#ch-ed', 'editado a medias'); await p.focus('#ch-texto');
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'otro más' }); await visible(p);
+  await p.waitForFunction(() => /otro más/.test(document.getElementById('ch-hilo').textContent));
+  assert.equal(await p.inputValue('#ch-ed'), 'editado a medias'); await ctx.close();
+});
+
+test('C2 en vivo: el aviso (solo ids) refresca el hilo y la lista al instante; «escribiendo» sale y se va; el contador late salvo con «reducir movimiento»', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'ya estoy aquí' });
+  const { p, ctx, peticiones } = await pagina(o, o.beto, 'editor');
+  await p.waitForSelector('#nbChatBtn .ch-n'); assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector('.ch-n')).animationName), 'ch-late', 'el contador late');
+  await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('.ch-m');
+  const n0 = peticiones.filter((x) => /^GET .*\/mensajes$/.test(x)).length;
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'esto llegó por el socket' });
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { tipo: 'chat', evento: 'mensaje', canal: 'general', id: 99, de: dani } })), o.dani);
+  await p.waitForFunction(() => /llegó por el socket/.test(document.getElementById('ch-hilo').textContent), null, { timeout: 3000 });
+  assert.ok(peticiones.filter((x) => /^GET .*\/mensajes$/.test(x)).length > n0);
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { tipo: 'chat', evento: 'escribiendo', canal: 'general', de: dani } })), o.dani);
+  await p.waitForFunction(() => /Dani está escribiendo/.test(document.getElementById('ch-escribe').textContent));
+  assert.equal(await p.getAttribute('#ch-escribe', 'aria-hidden'), 'true');
+  await p.waitForFunction(() => document.getElementById('ch-escribe').textContent === '', null, { timeout: 9000 });
+  await p.evaluate((dani) => window.dispatchEvent(new CustomEvent('ao:chat', { detail: { evento: 'escribiendo', canal: 'otro', de: dani } })), o.dani); assert.equal(await p.textContent('#ch-escribe'), '', 'otro canal: nada');
+  await ctx.close();
+  const q = await pagina(o, o.carla, 'lectura', { reducido: true }); await q.p.waitForSelector('#nbChatBtn .ch-n');
+  assert.equal(await q.p.evaluate(() => getComputedStyle(document.querySelector('.ch-n')).animationName), 'none', 'con «reducir movimiento» no late'); assert.ok((await q.p.textContent('.ch-n')).trim().length > 0, 'pero el número está');
+  await q.ctx.close();
 });

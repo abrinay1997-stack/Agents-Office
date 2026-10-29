@@ -5,9 +5,10 @@
   'use strict';
   const N = window.AO_NUBE; if (!N || N.chat) return;
   const { api, esc } = N;
-  const RESUMEN_MS = 60_000, HILO_MS = 10_000, APAGADO_MS = 300_000;
-  let activo = false, abierto = false, vista = 'lista', res = { canales: [], total: 0 }, canal = null, msgs = [], viejos = [], hayMas = false, hayMasViejos = false, hiloListo = false, enviando = false, componiendo = false, repintarLuego = false, editando = null, borrando = null, firma = '', personas = null, publicos = null, nuevoTab = 'directo', msg = '';
-  let boton = null, panel = null, tRes = 0, tHilo = 0, ultimoVisto = 0, vivo = null, alerta = null;
+  const RESUMEN_MS = 60_000, HILO_MS = 10_000, APAGADO_MS = 300_000, RESUMEN_VIVO_MS = 180_000, HILO_VIVO_MS = 30_000, ESCRIBE_CADA_MS = 3000, ESCRIBE_DURA_MS = 6000; // con el socket vivo el sondeo solo es la red de seguridad
+  let activo = false, abierto = false, vista = 'lista', res = { canales: [], total: 0 }, canal = null, msgs = [], viejos = [], hayMas = false, hayMasViejos = false, hiloListo = false, cargandoViejos = false, edTexto = null, enviando = false, componiendo = false, repintarLuego = false, editando = null, borrando = null, firma = '', personas = null, publicos = null, nuevoTab = 'directo', msg = '';
+  let boton = null, panel = null, tRes = 0, tHilo = 0, tEscribe = 0, ultimoVisto = 0, vivo = null, alerta = null, ultimoEscribi = 0, escribe = null;
+  const enVivo = () => { try { return N.conexion?.() === 'conectado'; } catch { return false; } };
   const borradores = {};
   const todos = () => [...viejos, ...msgs.filter((m) => !viejos.some((v) => v.id === m.id))];
   const firmaDe = (l) => l.map((m) => `${m.id}|${m.editado ? 1 : 0}|${m.borrado ? 1 : 0}`).join(',');
@@ -41,7 +42,7 @@
     clearTimeout(tRes);
     if (!document.hidden) { try { const d = await api('/api/chat/resumen'); activo = d.activo === true; res = { canales: d.canales || [], total: d.total || 0 }; } catch { /* sin red: se reintenta */ } }
     pintarBoton(); if (abierto && vista === 'lista') pintar();
-    tRes = setTimeout(cargarResumen, activo ? RESUMEN_MS : APAGADO_MS);
+    tRes = setTimeout(cargarResumen, activo ? (enVivo() ? RESUMEN_VIVO_MS : RESUMEN_MS) : APAGADO_MS);
   }
 
   async function cargarHilo(id, { marcar = true } = {}) {
@@ -59,10 +60,15 @@
     } catch (e) { fallar(e.message); pintar(); }
   }
   async function cargarViejos() {
-    const primero = todos()[0]; if (!primero || !canal) return;
-    try { const d = await api(`/api/chat/canales/${canal.id}/mensajes?limite=50&antes=${primero.id}`); viejos = [...d.mensajes, ...viejos]; hayMasViejos = d.hayMas; firma = firmaDe(todos()); pintar(); } catch (e) { fallar(e.message); pintar(); }
+    const primero = todos()[0]; if (!primero || !canal || cargandoViejos) return;
+    cargandoViejos = true; const id = canal.id;
+    try {
+      const d = await api(`/api/chat/canales/${id}/mensajes?limite=50&antes=${primero.id}`);
+      if (!canal || canal.id !== id) return;
+      const ya = new Set(todos().map((m) => m.id)); viejos = [...d.mensajes.filter((m) => !ya.has(m.id)), ...viejos]; hayMasViejos = d.hayMas; firma = firmaDe(todos()); pintar({ anclar: true });
+    } catch (e) { fallar(e.message); pintar(); } finally { cargandoViejos = false; }
   }
-  function sondearHilo() { clearTimeout(tHilo); if (!abierto || vista !== 'hilo' || !canal) return; tHilo = setTimeout(async () => { if (!document.hidden) await cargarHilo(canal.id); sondearHilo(); }, HILO_MS); }
+  function sondearHilo() { clearTimeout(tHilo); if (!abierto || vista !== 'hilo' || !canal) return; tHilo = setTimeout(async () => { if (!document.hidden) await cargarHilo(canal.id); sondearHilo(); }, enVivo() ? HILO_VIVO_MS : HILO_MS); }
 
   async function abrirCanal(c) {
     canal = c; msgs = []; viejos = []; hayMas = false; hayMasViejos = false; firma = ''; hiloListo = false; editando = null; borrando = null; ultimoVisto = 0; vista = 'hilo'; msg = ''; pintar();
@@ -93,12 +99,21 @@
     return `${sep}<div class="ch-m${m.mio ? ' mio' : ''}${junto ? ' junto' : ''}" data-m="${m.id}">${junto ? '' : `<div class="ch-quien"><b>${esc(m.de)}</b> <small>${esc(hora(m.at))}${m.editado ? ' · editado' : ''}</small></div>`}<div class="ch-txt">${cuerpoHTML(m.cuerpo)}</div>${acc}</div>`;
   }
 
+  /** «Dani está escribiendo…» (6 s): el nombre sale de lo que la página ya sabe (presencia o autores del hilo); nunca del evento, que solo trae un id. */
+  function nombreDe(uid) { const p = (N.presentes?.() || []).find((x) => x.userId === uid); return p?.nombre || todos().find((m) => m.deId === uid)?.de || 'Alguien'; }
+  const escribePlano = () => (escribe && escribe.canal === canal?.id && escribe.hasta > Date.now() ? `${nombreDe(escribe.de)} está escribiendo…` : '');
+  const escribeTxt = () => esc(escribePlano());
+  function marcaEscribe(d) {
+    escribe = { canal: d.canal, de: d.de, hasta: Date.now() + ESCRIBE_DURA_MS };
+    const el = panel?.querySelector('#ch-escribe'); if (el) el.textContent = escribePlano(); // sin repintar el hilo
+    clearTimeout(tEscribe); tEscribe = setTimeout(() => { const e2 = panel?.querySelector('#ch-escribe'); if (e2) e2.textContent = ''; }, ESCRIBE_DURA_MS + 50);
+  }
   function hiloHTML() {
     const c = canal;
     return `<div class="ch-cab"><span class="ch-tit">${movil() ? '<button type="button" class="sg-btn" data-a="atras" aria-label="Volver a la lista">←</button>' : ''}<h2 id="ch-t" tabindex="-1">${esc(tipoNombre(c))}</h2></span><span>${c.tipo !== 'directo' ? `<button type="button" class="sg-btn" data-a="silenciar" aria-pressed="${c.silenciado ? 'true' : 'false'}">${c.silenciado ? 'Silenciado' : 'Silenciar'}</button> ` : ''}<button type="button" class="sg-btn" data-a="x" aria-label="Cerrar el chat">✕</button></span></div>
       <div class="ch-hilo" id="ch-hilo" tabindex="0" aria-label="Mensajes de ${esc(tipoNombre(c))}">${hayMasViejos ? '<p class="ch-vacio"><button type="button" class="sg-btn" data-a="viejos">Cargar mensajes anteriores</button></p>' : ''}${todos().map(mensajeHTML).join('') || '<p class="ch-vacio">Aquí empieza la conversación.</p>'}</div>
       ${soloLee() ? '<p class="ch-vacio ch-solo">Con acceso de lectura puedes leer este canal, no escribir.</p>' : `<form class="ch-form"><label for="ch-texto" class="ch-oculto">Escribir en ${esc(tipoNombre(c))}</label><textarea id="ch-texto" rows="2" maxlength="4200" placeholder="Escribe un mensaje…"></textarea><button type="submit" class="sg-btn pri">Enviar</button></form>`}
-      <p class="nb-msg" aria-hidden="true">${esc(msg)}</p>`;
+      <p class="ch-escribe" id="ch-escribe" aria-hidden="true">${escribeTxt()}</p><p class="nb-msg" aria-hidden="true">${esc(msg)}</p>`;
   }
 
   function nuevoHTML() {
@@ -111,38 +126,39 @@
   }
 
   /** Dos paneles a lo ancho; en el teléfono, uno solo (lista o hilo). El borrador de lo que se escribe y el desplazamiento sobreviven al repintado. */
-  function pintar({ abajo = false } = {}) {
+  function pintar({ abajo = false, anclar = false } = {}) {
     if (!panel) return;
     if (componiendo) { repintarLuego = true; return; } // no se toca la caja mientras se compone (IME)
     const ta = panel.querySelector('#ch-texto'); if (ta && canal) borradores[canal.id] = ta.value;
     const act = document.activeElement, dentro = act && panel.contains(act), foco = dentro ? { id: act.id || null, a: act.dataset?.a || null, did: act.dataset?.id || null, ini: act.selectionStart, fin: act.selectionEnd, texto: act.id === 'ch-ed' ? act.value : null } : null;
-    const h0 = panel.querySelector('#ch-hilo'), pegado = !h0 || h0.scrollHeight - h0.scrollTop - h0.clientHeight < 60;
+    const h0 = panel.querySelector('#ch-hilo'), pegado = !h0 || h0.scrollHeight - h0.scrollTop - h0.clientHeight < 60, topAntes = h0?.scrollTop ?? 0, altoAntes = h0?.scrollHeight ?? 0;
     const izq = listaHTML(), der = vista === 'hilo' && canal ? hiloHTML() : vista === 'nuevo' ? nuevoHTML() : '<div class="ch-cab"><h2 id="ch-t" tabindex="-1">&nbsp;</h2></div><p class="ch-vacio ch-elige">Elige una conversación.</p>';
     panel.className = `ch-panel ver-${vista === 'lista' ? 'lista' : 'otro'}`;
     panel.innerHTML = `<section class="ch-izq" aria-label="Conversaciones">${vista === 'lista' || !movil() ? izq : ''}</section><section class="ch-der" aria-label="Conversación">${vista === 'lista' && movil() ? '' : der}</section>`;
     const t2 = panel.querySelector('#ch-texto'); if (t2 && canal) t2.value = borradores[canal.id] || '';
-    const ed = panel.querySelector('#ch-ed'); if (ed && foco?.texto != null) ed.value = foco.texto;
+    const ed = panel.querySelector('#ch-ed'); if (ed) { if (edTexto != null) ed.value = edTexto; else if (foco?.texto != null) ed.value = foco.texto; }
     if (foco) { // el foco vuelve a lo que lo tenía: por id (cajas) o por acción y dato (botones)
       const el = (foco.id && panel.querySelector('#' + foco.id)) || (foco.a && panel.querySelector(`[data-a="${foco.a}"]${foco.did ? `[data-id="${foco.did}"]` : ''}`)) || panel.querySelector('#ch-texto');
       if (el) { el.focus(); if (foco.ini != null && el.setSelectionRange) try { el.setSelectionRange(foco.ini, foco.fin); } catch { /* tipos sin selección */ } }
     }
-    const h = panel.querySelector('#ch-hilo'); if (h && (abajo && pegado)) h.scrollTop = h.scrollHeight;
+    const h = panel.querySelector('#ch-hilo');
+    if (h) { if (abajo && pegado) h.scrollTop = h.scrollHeight; else h.scrollTop = anclar ? topAntes + (h.scrollHeight - altoAntes) : topAntes; } // quien lee más arriba se queda donde estaba; al cargar anteriores, anclado al mismo mensaje
   }
 
   async function abrir() {
     if (abierto && panel) { panel.focus(); return; }
-    abierto = true; vista = 'lista'; canal = null; msg = '';
+    abierto = true; vista = 'lista'; canal = null; msg = ''; componiendo = false; repintarLuego = false; edTexto = null;
     panel = document.createElement('div'); panel.id = 'nbChat'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'false'); panel.setAttribute('aria-labelledby', 'ch-t'); panel.tabIndex = -1;
     document.body.appendChild(panel); pintarBoton(); pintar(); panel.focus();
     panel.addEventListener('click', alClic); panel.addEventListener('submit', alEnviar);
-    panel.addEventListener('input', (e) => { if (e.target.id === 'ch-texto' && canal) borradores[canal.id] = e.target.value; });
-    panel.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !movil() && e.target.id === 'ch-texto') { e.preventDefault(); panel.querySelector('.ch-form')?.requestSubmit(); } });
+    panel.addEventListener('input', (e) => { if (e.target.id === 'ch-texto' && canal) { borradores[canal.id] = e.target.value; if (e.target.value && enVivo() && Date.now() - ultimoEscribi > ESCRIBE_CADA_MS) { ultimoEscribi = Date.now(); api(`/api/chat/canales/${canal.id}/escribiendo`, { metodo: 'POST', cuerpo: {} }).catch(() => {}); } } if (e.target.id === 'ch-ed') edTexto = e.target.value; });
+    panel.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !movil() && e.target.id === 'ch-texto') { e.preventDefault(); panel.querySelector('.ch-form')?.requestSubmit(); } });
     panel.addEventListener('compositionstart', () => { componiendo = true; });
     panel.addEventListener('compositionend', () => { componiendo = false; if (repintarLuego) { repintarLuego = false; pintar(); } });
     document.addEventListener('keydown', alTecla);
     await cargarResumen();
   }
-  function cerrar() { clearTimeout(tHilo); document.removeEventListener('keydown', alTecla); abierto = false; panel?.remove(); panel = null; canal = null; pintarBoton(); boton?.focus(); }
+  function cerrar() { componiendo = false; repintarLuego = false; edTexto = null; clearTimeout(tHilo); document.removeEventListener('keydown', alTecla); abierto = false; panel?.remove(); panel = null; canal = null; pintarBoton(); boton?.focus(); }
   function alTecla(e) { if (e.key !== 'Escape' || !abierto || !panel) return; const f = document.activeElement; if (f && f !== document.body && !panel.contains(f) && f !== boton) return; /* otra ventana tiene el foco: no se cierra el chat */ e.stopPropagation(); if (vista !== 'lista' && movil()) { vista = 'lista'; clearTimeout(tHilo); pintar(); } else cerrar(); }
 
   async function alClic(e) {
@@ -157,8 +173,8 @@
       if (a === 'directo') return abrirDirecto(id);
       if (a === 'unirme') { await api(`/api/chat/canales/${id}/miembros`, { metodo: 'POST', cuerpo: {} }); await cargarResumen(); const c = res.canales.find((x) => x.id === id); return c ? abrirCanal(c) : undefined; }
       if (a === 'silenciar') { await api(`/api/chat/canales/${canal.id}/silenciar`, { metodo: 'POST', cuerpo: { silenciado: !canal.silenciado } }); await cargarResumen(); canal = res.canales.find((x) => x.id === canal.id) || canal; return pintar(); }
-      if (a === 'editar') { editando = Number(id); borrando = null; pintar(); return panel.querySelector('#ch-ed')?.focus(); }
-      if (a === 'editar-no') { editando = null; return pintar(); }
+      if (a === 'editar') { edTexto = null; editando = Number(id); borrando = null; pintar(); return panel.querySelector('#ch-ed')?.focus(); }
+      if (a === 'editar-no') { editando = null; edTexto = null; return pintar(); }
       if (a === 'borrar') { borrando = Number(id); editando = null; return pintar(); }
       if (a === 'borrar-no') { borrando = null; return pintar(); }
       if (a === 'borrar-si') { borrando = null; await api(`/api/chat/mensajes/${id}`, { metodo: 'DELETE' }); await cargarHilo(canal.id, { marcar: false }); return pintar(); }
@@ -169,7 +185,7 @@
     e.preventDefault(); const f = e.target;
     if (f.classList.contains('ch-edit')) {
       const cuerpo = f.querySelector('textarea').value.trim(); if (!cuerpo) return; const id = editando;
-      try { await api(`/api/chat/mensajes/${id}`, { metodo: 'PATCH', cuerpo: { cuerpo } }); editando = null; await cargarHilo(canal.id, { marcar: false }); pintar(); } catch (err) { fallar(err.message); pintar(); }
+      try { await api(`/api/chat/mensajes/${id}`, { metodo: 'PATCH', cuerpo: { cuerpo } }); editando = null; edTexto = null; await cargarHilo(canal.id, { marcar: false }); pintar(); } catch (err) { fallar(err.message); pintar(); }
       return;
     }
     if (f.classList.contains('ch-form')) {
@@ -177,7 +193,10 @@
       const ta = f.querySelector('textarea'), cuerpo = ta.value.trim(), btn = f.querySelector('button'), id = canal.id; if (!cuerpo) return;
       enviando = true; btn.disabled = true; btn.setAttribute('aria-busy', 'true'); ta.value = ''; borradores[id] = ''; // se vacía ANTES de viajar; si falla, se devuelve
       try { await api(`/api/chat/canales/${id}/mensajes`, { metodo: 'POST', cuerpo: { cuerpo } }); msg = ''; await cargarHilo(id); pintar({ abajo: true }); }
-      catch (err) { borradores[id] = cuerpo; fallar(err.message); pintar(); }
+      catch (err) { // lo que se escribió mientras el POST iba no se pisa: queda después del mensaje que no salió
+        const caja = panel?.querySelector('#ch-texto'), nuevo = (caja && canal?.id === id ? caja.value : borradores[id]) || '';
+        borradores[id] = cuerpo + (nuevo ? '\n' + nuevo : ''); if (caja && canal?.id === id) caja.value = borradores[id]; fallar(err.message); pintar();
+      }
       finally { enviando = false; }
       return;
     }
@@ -189,6 +208,14 @@
   }
 
   document.addEventListener('visibilitychange', () => { if (document.hidden) return; cargarResumen(); if (abierto && vista === 'hilo' && canal) { cargarHilo(canal.id); sondearHilo(); } });
+  /** El aviso en vivo trae SOLO ids: ante un mensaje o un cambio, la página pide el contenido con su sesión (D1 decide qué puede ver). */
+  let tRefresco = 0;
+  window.addEventListener('ao:chat', (e) => {
+    const d = e.detail || {}; if (!activo || document.hidden) return;
+    if (d.evento === 'escribiendo') { if (abierto && vista === 'hilo' && canal?.id === d.canal) marcaEscribe(d); return; }
+    clearTimeout(tRefresco); tRefresco = setTimeout(() => { cargarResumen(); if (abierto && vista === 'hilo' && canal?.id === d.canal) { if (d.evento === 'mensaje' && escribe?.de === d.de) escribe = null; cargarHilo(d.canal); } }, 150); // se juntan las ráfagas
+  });
+  window.addEventListener('ao:chat-conectado', () => { cargarResumen(); if (abierto && vista === 'hilo' && canal) cargarHilo(canal.id); }); // la puesta al día al volver el socket
   N.chat = { abrir, cerrar, recargar: cargarResumen };
   regiones(); cargarResumen();
 })();
