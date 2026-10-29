@@ -37,5 +37,17 @@ test('copiar-oficina lleva movil.js junto a la página y el Worker lo declara co
   const { ARCHIVOS } = await import('../scripts/copiar-oficina.mjs');
   assert.equal(ARCHIVOS['movil.js'], 'movil.js'); assert.equal(ARCHIVOS['movil-d.js'], 'movil-d.js');
   const { readFileSync } = await import('node:fs');
-  assert.match(readFileSync(new URL('../worker/lib/paginas.js', import.meta.url), 'utf8'), /PAQUETES = new Set\(\[[^\]]*'\/movil\.js'[^\]]*'\/movil-d\.js'/);
+  assert.match(readFileSync(new URL('../worker/lib/paginas.js', import.meta.url), 'utf8'), /PAQUETES = \/[^\n]*movil\|movil-d\|/);
+});
+
+test('PER-04: un paquete con ?v=<versión> sale immutable; sin versión, con «dev» o sin sesión, no', { skip: SALTAR }, async () => {
+  const d1 = crearD1(); const c = await sembrar(d1); const env = envDePrueba(d1); const ck = await entrar(env, c);
+  const cc = async (ruta, cookie) => { const r = await pedir(manejar, env, ruta, { cookie }); return { s: r.status, cc: r.headers.get('cache-control'), ce: r.headers.get('content-encoding') }; };
+  for (const n of ['estudio-extra', 'tareas-vista', 'anuncios-vista', 'pieza-editor']) {
+    const r = await cc(`/${n}.js?v=abc123def`, ck); assert.equal(r.s, 200, n); assert.equal(r.cc, 'private, max-age=31536000, immutable', n); assert.equal(r.ce, null, 'el Worker no pone Content-Encoding propio');
+    assert.notEqual((await cc(`/${n}.js`, ck)).cc, 'private, max-age=31536000, immutable', 'sin versión no es immutable');
+    assert.notEqual((await cc(`/${n}.js?v=dev`, ck)).cc, 'private, max-age=31536000, immutable', 'la construcción sin versión (dev) no es immutable');
+  }
+  for (const n of ['movil', 'movil-d', 'dictado', 'ajustes-extra']) assert.notEqual((await cc(`/${n}.js?v=abc123def`, ck)).cc, 'private, max-age=31536000, immutable', `${n} sigue sin versión`);
+  assert.equal((await cc('/estudio-extra.js?v=abc123def')).s, 401, 'sin sesión nada se sirve ni se cachea');
 });
