@@ -22,6 +22,8 @@ Cómo se hizo: seis auditores en paralelo, de solo lectura, sobre `main` (commit
 | 12 | Rendimiento: página de 2,20 MB (tope 2,2 MB, margen 3 KB), 1,88 MB de JS; miniaturas = originales; paquetes sin caché larga | Media-alta | PER-01..11 | S → L |
 | 13 | Seguridad: `/api/chat` sin tope por persona; detector de inyección de 8 regex; workflows sin `permissions`; `Origin: null` aceptado en local | Alta/Media | SEG-01..09 | S |
 | 14 | **Comunicación del equipo** (pedido del dueño, 29 oct): no hay chat en vivo, ni recados para cuando alguien entre, ni centro de notificaciones por persona; Telegram solo conoce al dueño y a los aprobadores, no a las cuentas | **Alta** (pedido) | §3.10, Fase 8 | L (por fases) |
+| 15 | La línea de arriba del chat de Dimitri («IA: … · gasto del mes … · solo conversa») sale **siempre**, aunque no haya nada que avisar | Media (pedido) | UX-11, Fase 0 | S |
+| 16 | **Vanguardia frente a otros agentes** (Muse de Meta, ChatGPT, Grok, Claude, Gemini, Copilot…): lo que hacen, dónde fallan y qué construir para superarlos | Estratégica | §3.11, Fase 9 | por fases |
 
 ## 1. Hallazgos por frente
 
@@ -139,6 +141,7 @@ Bien (no tocar): PBKDF2 con huella de sesión y `__Host-`, AES-GCM con HKDF e IV
 - **UX-08 · Media.** «Más» móvil depende del DOM escondido del escritorio (`src/movil/escritorio.js`): sin test, un id cambiado rompe en silencio.
 - **UX-09 · Media.** Paridad escritorio/móvil/nube: lo que contesta 501 sigue visible; mostrar capacidades por `/api/health` y desactivar con una frase.
 - **UX-10 · Baja.** Controles de 32/24/18 px en Dimitri; ~55 reglas con fuente ≤ 10,5 px.
+- **UX-11 · Media (pedido del dueño) · S.** `paintIa()` (`src/sub.js:54-61`, `.sb-ia-head`, `src/css/dimitri.css:230-231`) pinta siempre «IA: <modelo> · consulta la oficina por sí mismo / solo conversa (este modelo no usa herramientas) · cambiar · gasto de IA del mes». Es información útil una vez, ruido a diario. Arreglo en §3.11.
 
 ## 2. Reglas del plan
 
@@ -271,6 +274,58 @@ Presupuesto propuesto: página ≤ 2,0 MB bruto / ≤ 650 KB gzip / ≤ 550 KB b
 
 Criterios de aceptación: un recado dejado desde la app y desde Telegram aparece en la hoja de entrada de la persona correcta y de nadie más; «Enterado» avisa a quien lo dejó; la misma notificación no llega dos veces por el mismo canal; no llega a quien la causó; una persona sin vincular no recibe nada por Telegram y el bot sigue en silencio con extraños; un editor no puede aprobar por Telegram; un código vencido, reutilizado o ajeno no vincula; la oficina local (sin cuentas) no muestra nada de esto sin `window.AO_NUBE`.
 
+### 3.11 Estar a la vanguardia: qué hacen los demás agentes y cómo superarlos (pedido del dueño, 29 oct)
+
+**Cómo se investigó y cuánto vale.** Tres investigaciones web en paralelo (Meta Muse · OpenAI y xAI · Anthropic, Google, Microsoft, Perplexity, automatización y marketing). **Fiabilidad limitada y hay que decirlo:** las páginas oficiales de Meta, OpenAI y xAI no se pudieron abrir desde esta sesión (dominios fuera de la red permitida); solo se leyó en directo el cookbook de Meta en GitHub. Casi todo lo demás viene de resúmenes de búsqueda, prensa y blogs de proveedores con interés, y varias cifras se contradicen entre fuentes. Todo lo que sigue es **hipótesis hasta verificar**; lo no confirmado lleva [NV]. **Antes de decidir una inversión grande por una de estas comparaciones, repetir la investigación con acceso a las fuentes primarias** (decisión §6). Fechas = las de las fuentes (2026).
+
+**Meta · Muse (agente y API).**
+- *Qué es:* Muse Spark, primer modelo de la familia Muse de Meta Superintelligence Labs (lanzado ~8 abr 2026): multimodal con razonamiento, uso de herramientas y orquestación multiagente. Versiones 1.1 (jul), 1.2 y **1.3 (2-3 sep)**, con ~20 % menos llamadas a herramientas y ~25 % menos tokens que la 1.2 y contexto de 1.048.576 tokens (el cookbook de Meta confirma `muse-spark-1.3` por defecto). Modos Instant, Thinking y **Contemplating** (varios agentes razonando en paralelo; salió escalonado). *Muse Code* (subagentes, metas, tareas programadas, sandbox) aparece en el cookbook.
+- *App agente «Muse»* (reseñas la fechan el 8 sep 2026; solo EE. UU.; planes de pago reportados de US$20 y US$100 [NV]): agente personal en su app o dentro de WhatsApp, para correo, viajes, formularios, facturas y compras con Link de Stripe. Meta dice que pregunta, confirma antes de acciones con consecuencias y ajusta cuántas actualizaciones da [NV]. Una sola fuente habla de «Muse for Small Business» que revisa anuncios y redacta campañas sin gastar sin aprobación [NV]: si es cierto, compite directo con nuestro módulo de Anuncios.
+- *API* (`api.meta.ai/v1`, compatible con los SDK de OpenAI y de Anthropic): funciones, búsqueda con citas, JSON con esquema, esfuerzo de razonamiento, caché, visión, **Muse Image**. Precios de agregadores (no de Meta): nivel *Contributor* 1.3 ≈ US$0,10/0,20 por millón (entrada/salida) **pero entrena con lo que recibe**; estándar ≈ US$1,25/4,25 y no entrena. Video: solo SAM 3 (segmenta/rastrea), **no genera video**; el entendimiento de audio en 1.3 no está completo según Meta. **Nuestro código usa Muse Spark para entender video y audio: re-verificarlo contra la documentación actual.**
+- *Críticas:* en un índice de terceros, 1.3 ≈ 48,1 frente a ≈ 50,8 de Claude Opus 5; lento (~146 tok/s, ~48 s al primer token en `max`) y verboso [NV]. De memoria, voz, tareas programadas y notificaciones de la app no hay fuentes fiables.
+
+**OpenAI y xAI (solo segunda mano, [NV] casi todo).**
+- OpenAI: el «modo agente» parece haber sido sustituido por **ChatGPT Work** (una sola fuente, jul 2026): se ejecuta una vez, de forma recurrente, por evento o **vigilando un cambio**; *Pulse* retirado el 17 jun y sustituido por **Scheduled Tasks** (una ejecución por hora como máximo, pausa de las desatendidas, cada ejecución cuenta contra el límite mensual); **Agent Builder y Evals se retiran el 30 nov 2026** (recomiendan el Agents SDK) → dos productos de agente retirados en un año: **volatilidad**. Aprobaciones: «confirmación antes de acciones de alto impacto» y *watch mode*; no se pudo confirmar si Work lo conserva.
+- xAI: Grok 4.7 (21 sep) con API de ~US$2/6 por millón [NV]; **Agent Tools API** con búsqueda web y en X, código, colecciones y **MCP remoto** (herramientas de servidor ~US$5 por 1.000 invocaciones [NV]); Grok Build (agente de código en CLI, código abierto [NV]). De Grok Tasks, Companions, voz, memoria o incidentes de seguridad: **nada fiable**.
+
+**Anthropic, Google, Microsoft, Perplexity y el resto.**
+- Claude: **Cowork con tareas programadas** que corren con conectores y Skills y, según las notas de versión, sin dispositivo en línea; **memoria unificada** entre chat y Cowork, visible por temas en Ajustes (25 ago); lo de Cowork accesible desde cualquier conversación (16 sep). *Managed Agents*, *Dreaming* y un mercado de Skills de ~600: solo fuentes terciarias [NV].
+- Google: Agentspace fusionado en Gemini Enterprise; **«Gemini agent»**, agente universal para el trabajo (8 oct, vista previa privada según una fuente); Project Mariner discontinuado según una fuente y listado según otra (conflicto).
+- Microsoft: Agent Mode por defecto en Word, Excel y PowerPoint (jun), **Agent 365** como plano de control de agentes (inventario, identidad, seguridad; desde el 1 jul las protecciones de Copilot Studio exigen su licencia) y nuevo Copilot con «Home, Code y Autopilot» (25 sep).
+- Automatización y marketing: Zapier Agents (cobro aparte), Lindy, Manus y Genspark (créditos), Relevance AI, Agentforce (~US$2 por conversación) [precios de blogs, contradictorios]; **Adspirer** (servidor MCP para anuncios «con tu aprobación»), **AdAmigo** (modos «revisar primero» y «aplicar automático»).
+- **Riesgos documentados:** inyección de prompt en navegadores agente (OpenAI admite que quizá nunca se «resuelva» para Atlas; Trail of Bits encontró 4 técnicas que filtraban datos de Gmail por Comet, feb 2026; Brave, Zenity y Unit 42 con ataques demostrados); Gartner prevé que **más del 40 % de los proyectos agénticos se cancelen a fines de 2027** por costos, valor poco claro y controles débiles. No se encontraron incidentes documentados de borrado de datos o gastos descontrolados con fuente sólida: no se afirman.
+
+**Patrones ganadores comunes** (con fuente): el agente cruza apps y vive donde ya se trabaja; tareas recurrentes sin dispositivo encendido; **memoria visible y editable**; gobierno central de agentes con dueño y reversión; aprobación antes de gastar en los agentes de anuncios; cobro por créditos o consumo (costo impredecible). Sobre chat lateral ajustable, plan visible, voz y evaluaciones no hay patrón documentado.
+
+**Lo que ya tenemos y es ventaja** (no construir de nuevo): aprobación obligatoria con candado en código (el guardián revisa **cada** llamada; las herramientas de envío solo corren en una ejecución aprobada y solo a los destinatarios del borrador) — más estricta que los «con tu aprobación» de los blogs; regla del dinero con dos clics y topes; Cerebro con memoria que aprende de lo aprobado o devuelto; 35 puestos con skills, jefes y equipos; Estudio con presets, lotes y QA; Contenido, Anuncios y Bandeja de Meta; Telegram con aprobación de un toque; todo en la cuenta de Cloudflare del dueño, en español, con una oficina completa por defecto; motor propio sobre **MCP estándar** y multimodelo (Anthropic/Meta), que nos protege de la volatilidad de productos ajenos.
+
+**Mejoras para superarlos (VAN-xx; no repiten lo que ya hay).** Esfuerzo S = días, M = 1-3 semanas, L = más de un mes.
+
+| ID | Mejora | Por qué (comparación) | Esf. |
+|---|---|---|---|
+| VAN-01 | **Autonomía graduada** por acción y por monto: borrador · automático con tope · automático. Hoy `autonomous` es todo o nada por rutina y solo bajar gasto es automático | AdAmigo ofrece «revisar primero» y «aplicar automático»; Gartner pide gobierno. Los envíos y el dinero **siguen** bajo el candado actual | M |
+| VAN-02 | **Panel de gobierno de agentes**: inventario con último uso, costo, errores y permisos; «pausar todo»; jubilar o pausar lo que nadie abre en N semanas (ya existe la sugerencia «rutina que nadie lee») | Agent 365 de Microsoft | M |
+| VAN-03 | **Red-team continuo de inyección** en CI: un banco de ataques (correo, web, PDF, imagen, conector) contra el guardián en cada despliegue; enlaza con SEG-02 | Ataques demostrados a Comet y Atlas; nuestro `injectionIn` es heurístico | M |
+| VAN-04 | **Plan de herramientas visible** en cada ejecución de agente y OK solo en los pasos de envío | Patrón común de plan visible; Meta lo anuncia como virtud | S |
+| VAN-05 | **Simulación de rutinas** («¿qué haría hoy?» sin enviar, con costo estimado) | Costo impredecible de créditos y conversaciones | S |
+| VAN-06 | **Presupuesto por agente y por rutina** con corte duro (hoy es mensual y global) y **costo por herramienta** además de por token en `costs` | Dolor del costo variable (Manus, Agentforce); herramientas de servidor tarifadas por invocación | S |
+| VAN-07 | **Canal de WhatsApp** (Cloud API) para aprobar y pedir, reutilizando la Bandeja de Meta y los vínculos de la Fase 8 | La app agente de Meta vive en WhatsApp: es la brecha de acceso más grande frente a Telegram solo | M-L |
+| VAN-08 | **Cuántos avisos por rutina**: «en cada paso» o «solo al terminar», en Telegram y móvil | Meta ajusta cuántas actualizaciones da | S |
+| VAN-09 | **Memoria visible por temas** y «olvida esto» desde el chat; memoria personal del dueño editable | Cowork (memoria por temas, ago 2026); ya tenemos lecciones y notas | S |
+| VAN-10 | **Constructor guiado** de rutinas y agentes en lenguaje natural, con prueba, plantillas y versiones, incluido «vigila X y avísame si cambia» (disparadores + KPI como tipo de rutina de primera clase) | Workspace Studio, Copilot Studio, Lindy, ChatGPT Work | M |
+| VAN-11 | **Enrutamiento automático de modelo** por tarea (barato para triage, fuerte para lo delicado) con fallback, medido por el módulo de calidad; **Muse Spark estándar como segundo proveedor barato** de redacción; etiqueta visible y candado de que **nunca** se usa *Contributor* con notas internas, clientes, precios o chats | Gemini enruta entre modelos [NV]; Contributor es ~12× más barato pero entrena con los datos | M |
+| VAN-12 | **Tablero de evaluaciones de agentes** (regresiones al cambiar brief, skill o modelo; hoy los evals son por línea de comandos) | Gartner: «valor poco claro» | M |
+| VAN-13 | **Dos borradores en paralelo** (modelo barato frente a fuerte) antes de aprobar, y modo **Equipo** con costo previo y un único resultado revisado por el jefe | Modo *Contemplating* de Meta | S-M |
+| VAN-14 | **Agente con tu identidad en Gmail y Calendar** con borrador obligatorio (aprovecha conectores y el candado) | Gemini agent y Agent Mode viven en la bandeja | M |
+| VAN-15 | **Informe de valor para el dueño** (ahorro y retorno por agente) y **resumen diario por Telegram** con acciones | Gartner (valor poco claro); «morning brief» de Cowork | S |
+| VAN-16 | **Catálogo compartible de skills y rutinas** con importación en un clic (ya hay Biblioteca y GitHub) | Mercado de Skills [NV], plantillas de Zapier | M |
+| VAN-17 | **Salida de voz** y notas de voz de Telegram transcritas (Muse Voice Transcribe u otro) [no probado] | Voz en las apps de consumo | M |
+| VAN-18 | **Computer use en la nube** (navegador aislado en contenedor, lista blanca de sitios, solo lectura por defecto, aprobación para escribir y vista en vivo de lo que visita) — **diferido**: solo después de VAN-03, por el riesgo de inyección | Comet, Gemini agent; hoy solo hay Chrome en la oficina local | L |
+
+**Reglas para esta fase.** (1) Nada de esto relaja los candados de envío, destinatarios, importes ni la regla del dinero. (2) Una mejora que dependa de una comparación [NV] no empieza hasta verificarla con la fuente primaria. (3) Cada mejora lleva su test y su prueba de seguridad; las que usan datos de terceros pasan por `safety.injectionIn`. (4) Antes de VAN-11 hay que **re-verificar** lo que nuestro código supone de Muse Spark (entender video y audio, precios, límites) contra la documentación vigente.
+
+**Línea de IA de Dimitri (UX-11).** La función pura `cuandoMostrarIa(iaInfo, pref)` decide: *avisos* (por defecto) muestra la línea solo si (a) el modelo no usa herramientas, (b) el gasto del mes está en alerta o pasó el tope, (c) corre un modelo de respaldo distinto del elegido, o (d) el último turno falló por la IA; *siempre* y *nunca* son opciones del dueño (`ao.sub.ia`, también en Ajustes). El nombre del modelo, lo que hace y no hace y el botón «cambiar» pasan a un **ⓘ en la cabecera** de Dimitri (un popover, con 44 px en móvil). Archivos: `src/sub.js:54-61`, `src/css/dimitri.css:230-231`, y en la nube la misma regla.
+
 ## 4. Fases
 
 Cada fase es un PR (o varios) y termina verde. El orden sigue lo que el dueño llamó urgente y el beneficio/costo.
@@ -291,6 +346,7 @@ Cada fase es un PR (o varios) y termina verde. El orden sigue lo que el dueño l
 | PER-01 | Medir y blindar la compresión con un test | test de cabeceras |
 | ICO-03 | Test de cobertura de íconos (aunque aún use los sistemas viejos) | el propio test |
 | UX-08 | Test de que `ESCRITORIO` no apunta a ids muertos; borrar entradas muertas | el propio test |
+| UX-11 | La línea de IA de Dimitri solo cuando hay algo que avisar (modelo sin herramientas, gasto en alerta o pasado del tope, modelo de respaldo en uso, error de IA); el nombre del modelo y «cambiar» pasan a un ⓘ en la cabecera; preferencia «Mostrar la línea de IA: nunca · solo avisos (por defecto) · siempre» | test puro de `cuandoMostrarIa()` + recorrido de Dimitri |
 
 ### Fase 1 — Galería del Estudio (urgente para el dueño)
 
@@ -335,6 +391,10 @@ SEG-02 (normalizar NFKC y quitar invisibles, no tratar la regex como frontera, e
 
 Es el único frente que añade capacidad nueva; entra por pedido expreso del dueño y se apoya en lo que ya existe (presencia del `Hub`, avisos, Telegram, tareas para una persona). Orden: **N0 → N1 → N2** (en este orden, cada una útil por sí sola), luego **C0-C6** del chat (`docs/plan-chat-interno.md`) ya integrado con las notificaciones, y al final **N3**. N0-N2 pueden arrancar en paralelo con las Fases 1-3 porque no tocan los archivos grandes de la galería ni de Dimitri (§5, carril H). Detalle en §3.10.
 
+### Fase 9 — Vanguardia (VAN-01…18, §3.11)
+
+Va después de las Fases 0-3 y **en paralelo con la 8** donde no choque. Orden por beneficio/costo y por riesgo: primero lo pequeño y de gobierno (**VAN-04, 05, 06, 08, 09, 15**), luego **VAN-03** (red-team; precondición de cualquier cosa con navegador o con más autonomía), **VAN-02, 01, 10, 11, 12, 13, 14, 16**, y al final **VAN-07 (WhatsApp)**, **VAN-17** y **VAN-18 (computer use)**. La línea de IA de Dimitri (UX-11) va en la Fase 0.
+
 ## 5. Cómo ejecutarlo con varios agentes en paralelo
 
 Carriles que **no comparten archivos grandes**, pensados para correr a la vez (cada uno en su rama y su worktree, un PR por carril):
@@ -349,6 +409,7 @@ Carriles que **no comparten archivos grandes**, pensados para correr a la vez (c
 | F · Rendimiento y CI | 6 y 0 (PER, SEG-07/08) | `build.mjs`, `check.mjs`, `cloudflare/public/_headers`, `wrangler.jsonc`, `.github/workflows/*` | todos (solo configuración): último en fusionarse |
 | G · Seguridad y UX | 7 | `safety.mjs`, `cloudflare/worker/lib/sesion.js`, `src/detail.js`, `src/dock.js`… | revisar caso a caso |
 | H · Comunicación | 8 | `cloudflare/worker/modulos/{chat,recados,notificaciones}.js`, `lib/notificaciones/*`, `lib/avisos.js`, `hub.js`, `telegram-core.mjs`, `modulos/telegram.js`, `src/notificaciones/*` (paquete aparte, **nunca en la página**) | `hub.js` y `telegram.js` los toca poca gente; la campanita añade un botón al dock (`shell.html`/`dock.js`: avisar); Carril B si se cambia el dock |
+| I · Vanguardia | 9 y UX-11 | `safety.mjs`, `guardian.js`, `cloudflare/worker/lib/agentes/*`, `costs-core.mjs`, `lib/modelos.js`, `evals/*`, `src/sub.js` (solo UX-11: coordinar con B) | B en `sub.js`; H en `telegram.js` (VAN-07/15) |
 
 Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un PR, o por ítems pequeños); después **A + C + B en paralelo** (A y B comparten `studio.js`: A primero en su parte, B después) y D tras A.a. E y F pueden correr en paralelo con cualquiera. Cada carril entrega con `npm run check` verde y los recorridos que le tocan.
 
@@ -365,6 +426,9 @@ Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un P
 9. **Quién puede dejar recados**: propongo que cualquier administrador o editor pueda dejarlos a una persona, a un rol o a todos, y que `lectura` solo los reciba. ¿De acuerdo? ¿Y puede un recado «requerir enterado»?
 10. **Telegram por cuenta**: ¿cada persona vincula el suyo con un código de un solo uso? ¿El aviso lleva el texto o solo «te dejaron un recado» (propongo solo el aviso, por privacidad)? ¿Qué puede hacer un editor desde Telegram (propongo: recados, `/mias`, `/yo`, `/chat`; aprobar sigue siendo solo del dueño y de los aprobadores)?
 11. **Orden**: ¿N0-N2 (notificaciones, recados, Telegram por cuenta) antes o después de la galería del Estudio (Fase 1)? Propongo en paralelo, en carriles distintos.
+12. **Investigación de la competencia**: las páginas oficiales de Meta, OpenAI y xAI no se pudieron abrir desde esta sesión, así que §3.11 es de segunda mano. ¿Permites esos dominios (ai.meta.com, research.meta.ai, openai.com, platform.openai.com, help.openai.com, x.ai, docs.x.ai) para repetirla con fuentes primarias antes de invertir?
+13. **Prioridades de la Fase 9**: ¿qué te importa más superar primero — autonomía graduada y gobierno (VAN-01/02), WhatsApp (VAN-07), el constructor de rutinas por lenguaje natural (VAN-10), o el enrutamiento de modelos con Muse Spark barato (VAN-11)?
+14. **Línea de IA de Dimitri**: ¿«solo avisos» por defecto (propongo), o prefieres quitarla del todo y dejar solo el ⓘ?
 
 ## 7. Lo que NO está verificado
 
@@ -376,6 +440,7 @@ Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un P
 - Más de 400 `innerHTML` de `src/` sin revisar uno a uno; `npm audit` no se pudo ejecutar (sin red).
 - `agruparGaleria` (carruseles y reels en la galería) no existe en este árbol: confirmar en qué rama vive antes de diseñar su carpeta.
 - Comunicación (§3.10): no se midió cuántas personas usan la nube ni cuántos avisos al día habría; el costo de D1 y del `Hub` con un chat real es NV. No se verificó que los ids de `team.people` estén usados hoy por alguien. Las notificaciones push del navegador no se diseñaron en detalle (no hay *service worker*).
+- Competencia (§3.11): casi todo de segunda mano; páginas oficiales de Meta, OpenAI y xAI sin abrir; precios y límites contradictorios entre fuentes; «Muse for Small Business», «ChatGPT Work», la retirada de Agent Builder y los datos de Grok 4.7 son de una o dos fuentes secundarias. Que nuestro código use Muse Spark para entender video y audio hay que re-verificarlo.
 - Que la nube de verdad devuelva 304 con `If-None-Match` para los paquetes diferidos (la página sí, por test).
 
 ## 8. Seguimiento
@@ -390,4 +455,5 @@ Cada punto lleva su ID (DIM-xx, EST-xx, CON-xx, PER-xx, ICO-xx, SEG-xx, UX-xx). 
 - [ ] Fase 5 — íconos originales
 - [ ] Fase 6 — velocidad
 - [ ] Fase 7 — UX y seguridad restantes
+- [ ] Fase 9 — vanguardia (VAN-01…18; UX-11 va en la Fase 0)
 - [ ] Fase 8 — comunicación del equipo (N0 cimientos · N1 recados · N2 Telegram por cuenta · C0-C6 chat · N3 resumen y push)
