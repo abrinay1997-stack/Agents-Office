@@ -36,6 +36,17 @@ const minimaxOn = () => catalogo.engines().some((e) => e.id === 'minimax' && e.o
 const porDefecto = () => Object.fromEntries(catalogo.KINDS.map((k) => [k, catalogo.defaultModel(k)]));
 const NOMBRE_AGENTE = (id) => agentes().find((a) => a.id === id)?.name || '';
 
+/** Lo mismo para muchos archivos de una vez (borrar una carpeta): Map file → piezas. Falla CERRADO (lanza si no puede comprobar). */
+async function usosDeVarios(db, files) {
+  const mapa = new Map(files.map((f) => [f, []])); if (!files.length) return mapa;
+  const { results } = await db.prepare(`select id, json from contenido_piezas where borrada = 0 limit 5000`).all();
+  for (const r of results) {
+    let v = null; try { v = JSON.parse(r.json); } catch { continue; }
+    for (const f of [...(v.medios || []), ...(v.historias || [])]) if (mapa.has(f)) mapa.get(f).push({ id: r.id, titulo: v.titulo || '' });
+  }
+  return mapa;
+}
+
 /** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa): `contenido_piezas`, las que no están en su papelera.
  *  Antes miraba una colección `piezas` que no existe y nada estaba nunca «en uso»: una imagen programada se iba a la papelera y a los 30 días de R2.
  *  Falla CERRADO: si no se puede comprobar, la función lanza y el archivo NO se borra (nunca devuelve [] por un error). */
@@ -117,13 +128,43 @@ export async function manejar(ctx) {
     }
 
     /* ---- carpetas ---- */
+    if (ruta === '/api/media/folders' && metodo === 'GET' && galeria.arbolOn()) return json({ folders: await galeria.resumenCarpetas(db) }); // Fase 1.a: el árbol (con ruta, n y nTotal)
     if (ruta === '/api/media/folders' && metodo === 'POST') {
       const b = (await cuerpo(req)) || {};
-      try { const f = await galeria.addFolder(db, b.name); const moved = Array.isArray(b.files) && b.files.length ? await galeria.moveTo(db, b.files, f.id) : 0; return json({ folder: f, moved, folders: await galeria.resumenCarpetas(db) }); }
+      try { const f = await galeria.addFolder(db, b.name, galeria.arbolOn() ? { parentId: b.parentId, tipo: b.tipo, color: b.color, creadaPor: b.creadaPor } : {}); const moved = Array.isArray(b.files) && b.files.length ? await galeria.moveTo(db, b.files, f.id) : 0; return json({ folder: f, moved, folders: await galeria.resumenCarpetas(db) }); }
       catch (e) { return error(e.message, 400); }
     }
+    if (galeria.arbolOn() && ruta === '/api/media/folders/reorder' && metodo === 'PATCH') {
+      const b = (await cuerpo(req)) || {};
+      try { return json({ folders: await galeria.reorderFolders(db, b.parentId || null, b.ids) }); } catch (e) { return error(e.message, 400); }
+    }
+    if (galeria.arbolOn() && ruta === '/api/media/folders/deshacer' && metodo === 'POST') {
+      if (usuario.rol !== 'admin') return prohibido('Solo un administrador deshace el borrado de una carpeta.');
+      const b = (await cuerpo(req)) || {};
+      try { return json({ ...(await galeria.undoFolderDelete(db, b.token)), folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 410); }
+    }
     if ((m = ruta.match(/^\/api\/media\/folders\/(c[a-z0-9]{4,20})$/))) {
-      if (metodo === 'PATCH') { const b = (await cuerpo(req)) || {}; try { return json({ folder: await galeria.renameFolder(db, m[1], b.name), folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 400); } }
+      if (metodo === 'PATCH') {
+        const b = (await cuerpo(req)) || {};
+        try {
+          const arbol = galeria.arbolOn(); let folder = arbol && b.name === undefined ? await galeria.folderOf(db, m[1]) : await galeria.renameFolder(db, m[1], b.name);
+          if (!folder) return error('esa carpeta ya no existe', 400);
+          if (arbol && b.parentId !== undefined) folder = await galeria.moveFolder(db, m[1], b.parentId || null);
+          if (arbol && Number.isInteger(b.orden)) { const sib = (await galeria.resumenCarpetas(db)).filter((x) => (x.parentId ?? null) === (folder.parentId ?? null) && x.id !== m[1]).map((x) => x.id); sib.splice(Math.max(0, Math.min(sib.length, b.orden)), 0, m[1]); await galeria.reorderFolders(db, folder.parentId ?? null, sib); }
+          const folders = await galeria.resumenCarpetas(db); return json({ folder: folders.find((x) => x.id === m[1]) || folder, folders });
+        } catch (e) { return e.codigo ? json({ error: e.message, codigo: e.codigo }, 422) : error(e.message, 400); }
+      }
+      if (metodo === 'DELETE' && galeria.arbolOn()) { // 1.a: borra la carpeta, sus subcarpetas y sus archivos (a la papelera, 30 días); sin `confirmar` solo cuenta
+        if (usuario.rol !== 'admin') return prohibido('Solo un administrador borra carpetas.');
+        const b = (await cuerpo(req).catch(() => null)) || {};
+        try {
+          const r = await galeria.removeFolderTree(db, m[1], { confirmar: b.confirmar || null, dejar: b.dejar === true, usadas: (files) => usosDeVarios(db, files) });
+          if (r.pendiente) return json({ error: 'confirmar', ...r }, 409);
+          if (r.desfase) return json({ error: 'desfase', ...r }, 409);
+          if (r.enUso) return json({ error: 'en-uso', ...r }, 409);
+          return json({ ...r, freed: r.archivos, folders: await galeria.resumenCarpetas(db) });
+        } catch (e) { return error(e.message, /ya no existe/.test(e.message) ? 404 : 503); }
+      }
       if (metodo === 'DELETE') { try { const n = await galeria.removeFolder(db, m[1]); return json({ ok: true, freed: n, folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 404); } }
     }
     if (ruta === '/api/media/move' && metodo === 'POST') {

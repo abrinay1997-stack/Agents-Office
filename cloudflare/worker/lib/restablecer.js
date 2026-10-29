@@ -22,7 +22,7 @@ export const DESTINOS = {
   kpis: { docs: ['kpis', 'kpi.lineas'] },
   tareas: { filas: ['tareas', 'tareas-archivo'], tablas: ['tarea_bitacora', 'corridas', 'ejecuciones'], docs: ['tareas.proyectos', 'tareas.etiquetas', 'enrutador.correcciones'], prefijosDocs: ['feedback.', 'ejemplos.'] },
   dimitri: { filas: ['subgerente', 'subgerente-hilo'], prefijosFilas: ['subgerente:', 'subgerente-arch:'], docs: ['subgerente.archivo', 'dimitri.semanal'], prefijosDocs: ['subgerente.archivo:'] }, // desde el 27 oct 2026 cada cuenta tiene su sala (`subgerente:<cuenta>`) y su historial (`subgerente.archivo:<cuenta>`)
-  estudio: { tablas: ['estudio_archivos', 'estudio_trabajos'], filas: ['estudio-fichas'], docs: ['estudio.rev', 'estudio.carpetas'] },
+  estudio: { tablas: ['estudio_archivos', 'estudio_trabajos'], filas: ['estudio-fichas'], docs: ['estudio.rev', 'estudio.carpetas', 'estudio.carpetas-borradas'] },
   contenido: { tablas: ['contenido_piezas', 'contenido_cola', 'contenido_candado', 'contenido_papelera'], docs: ['contenido.simulacro', 'contenido.meta.agenda'], filas: ['contenido-piezas', 'contenido-cola', 'contenido-docs'] }, // las filas `contenido-*` son el paso de la migración (lib/contenido/migracion.js): de ahí pasan a las tablas
 };
 /** Lo que NO se restablece nunca (por tabla / clave / colección / prefijo): personas, accesos, llaves, auditoría, ajustes, Meta, respaldos. */

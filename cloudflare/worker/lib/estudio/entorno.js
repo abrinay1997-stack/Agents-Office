@@ -28,6 +28,7 @@ export function validarConfig(b) {
     if (!Number.isFinite(v) || v < 0 || v > 1_000_000) return { ok: false, error: `«${k}» debe ser un número de 0 en adelante (0 = sin tope).` };
     out[k] = k === 'maxPerRequest' ? Math.max(1, Math.min(30, Math.floor(v))) : k === 'concurrency' ? Math.max(1, Math.min(6, Math.floor(v))) : v;
   }
+  if (b?.carpetasArbol !== undefined) { if (typeof b.carpetasArbol !== 'boolean') return { ok: false, error: 'carpetasArbol: verdadero o falso.' }; out.carpetasArbol = b.carpetasArbol; } // Fase 1.a: carpetas en árbol (apagado por defecto)
   if (b?.departments !== undefined) {
     if (!Array.isArray(b.departments) || b.departments.some((d) => !['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'].includes(d))) return { ok: false, error: 'departments: una lista de departamentos de la oficina.' };
     out.departments = [...new Set(b.departments)];
