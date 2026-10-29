@@ -382,7 +382,7 @@
     try { yo = (await api('/api/yo')).usuario; } catch { return; }
     window.dispatchEvent(new Event('ao:yo')); // las tareas «mías» son de cada cuenta: la página rehace sus listas ahora que sabe quién eres
     pintarBarra(); vigilarVista(); conectar(); cargarEquipo();
-    { const n = document.createElement('script'); n.src = '/nube-notas.js'; n.defer = true; document.head.appendChild(n); } // N1: la campanita; si el servidor la tiene apagada no pinta nada
+    { const n = document.createElement('script'); n.src = '/nube-notas.js'; n.defer = true; document.head.appendChild(n); const c = document.createElement('script'); c.src = '/nube-chat.js'; c.defer = true; document.head.appendChild(c); } // + C1: el chat (si el servidor lo tiene apagado no pinta nada) // N1: la campanita; si el servidor la tiene apagada no pinta nada
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();

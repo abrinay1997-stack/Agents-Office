@@ -162,3 +162,36 @@ body.movil .nt-conexion { bottom: calc(76px + env(safe-area-inset-bottom)); } .n
 /* N2 — Tu Telegram */
 .nt-tg { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 14px; } .nt-tg p { margin: 0 0 8px; } .nt-tg .sg-btn { min-height: 36px; } body.movil .nt-tg .sg-btn { min-height: 44px; }
 .nt-cod { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #f1f1f1; color: #111; font: 700 15px/1.4 ui-monospace, monospace; letter-spacing: .04em; user-select: all; overflow-wrap: anywhere; }
+
+/* C1 — chat interno. Botón junto a la campanita; panel de dos columnas a lo ancho y de pantalla completa en el teléfono. Sin :hover como único camino, objetivos de 44 px en el teléfono, campos de 16 px. */
+.ch-btn { position: fixed; right: 68px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+body.movil .ch-btn { bottom: calc(76px + env(safe-area-inset-bottom)); }
+.ch-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
+.ch-btn:focus-visible, #nbChat button:focus-visible, #nbChat textarea:focus-visible, #nbChat input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#nbChat { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(780px, calc(100vw - 32px)); height: min(78vh, 640px); height: min(78dvh, 640px); display: grid; grid-template-columns: 260px 1fr; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); overflow: hidden; }
+.ch-izq, .ch-der { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px; overflow: auto; } .ch-izq { border-right: 1px solid var(--hairline); }
+.ch-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; } .ch-cab h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; } .ch-tit { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#nbChat h3 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
+#nbChat .sg-btn { min-height: 36px; }
+.ch-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ch-fila { position: relative; width: 100%; text-align: left; display: grid; gap: 2px; padding: 8px 40px 8px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; min-height: 44px; } .ch-fila.on, .ch-fila:active { background: var(--hairline); }
+.ch-fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ch-fn small { color: var(--grey); } .ch-prev { font-size: 12px; color: var(--grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-bad { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); min-width: 22px; padding: 0 6px; border-radius: 11px; background: #B3261E; color: #fff; font: 700 12px/22px system-ui, sans-serif; text-align: center; }
+.ch-vacio { color: var(--grey); font-size: 13px; margin: 8px 0; } .ch-elige { margin: auto; text-align: center; }
+.ch-hilo { flex: 1; min-height: 0; overflow: auto; padding: 4px 2px; display: flex; flex-direction: column; gap: 6px; }
+.ch-dia { text-align: center; margin: 8px 0 2px; font-size: 12px; color: var(--grey); }
+.ch-m { max-width: 88%; padding: 6px 10px; border-radius: 10px; background: var(--hairline); align-self: flex-start; overflow-wrap: anywhere; } .ch-m.mio { align-self: flex-end; background: #DCEBFF; color: #111; } .ch-m.junto { margin-top: -3px; }
+.ch-quien small { color: var(--grey); } .ch-m.mio .ch-quien small { color: #333; } .ch-borrado { color: var(--grey); background: none; font-size: 13px; }
+.ch-txt a { color: inherit; text-decoration: underline; }
+.ch-acc { display: inline-flex; gap: 8px; margin-top: 2px; } .ch-acc button { background: none; border: 0; padding: 0 2px; min-height: 28px; color: var(--grey); text-decoration: underline; cursor: pointer; font-size: 12px; } body.movil .ch-acc button { min-height: 44px; padding: 0 8px; }
+.ch-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; } .ch-form textarea { flex: 1; resize: none; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; min-height: 44px; }
+.ch-solo { text-align: center; } .ch-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.ch-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.ch-nuevo { display: grid; gap: 6px; } .ch-nuevo input[type=text], .ch-nuevo #ch-nom { font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }
+.ch-chk { display: flex; gap: 8px; align-items: center; min-height: 36px; font-size: 14px; } .ch-chk input { width: 20px; height: 20px; } .ch-nuevo fieldset { border: 1px solid var(--hairline); border-radius: 8px; max-height: 180px; overflow: auto; }
+@media (max-width: 820px) { .ch-chk { min-height: 44px; } .ch-chk input { width: 24px; height: 24px; } .ch-acc button { min-height: 44px; padding: 0 8px; } #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid-template-columns: 1fr; padding-top: env(safe-area-inset-top); padding-bottom: calc(56px + env(safe-area-inset-bottom)); } .ch-izq { border-right: 0; } #nbChat .sg-btn { min-height: 44px; min-width: 44px; } .ch-m { max-width: 94%; } }
+body.movil #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid-template-columns: 1fr; padding-bottom: calc(56px + env(safe-area-inset-bottom)); } body.movil #nbChat .sg-btn { min-height: 44px; min-width: 44px; }
+@media (prefers-reduced-motion: no-preference) { .ch-btn { transition: none; } }
+.ch-izq:empty, .ch-der:empty { display: none; }
+
+.ch-edit textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }

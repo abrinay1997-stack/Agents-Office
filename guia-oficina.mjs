@@ -154,6 +154,9 @@ export const GUIA = [
   { id: 'calidad', tema: 'oficina', titulo: 'Calidad de los agentes', donde: 'Costos (U) → Calidad · 👍/👎 en cada entrega', vistas: ['costos'],
     palabras: ['calidad', 'puntaje', 'primera vez', 'pulgar', 'empeora', 'cuales agentes son mejores'],
     texto: 'Cada agente tiene un puntaje: una entrega usada tal cual vale 100, cada devolución resta 30 y un 👎 resta 50; se ve el porcentaje aprobado a la primera y un aviso si un agente empeora tras cambiar su skill o su brief. En lo delicado (finanzas, contratos, propuestas, importes grandes) el jefe del departamento revisa antes de que te llegue.' },
+  { id: 'chat', tema: 'oficina', titulo: 'El chat del equipo', donde: 'El botón del chat, junto a la campanita (solo en la nube; un administrador lo enciende)', vistas: [],
+    palabras: ['chat', 'chatear', 'mensaje directo', 'escribirle a alguien', 'canal', 'general', 'conversar con el equipo', 'hablar con mi pareja', 'mensajes del equipo'],
+    texto: 'Chat entre las personas del equipo: #general (todos), canales públicos o privados y mensajes directos. Quien solo lee puede leer, no escribir. Lo privado lo leen solo sus miembros: ni un administrador ni Dimitri lo ven. Los directos y las @menciones llegan a la campanita sin el texto. Por ahora se actualiza cada pocos segundos (sin tiempo real).' },
 ];
 
 /** Qué vistas de la oficina DEBE cubrir la guía (el test lo comprueba). */

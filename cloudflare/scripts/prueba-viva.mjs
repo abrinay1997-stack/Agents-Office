@@ -37,7 +37,7 @@ for (const [nombre, r] of [['la API', h], ['el acceso', await fetch(`${base}/log
 // Fase 10: el acceso y la invitación son nativos y con CSP estricta; lo de la nube (nube.js, dictado) pide sesión; el Hub no se alcanza desde fuera
 const lg = await fetch(`${base}/login.html`);
 ok(lg.status === 200 && !/unsafe-inline/.test(lg.headers.get('content-security-policy') || ''), 'el acceso lleva CSP sin unsafe-inline');
-for (const r of ['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js', '/nube-notas.js', '/dictado.js']) ok((await fetch(base + r)).status === 401, `${r} sin sesión da 401`);
+for (const r of ['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js', '/nube-notas.js', '/nube-chat.js', '/dictado.js']) ok((await fetch(base + r)).status === 401, `${r} sin sesión da 401`);
 const inv = await fetch(`${base}/invitacion/${'0'.repeat(48)}`);
 ok(inv.status === 200 && /invitacion\.js/.test(await inv.text()), 'la página de invitación se sirve sin sesión');
 const falsa = await fetch(`${base}/api/invitacion/ver`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify({ testigo: '0'.repeat(48) }) });
