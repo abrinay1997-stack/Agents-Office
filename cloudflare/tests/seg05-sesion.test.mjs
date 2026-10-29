@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR, crearD1, sembrar, envDePrueba } from './d1-memoria.mjs';
 import { manejar } from '../worker/lib/rutas.js';
-import { abrirSesion, olvidarFlagSesion, dispositivoDe, HORAS_DESLIZANTE } from '../worker/lib/sesion.js';
+import { abrirSesion, olvidarFlagSesion, conciliarFlagSesion, dispositivoDe, HORAS_DESLIZANTE } from '../worker/lib/sesion.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
 import { sha256 } from '../worker/lib/ids.js';
 
@@ -13,7 +13,7 @@ async function mundo({ flag = false } = {}) {
   const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' }), env = envDePrueba(d1), db = d1._db;
   const nueva = (email, rol) => { const id = crypto.randomUUID(); db.prepare("insert into users (id,email,rol,password_hash,salt) values (?,?,?,'x','x')").run(id, email, rol); return id; };
   const ana = db.prepare('select id from users where email = ?').get(c.email).id, leo = nueva('leo@panaclaw.test', 'lectura'), beto = nueva('beto@panaclaw.test', 'editor');
-  if (flag) { await guardarDoc(d1, 'config-local', { sesion: { deslizante: true } }); olvidarFlagSesion(d1); }
+  if (flag) { await guardarDoc(d1, 'config-local', { sesion: { deslizante: true } }); await guardarDoc(d1, 'sesion.estado', { activo: true, desde: iso(Date.now() - 60 * DIA) }); olvidarFlagSesion(d1); } // encendido hace tiempo
   const yo = async (cookie, ruta = '/api/yo', metodo = 'GET', cuerpo) => manejar(new Request('https://oficina.test' + ruta, { method: metodo, headers: { cookie: `__Host-sesion=${cookie}`, 'content-type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }), env);
   const sesion = async (uid, { creada = Date.now(), expira = Date.now() + 30 * DIA, uso = null, ua = 'Mozilla/5.0 (Windows NT 10.0) Chrome/120 Safari/537' } = {}) => {
     const t = await abrirSesion(d1, uid, ua), h = await sha256(t);
@@ -73,10 +73,14 @@ test('flag ENCENDIDO (BLOQUEANTE de la revisión): una sesión de 30 días cread
   assert.equal((await m.yo(a.t)).status, 200); assert.equal((await m.yo(e.t)).status, 200);
   assert.equal(m.db.prepare('select count(*) n from sesiones_uso').get().n, 2, 'la fila se graba en esa misma petición');
   // apagado un tiempo (la fila queda vieja) y vuelto a encender: lo único que cuenta es lo que dice la fila
-  await guardarDoc(m.d1, 'config-local', {}); olvidarFlagSesion(m.d1);
-  m.db.prepare('update sesiones_uso set last_used_at = ?').run(iso(Date.now() - 3 * DIA));
+  await guardarDoc(m.d1, 'config-local', {}); olvidarFlagSesion(m.d1); await conciliarFlagSesion(m.d1); // el reloj anota que se apagó
+  m.db.prepare('update sesiones_uso set last_used_at = ?').run(iso(Date.now() - 20 * DIA)); // pasó más de 14 días apagado: la fila quedó vieja
   await guardarDoc(m.d1, 'config-local', { sesion: { deslizante: true } }); olvidarFlagSesion(m.d1);
-  assert.equal((await m.yo(a.t)).status, 200); assert.equal((await m.yo(e.t)).status, 200);
+  assert.equal((await m.yo(a.t)).status, 200, 'una fila anterior al encendido no cuenta'); assert.equal((await m.yo(e.t)).status, 200);
+  // y a partir de ahí la inactividad vuelve a medirse: 15 días después de lo anotado, sí vence
+  m.db.prepare('update sesiones_uso set last_used_at = ?').run(iso(Date.now() - 15 * DIA)); m.db.prepare('update sessions set expires_at = ?').run(iso(Date.now() + 5 * DIA));
+  await guardarDoc(m.d1, 'sesion.estado', { activo: true, desde: iso(Date.now() - 16 * DIA) }); olvidarFlagSesion(m.d1);
+  assert.equal((await m.yo(a.t)).status, 401, 'pasados 14 días desde el último uso y desde el encendido');
 });
 
 test('flag ENCENDIDO y migración 0300 SIN aplicar: nadie recibe un 500, se sigue como con el flag apagado', { skip: SALTAR }, async () => {
@@ -147,4 +151,12 @@ test('dispositivoDe no devuelve el texto crudo del navegador', () => {
   assert.equal(dispositivoDe('Mozilla/5.0 (Linux; Android 14) Chrome/120 Mobile Safari/537'), 'Chrome en Android');
   assert.equal(dispositivoDe('Mozilla/5.0 (Macintosh; Intel Mac OS X 14) Firefox/121'), 'Firefox en Mac');
   assert.equal(dispositivoDe(''), 'Navegador');
+});
+
+test('primer encendido: la primera petición apunta "desde" y una fila vieja no desconecta a nadie', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  const a = await m.sesion(m.ana, { creada: Date.now() - 25 * DIA, expira: Date.now() + 5 * DIA, uso: Date.now() - 20 * DIA });
+  await guardarDoc(m.d1, 'config-local', { sesion: { deslizante: true } }); olvidarFlagSesion(m.d1);
+  assert.equal((await m.yo(a.t)).status, 200);
+  const est = JSON.parse(m.db.prepare("select json from docs where clave = 'sesion.estado'").get().json); assert.equal(est.activo, true); // secrets-ok
 });

@@ -2,7 +2,7 @@
 // (workerd rechaza una constante exportada: «Incorrect type for map entry»).
 import { json, error, noAutenticado, prohibido, cuerpo } from './respuesta.js';
 const TOPE_PUBLICO = 16_000; // bytes de un cuerpo SIN sesión (acceso)
-import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada, conCookieRenovada, sesionesDe, cerrarSesionPorId, cerrarTodas } from './sesion.js';
+import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada, conCookieRenovada, sesionesDe, cerrarSesionPorId, cerrarTodas, conciliarFlagSesion } from './sesion.js';
 import { agentes, ejecutar } from './agentes.js';
 import { uuid, ahora } from './ids.js';
 import * as cerebro from './cerebro.js';
@@ -43,6 +43,7 @@ export async function correrReloj(env, ahoraMs = Date.now()) {
   registrarSecretos(env); // `ahoraMs`: solo las pruebas lo cambian
   instalarZona(env.ZONA_HORARIA);
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+  await conciliarFlagSesion(env.DB).catch(() => {}); // SEG-05: apunta si el flag se apagó
   await env.DB.prepare('delete from sesiones_uso where token_hash not in (select token_hash from sessions)').run().catch(() => {}); // SEG-05: sin migración aplicada no hace nada
   if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
@@ -111,7 +112,7 @@ async function manejarInterno(req, env, exec = null) {
     const b = await cuerpo(req);
     if (!(await cerrarSesionPorId(db, usuario.id, b?.id, req))) return error('Esa sesión no existe o es la que estás usando (para esa, usa «Salir»).', 404);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'sesion', usuario.email, JSON.stringify({ cerro: 'una' })).run();
-    await cerrarDe(env, usuario.id, 'sesión cerrada desde otro dispositivo'); // el socket de ese dispositivo cae; las demás pestañas de esta persona reconectan con su sesión vigente
+    await cerrarDe(env, usuario.id, 'sesión cerrada desde otro dispositivo'); // el Hub cierra TODOS los sockets de la cuenta (no distingue dispositivo): la sesión cerrada no reconecta, las demás reconectan solas
     return json({ ok: true, sesiones: await sesionesDe(db, usuario.id, req) });
   }
   if (ruta === '/api/yo/sesiones/cerrar-todas' && req.method === 'POST') {

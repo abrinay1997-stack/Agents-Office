@@ -4,7 +4,7 @@
 //  2. En `sessions` va el SHA-256 del testigo, nunca el testigo.
 //  3. Cookie con prefijo `__Host-`: sin Domain, solo vale para este origen.
 import { sha256, testigo, ahora, enHoras } from './ids.js';
-import { leerDoc } from './almacen.js';
+import { leerDoc, guardarDoc } from './almacen.js';
 
 export const COOKIE = '__Host-sesion';
 export const ITERACIONES = 600_000;
@@ -20,15 +20,32 @@ export const RENOVAR_SI_FALTAN_MS = 24 * 3600_000;
 export const INACTIVIDAD_MS = 14 * 24 * 3600_000;
 const TTL_FLAG_MS = 10_000;
 const cacheFlag = new WeakMap();
-export async function sesionDeslizante(db) {
+const DOC_ESTADO = 'sesion.estado'; // { activo, desde }: desde cuándo está encendido el flag SIN interrupción (lo apunta la primera petición que lo ve encendido; el reloj apunta cuándo se apaga)
+/** { v: ¿encendido?, desde: ms desde que está encendido sin interrupción }. Con el flag apagado no lee nada más que `config-local`. */
+export async function estadoDeslizante(db) {
   const c = cacheFlag.get(db), t = Date.now();
-  if (c && t - c.t < TTL_FLAG_MS) return c.v;
-  let v = false;
-  try { v = (await leerDoc(db, 'config-local', {})).valor?.sesion?.deslizante === true; } catch { v = false; }
-  cacheFlag.set(db, { v, t });
-  return v;
+  if (c && t - c.t < TTL_FLAG_MS) return c.e;
+  let e = { v: false, desde: 0 };
+  try {
+    if ((await leerDoc(db, 'config-local', {})).valor?.sesion?.deslizante === true) {
+      const est = (await leerDoc(db, DOC_ESTADO, {})).valor || {};
+      if (est.activo && Date.parse(est.desde)) e = { v: true, desde: Date.parse(est.desde) };
+      else { const desde = new Date().toISOString(); await guardarDoc(db, DOC_ESTADO, { activo: true, desde }); e = { v: true, desde: Date.parse(desde) }; }
+    }
+  } catch { e = { v: false, desde: 0 }; }
+  cacheFlag.set(db, { e, t });
+  return e;
 }
+export const sesionDeslizante = async (db) => (await estadoDeslizante(db)).v;
 export const olvidarFlagSesion = (db) => cacheFlag.delete(db);
+/** Lo llama el reloj cada minuto: si el flag se apagó, lo apunta. Al volver a encenderlo, las filas de uso que quedaron viejas no cuentan (el «último uso» es max(fila, desde que se encendió)). */
+export async function conciliarFlagSesion(db) {
+  const cfg = (await leerDoc(db, 'config-local', {})).valor;
+  if (cfg?.sesion?.deslizante === true) return;
+  const est = (await leerDoc(db, DOC_ESTADO, {})).valor;
+  if (est?.activo) await guardarDoc(db, DOC_ESTADO, { activo: false, desde: est.desde });
+  olvidarFlagSesion(db);
+}
 const renovadas = new WeakMap(); // petición → cookie renovada (la pone `usuarioDeLaPeticion`, la lee `conCookieRenovada`)
 /** Si la sesión de esta petición se renovó, la respuesta lleva la cookie nueva (misma respuesta, sin otra petición). */
 export function conCookieRenovada(req, res) {
@@ -95,7 +112,7 @@ export async function usuarioDeLaPeticion(db, req) {
     `select ${COLUMNAS_USUARIO}, s.created_at as s_creada, s.expires_at as s_expira${conUso ? ', su.last_used_at as s_uso' : ''}
        from sessions s join users u on u.id = s.user_id left join perfiles p on p.user_id = u.id${conUso ? ' left join sesiones_uso su on su.token_hash = s.token_hash' : ''}
       where s.token_hash = ? and s.expires_at > ? and p.baja_at is null`).bind(hash, ahora()).first();
-  let desliza = await sesionDeslizante(db), f;
+  const estado = await estadoDeslizante(db); let desliza = estado.v, f;
   if (desliza) { try { f = await consulta(true); } catch (e) { console.warn('[sesión] sesiones_uso no está (¿migración 0300 sin aplicar?); sigo como con el flag apagado:', e?.message ?? e); desliza = false; } }
   if (!desliza) f = await consulta(false);
   if (!f) return null;
@@ -103,7 +120,7 @@ export async function usuarioDeLaPeticion(db, req) {
     const t = Date.now(), faltan = (Date.parse(f.s_expira) || 0) - t;
     // Sin fila de uso (sesiones de antes de encender el flag, o filas viejas tras apagarlo y volver a encenderlo) NO se sabe cuándo se usó por última vez: cuenta como «ahora».
     // Contar desde su creación desconectaba a quien tenía una sesión de 30 días de hace más de 14 aunque la hubiera usado ayer. La fila se graba en esta misma petición.
-    const ultimo = f.s_uso ? Date.parse(f.s_uso) || t : t;
+    const ultimo = f.s_uso ? Math.max(Date.parse(f.s_uso) || t, estado.desde) : t; // y una fila anterior al último encendido (el flag estuvo apagado) no cuenta
     if (f.rol !== 'lectura' && t - ultimo > INACTIVIDAD_MS) { await db.prepare('delete from sessions where token_hash = ?').bind(hash).run(); return null; }
     const renovar = faltan < RENOVAR_SI_FALTAN_MS;
     if (!f.s_uso || renovar || t - ultimo > RENOVAR_SI_FALTAN_MS) { // una escritura por día y sesión
