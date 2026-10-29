@@ -8,6 +8,8 @@
 // aprobar, programar, quitar ni borrar. Eso se comprueba aquí y no solo en la herramienta, porque cualquier proceso puede llamar a la API.
 import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repetir.js';
 import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
+import { AVISO_YA, motivoNoYa } from '../src/contenido-ya.js';
+export { AVISO_YA, motivoNoYa };
 import { hashtagsUsados } from './guardados-core.mjs';
 import { emparejar, comoEvento } from '../src/contenido-publicadas.js';
 import { huecos as huecosDe, queVuelven, repartir, encargo, origenVuelve, raizDe } from '../src/contenido-llenar.js';
@@ -17,14 +19,6 @@ import { validateVision, MAX_IMAGES, MAX_B64 } from '../vision.mjs';
 
 export const LIMITE_VISION = MAX_IMAGES * (MAX_B64 + 400) + 256 * 1024; // lo que pesa un «Mejorar» con las 4 imágenes que Claude puede ver (+ la pieza)
 const ID = '[a-z0-9-]+';
-/** CON-04/B03: lo único que se promete con «Publicar ahora» y cuándo no hay ningún «ahora» posible. */
-export const AVISO_YA = 'Sale ahora en Instagram y Facebook. No se puede deshacer: después solo se puede borrar o archivar (en Instagram no se puede borrar desde aquí). Lo programado sí se puede deshacer.';
-export function motivoNoYa(aj = {}) {
-  if (aj.modo === 'apagado') return 'Contenido está apagado: no sale nada. Enciéndelo en Ajustes → Contenido.';
-  if (aj.modo !== 'real') return 'Estás en simulacro: nada sale de verdad. Pasa a «Real» en Ajustes → Contenido para publicar ahora.';
-  if (aj.conductor !== 'meta') return '«Publicar ahora» solo existe con «Meta directo»: con Metricool la publicación se programa con su mínimo de espera. Usa «Aprobar».';
-  return '';
-}
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const R = (status, datos) => ({ status, datos });
@@ -211,7 +205,7 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
       }
       const py = new RegExp(`^/api/contenido/piezas/(${ID})/publicar-ya$`).exec(p); // CON-04: «Publicar ahora» — SOLO el dueño en la pantalla (ni agentes, ni Dimitri, ni el asistente, ni Telegram)
       if (py && metodo === 'POST') {
-        const b = await body(); if (b.por !== undefined && b.por !== 'dueno') return R(403, { error: 'publicar ahora es solo del dueño, en la pantalla: ni los agentes ni los asistentes lo hacen' });
+        const b = await body(); if (b.por !== 'dueno') return R(403, { error: 'publicar ahora es solo del dueño, en la pantalla (la petición debe declararse del dueño): ni los agentes ni los asistentes lo hacen' });
         const aj = (await ajustes()) || {};
         if (aj.publicarYa !== true) return R(409, { error: '«Publicar ahora» está apagado: se enciende en Ajustes → Contenido' });
         if (!programador) return R(404, { error: 'sin cola' });

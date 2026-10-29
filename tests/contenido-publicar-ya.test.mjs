@@ -99,12 +99,15 @@ function controlador(t, { aj = {}, ret = { ok: true } } = {}) {
   const ticks = [];
   const programador = { tick: async o => { ticks.push(o); }, retirarAhora: async () => ret, salidaDe: async () => null, estado: async () => ({ entradas: {} }) };
   const ctl = crearControlador({ almacen: t.almacen, programador, ajustes: () => ({ publicarYa: true, modo: 'real', conductor: 'meta', ...aj }), ahora: t.ahora, segundoPlano: p => p });
-  const llamar = (cuerpo = {}) => ctl.responder({ metodo: 'POST', p: `/api/contenido/piezas/${t.id}/publicar-ya`, cuerpo: async () => cuerpo });
-  return { llamar, ticks };
+  const crudo = cuerpo => ctl.responder({ metodo: 'POST', p: `/api/contenido/piezas/${t.id}/publicar-ya`, cuerpo: async () => cuerpo });
+  const llamar = (cuerpo = {}) => crudo({ por: 'dueno', ...cuerpo }); // la pantalla (o la sesión de la nube) se declara del dueño
+  return { llamar, crudo, ticks };
 }
 
 test('ruta publicar-ya: candados y camino feliz (202, tick solo de esa pieza)', async () => {
   const t = montar(); const c = controlador(t);
+  assert.equal((await c.crudo({ confirmado: true })).status, 403, 'quien no se declara del dueño (un agente que omite `por`) recibe 403');
+  assert.equal((await c.crudo({})).status, 403);
   assert.equal((await c.llamar({ por: 'agente', confirmado: true })).status, 403);
   assert.equal((await c.llamar({ por: 'dimitri', confirmado: true })).status, 403);
   const sin = await c.llamar({}); assert.equal(sin.status, 409); assert.equal(sin.datos.confirmar, true);

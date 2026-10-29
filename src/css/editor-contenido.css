@@ -227,3 +227,5 @@ body.dark :is(.pz-ctt small, .pz-cto small, .pz-ctc) { color: #C2C0B9; }
 .pz-qimg { border-color: var(--ink); font-weight: 700; }
 .pz-chk small { color: var(--grey); font-size: 11px; }
 .pz-vi { color: var(--ink); border-left: 3px solid var(--ink); padding: 2px 0 2px 8px; margin: 6px 0; }
+
+.pz-ya-av { margin: 6px 0 0; padding: 8px 10px; border: 1px solid #B4391E; border-radius: 8px; background: #FBEDEA; color: #8F2A14; font-size: 12.5px; font-weight: 600; line-height: 1.4; } body.dark .pz-ya-av { border-color: #FF8A73; background: #3A1D17; color: #FFB4A3; } /* CON-04: el aviso de «sin deshacer», con contraste AA en claro y oscuro */
