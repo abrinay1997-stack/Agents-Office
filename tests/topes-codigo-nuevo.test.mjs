@@ -17,6 +17,12 @@ test('una excepción con motivo exime al archivo', () => {
 });
 test('leerDiff separa archivos, nuevos y líneas añadidas', () => {
   const d = leerDiff('diff --git a/a.js b/a.js\nnew file mode 100644\n--- /dev/null\n+++ b/a.js\n@@ -0,0 +1,2 @@\n+uno\n+dos\ndiff --git a/b.js b/b.js\n--- a/b.js\n+++ b/b.js\n@@ -1 +1 @@\n-viejo\n+nuevo\n');
-  assert.deepEqual(d, [{ ruta: 'a.js', nuevo: true, lineasAnadidas: ['uno', 'dos'] }, { ruta: 'b.js', nuevo: false, lineasAnadidas: ['nuevo'] }]);
+  assert.deepEqual(d, [{ ruta: 'a.js', nuevo: true, lineasAnadidas: ['uno', 'dos'], lineasQuitadas: [] }, { ruta: 'b.js', nuevo: false, lineasAnadidas: ['nuevo'], lineasQuitadas: ['viejo'] }]);
   assert.ok(esCodigo('src/x.js') && !esCodigo('docs/a.md') && !esCodigo('package-lock.json'));
+});
+test('retocar una línea larga que ya existía no cuenta, pero alargarla mucho o añadir una larga sí', () => {
+  const vieja = 'y'.repeat(500);
+  assert.deepEqual(revisarTopes([{ ruta: 'a.js', nuevo: false, lineasAnadidas: [vieja.slice(5)], lineasQuitadas: [vieja] }]), []);
+  assert.equal(revisarTopes([{ ruta: 'a.js', nuevo: false, lineasAnadidas: [vieja + 'z'.repeat(200)], lineasQuitadas: [vieja] }]).length, 1);
+  assert.equal(revisarTopes([{ ruta: 'a.js', nuevo: false, lineasAnadidas: [vieja], lineasQuitadas: [] }]).length, 1);
 });
