@@ -6,7 +6,7 @@ import { abrirSesion } from '../worker/lib/sesion.js';
 import { guardarConfig } from '../worker/lib/chat/chat.js';
 import { guardarConfig as notif } from '../worker/lib/notificaciones.js';
 import { podar } from '../worker/lib/mantenimiento.js';
-import { limpiarCuerpo, cuerpoValido, nombreCanalValido, claveDirecto, leerMenciones, puedeEditar, noLeidos, tituloAviso, pagina, MAX_CUERPO } from '../chat-core.mjs';
+import { limpiarCuerpo, cuerpoValido, nombreCanalValido, claveDirecto, leerMenciones, puedeEditar, noLeidos, tituloAviso, pagina, MAX_CUERPO } from '../../chat-core.mjs';
 import { SALTAR, crearD1, sembrar, envDePrueba } from './d1-memoria.mjs';
 
 async function oficina({ activo = true } = {}) {

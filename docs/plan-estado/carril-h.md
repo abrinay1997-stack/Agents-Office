@@ -31,3 +31,8 @@
   - UI (`nube-notas.js`, `nube.js` +1 línea): aviso pequeño «Ana se conectó» (6 s, sin sonido, juntas las ráfagas, «Escribirle») y, en la hoja, «Tu conexión» con «Avisarme…» (solo admin), «No avisar que me conecto» y el texto de transparencia. Test servidor `presencia-aviso.test.mjs` y de navegador.
   - Delta de bytes de la página: 0.
   - ⬜ Pendiente: aviso por Telegram (depende de N2), «visto hace / en línea» en la lista del equipo, D08 (el Hub aún manda `area`/etiqueta a todos los roles) y «no molestar» con horario.
+- ✅ **C0 — chat interno: modelo, rutas y tests, sin UI ni sockets** (rama `carril-h-c0`; flag `chat.config.activo` APAGADO).
+  - Migración reservada: `0143_chat.sql` (`chat_canales`, `chat_miembros`, `chat_mensajes`; deshacer: `drop table if exists chat_mensajes; drop table if exists chat_miembros; drop table if exists chat_canales;`). Poda declarada: `chat_mensajes` a los 365 días (`mantenimiento.js`); canales y miembros acotados (cascada). En `TABLAS` y `CONSERVA_TABLAS`/`CONSERVA_DOCS`.
+  - Archivos: `chat-core.mjs` (puro), `cloudflare/worker/lib/chat/chat.js`, `cloudflare/worker/modulos/chat.js` (`/api/chat/*`), `cloudflare/tests/chat.test.mjs` (12 casos). Decisiones del §13 asumidas (a confirmar por el dueño): lectura lee y no escribe; Telegram sin texto; #general automático; retención 365 días; sin escritura de Dimitri.
+  - Privacidad: la pertenencia en D1 es la única puerta (id ajeno = 404, un administrador no lee privados ni directos, solo metadatos en `/api/chat/admin`); avisos por `notificaciones` sin texto (§8 del plan actualizado).
+  - Delta de bytes de la página: 0. ⬜ C1 (pantallas), C2 (Hub dirigido y presencia), adjuntos, reacciones, búsqueda, hilos de registros y Dimitri: pendientes.

@@ -32,14 +32,14 @@ export const claveDirecto = (a, b) => [String(a), String(b)].sort().join('|');
  * Gana el nombre más largo. Como mucho MAX_MENCIONES; nunca al que escribe. @param {string} texto @param {{id:string,nombre:string}[]} miembros @param {string} [yo]
  */
 export function leerMenciones(texto, miembros, yo = '') {
-  const t = sinTildes(texto), vistos = new Set(), orden = [...miembros].filter((m) => m.id !== yo && m.nombre).sort((a, b) => b.nombre.length - a.nombre.length);
+  let t = sinTildes(texto); const vistos = new Set(), orden = [...miembros].filter((m) => m.id !== yo && m.nombre).sort((a, b) => b.nombre.length - a.nombre.length);
   for (const m of orden) {
     const k = sinTildes(m.nombre).trim(); if (!k) continue;
     let desde = 0;
     for (;;) {
       const i = t.indexOf('@' + k, desde); if (i < 0) break;
       const fin = i + 1 + k.length, sig = t[fin], ant = t[i - 1];
-      if ((!ant || /[\s(¿¡"'«]/.test(ant)) && (!sig || !/[\p{L}\p{N}_]/u.test(sig))) { vistos.add(m.id); break; }
+      if ((!ant || /[\s(¿¡"'«]/.test(ant)) && (!sig || !/[\p{L}\p{N}_]/u.test(sig))) { vistos.add(m.id); t = t.slice(0, i) + ' '.repeat(k.length + 1) + t.slice(fin); break; } // el tramo se gasta: «@Dani María» no cuenta también como «@Dani»
       desde = i + 1;
     }
     if (vistos.size >= MAX_MENCIONES) break;

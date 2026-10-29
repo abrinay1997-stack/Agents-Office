@@ -10,12 +10,13 @@ import { json, error, prohibido, noEncontrado } from '../lib/respuesta.js';
 import * as C from '../lib/chat/chat.js';
 
 export const nombre = 'chat';
-export const grupos = ['chat'];
+export const grupos = []; // /api/chat (exacto, POST) es del chat con un agente (chat-agente.js): este módulo solo posee /api/chat/*
+export const rutasExtra = ['/api/chat/'];
 const resp = (r, ok = 200) => (r.error ? error(r.error, r.estado || 400) : json(r, ok));
 
 export async function manejar(ctx) {
   const { req, db, ruta, usuario, url } = ctx;
-  if (!ruta.startsWith('/api/chat')) return null;
+  if (!ruta.startsWith('/api/chat/')) return null;
   const resto = ruta.slice('/api/chat'.length), metodo = req.method, escribe = usuario.rol !== 'lectura';
   if (resto === '/config') {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador cambia el chat.');
@@ -28,9 +29,10 @@ export async function manejar(ctx) {
     if (metodo === 'GET' && resto === '/resumen') return json({ activo: false, canales: [], total: 0 });
     return metodo === 'GET' ? json({ activo: false }) : error('El chat todavía no está encendido en esta oficina.', 409);
   }
+  await C.asegurarGeneral(db, usuario.id); // #general existe desde el primer día y toda cuenta está en él
   if (metodo === 'GET' && resto === '/resumen') return json({ activo: true, ...(await C.resumen(db, usuario)) });
   if (metodo === 'GET' && resto === '/canales') return json({ publicos: await C.publicos(db, usuario) });
-  if (metodo === 'GET' && resto === '/novedades') { await C.asegurarGeneral(db, usuario.id); return json(await C.novedades(db, usuario, url.searchParams.get('desde'))); }
+  if (metodo === 'GET' && resto === '/novedades') { return json(await C.novedades(db, usuario, url.searchParams.get('desde'))); }
   if (metodo === 'GET' && resto === '/admin') return usuario.rol === 'admin' ? json({ canales: await C.adminCanales(db) }) : prohibido('Solo un administrador ve el estado del chat.');
   if (metodo === 'POST' && resto === '/canales') { if (!escribe) return prohibido('Con acceso de lectura no se crean canales.'); const b = (await ctx.cuerpo(req)) || {}; return resp(await C.crearCanal(db, usuario, b), 201); }
   if (metodo === 'POST' && resto === '/directo') { if (!escribe) return prohibido('Con acceso de lectura no se abren chats directos.'); const b = (await ctx.cuerpo(req)) || {}; return resp(await C.abrirDirecto(db, usuario, b.con)); }
