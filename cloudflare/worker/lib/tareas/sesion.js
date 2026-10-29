@@ -10,6 +10,7 @@ import { crearCatalogoCon } from '../../../../tareas/catalogo-core.mjs';
 import { crearBus } from '../../../../tareas/eventos.mjs';
 import { LIGHT_KEEP } from '../../../../tareas/ligera.mjs';
 import { Conflicto, leerDoc, guardarDoc } from '../almacen.js';
+import { emitirAvisos } from '../avisos.js';
 
 export const TAREAS = 'tareas';
 export const DOC_PROYECTOS = 'tareas.proyectos';
@@ -101,20 +102,7 @@ export async function abrirSesion(db, { ahora = () => Date.now(), bitacora = nul
     }
     if (sucioP) { await guardarDoc(db, DOC_PROYECTOS, { lista: P }, { espera: vP }); vP += 1; sucioP = false; }
     if (sucioE) { await guardarDoc(db, DOC_ETIQUETAS, { lista: E }, { espera: vE }); vE += 1; sucioE = false; }
-    if (avisos.length) {
-      const t0 = ahora(), nuevos = [];
-      const lista = avisos.splice(0), claves = [...new Set(lista.map(a => a.key).filter(Boolean))], recientes = new Set();
-      for (let i = 0; i < claves.length; i += LOTE_IDS) { // MEDIO-6: una consulta por tanda de claves, no una por aviso
-        const trozo = claves.slice(i, i + LOTE_IDS);
-        const { results } = await db.prepare(`select distinct json_extract(json,'$.key') k from filas where coleccion = 'avisos' and orden > ? and json_extract(json,'$.key') in (${trozo.map(() => '?').join(',')})`).bind(t0 - 6 * 3600e3, ...trozo).all();
-        for (const r of results) recientes.add(r.k);
-      }
-      for (const a of lista) { // lo mismo dicho dos veces en 6 horas se dice una (serve.mjs → notice con key)
-        if (a.key && (recientes.has(a.key) || nuevos.some(x => x.key === a.key))) continue;
-        nuevos.push(a);
-      }
-      if (nuevos.length) await db.batch(nuevos.map((a, i) => { const id = `${t0.toString(36)}${i}${Math.random().toString(36).slice(2, 5)}`; return db.prepare('insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?) on conflict (coleccion, id) do nothing').bind('avisos', id, JSON.stringify({ id, t: t0, read: false, ...a }), t0, new Date(t0).toISOString()); }));
-    }
+    if (avisos.length) await emitirAvisos(db, avisos.splice(0), { ahora: ahora() }); // el dedupe de 6 h y el lote, en lib/avisos.js (N0.0)
     const eventos = c.eventos; alm.confirmar();
     return eventos;
   };

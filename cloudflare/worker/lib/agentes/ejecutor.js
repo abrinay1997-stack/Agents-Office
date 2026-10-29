@@ -11,6 +11,7 @@ import * as approvals from '../../../../approvals.mjs';
 import * as reliability from '../../../../reliability.mjs';
 import * as memory from '../../../../memory.mjs';
 import * as costsCore from '../../../../costs-core.mjs';
+import { emitirAviso } from '../avisos.js';
 import { HANDOFF, needsReview, reviewPrompt, parseJSON, clasificarCorreccion } from '../../../../agente-core.mjs';
 import { askLine } from '../../../../routines-core.mjs';
 import { pendientes as bloqueosPendientes } from '../../../../tareas/dependencias.mjs';
@@ -104,11 +105,7 @@ async function verificarCandado(db, tarea, token) { // si detuvieron la tarea mi
 }
 
 /* ---------- avisos y apuntes sueltos ---------- */
-async function avisar(db, aviso, ahora = Date.now()) { // lo que serve.mjs hace con notice(): el mismo problema se dice una vez cada 6 horas
-  if (aviso.key) { const ya = await db.prepare("select 1 x from filas where coleccion = 'avisos' and orden > ? and json_extract(json,'$.key') = ?").bind(ahora - 6 * 3600e3, aviso.key).first(); if (ya) return; }
-  const id = `${ahora.toString(36)}${Math.random().toString(36).slice(2, 5)}`;
-  await db.prepare('insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?) on conflict (coleccion, id) do nothing').bind('avisos', id, JSON.stringify({ id, t: ahora, read: false, level: 'info', task: null, key: null, ...aviso }), ahora, new Date(ahora).toISOString()).run();
-}
+const avisar = (db, aviso, ahora = Date.now()) => emitirAviso(db, aviso, { ahora }).then(() => {}); // el mismo problema se dice una vez cada 6 horas (lib/avisos.js)
 
 async function escribirNota(db, task, C, ahora) { // writeNote: el entregable se vuelve una nota del Cerebro, enlazada a lo que leyó
   const a = C.agents.find(x => x.id === task.agent);

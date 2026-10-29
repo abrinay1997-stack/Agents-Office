@@ -14,6 +14,7 @@ import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { guardarAgente } from '../lib/tareas/roster.js';
 import * as RT from '../lib/tareas/rutinas.js';
 import { leerDoc } from '../lib/almacen.js';
+import { leerAvisos, marcarAvisosLeidos } from '../lib/avisos.js';
 import { crearPresupuesto, contarD1 } from '../lib/contenido/presupuesto.js';
 import * as costos from '../lib/agentes/costos.js';
 import { tickAprobaciones } from '../lib/agentes/aprobaciones.js';
@@ -84,8 +85,7 @@ export async function manejar(ctx) {
   if (ruta === '/api/status' && metodo === 'GET') return json(await estado(env, db));
   if (ruta === '/api/notices/read' && metodo === 'POST') {
     if (usuario.rol === 'lectura') return prohibido();
-    const { results } = await db.prepare("select id, json from filas where coleccion = 'avisos'").all();
-    for (const r of results) { const j = JSON.parse(r.json); if (j.read) continue; j.read = true; await db.prepare("update filas set json = ? where coleccion = 'avisos' and id = ?").bind(JSON.stringify(j), r.id).run(); }
+    await marcarAvisosLeidos(db);
     return json({ ok: true });
   }
   return null;
@@ -116,8 +116,7 @@ export async function estado(env, db) {
   const mes = await costos.estadoDelMes(db, C.ajustes.costs, now);
   if (mes.level !== 'none') add('presupuesto', 'Presupuesto del mes', mes.level === 'over' ? 'bad' : mes.level === 'alert' ? 'warn' : 'ok', `US$${mes.spent.toFixed(2)} de US$${mes.budget.toFixed(2)}.`);
   const overall = checks.some(c => c.state === 'bad') ? 'bad' : checks.some(c => c.state === 'warn') ? 'warn' : 'ok';
-  const { results } = await db.prepare("select json from filas where coleccion = 'avisos' order by orden desc limit 30").all();
-  const notices = results.map(r => JSON.parse(r.json));
+  const notices = await leerAvisos(db, 30);
   return { overall, checks, notices, unread: notices.filter(n => !n.read).length, at: now };
 }
 

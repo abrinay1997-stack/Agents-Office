@@ -21,17 +21,13 @@ import { crearMejorar } from './redaccion.js';
 import { aprenderDeLoPublicado, llevarIndicadoresMeta, indicadoresEstado } from './aprender.js';
 import { describirZona } from '../zona.js';
 import { leerDoc, mutarDoc } from '../almacen.js';
+import { emitirAviso } from '../avisos.js';
 import { crearPresupuesto } from './presupuesto.js';
 
 /** Un aviso para el dueño (la lista `notices`, la misma forma que data/notices.json: lo último 200; el mismo problema se dice una vez cada 6 horas). */
 export function avisarD1(db, ahora = Date.now) {
   return (kind, text, { level = 'info', task = null, key = null } = {}) => {
-    const p = mutarDoc(db, 'notices', [], lista => {
-      const t = ahora();
-      if (key && lista.some(n => n.key === key && t - n.t < 6 * 3600e3)) return lista;
-      lista.push({ id: crypto.randomUUID().slice(0, 8), t, kind, level, text: String(text).slice(0, 600), task, key, read: false });
-      return lista.slice(-200);
-    }).catch(() => {});
+    const p = emitirAviso(db, { kind, level, text, task, key }, { ahora: ahora(), destino: 'doc', maxTexto: 600, largoId: 8 }).catch(() => {});
     return p;
   };
 }
