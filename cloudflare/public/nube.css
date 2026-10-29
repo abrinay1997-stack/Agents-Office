@@ -136,7 +136,7 @@ body.movil .nt-campana { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .nt-campana:focus-visible, .nt-hoja button:focus-visible, .nt-hoja select:focus-visible, .nt-hoja textarea:focus-visible, .nt-sw input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .nt-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
 .nt-hoja { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(400px, calc(100vw - 32px)); max-height: min(78vh, 640px); max-height: min(78dvh, 640px); overflow: auto; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
-body.movil .nt-hoja { left: 0; right: 0; bottom: 0; width: auto; max-height: 86dvh; border-radius: 16px 16px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); width: auto; max-height: calc(86dvh - 64px); border-radius: 16px 16px 0 0; padding-bottom: 16px; } /* deja libre la barra de pestañas */
 .nt-cab { display: flex; justify-content: space-between; align-items: center; } .nt-cab h2 { margin: 0; font-size: 17px; }
 .nt-hoja h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
 .nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; }

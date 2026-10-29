@@ -26,6 +26,7 @@
   }
 
   async function cargar() {
+    if (document.hidden) { clearTimeout(timer); timer = setTimeout(cargar, activo ? CADA_MS : SI_APAGADO_MS); return; } // una pestaña olvidada no marca presencia ni «visita nueva»
     try { datos = await api('/api/notas-personales/entrada'); activo = datos.activo === true; } catch { return; }
     pintarCampana(); if (abierta) pintarHoja();
     clearTimeout(timer); timer = setTimeout(cargar, activo ? CADA_MS : SI_APAGADO_MS);
@@ -51,19 +52,22 @@
   function pintarHoja() {
     if (!hoja) return;
     const notas = datos?.notas || [], av = datos?.notificaciones?.items?.filter((a) => !a.leida) || [];
-    const guardado = hoja.querySelector('#nt-texto')?.value, para = hoja.querySelector('#nt-para')?.value;
+    const guardado = hoja.querySelector('#nt-texto')?.value, para = hoja.querySelector('#nt-para')?.value, color = hoja.querySelector('input[name=color]:checked')?.value;
     hoja.innerHTML = `<div class="nt-cab"><h2 id="nt-t">Mientras no estabas</h2><button type="button" class="sg-btn" data-a="x" aria-label="Cerrar">✕</button></div>
       ${notas.length ? `<h3>Notas para ti</h3><ul class="nt-lista">${notas.map(tarjetaNota).join('')}</ul>` : ''}
       ${av.length ? `<h3>Avisos <button type="button" class="sg-btn" data-a="leidas">Marcar todo como leído</button></h3><ul class="nt-avisos">${av.map(filaAviso).join('')}</ul>` : ''}
       ${!notas.length && !av.length ? '<p class="nt-vacio"><b>Estás al día.</b> No hay notas ni avisos nuevos.</p>' : ''}
       <h3>Dejar una nota</h3>${formulario()}`;
-    const t = hoja.querySelector('#nt-texto'); if (t && guardado) { t.value = guardado; contar(); } if (document.activeElement === document.body) hoja.focus(); // el foco no se pierde al repintar const s = hoja.querySelector('#nt-para'); if (s && para) s.value = para;
+    const t = hoja.querySelector('#nt-texto'); if (t && guardado) { t.value = guardado; contar(); }
+    const sel = hoja.querySelector('#nt-para'); if (sel && para) sel.value = para; // el destinatario elegido se conserva al repintar
+    if (color) { const r = hoja.querySelector(`input[name=color][value="${color}"]`); if (r) r.checked = true; }
+    if (document.activeElement === document.body) hoja.focus(); // el foco no se pierde al repintar
   }
   function contar() { const t = hoja?.querySelector('#nt-texto'), c = hoja?.querySelector('#nt-cont'); if (t && c) { const l = t.value.trim().length; c.textContent = l > TOPE ? `Te sobran ${l - TOPE}` : `${l} / ${TOPE}`; c.classList.toggle('mal', l > TOPE); } }
 
   async function abrir() {
     abierta = true; mensaje = '';
-    hoja = document.createElement('section'); hoja.id = 'nbNotas'; hoja.className = 'nt-hoja'; hoja.setAttribute('role', 'dialog'); hoja.setAttribute('aria-labelledby', 'nt-t'); hoja.tabIndex = -1;
+    hoja = document.createElement('section'); hoja.id = 'nbNotas'; hoja.className = 'nt-hoja'; hoja.setAttribute('role', 'dialog'); hoja.setAttribute('aria-modal', 'false'); /* no modal: no bloquea la oficina */ hoja.setAttribute('aria-labelledby', 'nt-t'); hoja.tabIndex = -1;
     document.body.appendChild(hoja); pintarHoja(); pintarCampana(); hoja.focus();
     hoja.addEventListener('click', alClic); hoja.addEventListener('input', (e) => { if (e.target.id === 'nt-texto') contar(); }); hoja.addEventListener('submit', alEnviar);
     document.addEventListener('keydown', alTecla);
@@ -80,7 +84,7 @@
     if (a === 'abrir') { const id = b.dataset.e.slice(6); cerrar(); location.hash = `#tareas=lista&t=${encodeURIComponent(id)}`; return; }
     try {
       if (a === 'leidas') await api('/api/notificaciones/leer', { metodo: 'POST', cuerpo: { todas: true } });
-      else if (li && (a === 'cerrar' || a === 'reportar')) { await api(`/api/notas-personales/${li.dataset.id}/${a}`, { metodo: 'POST' }); if (a === 'reportar') N.aviso('Avisé a un administrador. La nota se cerró para ti.'); if (a === 'reportar') await api(`/api/notas-personales/${li.dataset.id}/cerrar`, { metodo: 'POST' }); }
+      else if (li && (a === 'cerrar' || a === 'reportar')) { await api(`/api/notas-personales/${li.dataset.id}/${a}`, { metodo: 'POST' }); if (a === 'reportar') N.aviso('Cerré la nota. Un administrador podrá leerla porque la reportaste.'); if (a === 'reportar') await api(`/api/notas-personales/${li.dataset.id}/cerrar`, { metodo: 'POST' }); }
     } catch (err) { N.aviso(err.message); }
     await cargar();
   }

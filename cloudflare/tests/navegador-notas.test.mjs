@@ -60,7 +60,10 @@ for (const ancho of [390, 1280]) test(`encendido a ${ancho} px: cuenta lo nuevo,
   assert.equal(await sinDesborde(p), true);
   await p.waitForSelector('#nt-para option[value^="persona:"]', { state: 'attached' });
   assert.equal(await p.locator('#nt-para option[value="todos"]').count(), 1, 'un editor puede escribir a todos');
-  await p.fill('#nt-texto', 'Gracias, ya lo vi'); await p.selectOption('#nt-para', `persona:${ana}`); await p.click('#nbNotas button[type=submit]');
+  await p.fill('#nt-texto', 'Gracias, ya lo vi'); await p.selectOption('#nt-para', `persona:${ana}`); await p.check('input[name=color][value=verde]');
+  await p.evaluate(() => window.AO_NUBE.notas.recargar()); await p.waitForTimeout(300);
+  assert.equal(await p.inputValue('#nt-para'), `persona:${ana}`, 'el destinatario sobrevive al repintado'); assert.equal(await p.inputValue('#nt-texto'), 'Gracias, ya lo vi'); assert.equal(await p.isChecked('input[name=color][value=verde]'), true);
+  assert.equal(await p.getAttribute('#nbNotas', 'aria-modal'), 'false'); await p.click('#nbNotas button[type=submit]');
   await p.waitForFunction(() => /Nota dejada/.test(document.querySelector('#nbNotas .nb-msg')?.textContent || ''));
   assert.equal(d1._db.prepare("select count(*) n from notas_personales where de_user_id = ?").get(beto).n, 1);
   await p.click('#nbNotas [data-a=cerrar]'); await p.waitForSelector('#nbNotas .nt-vacio');
