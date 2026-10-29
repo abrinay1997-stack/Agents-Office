@@ -375,6 +375,7 @@ const TABLAS = {
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
   auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', notas_personales: 'mantenimiento',
+  bandeja_items: 'acotada (el módulo se queda con los 800 más recientes: contenido/bandeja.mjs → MAX; solo con el flag nube.bandejaTabla)',
   notas_estado: 'acotada (cascada con su nota, que se poda a los 30 días de vencer)', presencia_cuenta: 'acotada (una fila por cuenta, cascada con users)',
   // el libro contable: se conserva (una fila de ~150 bytes por llamada a un modelo), se lee por rango con índice
   costos: 'libro contable (se conserva)',

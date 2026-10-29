@@ -44,6 +44,7 @@ import { publica } from '../../../contenido/programador-core.mjs';
 import { armarLectura } from '../../../contenido/metricas-core.mjs';
 import { conEspejo, bytesDeFila, MAX_ARCHIVO } from './espejo.js';
 import { igualSeguro } from './ids.js';
+import { tablaActiva, cargarTabla } from './bandeja-tabla.js';
 
 // ------------------------------------------------------------ dónde viven las cosas dentro del espejo
 export const DIR_ANUNCIOS = 'data/anuncios';
@@ -61,6 +62,8 @@ export const ESPEJO_BANDEJA = {
   exactos: [`${DIR_ANALITICAS}/cuentas.json`, `${DIR_ANALITICAS}/bandeja.json`, `${DIR_ANALITICAS}/bandeja-meta.json`, `${DIR_ANUNCIOS}/cuenta.json`],
   semillas: {},
 };
+/** Con la tabla `bandeja_items` encendida, `bandeja.json` ya no se trae al espejo (solo la Bandeja lo leía; Anuncios la consulta por el mismo almacén). */
+export const sinArchivoBandeja = (e) => ({ ...e, exactos: e.exactos.filter((x) => !x.endsWith('/bandeja.json')) });
 /** El espejo mínimo del webhook público: solo lo que hace falta para APUNTAR un evento (su cola y la moneda de la cuenta). */
 export const ESPEJO_WEBHOOK = { prefijos: [], exactos: [`${DIR_ANUNCIOS}/conversiones.json`, `${DIR_ANUNCIOS}/cuenta.json`], semillas: {} };
 export const DOC_FRENO = 'meta.freno';
@@ -176,7 +179,7 @@ export const pareceDeAgente = (v) => String(v ?? '').trim().toLowerCase() === 'a
  * Todo lo de Anuncios construido sobre un espejo ya abierto.
  * @param {object} o  { db, env, esp, cfg, fetchFn, ahora, avisos, freno, panelAt, bandejaAbiertaAt, kpis, piezas, usuario }
  */
-export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined, ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {}, latido = null }) {
+export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined, ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {}, latido = null, tabla = null }) {
   const dirAn = esp.ruta(DIR_ANUNCIOS), dirMeta = esp.ruta(DIR_ANALITICAS);
   const aj = () => cfg.anuncios || {};
   const avisar = (texto, o) => avisos.avisar('anuncios', texto, o);
@@ -221,7 +224,7 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
     const r = await textoIA(env, { sistema: system, usuario: user, maxTokens: 1500, fetchFn: elFetch(fetchFn) });
     return { ...leerPropuesta(r.texto), agente: a.name, campo };
   };
-  const bandejaLect = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: bandejaAbiertaAt, tokens });
+  const bandejaLect = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: bandejaAbiertaAt, tokens, tabla });
   const hookOk = (req) => { const t = String(env.AO_HOOK_TOKEN || ''); if (!t) return false; const dado = req.headers['x-office-token'] || String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); return igualSeguro(String(dado), t); }; // solo cabecera: una dirección con el token queda en los registros
   const marcasDimitri = []; // el segundo clic del dueño sobre un gasto que propuso Dimitri: su tarjeta queda hecha al cerrar la petición (fase 6)
   const rutas = (syncRuta, json, body) => crearRutasAnuncios({ sync: syncRuta, meta, json, body, acciones: acc, alHacer: (x) => { marcasDimitri.push(x); }, ahora, borradores: borr, creador, mejorar, sugerencias: sug, aplicador, impulsor, informe, indicadores: ind, conversiones: conv, bandeja: bandejaLect, hookOk });
@@ -264,14 +267,14 @@ export function almacenEnMemoria(archivo) {
 }
 
 /** La Bandeja sobre un espejo abierto (la misma de contenido/bandeja.mjs; su fuente de Meta, con el volcado antes de escribir). */
-export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avisos, abiertaAt = 0, tokens = null }) {
+export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avisos, abiertaAt = 0, tokens = null, tabla = null }) {
   const fuente0 = crearFuenteMeta({ meta, archivo: path.join(esp.ruta(DIR_ANALITICAS), 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(esp.ruta(DIR_ANUNCIOS), 'cuenta.json'), 'utf8')); } catch { return null; } }, ahora });
   // responder y ocultar escriben en Meta: ANTES de la llamada se vuelca a D1 el testigo «enviando» (si el Worker se corta, no se repite sin «forzar»).
   // El «solo uno a la vez» lo pone la ruta (un candado por mensaje, antes de tocar nada).
-  const antes = (f) => async (...a) => { await esp.flush(); return f(...a); };
+  const antes = (f) => async (...a) => { await esp.flush(); if (tabla) await tabla.flush(); return f(...a); }; // con la tabla (CON-11 paso 3) el testigo «enviando» es compare-and-set: si otra petición ya lo puso, flush lanza y NO se llama a Meta
   const fuente = { ...fuente0, responder: antes(fuente0.responder), ocultar: antes(fuente0.ocultar) };
   const av = (kind) => (t, o) => (avisos ? avisos.avisar(kind, t, o) : undefined);
-  return crearBandeja({ metricool: null, meta: fuente, elegir: () => cfg.contenido?.bandejaFuente || 'auto', almacen: almacenEnMemoria(path.join(esp.ruta(DIR_ANALITICAS), 'bandeja.json')),
+  return crearBandeja({ metricool: null, meta: fuente, elegir: () => cfg.contenido?.bandejaFuente || 'auto', almacen: tabla || almacenEnMemoria(path.join(esp.ruta(DIR_ANALITICAS), 'bandeja.json')),
     modo: () => cfg.contenido?.modo || 'simulacro', ahora, avisar: av('contenido'), avisarComentario: av('bandeja-comentario'), avisarMensaje: av('bandeja-mensaje'),
     injectionIn, undoSeconds: () => Number(cfg.approvals?.undoSeconds ?? 30), tokens, abiertaAtInicial: abiertaAt });
 }
@@ -298,11 +301,12 @@ async function leerInicio(db) {
 export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), preload = {}, espejo = ESPEJO_ANUNCIOS, latido = null }, fn) {
   await aplicarMigracion(db);
   const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
-  return conEspejo(db, espejo, async (esp) => {
-    const a = await construirAnuncios({ db, env, esp, cfg, fetchFn, ahora, avisos, preload, latido, ...guardado });
+  const tabla = tablaActiva(cfg) ? await cargarTabla(db, { ahora }) : null; // CON-11 paso 3
+  return conEspejo(db, tabla ? sinArchivoBandeja(espejo) : espejo, async (esp) => {
+    const a = await construirAnuncios({ db, env, esp, cfg, fetchFn, ahora, avisos, preload, latido, tabla, ...guardado });
     let r, fallo = null;
     try { r = await fn(a, { esp, cfg, avisos }); } catch (e) { fallo = e; }
-    try { await a.cerrar(); await esp.flush(); await avisos.volcar(); } catch (e) { if (!fallo) fallo = e; else console.error('[anuncios] no pude cerrar tras un fallo:', e?.message ?? e); }
+    try { await a.cerrar(); await esp.flush(); if (tabla) await tabla.flush(); await avisos.volcar(); } catch (e) { if (!fallo) fallo = e; else console.error('[anuncios] no pude cerrar tras un fallo:', e?.message ?? e); }
     if (fallo) throw fallo;
     return r;
   });
@@ -312,16 +316,17 @@ export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), 
 export async function conBandeja({ db, env, fetchFn, ahora = () => Date.now() }, fn) {
   await aplicarMigracion(db);
   const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
-  return conEspejo(db, ESPEJO_BANDEJA, async (esp) => {
+  const tabla = tablaActiva(cfg) ? await cargarTabla(db, { ahora }) : null; // CON-11 paso 3
+  return conEspejo(db, tabla ? sinArchivoBandeja(ESPEJO_BANDEJA) : ESPEJO_BANDEJA, async (esp) => {
     const meta = crearMeta({ env, fetchFn: elFetch(fetchFn), dir: esp.ruta(DIR_ANALITICAS), ahora });
     meta.ponerFreno(guardado.freno);
-    const bandeja = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: guardado.bandejaAbiertaAt, tokens: tokensD1(db, { ahora }) });
+    const bandeja = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: guardado.bandejaAbiertaAt, tokens: tokensD1(db, { ahora }), tabla });
     let r, fallo = null;
     try { r = await fn({ bandeja, meta, esp, cfg, avisos }); } catch (e) { fallo = e; }
     try {
       await guardarFreno(db, meta, guardado.freno);
       if (bandeja.abiertaAtAhora() - guardado.bandejaAbiertaAt > 60e3) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandeja.abiertaAtAhora() });
-      await esp.flush(); await avisos.volcar();
+      await esp.flush(); if (tabla) await tabla.flush(); await avisos.volcar();
     } catch (e) { if (!fallo) fallo = e; else console.error('[bandeja] no pude cerrar tras un fallo:', e?.message ?? e); }
     if (fallo) throw fallo;
     return r;
