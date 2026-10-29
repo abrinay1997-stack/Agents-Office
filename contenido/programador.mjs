@@ -32,7 +32,8 @@ export function crearProgramador({ almacen, archivo, conductor, porId = null, mo
   const guardar = d => escribirJSON(archivo, d);
   const nucleo = crearNucleoProgramador({ almacen, cola: { leer, guardar }, conductor, porId, modo, horasAntes, avisar, auditar, ahora });
   return {
-    tick: nucleo.tick,
+    tick: nucleo.tick, // tick({ solo: id }) = solo esa pieza (Publicar ahora)
+    retirarAhora: nucleo.retirarAhora,
     salidaDe: id => publica(leer().entradas?.[id]) || null,
     estado: () => estadoDeCola({ d: leer(), c: conductor(), modo: modo(), horasAntes: horasAntes(), ultimo: nucleo.ultimo() }),
     /** Volver a intentar lo que falló (desde el principio de su espera). */

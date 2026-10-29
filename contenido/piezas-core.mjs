@@ -3,7 +3,7 @@
 // las mismas reglas que la oficina local. Aquí no hay `fs`: solo texto, fechas y un hash. Lo prueban tests/contenido-piezas.test.mjs y
 // cloudflare/tests/contenido-piezas.test.mjs.
 import { createHash } from 'node:crypto';
-import { normalizarFormatos, formatoDe } from '../src/contenido-reglas.js';
+import { normalizarFormatos, formatoDe, PRONTO_MIN } from '../src/contenido-reglas.js';
 import { limpiarCuentas, cuentasLimpias, cuentasDeRedes } from '../src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada red (qué página, qué Instagram)
 const base = (f, ext = '') => { const n = String(f || '').split(/[\\/]/).pop(); return ext && n.endsWith(ext) ? n.slice(0, -ext.length) : n; };
 export const ESTADOS = ['idea', 'borrador', 'revision', 'aprobada']; // los que se deciden aquí; «en Meta», «publicada» y «falló» son de la cola (F3)
@@ -87,7 +87,7 @@ export function parsear(md, { file = '' } = {}) {
     medios: lista(head.medios), historiaTambien: head.historiaTambien === true, historias: lista(head.historias),
     texto: t('texto'), comentario: t('comentario'), hashtags: t('hashtags'), hashtagsEnComentario: head.hashtagsEnComentario === true, textoFacebook: t('textoFacebook'), notas: t('notas'),
     origen: String(head.origen ?? 'dueno'), tarea: head.tarea ? String(head.tarea) : '', creada: String(head.creada ?? ''), actualizada: String(head.actualizada ?? ''),
-    aprobada: head.aprobada && typeof head.aprobada === 'object' && !Array.isArray(head.aprobada) ? { cuando: String(head.aprobada.cuando ?? ''), huella: String(head.aprobada.huella ?? ''), por: String(head.aprobada.por ?? '') } : null,
+    aprobada: head.aprobada && typeof head.aprobada === 'object' && !Array.isArray(head.aprobada) ? { cuando: String(head.aprobada.cuando ?? ''), huella: String(head.aprobada.huella ?? ''), por: String(head.aprobada.por ?? ''), ...(head.aprobada.ya === true ? { ya: true } : {}) } : null,
     // M1 (6 oct 2026): el doble testigo de lo entregado al conductor (Metricool, simulacro): la cola lo apunta, y la nota también
     textos, pinterest: opciones('pinterest', head.pinterest), youtube: opciones('youtube', head.youtube), tiktok: opciones('tiktok', head.tiktok),
     entregada: head.entregada && typeof head.entregada === 'object' && !Array.isArray(head.entregada) ? { conductor: String(head.entregada.conductor ?? ''), huella: String(head.entregada.huella ?? ''), cuando: String(head.entregada.cuando ?? ''), remoto: head.entregada.remoto && typeof head.entregada.remoto === 'object' ? head.entregada.remoto : {} } : null,
@@ -96,7 +96,7 @@ export function parsear(md, { file = '' } = {}) {
 
 /** La pieza → la nota. `parsear(serializar(p))` devuelve la misma pieza. */
 export function serializar(p) {
-  const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '' }) : null, entregada: p.entregada ? JSON.stringify(p.entregada) : null };
+  const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '', ...(p.aprobada.ya === true ? { ya: true } : {}) }) : null, entregada: p.entregada ? JSON.stringify(p.entregada) : null };
   for (const k of ['pinterest', 'youtube', 'tiktok']) v[k] = p[k] ? JSON.stringify(p[k]) : null;
   v.formatos = p.formatos && Object.keys(p.formatos).length ? JSON.stringify(p.formatos) : null;
   v.cuentas = p.cuentas && Object.keys(p.cuentas).length ? JSON.stringify(p.cuentas) : null; // 9 oct 2026: { red: 'red:<id>' }, en una línea
@@ -175,8 +175,10 @@ export function normalizar(d = {}, previa = null) {
 }
 export const mesDe = f => (FECHA_RE.test(f) ? f.slice(0, 7) : SIN_FECHA);
 /** C1: «Publicar ya» aprueba para el primer minuto entero que falte a `min` minutos o más (la cola: 1 de gracia y 3 de margen). */
-export const PRONTO_MIN = 5;
+export { PRONTO_MIN }; // (B07) vive en src/contenido-reglas.js: aquí solo se reexporta para los almacenes
 const dos = n => String(n).padStart(2, '0');
+/** CON-04: el minuto en curso hacia abajo (la hora de «Publicar ahora»: la cola no espera ni 5 minutos ni el margen). */
+export function ahoraAbajo(t) { const d = new Date(t); d.setSeconds(0, 0); return { fecha: `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}` }; }
 export function ahoraMas(t, min) { const d = new Date(t + min * 60e3); if (d.getSeconds() || d.getMilliseconds()) d.setMinutes(d.getMinutes() + 1, 0, 0); return { fecha: `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}` }; }
 /** El id de una pieza nueva. `aleatorio()` da 4 caracteres hex (el almacén local usa node:crypto; el Worker, WebCrypto). */
 export const nuevoId = (fecha, ahora, aleatorio) => `p-${(FECHA_RE.test(fecha) ? fecha : new Date(ahora()).toISOString().slice(0, 10)).replace(/-/g, '')}-${aleatorio()}`;

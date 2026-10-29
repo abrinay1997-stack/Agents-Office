@@ -7,12 +7,15 @@ export const GRACIA_MS = 60e3;            // tras aprobar, un minuto para deshac
 export const MARGEN_MS = 3 * 60e3;        // a menos de 3 minutos de su hora, ya no se entrega (no daría tiempo)
 export const COMPROBAR_CADA_MS = 10 * 60e3;
 export const COMPROBAR_HASTA_MS = 3 * 864e5; // después de 3 días sin noticias, se deja de preguntar
+export const YA_VENTANA_MS = 30 * 60e3;  // «Publicar ahora» (CON-04): se salta la gracia y el margen solo durante estos minutos desde su OK; pasados, vale la regla de siempre
 const ESPERAS = [60e3, 5 * 60e3, 15 * 60e3]; // reintentos de un fallo pasajero
 const VIVAS = ['espera', 'entregando', 'en_red'];
 export const ENTREGANDO_MAX_MS = 10 * 60e3; // M1: una entrega no tarda tanto; si pasa, no se sabe si el conductor la recibió
 export const INCIERTO = 'No se sabe si el conductor llegó a recibirla (la respuesta no quedó apuntada): míralo allí y, si no está, cámbiale la hora y vuelve a aprobarla. No la repito sola porque podría salir dos veces.';
 
 const momentoDe = p => { const e = entregasDe(p); return e.length ? Math.min(...e.map(x => x.momento)) : NaN; };
+/** «Publicar ahora»: SOLO lo dice el OK guardado en la pieza (`aprobada.ya`), que escribe la ruta publicar-ya del dueño; ni una petición ni una entrada de la cola lo activan (B02). */
+export const esYa = (p, ahora) => p?.aprobada?.ya === true && ahora - Date.parse(p.aprobada.cuando || 0) <= YA_VENTANA_MS;
 const aprobadaVigente = p => p && p.estado === 'aprobada' && p.aprobada && !p.cambiadaTrasAprobar && p.fecha && p.hora;
 
 /** Qué hay que hacer ahora, sin tocar nada. */
@@ -28,8 +31,9 @@ export function planear(piezas = [], entradas = {}, { ahora = Date.now(), horasA
     const reaprobada = e && !VIVAS.includes(e.estado) && Date.parse(p.aprobada.cuando || 0) > (e.historial?.at(-1)?.at || 0); // cancelada o fallida, y aprobada otra vez después
     if (!e || e.huella !== h || reaprobada) { acciones.push({ tipo: 'encolar', id: p.id, pieza: p }); continue; }
     if (e.estado === 'espera') {
-      const listaDesde = Math.max(e.entregarDesde || 0, Date.parse(p.aprobada.cuando || 0) + GRACIA_MS, e.siguienteIntento || 0);
-      if (momento - ahora < MARGEN_MS) acciones.push({ tipo: 'vencer', id: p.id });
+      const ya = esYa(p, ahora); // B02: sin minuto de gracia (no se deshace) ni margen de 3 min (su hora es el minuto en curso)
+      const listaDesde = Math.max(e.entregarDesde || 0, ya ? 0 : Date.parse(p.aprobada.cuando || 0) + GRACIA_MS, e.siguienteIntento || 0);
+      if (!ya && momento - ahora < MARGEN_MS) acciones.push({ tipo: 'vencer', id: p.id });
       else if (ahora >= listaDesde) acciones.push({ tipo: 'entregar', id: p.id, pieza: p });
     }
   }
@@ -162,8 +166,8 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
   }
 
   /** Una vuelta: planea con lo que hay y hace cada acción, una tras otra. Nunca dos vueltas a la vez. */
-  async function tick() {
-    if (enMarcha) return enMarcha;
+  async function tick({ solo = '' } = {}) {
+    if (enMarcha) return enMarcha; // (una vuelta en marcha ya verá la pieza: «solo» es para no tocar las demás)
     enMarcha = (async () => {
       const m = modo(); if (m === 'apagado') { ultimo = { at: ahora(), acciones: 0, error: '' }; return ultimo; }
       const d = await leer(); d.entradas ||= {};
@@ -171,7 +175,7 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
       const piezas = await almacen.listar({ desde: ymd });
       const conocidas = new Map(piezas.map(p => [p.id, p]));
       for (const id of Object.keys(d.entradas)) if (!conocidas.has(id)) { const p = await almacen.leer(id); if (p) conocidas.set(id, p); }
-      const acciones = planear([...conocidas.values()], d.entradas, { ahora: ahora(), horasAntes: horasAntes() });
+      const acciones = planear([...conocidas.values()], d.entradas, { ahora: ahora(), horasAntes: horasAntes() }).filter(a => !solo || a.id === solo);
       if (mirarYa.size) { // un conductor avisó: lo suyo que está en la red se mira ahora (aunque no haya llegado su hora ni pasado 10 min)
         for (const [id, e] of Object.entries(d.entradas)) if (e.estado === 'en_red' && mirarYa.has(e.conductor) && !acciones.some(a => a.id === id && a.tipo === 'comprobar')) acciones.push({ tipo: 'comprobar', id });
         mirarYa.clear();
@@ -185,6 +189,7 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
             const p = a.pieza, momento = momentoDe(p), previa = d.entradas[p.id];
             d.entradas[p.id] = mover({ pieza: p.id, huella: p.aprobada.huella, momento, entregarDesde: momento - horasAntes() * 3600e3, redes: {}, remoto: {}, intentos: 0, error: '', historial: previa?.historial || [] }, 'espera');
             await guardar(d);
+            if (esYa(p, ahora())) await entregar(d, p); // «Publicar ahora»: en la misma vuelta, sin esperar a la siguiente
           } else if (a.tipo === 'entregar') await entregar(d, a.pieza);
           else if (a.tipo === 'vencer') { const e = d.entradas[a.id]; mover(e, 'fallo', { error: 'No se entregó a tiempo: su hora pasó (o falta muy poco) y la oficina no pudo dejarla programada. Cámbiale el día y vuelve a aprobarla.' }); await guardar(d); avisar(`«${titulo(await almacen.leer(a.id))}» no se entregó a tiempo: cámbiale el día.`, { key: 'vencida-' + a.id, level: 'warn' }); }
           else if (a.tipo === 'atascada') { const e = d.entradas[a.id]; mover(e, 'fallo', { error: INCIERTO, incierto: true }); await guardar(d); avisar(`«${titulo(await almacen.leer(a.id))}» se quedó entregándose y no se sabe si el conductor la recibió: míralo allí.`, { key: 'atascada-' + a.id, level: 'error' }); auditar({ que: 'atascada', pieza: a.id }); }
@@ -202,8 +207,22 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
     return enMarcha;
   }
 
+  /** «Publicar ahora» sobre algo ya entregado (B05): primero se RETIRA del conductor; si no se puede, no se publica (saldría dos veces). → { ok } | { error } en palabras. */
+  async function retirarAhora(id) {
+    await (enMarcha || Promise.resolve()).catch(() => {});
+    const d = await leer(), e = d.entradas?.[id]; if (!e) return { ok: true };
+    if (e.estado === 'entregando') return { error: 'se está entregando en este momento: espera unos segundos y vuelve a pulsar' };
+    if (['publicada', 'parcial'].includes(e.estado)) return { error: 'ya salió: no se puede volver a publicar la misma pieza; para repetirla, duplícala' };
+    if (e.incierto) return { error: INCIERTO };
+    if (!VIVAS.includes(e.estado) && !Object.keys(e.remoto || {}).length) return { ok: true }; // cancelada o fallida y sin nada en el conductor
+    await retirar(d, id, 'publicar-ya');
+    const f = d.entradas[id];
+    if (f?.estado === 'cancelada') return { ok: true };
+    return { error: `quita antes la programada en ${e.conductor || 'el conductor'} (${f?.error || 'no se pudo retirar'})` };
+  }
+
   return {
-    tick,
+    tick, retirarAhora,
     /** Un conductor avisa de que algo salió o falló: se mira ya (en un tick, en fila con los demás: nunca dos a la vez). */
     refrescar(conductorId) { mirarYa.add(conductorId); return (enMarcha || Promise.resolve()).then(() => tick()); },
     ultimo: () => ultimo,

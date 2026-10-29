@@ -14,7 +14,8 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 // C1 (8 oct 2026), el editor nuevo:
 //   GET|POST /api/contenido/guardados · DELETE /api/contenido/guardados/<nombre>  → los textos guardados (nota del Cerebro) y tus hashtags más usados
 //   POST   /api/contenido/mejorar { pieza, red, pide }                          → la propuesta de tu agente de contenido (no guarda nada)
-//   POST   /api/contenido/piezas/<id>/aprobar { pronto: true }                  → «Publicar ya»: aprobada para dentro de unos 5 minutos
+//   POST   /api/contenido/piezas/<id>/aprobar { pronto: true }                  → aprobada para dentro de PRONTO_MIN minutos (src/contenido-reglas.js)
+//   POST   /api/contenido/piezas/<id>/publicar-ya { confirmado: true }          → «Publicar ahora» (CON-04): solo el dueño, flag contenido.publicarYa, modo real + Meta directo; 202, sin deshacer
 // C2 (8 oct 2026), lo ya publicado:
 //   GET    /api/contenido/publicadas?desde=&hasta=                             → { fuente, ultimaFoto, porPieza: { id: [resultado] }, sueltas }
 //   GET    /api/contenido/cuentas                                              → (9 oct 2026) { cuentas: [{ id, red, nombre, usuario, foto, paginaId, puedePublicar, motivo? }], porDefecto }

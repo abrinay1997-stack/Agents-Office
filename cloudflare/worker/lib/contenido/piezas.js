@@ -4,7 +4,7 @@
 // Una diferencia a propósito: borrar manda la pieza a la papelera (`borrada = 1`) y ahí se queda 30 días (`purgarPapelera`), como `.papelera/` en la oficina local.
 import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento } from '../../../../src/contenido-reglas.js';
 import { cuentasLimpias } from '../../../../src/contenido-cuentas.js';
-import { huella, normalizar, ID_RE, FECHA_RE, PRONTO_MIN, ahoraMas, nuevoId } from '../../../../contenido/piezas-core.mjs';
+import { huella, normalizar, ID_RE, FECHA_RE, PRONTO_MIN, ahoraMas, ahoraAbajo, nuevoId } from '../../../../contenido/piezas-core.mjs';
 
 const MEDIO_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm)$/i;
 export const DIAS_PAPELERA = 30;
@@ -88,15 +88,16 @@ export function crearAlmacenD1({ db, medioExiste = async () => true, medida = as
       await guardarFila(p); return { pieza: await conEstado(p), soltada };
     },
     /** El OK del dueño: solo si puede salir (sin errores de las reglas de cada red), tiene día y hora, y ese momento todavía no pasó. */
-    async aprobar(id, { por = 'dueno', pronto = false } = {}) {
+    async aprobar(id, { por = 'dueno', pronto = false, ya = false } = {}) {
       const p = await buscar(id); if (!p) return { error: 'esa pieza ya no existe', nada: true };
-      if (pronto) { const t = ahoraMas(ahora(), PRONTO_MIN); p.fecha = t.fecha; p.hora = t.hora; } // C1: «Publicar ya» — sale dentro de unos 5 minutos
+      if (ya) { const t = ahoraAbajo(ahora()); p.fecha = t.fecha; p.hora = t.hora; } // CON-04: «Publicar ahora» — el minuto en curso; solo lo pide la ruta publicar-ya
+      else if (pronto) { const t = ahoraMas(ahora(), PRONTO_MIN); p.fecha = t.fecha; p.hora = t.hora; } // C1: aprobar «para ya» por el camino antiguo (PRONTO_MIN minutos)
       if (!p.fecha) return { error: 'ponle un día antes de aprobarla', errores: ['Sin día'] };
-      const cuando = revisarMomento(p.fecha, p.hora, ahora(), pronto ? { minMin: PRONTO_MIN - 1 } : undefined); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
+      const cuando = revisarMomento(p.fecha, p.hora, ahora(), ya ? { ya: true } : pronto ? { minMin: PRONTO_MIN - 1 } : undefined); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
       const { errores, avisos } = await revisar(p); if (errores.length) return { error: 'todavía no puede salir: ' + errores[0], errores, avisos: [...avisos, ...cuando.avisos] };
       const mal = await mediosMalos(p); if (mal) return { error: mal };
       await conMedidas(p);
-      p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por }; p.actualizada = p.aprobada.cuando;
+      p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por, ...(ya ? { ya: true } : {}) }; p.actualizada = p.aprobada.cuando; // `ya` solo vive aquí: lo lee la cola, nunca la petición
       await guardarFila(p); return { pieza: await conEstado(p), avisos: [...avisos, ...cuando.avisos] };
     },
     /** Devolver una pieza a revisión (o a borrador): quita el OK. */
