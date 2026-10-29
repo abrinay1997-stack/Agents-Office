@@ -18,6 +18,7 @@ import * as imagenMeta from './imagen-meta.js';
 import * as chatAgente from './chat-agente.js';
 import * as conexiones from './conexiones.js';
 import * as notificaciones from './notificaciones.js';
+import * as notasPersonales from './notas-personales.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -38,5 +39,6 @@ export const MODULOS = [
   chatAgente, // POST /api/chat: hablar con un agente (un turno, solo herramientas de lectura)
   conexiones, // /api/brain/actualizar: el botón «Actualizar conexiones» del Cerebro (solo administradores)
   notificaciones, // N0: las notificaciones de cada persona (/api/notificaciones/*)
+  notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
