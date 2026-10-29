@@ -14,6 +14,7 @@ import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 import { avisarCambio } from './vivo.js';
 import * as equipo from '../modulos/equipo.js';
+import { retrocesoActivo, fallosDe, anotarFallo, esperaMs, dormir } from './retroceso.js';
 import { tasa, tasaVer, ipDe, relojDe, cupoDeModelo } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 import { podar, tocaPodar } from './mantenimiento.js';
@@ -97,8 +98,10 @@ async function manejarInterno(req, env, exec = null) {
     const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120), ip = ipDe(req), claveFallos = `acc:fallo:${ip}:${huella}`;
     const ms = relojDe(env);
     if (!(await tasa(db, 'acc:ip:' + ip, 20, ms)).ok || (await tasaVer(db, claveFallos, ms)) >= 8) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
+    const retro = await retrocesoActivo(db); // SEG-06: con el flag, cada intento de un correo con muchos fallos (de cualquier IP) espera antes de contestar, bueno o malo; nunca se rechaza por esto
+    if (retro) await dormir(env, esperaMs(await fallosDe(db, huella, ms)));
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
-    if (!s) { await tasa(db, claveFallos, 8, ms); return error('Usuario o contraseña incorrectos.', 401); }
+    if (!s) { await tasa(db, claveFallos, 8, ms); if (retro) await anotarFallo(db, huella, ms); return error('Usuario o contraseña incorrectos.', 401); }
     return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo, s.segundos) });
   }
 
