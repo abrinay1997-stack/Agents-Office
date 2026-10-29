@@ -22,7 +22,7 @@ Cómo se hizo: seis auditores en paralelo, de solo lectura, sobre `main` (commit
 | 12 | Rendimiento: página de 2,20 MB (tope 2,2 MB, margen 3 KB), 1,88 MB de JS; miniaturas = originales; paquetes sin caché larga | Media-alta | PER-01..11 | S → L |
 | 13 | Seguridad: `/api/chat` sin tope por persona; detector de inyección de 8 regex; workflows sin `permissions`; `Origin: null` aceptado en local | Alta/Media | SEG-01..09 | S |
 | 14 | **Comunicación del equipo** (pedido del dueño, 29 oct): no hay chat en vivo, ni notas para cuando alguien entre, ni centro de notificaciones por persona; Telegram solo conoce al dueño y a los aprobadores, no a las cuentas | **Alta** (pedido) | §3.10, Fase 8 | L (por fases) |
-| 15 | La línea de arriba del chat de Dimitri («IA: … · gasto del mes … · solo conversa») sale **siempre**, aunque no haya nada que avisar | Media (pedido) | UX-11, Fase 0 | S |
+| 15 | La línea de arriba del chat de Dimitri («IA: … · gasto del mes … · solo conversa») sale siempre: **el dueño decidió quitarla** y dejar solo un ícono ⓘ | Media (pedido) | UX-11, Fase 0 | S |
 | 16 | **Vanguardia frente a otros agentes** (Muse de Meta, ChatGPT, Grok, Claude, Gemini, Copilot…): lo que hacen, dónde fallan y qué construir para superarlos | Estratégica | §3.11, Fase 9 | por fases |
 
 ## 1. Hallazgos por frente
@@ -141,7 +141,7 @@ Bien (no tocar): PBKDF2 con huella de sesión y `__Host-`, AES-GCM con HKDF e IV
 - **UX-08 · Media.** «Más» móvil depende del DOM escondido del escritorio (`src/movil/escritorio.js`): sin test, un id cambiado rompe en silencio.
 - **UX-09 · Media.** Paridad escritorio/móvil/nube: lo que contesta 501 sigue visible; mostrar capacidades por `/api/health` y desactivar con una frase.
 - **UX-10 · Baja.** Controles de 32/24/18 px en Dimitri; ~55 reglas con fuente ≤ 10,5 px.
-- **UX-11 · Media (pedido del dueño) · S.** `paintIa()` (`src/sub.js:54-61`, `.sb-ia-head`, `src/css/dimitri.css:230-231`) pinta siempre «IA: <modelo> · consulta la oficina por sí mismo / solo conversa (este modelo no usa herramientas) · cambiar · gasto de IA del mes». Es información útil una vez, ruido a diario. Arreglo en §3.11.
+- **UX-11 · Media (pedido y decidido por el dueño) · S.** `paintIa()` (`src/sub.js:54-61`, `.sb-ia-head`, `src/css/dimitri.css:230-231`) pinta siempre «IA: <modelo> · consulta la oficina por sí mismo / solo conversa (este modelo no usa herramientas) · cambiar · gasto de IA del mes». **Decisión (29 oct): quitar la línea.** Arreglo en §3.11.
 
 ## 2. Reglas del plan
 
@@ -331,7 +331,7 @@ Criterios de aceptación: una nota dejada desde la app y desde Telegram aparece 
 
 **Reglas para esta fase.** (1) Nada de esto relaja los candados de envío, destinatarios, importes ni la regla del dinero. (2) Una mejora que dependa de una comparación [NV] no empieza hasta verificarla con la fuente primaria. (3) Cada mejora lleva su test y su prueba de seguridad; las que usan datos de terceros pasan por `safety.injectionIn`. (4) Antes de VAN-11 hay que **re-verificar** lo que nuestro código supone de Muse Spark (entender video y audio, precios, límites) contra la documentación vigente.
 
-**Línea de IA de Dimitri (UX-11).** La función pura `cuandoMostrarIa(iaInfo, pref)` decide: *avisos* (por defecto) muestra la línea solo si (a) el modelo no usa herramientas, (b) el gasto del mes está en alerta o pasó el tope, (c) corre un modelo de respaldo distinto del elegido, o (d) el último turno falló por la IA; *siempre* y *nunca* son opciones del dueño (`ao.sub.ia`, también en Ajustes). El nombre del modelo, lo que hace y no hace y el botón «cambiar» pasan a un **ⓘ en la cabecera** de Dimitri (un popover, con 44 px en móvil). Archivos: `src/sub.js:54-61`, `src/css/dimitri.css:230-231`, y en la nube la misma regla.
+**Línea de IA de Dimitri (UX-11) — decidido por el dueño: se quita.** La línea fija desaparece de la cabecera. El nombre del modelo, si consulta la oficina o solo conversa, el gasto de IA del mes y el botón «cambiar» pasan a un **ⓘ** en la cabecera de Dimitri (popover; 44 px en móvil; accesible por teclado). Para que una alerta importante no se pierda, el ⓘ lleva un punto de color cuando el gasto pasó el tope, corre un modelo de respaldo o el último turno falló por la IA, y esos casos también se dicen una vez en el hilo cuando ocurren. Sin preferencia de usuario (se quitó la opción «siempre/avisos/nunca»). Archivos: `src/sub.js:54-61`, `src/css/dimitri.css:230-231`, y en la nube la misma regla.
 
 ## 4. Fases
 
@@ -353,7 +353,7 @@ Cada fase es un PR (o varios) y termina verde. El orden sigue lo que el dueño l
 | PER-01 | Medir y blindar la compresión con un test | test de cabeceras |
 | ICO-03 | Test de cobertura de íconos (aunque aún use los sistemas viejos) | el propio test |
 | UX-08 | Test de que `ESCRITORIO` no apunta a ids muertos; borrar entradas muertas | el propio test |
-| UX-11 | La línea de IA de Dimitri solo cuando hay algo que avisar (modelo sin herramientas, gasto en alerta o pasado del tope, modelo de respaldo en uso, error de IA); el nombre del modelo y «cambiar» pasan a un ⓘ en la cabecera; preferencia «Mostrar la línea de IA: nunca · solo avisos (por defecto) · siempre» | test puro de `cuandoMostrarIa()` + recorrido de Dimitri |
+| UX-11 | **Quitar** la línea de IA de la cabecera del chat de Dimitri. Todo lo que mostraba (modelo, si consulta la oficina o solo conversa, gasto de IA del mes, «cambiar») pasa a un **ⓘ** en la cabecera que abre un popover; una **alerta real** (gasto pasado del tope, modelo de respaldo en uso, error de IA) sale como un punto de color sobre el ⓘ y como mensaje en el propio hilo cuando ocurre, no como una línea fija | test puro del popover y de las alertas + recorrido de Dimitri |
 
 ### Fase 1 — Galería del Estudio (urgente para el dueño)
 
@@ -400,7 +400,7 @@ Es el único frente que añade capacidad nueva; entra por pedido expreso del due
 
 ### Fase 9 — Vanguardia (VAN-01…18, §3.11)
 
-Va después de las Fases 0-3 y **en paralelo con la 8** donde no choque. Orden por beneficio/costo y por riesgo: primero lo pequeño y de gobierno (**VAN-04, 05, 06, 08, 09, 15**), luego **VAN-03** (red-team; precondición de cualquier cosa con navegador o con más autonomía), **VAN-02, 01, 10, 11, 12, 13, 14, 16**, y al final **VAN-07 (WhatsApp)**, **VAN-17** y **VAN-18 (computer use)**. La línea de IA de Dimitri (UX-11) va en la Fase 0.
+Va después de las Fases 0-3 y **en paralelo con la 8** donde no choque. El dueño pidió **las cuatro prioridades** (autonomía y gobierno, WhatsApp, constructor de rutinas, enrutamiento de modelos con Muse barato). Orden por dependencias y riesgo: primero lo pequeño (**VAN-04, 05, 06, 08, 09, 15**), luego **VAN-03** (red-team; precondición de más autonomía y de cualquier navegador), **VAN-01 y 02**, **VAN-10**, **VAN-11** (solo tras repetir la investigación de Meta con fuentes oficiales), **VAN-12, 13, 14, 16**, y al final **VAN-07 (WhatsApp)**, **VAN-17** y **VAN-18 (computer use)**. La línea de IA de Dimitri (UX-11, quitarla) va en la Fase 0.
 
 ## 5. Cómo ejecutarlo con varios agentes en paralelo
 
@@ -433,9 +433,9 @@ Orden recomendado de arranque: **Fase 0 completa primero** (un solo carril, un P
 9. ✅ **Notas** (decidido 29 oct): las puede dejar **todo el mundo**, también `lectura`; **no exigen «Enterado»**: la persona las cierra o elimina y se ven como tarjetas bonitas. Quedan los topes anti-abuso (§3.10 punto 2).
 10. ✅ **Telegram por cuenta** (decidido 29 oct, «como tú digas»): el aviso **no lleva el texto** («te dejaron una nota»); un editor puede `/notas`, `/nota`, `/mias`, `/yo` y `/chat`; **aprobar sigue siendo solo del dueño y de los aprobadores**.
 11. ✅ **Orden** (decidido 29 oct): **en paralelo con todo lo demás** (carril H independiente; solo se coordina el botón del dock y `telegram.js`).
-12. **Investigación de la competencia**: las páginas oficiales de Meta, OpenAI y xAI no se pudieron abrir desde esta sesión, así que §3.11 es de segunda mano. ¿Permites esos dominios (ai.meta.com, research.meta.ai, openai.com, platform.openai.com, help.openai.com, x.ai, docs.x.ai) para repetirla con fuentes primarias antes de invertir?
-13. **Prioridades de la Fase 9**: ¿qué te importa más superar primero — autonomía graduada y gobierno (VAN-01/02), WhatsApp (VAN-07), el constructor de rutinas por lenguaje natural (VAN-10), o el enrutamiento de modelos con Muse Spark barato (VAN-11)?
-14. **Línea de IA de Dimitri**: ¿«solo avisos» por defecto (propongo), o prefieres quitarla del todo y dejar solo el ⓘ?
+12. ✅ **Investigación de la competencia** (decidido 29 oct): el dueño autoriza repetirla con fuentes oficiales. **Pendiente de su lado:** permitir en el entorno de la sesión (menú del entorno en la barra de título → Edit → Network access → Allowed domains) los hosts `ai.meta.com`, `research.meta.ai`, `developers.meta.com`, `openai.com`, `platform.openai.com`, `help.openai.com`, `x.ai`, `docs.x.ai` (y, si se quiere, `docs.claude.com`, `blog.google`); hasta entonces `ai.meta.com` y los demás no resuelven. Cuando estén permitidos se repite la investigación y se corrige §3.11 antes de empezar cualquier VAN que dependa de ella.
+13. ✅ **Prioridades de la Fase 9** (decidido 29 oct, «si se puede, perfecto»): el dueño quiere **las cuatro** cosas (autonomía y gobierno, WhatsApp, el constructor de rutinas por lenguaje natural y el enrutamiento de modelos con Muse barato). Se hacen en este orden por dependencias y riesgo: **VAN-03** (pruebas de inyección, precondición) → **VAN-01/02** (autonomía graduada y gobierno) → **VAN-10** (constructor de rutinas) → **VAN-11** (enrutamiento de modelos, tras re-verificar Muse con fuentes oficiales) → **VAN-07** (WhatsApp, apoyado en las notas, los avisos y los vínculos de la Fase 8). Todo bajo el candado de envío y la regla del dinero.
+14. ✅ **Línea de IA de Dimitri** (decidido 29 oct): se quita del todo; queda solo el ícono ⓘ (§3.11, UX-11).
 
 ## 7. Lo que NO está verificado
 
