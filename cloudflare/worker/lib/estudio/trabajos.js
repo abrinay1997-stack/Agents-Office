@@ -78,10 +78,13 @@ export { ErrorPedido };
 
 /** Pone en cola una generación. `usuario`: quien la pide (los motores de pago son del administrador). → el trabajo */
 export async function pedir(env, db, req, { usuario } = {}) {
-  if (req.local === true || req.preset || req.post || req.qa) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
+  const hay = (v) => Array.isArray(v) && v.length > 0;
+  // el rastro del banco de presets (preset, receta, canal) SÍ viaja; los pasos que necesitan sharp (retoques locales, QA) todavía no existen en la nube
+  if (req.local === true || hay(req.post) || hay(req.pre) || hay(req.qa)) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
   const pedido = limpiarPedido(req, { por: usuario?.agente ? 'agent' : 'you' });
   if (usuario?.agente) pedido.agent = String(usuario.agente); // lo pidió un agente: la galería, la tarjeta y el rastro lo dicen (by/agent)
   if (req.versionOf != null) pedido.versionOf = req.versionOf;
+  for (const k of ['preset', 'receta', 'canal', 'esEscena']) if (req[k] !== undefined) pedido[k] = req[k]; // armarTrabajo los valida (presetTrail)
   if (typeof req.purpose === 'string') pedido.purpose = req.purpose;
   const ids = [...Object.values(pedido.media).flat(), ...(pedido.versionOf != null ? [String(pedido.versionOf).replace(/\\/g, '/')] : [])];
   const existen = await galeria.cuales(db, ids), carpeta = pedido.folder ? await galeria.folderOf(db, pedido.folder) : null, b = await budget(env, db);
@@ -136,7 +139,7 @@ async function propiaCancelacion(env, engine, url) {
 export async function retry(env, db, id, { usuario } = {}) {
   const j = await cargar(db, id); if (!j) return null;
   if (j.state !== 'failed' && j.state !== 'done') throw new ErrorPedido('ese trabajo sigue en marcha: espera a que termine para reintentarlo', 409);
-  return pedir(env, db, { model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, task: j.task, folder: j.folder, versionOf: j.versionOf, purpose: j.purpose, retryOf: j.id }, { usuario });
+  return pedir(env, db, { model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, task: j.task, folder: j.folder, versionOf: j.versionOf, purpose: j.purpose, preset: j.preset, receta: j.receta, canal: j.canal, esEscena: j.esEscena, retryOf: j.id }, { usuario });
 }
 export async function forget(db, id) { const r = await db.prepare(`delete from estudio_trabajos where id = ? and estado in ('done','failed')`).bind(id).run(); return !!r.meta?.changes; }
 export async function markAttached(db, id) { const j = await cargar(db, id); if (j) { j.attached = true; await guardarFila(db, j); } }
@@ -198,7 +201,7 @@ async function paso(env, db, id, ahora) {
   const guardar = async (buf, ext, extra = {}) => {
     const real = sniffExt(buf, { svg: j.engine === 'prueba' }); // la verdad la dicen los primeros bytes, no el tipo que declare el motor
     if (!real) throw new Error('el motor devolvió algo que no es una imagen, un video ni un audio');
-    const it = await galeria.store(env, db, buf, real, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...extra }, { zona: galeria.ZONA(env) });
+    const it = await galeria.store(env, db, buf, real, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...(j.preset ? { preset: j.preset } : {}), ...(j.receta ? { receta: j.receta } : {}), ...(j.canal ? { canal: j.canal } : {}), ...extra }, { zona: galeria.ZONA(env) });
     j.items.push(it.file); await guardarFila(db, j); return it;
   };
   const ctx = { save: async () => { const r = await db.prepare('select cancelar from estudio_trabajos where id = ?').bind(j.id).first(); if (r?.cancelar) j.cancel = true; await guardarFila(db, j); }, add: guardar };

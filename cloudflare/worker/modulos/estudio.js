@@ -4,7 +4,8 @@
 // Lo que SÍ está: el catálogo y el estado de los motores (según los secretos del Worker), la galería (listar, subir, carpetas,
 // mover, favoritos y «usado», papelera de 30 días, recuperar, vaciar, zip, servir cada archivo), los trabajos (pedir, estado, esperar,
 // cancelar, reintentar, olvidar, editar una imagen), los topes del día y del mes, «mejorar el prompt» y las voces propias de MiniMax.
-// Lo que NO está (contesta 501 en español): el banco de presets, los lotes, las plantillas, «Mandar a un departamento» (tareas),
+// El banco de presets (Fase 4 A+B, lib/estudio/presets.js) sí está; lo que usa sharp dentro de él se dice y no corre.
+// Lo que NO está (contesta 501 en español): los lotes, las plantillas, «Mandar a un departamento» (tareas),
 // entender un video o un audio, y todo lo que dependa de `sharp` (los retoques locales y la QA): no existe en un Worker.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { agentes } from '../lib/agentes.js';
@@ -16,13 +17,13 @@ import { prepararSubida } from '../../../media/formatos-imagen.mjs';
 import { aJpegDeEnv } from '../lib/contenido/conductores.js';
 import * as trabajos from '../lib/estudio/trabajos.js';
 import * as voces from '../lib/estudio/voces.js';
+import * as presets from '../lib/estudio/presets.js';
 import { prepararEstudio, guardarConfig, validarConfig, leerConfig, motoresEncendidos } from '../lib/estudio/entorno.js';
 
 export const nombre = 'estudio';
 export const grupos = ['media', 'voces'];
 
 const NO_ESTA = {
-  presets: 'El banco de presets del Estudio todavía no está en la nube: sigue en la oficina de tu computadora.',
   lotes: 'Los lotes del Estudio todavía no están en la nube: siguen en la oficina de tu computadora.',
   plantillas: 'Las plantillas del Estudio todavía no están en la nube.',
   understand: 'Entender un video o un audio todavía no está en la nube.',
@@ -101,6 +102,34 @@ export async function manejar(ctx) {
   let m;
 
   try {
+    /* ---- el banco de presets (Fase 4 A+B): compilar no gasta; aplicar es el clic GENERAR y pasa por los topes ---- */
+    if (ruta === '/api/media/presets' || ruta.startsWith('/api/media/presets/')) {
+      const pm = ruta.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/), puedeEscribir = usuario.rol === 'admin' || usuario.rol === 'editor';
+      try {
+        if (ruta === '/api/media/presets' && metodo === 'GET') return json(await presets.lista(db, { medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
+        if (ruta === '/api/media/presets/compile' && metodo === 'POST') { const { plan } = await presets.compilar(db, (await cuerpo(req)) || {}); return json({ plan, budget: await trabajos.budget(env, db) }); }
+        if (ruta === '/api/media/presets/apply' && metodo === 'POST') {
+          const out = await presets.aplicar(env, db, (await cuerpo(req)) || {}, { usuario });
+          return json({ ...out, budget: await trabajos.budget(env, db) });
+        }
+        if (ruta === '/api/media/presets' && metodo === 'POST') {
+          if (!puedeEscribir) return prohibido('Guardar un preset es de un administrador o un editor.');
+          return json(await presets.guardar(env, db, (await cuerpo(req)) || {}, { usuario }));
+        }
+        if (pm && pm[2] && metodo === 'GET') return json({ versiones: await presets.versiones(db, pm[1]) });
+        if (pm && !pm[2] && metodo === 'DELETE') {
+          if (!puedeEscribir) return prohibido('Borrar un preset es de un administrador o un editor.');
+          return (await presets.borrar(db, pm[1], { usuario })) ? json({ ok: true }) : error('ese preset no es tuyo o ya no está', 404);
+        }
+      } catch (e) {
+        if (e instanceof trabajos.ErrorPedido) return json({ error: e.message }, e.estado);
+        if (e?.plan) return json({ error: e.message, plan: e.plan }, e.status || 400);
+        if (Number.isInteger(e?.status)) return error(e.message, e.status);
+        throw e;
+      }
+      return error('no such route', 404);
+    }
+
     /* ---- lo que todavía no está ---- */
     for (const [k, msg] of Object.entries(NO_ESTA)) if (ruta === `/api/media/${k}` || ruta.startsWith(`/api/media/${k}/`)) return noEsta(msg);
 
