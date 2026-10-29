@@ -78,12 +78,13 @@ export function faltaLocal(p, lutExiste = () => true) {
 const tocaLocal = (p) => p.ejecutor === 'local' || p.ejecutor === 'local+ia' || arr(p.local).length > 0 || arr(p.post).length > 0;
 
 /** GET /api/media/presets: la mezcla, filtrada por medio, modo y texto, cada uno con si algún modelo encendido (o lo local) lo sirve.
- *  opts.sinLocal: motivo (texto) cuando aquí no se pueden hacer los retoques locales: los presets que lo exigen salen con `on:false` y ese motivo (no se ocultan). */
-export function listar(banco, ctx, { medio, modo, q } = {}, { fab, sinLocal = '', lutExiste = () => true, sharp = true } = {}) {
+ *  opts.sinLocal: motivo (texto) cuando aquí no se pueden hacer los retoques locales: los presets que lo exigen salen con `on:false` y ese motivo (no se ocultan).
+ *  opts.localOk(p): alternativa fina (la nube con IMAGES hace unos retoques y otros no). */
+export function listar(banco, ctx, { medio, modo, q } = {}, { fab, sinLocal = '', localOk = null, lutExiste = () => true, sharp = true } = {}) {
   let ps = banco.presets.filter((p) => !medio || arr(p.medios).includes(medio)).filter((p) => !modo || core.modoAdmite(p, modo));
   if (q && String(q).trim()) { const hits = core.buscar(String(q).slice(0, 120), ps, { max: 40 }); const by = new Map(ps.map((p) => [p.id, p])); ps = hits.map((h) => ({ ...by.get(h.id), score: h.score, por: h.por })).filter((p) => p.id); }
   const sirve = (p) => {
-    if (sinLocal && tocaLocal(p)) return { on: false, modelos: [], motivo: sinLocal };
+    if (tocaLocal(p)) { const m = localOk ? localOk(p) : sinLocal; if (m) return { on: false, modelos: [], motivo: m }; } // `localOk(p)`: por qué ESTE preset no se puede hacer aquí ('' si sí); `sinLocal`: nada local se puede
     if (p.ejecutor === 'local') { const falta = faltaLocal(p, lutExiste); return { on: sharp !== false && !falta, modelos: [], motivo: falta || (sharp === false ? 'no disponible en esta máquina' : '') }; }
     const kind = arr(p.medios)[0] || 'image';
     const c = core.modelosPara([{ id: p.id, preset: p, params: {} }], ctx.models, ctx.caps, { kind, modo: arr(p.modos)[0], familias: ctx.familias });

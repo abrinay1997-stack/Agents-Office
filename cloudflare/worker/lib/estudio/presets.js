@@ -17,6 +17,8 @@ import { ahora } from '../ids.js';
 import * as cerebro from '../cerebro.js';
 import * as galeria from './galeria.js';
 import * as trabajos from './trabajos.js';
+import { leerConfig } from './entorno.js';
+import { hayRetoques, motivoPreset, motivoPlan, retocar } from './retoques.js';
 
 export const GRUPO_NOTAS = 'Estudio';
 export const COLECCION_VERSIONES = 'presets-versiones';
@@ -39,30 +41,32 @@ async function notasDePresets(db) {
 }
 
 /** La fábrica, los presets del dueño y el contexto del compilador (modelos encendidos, cifras de la empresa). */
-export async function cargar(db) {
+export async function cargar(db, env = null) {
+  const retoques = env ? hayRetoques(env, await leerConfig(db)) : false; // Fase 4 D: con el interruptor y el binding IMAGES, unos retoques de foto SÍ corren en la nube
   const fab = cargarFabrica();
   const propios = API.propiosDeNotas(await notasDePresets(db), { fab });
   const banco = API.bancoDe({ fab, ...propios });
   const cifras = (await leerDoc(db, 'cifras', null)).valor;
   const models = catalogo.models();
-  const ctx = API.contextoDe({ fab, models, caps: (m) => catalogo.capsOf(m.id || m, { familias: fab.familias }), cifras: Array.isArray(cifras?.items) ? cifras.items : [], local: false });
-  return { fab, banco, ctx };
+  const ctx = API.contextoDe({ fab, models, caps: (m) => catalogo.capsOf(m.id || m, { familias: fab.familias }), cifras: Array.isArray(cifras?.items) ? cifras.items : [], local: retoques });
+  return { fab, banco, ctx, retoques };
 }
 
 /** GET /api/media/presets */
-export async function lista(db, filtro = {}) {
-  const { fab, banco, ctx } = await cargar(db);
-  return API.listar(banco, ctx, filtro, { fab, sinLocal: SIN_LOCAL, sharp: false });
+export async function lista(db, filtro = {}, env = null) {
+  const { fab, banco, ctx, retoques } = await cargar(db, env);
+  return API.listar(banco, ctx, filtro, retoques ? { fab, localOk: motivoPreset, sharp: true } : { fab, sinLocal: SIN_LOCAL, sharp: false });
 }
 
 /** POST /api/media/presets/compile: el plan, sin gastar nada. */
-export async function compilar(db, b = {}) {
-  const { banco, ctx } = await cargar(db);
+export async function compilar(db, b = {}, env = null) {
+  const { banco, ctx, retoques } = await cargar(db, env);
   const r = API.compilar(b, banco, ctx);
-  return { plan: conAvisos(r.plan), pedido: r.pedido };
+  return { plan: conAvisos(r.plan, retoques), pedido: r.pedido };
 }
-function conAvisos(plan) {
+function conAvisos(plan, retoques = false) {
   const errores = (plan.errores || []).map(enNube);
+  if (retoques && !errores.length) { const m = motivoPlan(plan); if (m) errores.push(m); } // lo que IMAGES no hace: el plan lo dice y no se aplica
   const avisos = [...(plan.avisos || [])];
   if (Array.isArray(plan.qa) && plan.qa.length && !avisos.some((a) => a.tipo === 'qa')) avisos.push({ tipo: 'qa', texto: AVISO_QA });
   return { ...plan, errores, avisos };
@@ -80,26 +84,55 @@ async function guiaDe(env, db, escena) {
 }
 async function sha1(t) { const d = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(t)); return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
 
-/** POST /api/media/presets/apply: lo único que gasta, y solo con el clic GENERAR. Pasa por los topes del Estudio (trabajos.pedir). → { plan, jobs, avisos } */
+/** POST /api/media/presets/apply: lo único que gasta, y solo con el clic GENERAR. Pasa por los topes del Estudio (trabajos.pedir). → { plan, jobs, avisos }
+ *  Con los retoques de la nube encendidos (Fase 4 D): lo todo-local se hace aquí mismo, gratis y sin IA, como una versión nueva de tu foto; lo de «antes» de la IA
+ *  se hace sobre tu foto y la IA recibe esa copia; lo de «después» lo hace el cron cuando llega la imagen (trabajos.js). */
 export async function aplicar(env, db, b = {}, { usuario } = {}) {
-  const { banco, ctx } = await cargar(db);
+  const { banco, ctx, retoques } = await cargar(db, env);
   let A;
-  try { A = API.planAplicar(b, banco, ctx); } // lanza Error(status 400, plan) si el plan trae errores: nada se sube ni se gasta
-  catch (e) { if (e.plan) { e.message = enNube(e.message); e.plan = conAvisos(e.plan); } throw e; }
-  const P = A.pedido;
-  const creados = [];
+  try {
+    A = API.planAplicar(b, banco, ctx); // lanza Error(status 400, plan) si el plan trae errores: nada se sube ni se gasta
+    const m = retoques ? motivoPlan(A.plan) : '';
+    if (m) throw Object.assign(new Error(m), { status: 400, plan: A.plan });
+  } catch (e) { if (e.plan) { e.message = enNube(e.message); e.plan = conAvisos(e.plan, retoques); } throw e; }
+  const P = A.pedido, creados = [], leer = (id) => galeria.leerBytes(env, id);
   try {
     let c = A.plan;
+    if (c.soloLocal) return await aplicarLocal(env, db, { A, c, P, leer, usuario, retoques });
     if (c.guia?.pendiente) { const g = await guiaDe(env, db, P.escena); if (g.nueva) creados.push(g.file); c = core.ponerGuia(c, g.file); }
-    const { pre, post, qa, ...req } = c.request; // pre/post/qa necesitan sharp: aquí no hay (el plan ya no los trae cuando local=false; esto lo asegura)
-    void pre; void post; void qa;
+    const { pre, qa, ...req } = c.request; // la QA que mide necesita sharp: no corre aquí (el plan lo avisa)
+    void qa;
+    if (pre?.length) { // §5.2: lo de antes, antes — la IA recibe tu foto ya preparada
+      if (!retoques || !A.foto || req.media.reference?.[0] !== A.foto) throw Object.assign(new Error('Lo de antes de la IA (luz y color) todavía no se puede hacer en la nube: no se manda a la IA en su lugar.'), { status: 400 });
+      const bytes = await leer(A.foto); if (!bytes) throw Object.assign(new Error('no encuentro tu foto en el Estudio'), { status: 400 });
+      const r = await retocar(env, bytes, pre, { leerRef: leer });
+      const it = await galeria.store(env, db, Buffer.from(r.bytes), r.ext, { prompt: 'Tu foto, preparada para la IA', provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, prep: true, versionOf: A.foto, post: { pasos: r.pasos, avisos: r.avisos } });
+      creados.push(it.file); req.media = { ...req.media, reference: [it.file, ...req.media.reference.slice(1)] };
+    }
     const j = await trabajos.pedir(env, db, { ...req, canal: A.canal, esEscena: A.esEscena, receta: A.receta, folder: P.folder, purpose: 'banco de presets' }, { usuario, presets: true });
-    const plan = conAvisos(c);
+    const plan = conAvisos(c, retoques);
     return { plan, jobs: [j], avisos: plan.avisos };
   } catch (e) {
-    for (const f of creados) { try { await galeria.trash(db, f); } catch { /* una guía de más no daña */ } } // un clic repetido con el tope alcanzado no llena la galería de guías
+    for (const f of creados) { try { await galeria.trash(db, f); } catch { /* una guía o una copia de más no daña */ } } // un clic repetido con el tope alcanzado no llena la galería
     throw e;
   }
+}
+
+/** Todo local: una versión nueva de tu foto, sin IA, gratis, el original intacto (la oficina local hace lo mismo con sharp). */
+async function aplicarLocal(env, db, { A, c, P, leer, retoques }) {
+  const mal = (m) => Object.assign(new Error(m), { status: 400 });
+  if (!A.foto) throw mal('Lo local trabaja sobre tu foto: súbela o elige una de la galería');
+  const bytes = await leer(A.foto); if (!bytes) throw mal('tu foto ya no está en el Estudio');
+  const carpeta = P.folder ? await galeria.folderOf(db, P.folder) : null, byId = A.byId;
+  const prompt = c.preset.map((x) => byId.get(x.id)?.nombre || x.id).join(' + ') || 'Edición en la nube';
+  const r = await retocar(env, bytes, [...c.local.antes, ...c.local.despues], { leerRef: leer });
+  const it = await galeria.store(env, db, Buffer.from(r.bytes), r.ext, { prompt, provider: 'local', model: '', modelName: 'En la nube (sin IA)', cost: 0, by: 'you', agent: null, task: null, versionOf: A.foto, preset: c.preset, receta: A.receta, ...(A.canal ? { canal: A.canal } : {}),
+    post: { pasos: r.pasos, medido: {}, avisos: r.avisos }, ...(carpeta ? { folder: carpeta.id } : {}) });
+  await galeria.update(db, A.foto, { versions: [...new Set([...(Array.isArray((await galeria.item(db, A.foto))?.versions) ? (await galeria.item(db, A.foto)).versions : []), it.file])] }).catch(() => {});
+  const avisos = [...r.avisos, ...(r.sinHacer.length ? [`no se hizo: ${r.sinHacer.join(' · ')}`] : [])];
+  const j = await trabajos.registrarLocal(db, { prompt, item: it, source: A.foto, preset: c.preset, receta: A.receta, canal: A.canal, folder: carpeta?.id, avisos });
+  const plan = conAvisos(c, retoques);
+  return { plan, jobs: [j], avisos: plan.avisos };
 }
 
 /* ---------- los presets propios: notas del Cerebro ---------- */

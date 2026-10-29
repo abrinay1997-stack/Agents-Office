@@ -15,10 +15,11 @@ import * as mmx from '../../../../minimax.mjs';
 import { explicar } from '../../../../media/errores.mjs';
 import { sniffExt, MEDIA_MIME } from '../../../../media/galeria-core.mjs';
 import { crearMotores } from '../../../../media/motores-core.mjs';
-import { usageOf, spendOn, budgetOf, checkBudgetOf, armarTrabajo, pubJob, editRequestOf, weightOf } from '../../../../media/trabajos-core.mjs';
+import { usageOf, spendOn, budgetOf, checkBudgetOf, armarTrabajo, pubJob, editRequestOf, weightOf, jid } from '../../../../media/trabajos-core.mjs';
 import { mutarDoc, leerDoc } from '../almacen.js';
 import * as galeria from './galeria.js';
 import { entornoDe } from './entorno.js';
+import { hayRetoques, retocar } from './retoques.js';
 
 const USO = 'estudio.uso';
 const LEASE_MS = 10 * 60e3, EMPUJE_MS = 3000, MAX_TRABAJOS = 400, SEMANA = 7 * 864e5;
@@ -80,10 +81,12 @@ export { ErrorPedido };
 export async function pedir(env, db, req, { usuario, presets = false } = {}) { // `presets`: solo lo pasa lib/estudio/presets.js (y retry, con lo que ya guardó el propio trabajo); un body crudo de /api/media/jobs nunca trae el rastro del banco
   const hay = (v) => Array.isArray(v) && v.length > 0;
   // el rastro del banco de presets (preset, receta, canal) SÍ viaja; los pasos que necesitan sharp (retoques locales, QA) todavía no existen en la nube
-  if (req.local === true || hay(req.post) || hay(req.pre) || hay(req.qa)) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
+  const retoquesOn = presets && hayRetoques(env, S.cfg); // Fase 4 D (interruptor `retoquesNube` + binding IMAGES): los pasos de DESPUÉS de la IA los hace el cron aquí mismo
+  if (req.local === true || (hay(req.post) && !retoquesOn) || hay(req.pre) || hay(req.qa)) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
   const pedido = limpiarPedido(req, { por: usuario?.agente ? 'agent' : 'you' });
   if (usuario?.agente) pedido.agent = String(usuario.agente); // lo pidió un agente: la galería, la tarjeta y el rastro lo dicen (by/agent)
   if (req.versionOf != null) pedido.versionOf = req.versionOf;
+  if (retoquesOn && hay(req.post)) pedido.post = req.post; // armarTrabajo lo valida (presetTrail: op con nombre válido, hasta 30)
   if (presets) for (const k of ['preset', 'receta', 'canal', 'esEscena']) if (req[k] !== undefined) pedido[k] = req[k]; // armarTrabajo los valida (presetTrail)
   if (typeof req.purpose === 'string') pedido.purpose = req.purpose;
   const ids = [...Object.values(pedido.media).flat(), ...(pedido.versionOf != null ? [String(pedido.versionOf).replace(/\\/g, '/')] : [])];
@@ -104,6 +107,14 @@ export async function pedir(env, db, req, { usuario, presets = false } = {}) { /
     } catch (e) { await db.prepare('delete from estudio_trabajos where id = ?').bind(j.id).run(); throw new ErrorPedido(e.message, 400); }
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'estudio', usuario?.email || '?', JSON.stringify({ trabajo: j.id, modelo: j.model, n: j.n, costo: +(j.unit * j.n).toFixed(3) })).run();
   }
+  return pub(j);
+}
+/** Un retoque todo-local ya hecho (Fase 4 D): queda en el historial de trabajos como uno terminado, para que la página lo vea igual que en la oficina local. */
+export async function registrarLocal(db, { prompt, item, source, preset, receta, canal, folder, avisos = [] }) {
+  const ahora = Date.now();
+  const j = { id: jid(), state: 'done', kind: 'image', model: 'local', engine: 'local', prompt, n: 1, s: {}, media: { reference: [source] }, weight: 0, by: 'you', agent: null, task: null, at: ahora, startedAt: ahora, doneAt: ahora, items: [item.file], cost: 0, unit: 0, versionOf: source,
+    ...(folder ? { folder } : {}), ...(preset ? { preset } : {}), ...(receta ? { receta } : {}), ...(canal ? { canal } : {}), ...(avisos.length ? { warning: avisos.join(' · ').slice(0, 300) } : {}) };
+  await db.prepare('insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)').bind(j.id, JSON.stringify(j), j.state, j.at).run();
   return pub(j);
 }
 /** Editar una imagen: una versión nueva al lado (el original no se toca). */
@@ -199,8 +210,12 @@ async function paso(env, db, id, ahora) {
   await guardarFila(db, j);
 
   const guardar = async (buf, ext, extra = {}) => {
-    const real = sniffExt(buf, { svg: j.engine === 'prueba' }); // la verdad la dicen los primeros bytes, no el tipo que declare el motor
+    let real = sniffExt(buf, { svg: j.engine === 'prueba' }); // la verdad la dicen los primeros bytes, no el tipo que declare el motor
     if (!real) throw new Error('el motor devolvió algo que no es una imagen, un video ni un audio');
+    if (j.kind === 'image' && Array.isArray(j.post) && j.post.length && hayRetoques(env, S.cfg)) { // Fase 4 D: lo de DESPUÉS de la IA (fondo blanco…) con IMAGES; si falla, va la imagen del modelo y se dice
+      try { const r = await retocar(env, buf, j.post, { leerRef: (id) => galeria.leerBytes(env, id) }); buf = Buffer.from(r.bytes); real = r.ext; extra = { ...extra, post: { pasos: r.pasos, medido: {}, avisos: r.avisos } }; if (r.sinHacer.length) j.warning = [j.warning, `no se hizo: ${r.sinHacer.join(' · ')}`].filter(Boolean).join(' · ').slice(0, 300); }
+      catch (e) { j.warning = [j.warning, `no se pudo retocar en la nube (va la imagen del modelo): ${String(e.message).slice(0, 120)}`].filter(Boolean).join(' · ').slice(0, 300); }
+    }
     const it = await galeria.store(env, db, buf, real, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...(j.preset ? { preset: j.preset } : {}), ...(j.receta ? { receta: j.receta } : {}), ...(j.canal ? { canal: j.canal } : {}), ...extra }, { zona: galeria.ZONA(env) });
     j.items.push(it.file); await guardarFila(db, j); return it;
   };
