@@ -59,8 +59,8 @@ export async function lista(db, filtro = {}, env = null) {
 }
 
 /** POST /api/media/presets/compile: el plan, sin gastar nada. */
-export async function compilar(db, b = {}, env = null) {
-  const { banco, ctx, retoques } = await cargar(db, env);
+export async function compilar(db, b = {}, env = null, cargado = null) { // `cargado`: lo de cargar() ya hecho (un lote compila muchas filas: la fábrica y las notas se leen una vez)
+  const { banco, ctx, retoques } = cargado || await cargar(db, env);
   const r = API.compilar(b, banco, ctx);
   return { plan: conAvisos(r.plan, retoques), pedido: r.pedido };
 }
@@ -87,8 +87,8 @@ async function sha1(t) { const d = await crypto.subtle.digest('SHA-1', new TextE
 /** POST /api/media/presets/apply: lo único que gasta, y solo con el clic GENERAR. Pasa por los topes del Estudio (trabajos.pedir). → { plan, jobs, avisos }
  *  Con los retoques de la nube encendidos (Fase 4 D): lo todo-local se hace aquí mismo, gratis y sin IA, como una versión nueva de tu foto; lo de «antes» de la IA
  *  se hace sobre tu foto y la IA recibe esa copia; lo de «después» lo hace el cron cuando llega la imagen (trabajos.js). */
-export async function aplicar(env, db, b = {}, { usuario } = {}) {
-  const { banco, ctx, retoques } = await cargar(db, env);
+export async function aplicar(env, db, b = {}, { usuario, cargado = null, purpose = 'banco de presets' } = {}) { // `purpose`: un lote pone aquí su marca (lote <id>:<n>) para no mandar una foto dos veces
+  const { banco, ctx, retoques } = cargado || await cargar(db, env);
   let A;
   try {
     A = API.planAplicar(b, banco, ctx); // lanza Error(status 400, plan) si el plan trae errores: nada se sube ni se gasta
@@ -98,7 +98,7 @@ export async function aplicar(env, db, b = {}, { usuario } = {}) {
   const P = A.pedido, creados = [], leer = (id) => galeria.leerBytes(env, id);
   try {
     let c = A.plan;
-    if (c.soloLocal) return await aplicarLocal(env, db, { A, c, P, leer, usuario, retoques });
+    if (c.soloLocal) return await aplicarLocal(env, db, { A, c, P, leer, usuario, retoques, purpose });
     if (c.guia?.pendiente) { const g = await guiaDe(env, db, P.escena); if (g.nueva) creados.push(g.file); c = core.ponerGuia(c, g.file); }
     const { pre, qa, ...req } = c.request; // la QA que mide necesita sharp: no corre aquí (el plan lo avisa)
     void qa;
@@ -109,7 +109,7 @@ export async function aplicar(env, db, b = {}, { usuario } = {}) {
       const it = await galeria.store(env, db, Buffer.from(r.bytes), r.ext, { prompt: 'Tu foto, preparada para la IA', provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, prep: true, versionOf: A.foto, post: { pasos: r.pasos, avisos: r.avisos } });
       creados.push(it.file); req.media = { ...req.media, reference: [it.file, ...req.media.reference.slice(1)] };
     }
-    const j = await trabajos.pedir(env, db, { ...req, canal: A.canal, esEscena: A.esEscena, receta: A.receta, folder: P.folder, purpose: 'banco de presets' }, { usuario, presets: true });
+    const j = await trabajos.pedir(env, db, { ...req, canal: A.canal, esEscena: A.esEscena, receta: A.receta, folder: P.folder, purpose }, { usuario, presets: true });
     const plan = conAvisos(c, retoques);
     return { plan, jobs: [j], avisos: plan.avisos };
   } catch (e) {
@@ -119,7 +119,7 @@ export async function aplicar(env, db, b = {}, { usuario } = {}) {
 }
 
 /** Todo local: una versión nueva de tu foto, sin IA, gratis, el original intacto (la oficina local hace lo mismo con sharp). */
-async function aplicarLocal(env, db, { A, c, P, leer, retoques }) {
+async function aplicarLocal(env, db, { A, c, P, leer, retoques, purpose }) {
   const mal = (m) => Object.assign(new Error(m), { status: 400 });
   if (!A.foto) throw mal('Lo local trabaja sobre tu foto: súbela o elige una de la galería');
   const bytes = await leer(A.foto); if (!bytes) throw mal('tu foto ya no está en el Estudio');
@@ -130,7 +130,7 @@ async function aplicarLocal(env, db, { A, c, P, leer, retoques }) {
     post: { pasos: r.pasos, medido: {}, avisos: r.avisos }, ...(carpeta ? { folder: carpeta.id } : {}) });
   await galeria.update(db, A.foto, { versions: [...new Set([...(Array.isArray((await galeria.item(db, A.foto))?.versions) ? (await galeria.item(db, A.foto)).versions : []), it.file])] }).catch(() => {});
   const avisos = [...r.avisos, ...(r.sinHacer.length ? [`no se hizo: ${r.sinHacer.join(' · ')}`] : [])];
-  const j = await trabajos.registrarLocal(db, { prompt, item: it, source: A.foto, preset: c.preset, receta: A.receta, canal: A.canal, folder: carpeta?.id, avisos });
+  const j = await trabajos.registrarLocal(db, { prompt, item: it, source: A.foto, preset: c.preset, receta: A.receta, canal: A.canal, folder: carpeta?.id, avisos, purpose });
   const plan = conAvisos(c, retoques);
   return { plan, jobs: [j], avisos: plan.avisos };
 }

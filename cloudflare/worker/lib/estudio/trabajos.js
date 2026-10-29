@@ -110,10 +110,10 @@ export async function pedir(env, db, req, { usuario, presets = false } = {}) { /
   return pub(j);
 }
 /** Un retoque todo-local ya hecho (Fase 4 D): queda en el historial de trabajos como uno terminado, para que la página lo vea igual que en la oficina local. */
-export async function registrarLocal(db, { prompt, item, source, preset, receta, canal, folder, avisos = [] }) {
+export async function registrarLocal(db, { prompt, item, source, preset, receta, canal, folder, avisos = [], purpose }) {
   const ahora = Date.now();
   const j = { id: jid(), state: 'done', kind: 'image', model: 'local', engine: 'local', prompt, n: 1, s: {}, media: { reference: [source] }, weight: 0, by: 'you', agent: null, task: null, at: ahora, startedAt: ahora, doneAt: ahora, items: [item.file], cost: 0, unit: 0, versionOf: source,
-    ...(folder ? { folder } : {}), ...(preset ? { preset } : {}), ...(receta ? { receta } : {}), ...(canal ? { canal } : {}), ...(avisos.length ? { warning: avisos.join(' · ').slice(0, 300) } : {}) };
+    ...(folder ? { folder } : {}), ...(preset ? { preset } : {}), ...(receta ? { receta } : {}), ...(canal ? { canal } : {}), ...(avisos.length ? { warning: avisos.join(' · ').slice(0, 300) } : {}), ...(purpose ? { purpose: String(purpose).slice(0, 200) } : {}) };
   await db.prepare('insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)').bind(j.id, JSON.stringify(j), j.state, j.at).run();
   return pub(j);
 }

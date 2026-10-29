@@ -18,6 +18,8 @@ export const CAMPOS = ['foto', 'sku', 'nombre', 'preset', 'canal', 'encuadre', '
 const IMG_EXT = ['png', 'jpg', 'jpeg', 'webp'];
 
 let COLS = null;
+/** La nube no tiene carpeta de presets/ que leer: instala los sinónimos ya importados (presets/columnas.json). */
+export function usarColumnas(json) { COLS = json && typeof json === 'object' ? (json.campos || json) : null; }
 /** Los sinónimos de presets/columnas.json: { campo: { es, sinonimos[] } }. */
 export function columnas() {
   if (!COLS) { try { COLS = JSON.parse(fs.readFileSync(new URL('./presets/columnas.json', import.meta.url), 'utf8')).campos || {}; } catch { COLS = {}; } }
