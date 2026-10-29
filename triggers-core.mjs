@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — triggers: work that starts when something HAPPENS, not at an hour (V4.4, 25 Sep 2026; audit E1, E2).
 // A form is sent, a payment arrives, a WhatsApp comes in, Zapier / Make / n8n sees a new email → they call
 //   POST /api/hook/<id>        (JSON or form body; the secret in the header X-Office-Token or ?token=)

@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — «Preparar desde mi web», el NÚCLEO (25 oct 2026). Lo comparten la oficina local (serve.mjs) y la nube (cloudflare/worker/lib/arranque.js): puro, sin fs ni red.
 //
 // QUÉ CAMBIÓ (pregunta del dueño: «¿corrige el cerebro o superpone prompts? ¿qué pasa si ya hay información distinta?»):

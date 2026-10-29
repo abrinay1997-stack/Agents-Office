@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — costs and return (V4.4, 25 Sep 2026; audit C1–C7, C9, C10). What every run costs, in dollars, by task,
 // desk, department, week and month; what it saved in hours; a monthly budget with a warning; which desk could use a cheaper
 // model; which routines nobody reads; and a CSV for the accountant.
