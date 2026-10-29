@@ -198,7 +198,7 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
     const c = await hallar(e.conector); if (!c) return falla(`No hay un conector «${cadena(e.conector, 40)}» listo. Mira ver_conectores.`);
     const lee = lecturaDe(c); if (!lee.size) return falla(`«${c.nombre}» no tiene herramientas de lectura habilitadas (Ajustes → Conectores MCP).`);
     if (!clientes.has(c.nombre) && clientes.size >= MAX_CONECTORES) return falla(`Ya consultaste ${MAX_CONECTORES} conectores en este turno; contesta con lo que tienes.`);
-    const lista1 = (await clienteDe(c).listar()).filter((t) => lee.has(t.name));
+    const lista1 = (await clienteDe(c).listar()).filter((t) => lee.has(t.name) && !safety.esquemaConUrlLibre(t.inputSchema));
     return ok(`Herramientas de LECTURA de ${c.nombre}:\n${lista1.map((t) => `- ${t.name}: ${clip(t.description, 160)} · parámetros: ${Object.entries(t.inputSchema?.properties || {}).map(([k, v]) => `${k}${(t.inputSchema.required || []).includes(k) ? '*' : ''} (${v.type || 'texto'})`).join(', ') || 'ninguno'}`).join('\n')}`, `${lista1.length} herramientas`);
   }
   async function usarConector(e) {
@@ -210,7 +210,7 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
     llamadasConector++;
     guardian ||= crearGuardian({ db, estado: estadoGuardian, ctx: { run: 'dimitri-' + Date.now().toString(36), tarea: null, agente: 'dimitri', dept: 'direccion', writes: false, runMode: 'chat', policy: 'nunca', known: null, safety: cfg.safety || {}, amountLimit: 0, servers: [...new Set((await lisos()).map((x) => x.nombre))] } });
     const args = e.argumentos && typeof e.argumentos === 'object' && !Array.isArray(e.argumentos) ? e.argumentos : {};
-    const tool = `mcp__${c.nombre}__${nombreH}`, d = await guardian.antes(tool, args);
+    const tool = `mcp__${c.nombre}__${nombreH}`, ajena = safety.urlAjenaEn(args, c.url), d = ajena ? { allow: false, why: `Bloqueado: el argumento lleva una dirección a ${ajena}, que no es del conector.` } : await guardian.antes(tool, args);
     if (!d.allow || d.kind !== 'read') return falla(d.allow ? 'Bloqueado: Dimitri solo lee datos.' : d.why);
     const x = await clienteDe(c).llamar(nombreH, args), aviso = await guardian.despues(tool, args, x.texto);
     const why = estadoGuardian.taint?.why || safety.injectionIn(x.texto);

@@ -162,9 +162,55 @@ const INJECTION = [
   [/\b(forward|send|reenv[ií]a|env[ií]a|exporta|export)\b.{0,50}\b(all|every|todos|todas|cada)\b.{0,40}\b(emails?|correos|messages|mensajes|contacts|contactos|files|archivos|passwords?|contraseñas|invoices|facturas)\b/i, 'pide sacar datos en bloque'],
   [/\b(do not|don't|never|no)\s+(tell|inform|mention|notify|le digas|avises|menciones|informes)\b.{0,40}\b(user|owner|human|dueño|usuario|jefe)\b/i, 'pide ocultarle algo al dueño'],
 ];
+/* SEG-02 · ninguna regex es frontera: el texto se NORMALIZA antes (NFKC, sin caracteres invisibles ni de dirección, homoglifos
+   comunes pasados a latino, sin tildes) y se prueba el original y cada forma. Quien escribe a mano «ígnora», «ignоre» (о cirílica)
+   o «ig\u200bnore» no esquiva la lista. Sigue siendo una heurística: el candado real son el guardián y el OK del dueño. */
+const INVISIBLES = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDDEF]/g; // ancho cero, bidi, selectores de variación, caracteres «tag»
+const HOMOGLIFOS = (() => { // cirílico y griego que se ven como una letra latina
+  const m = {}; const par = (de, a) => { for (let i = 0; i < de.length; i++) m[de[i]] = a[i]; };
+  par('асеорхуіјѕԁԛѵһԝАВЕКМНОРСТХУІЈЅ', 'aceopxyijsdqvhwABEKMHOPCTXYIJS');
+  par('αβεικνορτυχοΑΒΕΖΗΙΚΜΝΟΡΤΥΧ', 'abeiknoptyxoABEZHIKMNOPTYX');
+  return m;
+})();
+export function normalizarParaDeteccion(text) {
+  let s = String(text ?? '').slice(0, 200000);
+  try { s = s.normalize('NFKC'); } catch { /* texto roto: se sigue con lo que hay */ }
+  s = s.replace(INVISIBLES, '');
+  s = s.replace(/[^\u0000-\u007F]/g, ch => HOMOGLIFOS[ch] ?? ch);
+  return s.replace(/[\s\u00A0\u2000-\u200A\u202F\u205F\u3000]+/g, ' ');
+}
+const sinTildes = s => { try { return s.normalize('NFD').replace(/\p{M}+/gu, ''); } catch { return s; } };
 export function injectionIn(text) {
-  const s = String(text || '').slice(0, 200000);
-  for (const [re, why] of INJECTION) if (re.test(s)) return why;
+  const crudo = String(text || '').slice(0, 200000);
+  const a = normalizarParaDeteccion(crudo), b = sinTildes(a);
+  const formas = a === crudo ? [crudo, b] : [crudo, a, b];
+  for (const s of formas) for (const [re, why] of INJECTION) if (re.test(s)) return why;
+  return null;
+}
+
+/* ---------- SEG-02 · herramientas con URL libre: un argumento «url» es un canal de salida (exfiltración por la dirección) ---------- */
+const NOMBRE_URL = /^(url|uri|href|link|links|endpoint|webhook|callback|redirect|address|host|hostname|domain|website|site|src|source_url|target_url|image_url|file_url|page_url|base_url|proxy)s?$|(_|\b)(url|uri|href|webhook|endpoint|callback)s?$/i;
+/** ¿Esta herramienta acepta una dirección escrita por el modelo? (parámetro «url», formato uri, o un objeto/array que lo lleva). */
+export function esquemaConUrlLibre(schema, hondo = 0) {
+  if (!schema || typeof schema !== 'object' || hondo > 6) return false;
+  if (/^(uri|url|uri-reference|iri|hostname)$/i.test(String(schema.format || ''))) return true;
+  for (const [k, v] of Object.entries(schema.properties || {})) { if (NOMBRE_URL.test(k) || esquemaConUrlLibre(v, hondo + 1)) return true; }
+  for (const k of ['items', 'additionalProperties']) if (schema[k] && typeof schema[k] === 'object' && esquemaConUrlLibre(schema[k], hondo + 1)) return true;
+  for (const k of ['anyOf', 'oneOf', 'allOf']) if (Array.isArray(schema[k]) && schema[k].some(x => esquemaConUrlLibre(x, hondo + 1))) return true;
+  return false;
+}
+/** Los argumentos de una llamada que llevan una dirección (o algo que se lee como una) a un sitio que no es el del conector. → el host ajeno o null. */
+export function urlAjenaEn(args, urlConector) {
+  const propio = hostOf(urlConector || '');
+  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push(NOMBRE_URL.test(clave) && !/^[a-z][a-z0-9+.-]*:|^\/\//i.test(v.trim()) ? 'https://' + v.trim() : v); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); }; // un campo llamado «url» con «evil.com/x» sin esquema también cuenta
+  visita(args);
+  for (const t of textos) {
+    const n = sinTildes(normalizarParaDeteccion(t));
+    for (const m of n.matchAll(/(?:[a-z][a-z0-9+.-]{1,12}:\/\/|\/\/|\bwww\.)[^\s"'<>)\]]+/gi)) {
+      const h = hostOf(m[0].replace(/^\/\//, 'https://').replace(/^www\./i, 'https://www.'));
+      if (!h || !propio || !(h === propio || h.endsWith('.' + propio))) return h || m[0].slice(0, 40);
+    }
+  }
   return null;
 }
 

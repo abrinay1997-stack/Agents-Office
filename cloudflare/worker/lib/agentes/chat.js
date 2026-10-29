@@ -135,7 +135,8 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
       else {
         llamadas++;
         const entrada = u.input && typeof u.input === 'object' ? u.input : {};
-        const d = await guardian.antes(def.nombre, entrada);
+        const ajena = safety.urlAjenaEn(entrada, conPorNombre.get(def.servidor)?.url);
+        const d = ajena ? { allow: false, why: `Bloqueado: el argumento lleva una dirección a ${ajena}, que no es del conector. En un chat las consultas no mandan direcciones a otros sitios.` } : await guardian.antes(def.nombre, entrada);
         if (!d.allow || d.kind !== 'read') res = { texto: d.allow ? 'Bloqueado: en un chat solo se leen datos.' : d.why, esError: true };
         else {
           let cli = clientes.get(def.servidor);
@@ -178,7 +179,7 @@ async function herramientasDeLectura({ db, env, agente, fetchFn, presupuesto, sa
     try {
       const lista = await crearClienteMcp({ conector: c, env, fetchFn, presupuesto }).listar();
       usables.push(c);
-      for (const t of lista) if (permitidas.has(t.name)) defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema });
+      for (const t of lista) if (permitidas.has(t.name)) { if (safety.esquemaConUrlLibre(t.inputSchema)) { fallos.push({ servidor: c.nombre, motivo: `la herramienta ${t.name} acepta una dirección libre y no se ofrece en el chat` }); continue; } defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema }); }
     } catch (e) { fallos.push({ servidor: c.nombre, motivo: limpiarSecretos(String(e.message)).slice(0, 160) }); }
   }
   return { defs, fallos, conectores: usables };
