@@ -17,6 +17,7 @@ import * as conectores from './conectores.js';
 import * as imagenMeta from './imagen-meta.js';
 import * as chatAgente from './chat-agente.js';
 import * as conexiones from './conexiones.js';
+import * as notificaciones from './notificaciones.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -36,5 +37,6 @@ export const MODULOS = [
   imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)
   chatAgente, // POST /api/chat: hablar con un agente (un turno, solo herramientas de lectura)
   conexiones, // /api/brain/actualizar: el botón «Actualizar conexiones» del Cerebro (solo administradores)
+  notificaciones, // N0: las notificaciones de cada persona (/api/notificaciones/*)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
