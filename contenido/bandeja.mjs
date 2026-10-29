@@ -100,17 +100,20 @@ export function mismoMensaje(a = {}, b = {}) {
  * @param o.elegir     () → contenido.bandejaFuente (auto · meta · metricool · ambas)
  * @param o.avisarComentario (texto, { key }) → el aviso de un comentario nuevo (Telegram lo manda si telegram.notify.comentarios)
  * @param o.avisarMensaje (texto, { key }) → B2: el aviso de un mensaje privado nuevo (Telegram lo manda si telegram.notify.mensajes)
+ * @param o.almacen    CON-11: `{ leer, escribir }` en lugar de `archivo` (el Worker lo da en memoria con escritura a su espejo); mismo contrato local y de nube
  * @param o.undoSeconds () → approvals.undoSeconds: cuánto dura el DESHACER de ocultar
  * @param o.tokens      Cloudflare (fase 7): dónde viven los tokens de DESHACER (D1; la misma interfaz que `tokensEnMemoria` de anuncios/acciones.mjs, tipo 'bandeja'). En local, en memoria.
  * @param o.abiertaAtInicial Cloudflare: cuándo se miró la Bandeja por última vez (el Worker no lo recuerda entre peticiones; se devuelve con `abiertaAtAhora`)
  */
-export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30, tokens = null, abiertaAtInicial = 0 } = {}) {
+export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, almacen = null, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30, tokens = null, abiertaAtInicial = 0 } = {}) {
   const F = { ...(meta ? { meta } : {}), ...(metricool ? { metricool: fuenteMetricool(metricool) } : {}) };
-  const leer = () => { const d = leerJSON(archivo, {}); return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...d }; };
+  // CON-11 paso 2: el estado se lee y se escribe por un ALMACÉN `{ leer(): objeto, escribir(objeto) }`. Sin `almacen`, el de siempre: el archivo `archivo`.
+  const alm = almacen || { leer: () => leerJSON(archivo, {}), escribir: d => escribirJSON(archivo, d) };
+  const leer = () => { const d = alm.leer() ?? {}; return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...d }; };
   const guardar = d => {
     const l = Object.values(d.items).sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
     if (l.length > MAX) { d.items = Object.fromEntries(l.slice(0, MAX).map(x => [x.id, x])); for (const [k, v] of Object.entries(d.alias)) if (!d.items[v]) delete d.alias[k]; }
-    escribirJSON(archivo, d);
+    alm.escribir(d);
   };
   const ahoraIso = () => new Date(ahora()).toJSON();
   const resolver = (d, id) => d.alias?.[id] || id;
