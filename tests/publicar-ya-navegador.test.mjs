@@ -62,6 +62,11 @@ test('«Publicar ahora» encendido: el segundo clic con el aviso de que no se de
   assert.match(await page.textContent(boton), /Pulsa otra vez/);
   assert.match(await page.textContent(P + '.pz-ya-av'), /No se puede deshacer/);
   assert.equal((await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza.estado, 'revision', 'un clic no aprueba nada');
+  await page.click(boton); await page.waitForTimeout(100); // un segundo clic demasiado rápido (doble clic, Enter mantenido) no confirma
+  assert.equal((await o.api('GET', `/api/contenido/piezas/${pz.id}`)).pieza.estado, 'revision', 'sin haber leído el aviso no se publica');
+  await page.waitForTimeout(800);
+  assert.match(await page.textContent(P + '.pz-ya-av'), /No se puede deshacer/);
+  assert.equal(await page.locator(P + '.pz-menu .pz-ya-av').count(), 0, 'el aviso va fuera del menú');
   await page.click(boton); await page.waitForTimeout(1500);
   const { pieza } = await o.api('GET', `/api/contenido/piezas/${pz.id}`);
   assert.equal(pieza.estado, 'aprobada'); assert.equal(pieza.aprobada.ya, true);

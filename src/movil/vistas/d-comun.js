@@ -83,11 +83,16 @@ export async function aprobarPieza(ctx, p, { pronto = false } = {}) {
 
 /** «Publicar ahora» (CON-04): SIN deshacer, así que la hoja dice la verdad y pide el segundo toque; el servidor vuelve a comprobar todo (flag, modo real, Meta directo, solo el dueño). Responde 202: la cola sigue sola.
  *  → { ok: true, pieza } | { ok: false, error } | { ok: false, cancelado: true } */
+let enCurso = false; // dos toques seguidos no abren dos hojas ni confirman dos veces
 export async function publicarAhora(ctx, p) {
+  if (enCurso) return { ok: false, cancelado: true }; enCurso = true;
+  try { return await publicarAhoraUna(ctx, p); } finally { enCurso = false; }
+}
+async function publicarAhoraUna(ctx, p) {
   const errores = p.revision?.errores || [];
   if (errores.length) return { ok: false, error: errores[0] };
   const si = await ctx.confirmar({ titulo: '¿Publicar ahora?', texto: `${p.titulo || (p.texto || '').slice(0, 60) || 'Sin título'}\n${(p.redes || []).map(x => NOMBRE_RED[x] || x).join(', ')}\n${AVISO_YA}`, ok: 'Publicar ahora', peligro: true });
   if (!si) return { ok: false, cancelado: true };
-  try { const r = await ctx.api(`/api/contenido/piezas/${encodeURIComponent(p.id)}/publicar-ya`, { method: 'POST', body: { confirmado: true } }); return { ok: true, pieza: r.pieza, avisos: r.avisos || [] }; }
+  try { const r = await ctx.api(`/api/contenido/piezas/${encodeURIComponent(p.id)}/publicar-ya`, { method: 'POST', body: { confirmado: true, por: 'dueno' } }); return { ok: true, pieza: r.pieza, avisos: r.avisos || [] }; }
   catch (e) { return { ok: false, error: (e.datos?.error) || motivo(e) }; }
 }

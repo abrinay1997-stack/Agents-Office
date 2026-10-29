@@ -170,7 +170,7 @@ export function registrar(shell) {
           if (a === 'aprobar') { const r = await aprobarPieza(ctx, p); if (r.ok) { h.cerrar(); ctx.toast('Aprobada. ' + resumenSalida(r.pieza || p)); await cargar({ silencioso: true }); } else if (r.error) ctx.toast(r.error); return; }
           if (a === 'ahora') {
             if (b.getAttribute('aria-disabled') === 'true') { ctx.toast(errores[0] || motivoNoYa(E.ajustes)); return; }
-            const r = await publicarAhora(ctx, p); if (r.ok) { h.cerrar(); ctx.toast('Publicando ahora… mira Cola para ver cómo va.'); await cargar({ silencioso: true }); } else if (r.error) ctx.toast(r.error); return;
+            b.setAttribute('aria-busy', 'true'); b.disabled = true; let r; try { r = await publicarAhora(ctx, p); } finally { b.removeAttribute('aria-busy'); b.disabled = false; } if (r.ok) { h.cerrar(); ctx.toast('Publicando ahora… mira Cola para ver cómo va.'); await cargar({ silencioso: true }); } else if (r.error) ctx.toast(r.error); return;
           }
           if (a === 'revision') { const r = await con(b, () => ctx.api(`/api/contenido/piezas/${p.id}`, { method: 'PATCH', body: { estado: 'revision' } }), { hecho: 'En revisión' }); if (r.ok) { h.cerrar(); await cargar({ silencioso: true }); } return; }
           if (a === 'devolver') { const r = await con(b, () => ctx.api(`/api/contenido/piezas/${p.id}/devolver`, { method: 'POST', body: {} }), { hecho: 'Devuelta' }); if (r.ok) { h.cerrar(); await cargar({ silencioso: true }); } return; }

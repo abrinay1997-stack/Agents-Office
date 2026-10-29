@@ -29,7 +29,7 @@ test('escritorio: el botón solo existe con publicarYa y el primer clic no publi
   assert.match(pz, /aj\?\.publicarYa !== true/, 'apagado por defecto');
   const handler = pz.slice(pz.indexOf("if (a === 'ahora')"), pz.indexOf("if (a === 'impulsar')"));
   assert.match(handler, /ahoraConf < Date\.now\(\)/, 'el primer clic solo arma la confirmación'); assert.match(handler, /publicarAhora\(\)/);
-  assert.match(pz, /publicar-ya`, \{ confirmado: true \}/);
+  assert.match(pz, /publicar-ya`, \{ confirmado: true, por: 'dueno' \}/);
   const dc = lee('src/movil/vistas/d-comun.js'), f = dc.slice(dc.indexOf('export async function publicarAhora'));
   assert.match(f, /ctx\.confirmar\(/); assert.match(f, /peligro: true/); assert.ok(f.indexOf('ctx.confirmar') < f.indexOf('publicar-ya'), 'primero la hoja, después la ruta');
   assert.match(f, /confirmado: true/);

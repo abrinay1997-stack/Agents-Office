@@ -205,7 +205,7 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
       }
       const py = new RegExp(`^/api/contenido/piezas/(${ID})/publicar-ya$`).exec(p); // CON-04: «Publicar ahora» — SOLO el dueño en la pantalla (ni agentes, ni Dimitri, ni el asistente, ni Telegram)
       if (py && metodo === 'POST') {
-        const b = await body(); if (b.por !== undefined && b.por !== 'dueno') return R(403, { error: 'publicar ahora es solo del dueño, en la pantalla: ni los agentes ni los asistentes lo hacen' });
+        const b = await body(); if (b.por !== 'dueno') return R(403, { error: 'publicar ahora es solo del dueño, en la pantalla (la petición debe declararse del dueño): ni los agentes ni los asistentes lo hacen' });
         const aj = (await ajustes()) || {};
         if (aj.publicarYa !== true) return R(409, { error: '«Publicar ahora» está apagado: se enciende en Ajustes → Contenido' });
         if (!programador) return R(404, { error: 'sin cola' });

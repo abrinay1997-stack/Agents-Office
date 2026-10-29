@@ -67,6 +67,7 @@ export async function manejar(ctx) {
   if (cuerpo === null || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) cuerpo = {};
   // Quién aprueba lo pone el servidor (la sesión), no lo que diga el cuerpo.
   if (/\/(aprobar|publicar-ya)$/.test(ruta)) cuerpo = { ...cuerpo, quien: usuario.email };
+  if (/\/publicar-ya$/.test(ruta)) cuerpo = { ...cuerpo, por: cuerpo.por ?? 'dueno' }; // la sesión de un administrador ES el canal del dueño; quien declare otra cosa (un agente) sigue recibiendo 403
 
   return conServicio(env, async (svc, config) => {
     if (svc.adoptando && metodo !== 'GET' && ruta !== '/api/contenido/config') return error('Se está mudando Contenido a la nube y todavía no terminó (por tandas, cada minuto): espera un momento y vuelve a intentarlo.', 409);
