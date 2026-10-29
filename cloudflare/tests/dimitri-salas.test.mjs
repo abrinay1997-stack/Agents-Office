@@ -152,3 +152,18 @@ test('revisión de Codex (P1): meter el id de una conversación AJENA en tu prop
   assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = ?", 'subgerente-arch:' + dueno(o) + ':' + ajena)[0].n, 2, 'y sus filas, donde estaban');
 });
 
+
+test('UX-11: el ⓘ de Dimitri sabe si el último turno falló por la IA, y se limpia al contestar bien', { skip: SALTAR }, async () => {
+  const o = await oficina6({ guion: [charla('Listo.')] });
+  assert.equal((await o.admin('GET', '/api/sub')).j.ia.fallo, undefined, 'sin fallos al principio');
+  assert.equal((await o.admin('POST', '/api/sub/chat', { text: 'hola' })).status, 200);
+  const llave = o.env.ANTHROPIC_API_KEY; o.env.ANTHROPIC_API_KEY = ''; // sin llave, el turno falla por la IA
+  const r = await o.admin('POST', '/api/sub/chat', { text: 'otra vez' });
+  o.env.ANTHROPIC_API_KEY = llave;
+  assert.notEqual(r.status, 200, 'el turno sin llave tiene que fallar para probar esto');
+  const ia = (await o.admin('GET', '/api/sub')).j.ia;
+  assert.ok(ia.fallo && ia.fallo.at > 0 && typeof ia.fallo.motivo === 'string', JSON.stringify(ia));
+  assert.ok(!JSON.stringify(ia).includes('sk-'), 'ningún secreto en el motivo');
+  await o.admin('POST', '/api/sub/chat', { text: 'ya con llave' }); // contesta bien: el fallo se limpia
+  assert.equal((await o.admin('GET', '/api/sub')).j.ia.fallo, undefined);
+});

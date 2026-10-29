@@ -10,7 +10,7 @@
 //  · Lo que lee de afuera (una imagen, una nota, el resultado de un correo) con órdenes escondidas marca el mensaje y esa respuesta no trae cambios.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import * as chat from '../lib/dimitri/chat.js';
-import { leerPeticion, conversar, estadoRapido, generar, trabajosTerminados, infoModelo, MAX_TEXTO } from '../lib/dimitri/conversar.js';
+import { leerPeticion, conversar, estadoRapido, generar, trabajosTerminados, infoModelo, turnoTerminado, MAX_TEXTO } from '../lib/dimitri/conversar.js';
 import { hacerOps, deshacerOp, enviarPlan } from '../lib/dimitri/ops.js';
 import { informeSemanal } from '../lib/dimitri/semanal.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
@@ -61,7 +61,7 @@ export async function manejar(ctx) {
   if (ruta === '/api/sub/chat') {
     const p = leerPeticion(b); if (p.error) return error(p.error, p.estado || 400);
     if (b.stream !== true) { // Telegram y las páginas viejas: un solo JSON al final
-      try { return json(await conversar({ ...deps, req: p, fetchFn })); } catch (e) { return error(String(e?.message || e).slice(0, 300), 500, e); }
+      try { const r = await conversar({ ...deps, req: p, fetchFn }); await turnoTerminado(db, null); return json(r); } catch (e) { await turnoTerminado(db, e?.message ?? e); return error(String(e?.message || e).slice(0, 300), 500, e); }
     }
     // NDJSON: {type:'start', run} · {type:'paso', paso} (cada consulta de Dimitri, al empezar y al acabar: 27 oct 2026) · {type:'done', messages…} | {type:'error', error} (el texto no se va escribiendo: la respuesta llega entera)
     const run = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ac = new AbortController();
@@ -71,8 +71,8 @@ export async function manejar(ctx) {
       async start(c) {
         const linea = (o) => { try { c.enqueue(enc.encode(JSON.stringify(o) + '\n')); } catch { /* el navegador se fue */ } };
         linea({ type: 'start', run });
-        try { linea({ type: 'done', ...(await conversar({ ...deps, req: p, signal: ac.signal, fetchFn, alPaso: (paso) => linea({ type: 'paso', paso }) })) }); }
-        catch (e) { linea({ type: 'error', error: ac.signal.aborted ? 'Detenido por ti.' : String(e?.message || e).slice(0, 300) }); }
+        try { const r = await conversar({ ...deps, req: p, signal: ac.signal, fetchFn, alPaso: (paso) => linea({ type: 'paso', paso }) }); await turnoTerminado(db, null); linea({ type: 'done', ...r }); }
+        catch (e) { if (!ac.signal.aborted) await turnoTerminado(db, e?.message ?? e); linea({ type: 'error', error: ac.signal.aborted ? 'Detenido por ti.' : String(e?.message || e).slice(0, 300) }); }
         finally { corridas.delete(run); try { c.close(); } catch { /* ya cerrado */ } }
       },
     });

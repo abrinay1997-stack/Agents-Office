@@ -149,7 +149,7 @@ export function crearShell() {
     refs.titulo.textContent = t;
     const hojaAbierta = pila.cima()?.tipo === 'hoja';
     refs.atras.hidden = !(enEsc || pantalla); refs.atras.setAttribute('aria-label', enEsc ? 'Volver a Más' : 'Volver');
-    refs.acc.innerHTML = enEsc || hojaAbierta && false ? '' : (c.acciones || []).map((a, i) => `<button type="button" class="mv-ic" data-i="${i}" aria-label="${esc(a.etiqueta)}">${svg(a.icono)}</button>`).join('');
+    refs.acc.innerHTML = enEsc || hojaAbierta && false ? '' : (c.acciones || []).map((a, i) => `<button type="button" class="mv-ic" data-i="${i}" aria-label="${esc(a.etiqueta)}">${svg(a.icono)}${a.punto ? '<i class="mv-ic-punto" aria-hidden="true"></i>' : ''}</button>`).join('');
     const n = store ? store.aprobaciones.length : 0;
     refs.aprob.hidden = !n || (enEsc && pila.cima().item.ventana); refs.aprob.innerHTML = `${svg('alerta')}<b>${n}</b>`; refs.aprob.setAttribute('aria-label', `${n} ${n === 1 ? 'espera' : 'esperan'} tu visto bueno. Abrir`);
     const fr = raiz.querySelector('.mv-franja'), hay = n > 0 && !franjaNo && id !== 'aprobaciones' && !enEsc;
