@@ -43,3 +43,11 @@
 - Flag: `dimitri.series` (apagado; solo gobierna `proponer`). Sin migraciones. Página: 0 B.
 - Tests: `tests/biblia-core.test.mjs` (16, incluida la oficina real). El caso de evaluación «respeta el nunca» está como prueba de estructura (`violaNunca`/`verificarPedido`); `evals/dimitri-creativo/evals.json` (con modelo real) sigue para 11.6.
 - ⏳ No hecho: la interfaz de revisión de la biblia (11.2 solo trae API y MCP), medir los colores de las imágenes aprobadas con sharp (`paletaDeterminista` existe pero nadie la llama aún), la nube, y que la serie (11.3) llame a `citarBiblia`.
+
+## Arreglos de la revisión de #90
+- ✅ `verificarPedido` exige que el pedido TERMINE en `lineaDeBiblia(biblia, version)` y revisa todo lo anterior sin dividir por regex.
+- ✅ `leerPropuestaBiblia`: sin `idsConocidos` no se acepta ninguna evidencia ni ejemplo (nunca «vacío = cualquiera»).
+- ✅ `violaNunca` compara por palabra clave (plural, sin tildes, «ne0n»), ventana de 6 palabras, negaciones «sin/no/nunca/evitar/ni». Es una red de seguridad, no una garantía: se documenta en el código; la línea NUNCA se cita en cada pedido y al reanclar, y la visión (11.4) vuelve a mirar.
+- ✅ `proponer` con cerrojo (`proponiendo`): dos POST seguidos cobran una vez (el segundo, 409).
+- ✅ `guardar` devuelve `desaprobada:true` si editar sin aprobar quita la vigencia; una nota dañada se copia a `history/biblias/roto-<ts>.md` antes de escribir; el historial lleva el hash en el nombre (`biblia-visual-vN-<hash8>.md`) para no pisarse; `cambiarBibliaDeSerie(null)` no lanza; `nombreValido` rechaza nombres reservados de Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9, también con extensión).
+- ⚠️ Riesgo conocido: en `serve.mjs`, `agente: b.by === 'agent' || !!b.agent` lo decide quien llama (cualquier proceso local puede omitirlo). Es el mismo patrón que las demás rutas locales de gasto (`/api/media/describir`, Contenido); lo que cierra el dinero es el flag, `confirmarUsd`, el presupuesto del Estudio y que la propuesta no se guarde sola. La oficina ya está limitada a esta máquina (issue #2 para exponerla).

@@ -99,7 +99,7 @@ test('guardar y aprobar: versión 1, luego solo sube con cambios y la anterior q
   const a = o.L.guardar({ biblia: b, aprobar: true, nombre: 'Ana' }); assert.equal(a.cuerpo.version, 1); assert.equal(o.L.leer().estado, 'aprobada');
   assert.equal(o.L.guardar({ biblia: b, aprobar: true }).cuerpo.version, 1, 'sin cambios no sube');
   const c = o.L.guardar({ biblia: { ...b, nunca: [...b.nunca, 'neón'] }, aprobar: true }); assert.equal(c.cuerpo.version, 2); assert.equal(c.cuerpo.cambio, true);
-  assert.ok(fs.existsSync(path.join(o.DATA, 'history', 'biblias', 'biblia-visual-v1.md'))); assert.match(o.L.linea().linea, /Biblia visual v2.*neón/);
+  assert.ok(fs.readdirSync(path.join(o.DATA, 'history', 'biblias')).some(f => /^biblia-visual-v1-[0-9a-f]{8}\.md$/.test(f))); assert.match(o.L.linea().linea, /Biblia visual v2.*neón/);
   assert.ok(!fs.readdirSync(path.join(o.BRAIN, 'Marca')).some(f => f.includes('.tmp')));
 });
 test('hojas en el Cerebro: nombre validado (nada de rutas), producto sin foto rechazado, se listan', async t => {
@@ -134,4 +134,37 @@ test('con la oficina real (serve.mjs): GET lee, un agente no guarda, el dueño a
   const ok = await j('PUT', '/api/biblia', { biblia: { ...base(), reglas: [] }, aprobar: true }); assert.equal((await ok.json()).version, 1);
   assert.equal((await (await j('GET', '/api/biblia')).json()).linea.version, 1); assert.equal((await j('POST', '/api/biblia/proponer', { confirmarUsd: 9 })).status, 409);
   assert.ok(fs.existsSync(path.join(brain, 'Marca', 'biblia-visual.md')));
+});
+
+test('revisión de #90: verificarPedido no se salta con un separador falso, ni la propuesta acepta evidencias sin ids conocidos', () => {
+  const n = B.normalizarBiblia({ ...base(), nunca: ['neón'] });
+  const falso = B.verificarPedido({ prompt: 'x\n\nBiblia visual v1 ok neón', biblia: n, version: 1, versionPedido: 1 }); assert.ok(!falso.ok);
+  const bueno = B.citarBiblia('Un sofá gris', n, 1); assert.ok(B.verificarPedido({ prompt: bueno.prompt, biblia: n, version: 1, versionPedido: 1 }).ok);
+  assert.ok(!B.verificarPedido({ prompt: bueno.prompt + ' con neón', biblia: n, version: 1, versionPedido: 1 }).ok, 'texto después de la línea: no termina en ella');
+  assert.ok(!B.verificarPedido({ prompt: 'Un sofá con neón\n\n' + B.lineaDeBiblia(n, 1), biblia: n, version: 1, versionPedido: 1 }).ok, 'el nunca antes de la línea se detecta');
+  const sin = B.leerPropuestaBiblia(JSON.stringify(base()), { idsConocidos: [] }); assert.equal(sin.biblia.reglas.length, 0); assert.equal(sin.biblia.ejemplos.length, 0); assert.equal(sin.descartadas.length, 2);
+  const sin2 = B.leerPropuestaBiblia(JSON.stringify(base())); assert.equal(sin2.biblia.ejemplos.length, 0, 'sin lista conocida no vale «cualquiera»');
+});
+test('revisión de #90: violaNunca por palabra clave (plural, tildes, cifras como letras) y las negaciones siguen valiendo', () => {
+  const n = B.normalizarBiblia({ nunca: ['neón', 'plástico', 'fondos oscuros', 'texto generado por el modelo'] });
+  for (const t of ['luces de neones', 'un envase de plastico', 'muebles de plásticos baratos', 'luz ne0n rosa', 'sobre un fondo oscuro', 'el modelo genera texto generado en la foto']) assert.ok(B.violaNunca(t, n).length, t);
+  for (const t of ['sin neon', 'nunca plástico', 'evitar fondos oscuros', 'sin un fondo oscuro', 'una sala clara']) assert.deepEqual(B.violaNunca(t, n), [], t);
+  assert.deepEqual(B.violaNunca('algo', B.normalizarBiblia({ nunca: [] })), []);
+});
+test('revisión de #90: cambiarBibliaDeSerie(null) no lanza; guardar sin aprobar lo dice; una nota rota se conserva; el historial no se pisa; Windows', async t => {
+  assert.doesNotThrow(() => B.cambiarBibliaDeSerie(null, 2, { desde: 1 })); assert.ok(B.cambiarBibliaDeSerie(undefined, 2, {}).error);
+  const o = oficina(t); const b = { ...base(), reglas: [] };
+  o.L.guardar({ biblia: b, aprobar: true });
+  const d = o.L.guardar({ biblia: { ...b, tono: 'otro' } }); assert.equal(d.cuerpo.desaprobada, true); assert.equal(d.cuerpo.estado, 'propuesta'); assert.equal(o.L.linea(), null);
+  const archivo = path.join(o.BRAIN, 'Marca', 'biblia-visual.md'); fs.writeFileSync(archivo, '---\ntipo: biblia-visual\nversion: 4\n---\n```json\n{,\n```\n');
+  const r = o.L.guardar({ biblia: b, aprobar: true }); assert.equal(r.estado, 200); const hist = fs.readdirSync(path.join(o.DATA, 'history', 'biblias'));
+  assert.ok(hist.some(f => /^roto-\d+\.md$/.test(f)), hist.join()); assert.ok(hist.some(f => /^biblia-visual-v1-/.test(f)), 'el historial anterior sigue ahí');
+  for (const mal of ['CON', 'nul', 'Com1', 'lpt3', 'aux.txt']) assert.equal(o.L.guardarHoja({ hoja: { nombre: mal, tipo: 'producto', refs: [ID(1)] } }).estado, 400, mal);
+  assert.equal(o.L.guardarHoja({ hoja: { nombre: 'Console', tipo: 'producto', refs: [ID(1)] } }).estado, 200);
+});
+test('revisión de #90: dos «proponer» seguidos cobran una sola vez', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-biblia-c-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true })); let llamadas = 0, suelta;
+  const L = crearBiblia({ BRAIN: path.join(dir, 'b'), DATA: path.join(dir, 'd'), renombrar: fs.renameSync, activo: () => true, notas: () => [{ nombre: 'm', texto: 'x' }], ask: () => { llamadas++; return new Promise(r => { suelta = () => r({ text: JSON.stringify(base()), usd: 0.02 }); }); } });
+  const a = L.proponer({ confirmarUsd: 0.05 }); const b = await L.proponer({ confirmarUsd: 0.05 }); assert.equal(b.estado, 409); assert.match(b.cuerpo.error, /en marcha/);
+  suelta(); assert.equal((await a).estado, 200); assert.equal(llamadas, 1);
 });

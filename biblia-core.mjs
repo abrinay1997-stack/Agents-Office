@@ -96,13 +96,29 @@ export function lineaDeBiblia(b, version) {
 /** El pedido de un plano con su biblia citada. → { prompt, biblia_version } */
 export const citarBiblia = (prompt, b, version) => ({ prompt: `${String(prompt ?? '').trim()}\n\n${lineaDeBiblia(b, version)}`, biblia_version: version });
 
-/** Términos de «nunca» que aparecen en un texto, salvo que estén negados justo antes («sin …», «no …», «evitar …»). */
+const PARADA = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'en', 'un', 'una', 'y', 'o', 'con', 'por', 'para', 'que', 'al', 'su', 'sus', 'lo', 'se']);
+const NEGADORES = new Set(['sin', 'no', 'nunca', 'jamas', 'evitar', 'evita', 'ni']);
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't' };
+const palabras = t => sinTildes(t).replace(/[0-9]/g, d => LEET[d] || d).split(/[^a-z]+/).filter(Boolean);
+const raiz = w => (w.length > 4 ? w.replace(/(es|s)$/, '') : w);
+const coincide = (t, k) => raiz(t) === raiz(k) || (raiz(k).length >= 5 && raiz(t).startsWith(raiz(k).slice(0, 5)));
+/**
+ * Los «nunca» de la biblia que un texto parece violar. Es una RED DE SEGURIDAD, no una garantía: compara por palabra clave (plural, sin tildes, «ne0n» = «neon»)
+ * dentro de una ventana de 6 palabras y lo da por negado si «sin / no / nunca / evitar / ni» está justo antes. Una paráfrasis lo puede esquivar: por eso toda
+ * biblia se CITA en cada pedido y al reanclar, y la visión (11.4) vuelve a mirar el resultado.
+ */
 export function violaNunca(texto, b) {
-  const t = sinTildes(texto), halladas = [];
+  const tt = palabras(texto), halladas = [];
   for (const x of normalizarBiblia(b).nunca) {
-    const q = sinTildes(x).replace(/^(no|nunca|sin|evitar)\s+/, '').trim(); if (q.length < 3) continue;
-    let desde = 0, i;
-    while ((i = t.indexOf(q, desde)) >= 0) { desde = i + q.length; if (!/(^|[\s,;:(])(sin|no|nunca|evitar|ni)\s+(los\s+|las\s+|el\s+|la\s+|un\s+|una\s+)?$/.test(t.slice(Math.max(0, i - 24), i))) { halladas.push(x); break; } }
+    const todas = palabras(x).filter(w => !NEGADORES.has(w) && !PARADA.has(w));
+    const claves = todas.filter(w => w.length >= 4).length ? todas.filter(w => w.length >= 4) : todas.filter(w => w.length >= 3);
+    if (!claves.length) continue;
+    const viola = tt.some((w, i) => {
+      if (!coincide(w, claves[0])) return false;
+      const idx = [i]; for (const k of claves.slice(1)) { const j = tt.findIndex((u, q) => Math.abs(q - i) <= 6 && coincide(u, k)); if (j < 0) return false; idx.push(j); }
+      const ini = Math.min(...idx); return !tt.slice(Math.max(0, ini - 3), ini).some(u => NEGADORES.has(u));
+    });
+    if (viola) halladas.push(x);
   }
   return halladas;
 }
@@ -111,17 +127,18 @@ export function verificarPedido({ prompt, biblia, version, versionPedido }) {
   const motivos = [];
   if (!(versionPedido > 0)) motivos.push('El pedido no dice con qué versión de la biblia se hizo.');
   else if (versionPedido !== version) motivos.push(`El pedido se hizo con la biblia v${versionPedido} y la vigente es la v${version}: hay que reanclar la serie.`);
-  if (!new RegExp(`Biblia visual v${version}\\b`).test(String(prompt ?? ''))) motivos.push(`El texto del pedido no cita «Biblia visual v${version}».`);
-  const v = violaNunca(String(prompt ?? '').split(/\n\nBiblia visual v\d+/)[0], biblia); if (v.length) motivos.push(`El pedido incluye lo que la biblia prohíbe: ${v.join('; ')}.`);
+  const texto = String(prompt ?? ''), cola = `\n\n${lineaDeBiblia(biblia, version)}`, cita = texto.endsWith(cola);
+  if (!cita) motivos.push(`El pedido no termina con la línea de la biblia vigente (v${version}): hay que citarla tal cual al final.`);
+  const v = violaNunca(cita ? texto.slice(0, -cola.length) : texto, biblia); if (v.length) motivos.push(`El pedido incluye lo que la biblia prohíbe: ${v.join('; ')}.`);
   return { ok: !motivos.length, motivos };
 }
 /** Cambiar la biblia de una serie en marcha exige decir desde qué plano se reancla. → { ok, reanclar_desde, planos_afectados[] } | { error } */
 export function cambiarBibliaDeSerie(serie, nuevaVersion, { desde } = {}) {
-  const total = (serie && serie.escaleta ? serie.escaleta.length : 0);
+  const esc = Array.isArray(serie?.escaleta) ? serie.escaleta : [], total = esc.length;
   if (serie && serie.biblia_version === nuevaVersion) return { ok: true, reanclar_desde: null, planos_afectados: [] };
   if (!Number.isInteger(desde) || desde < 1 || desde > Math.max(1, total)) return { error: `Cambiar la biblia pide «Reanclar desde el plano n» (1 a ${Math.max(1, total)}).` };
-  const hechos = (serie.escaleta || []).filter(p => p.n < desde && p.estado === 'listo').map(p => p.n);
-  return { ok: true, reanclar_desde: desde, planos_afectados: (serie.escaleta || []).filter(p => p.n >= desde).map(p => p.n), conservados: hechos };
+  const hechos = esc.filter(p => p.n < desde && p.estado === 'listo').map(p => p.n);
+  return { ok: true, reanclar_desde: desde, planos_afectados: esc.filter(p => p.n >= desde).map(p => p.n), conservados: hechos };
 }
 /** Las anclas fijas que la biblia aporta para reanclar (nunca el plano anterior). */
 export const anclasDeBiblia = b => normalizarBiblia(b).ejemplos.slice(0, 4);
@@ -170,11 +187,11 @@ export function leerPropuestaBiblia(texto, { idsConocidos = [] } = {}) {
   const s = String(texto ?? ''); const a = s.indexOf('{'), z = s.lastIndexOf('}');
   let raw = null; if (a >= 0 && z > a) { try { raw = JSON.parse(s.slice(a, z + 1)); } catch { raw = null; } }
   if (!raw) return { error: 'La IA no devolvió una biblia que se pueda leer.' };
-  const conocidos = new Set(idsConocidos); const descartadas = [];
-  const reglas = (Array.isArray(raw.reglas) ? raw.reglas : []).map(x => ({ ...x, evidencias: idsValidos(x && x.evidencias).filter(i => !conocidos.size || conocidos.has(i)) })).filter(x => {
+  const conocidos = new Set(idsConocidos); const descartadas = []; // sin ids conocidos NO vale «cualquiera»: no hay evidencias ni ejemplos que aceptar
+  const reglas = (Array.isArray(raw.reglas) ? raw.reglas : []).map(x => ({ ...x, evidencias: idsValidos(x && x.evidencias).filter(i => conocidos.has(i)) })).filter(x => {
     const buena = !x.inferida || x.evidencias.length >= MIN_EVIDENCIAS; if (!buena) descartadas.push({ texto: cadena(x.texto, 120), motivo: `solo ${x.evidencias.length} evidencias válidas` }); return buena;
   });
-  const biblia = normalizarBiblia({ ...raw, reglas, ejemplos: idsValidos(raw.ejemplos).filter(i => !conocidos.size || conocidos.has(i)) });
+  const biblia = normalizarBiblia({ ...raw, reglas, ejemplos: idsValidos(raw.ejemplos).filter(i => conocidos.has(i)) });
   const sospechoso = injectionIn(JSON.stringify(biblia)); if (sospechoso) return { error: `La propuesta trae algo que parece una orden escondida (${sospechoso}): no se usa.` };
   return { biblia, descartadas, problemas: validarBiblia(biblia) };
 }

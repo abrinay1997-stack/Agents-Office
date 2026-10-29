@@ -17,6 +17,7 @@ export function crearBiblia({ BRAIN, DATA, renombrar, ask, notas = () => [], ima
   const dirHistoria = path.join(DATA, 'history', 'biblias');
   const escribir = (destino, texto) => { fs.mkdirSync(path.dirname(destino), { recursive: true }); const tmp = destino + '.tmp-' + process.pid + '-' + Date.now(); fs.writeFileSync(tmp, texto, 'utf8'); renombrar(tmp, destino); };
   const err = (estado, error, extra = {}) => ({ estado, cuerpo: { error, ...extra } });
+  let proponiendo = false; // dinero: un solo pedido a la vez (dos clics seguidos no cobran dos veces)
 
   /** La biblia de ahora (o que aún no hay). */
   function leer() {
@@ -32,6 +33,11 @@ export function crearBiblia({ BRAIN, DATA, renombrar, ask, notas = () => [], ima
     if (por !== 'dueno') return err(403, 'Proponer la biblia visual es del dueño.');
     if (!activo()) return err(409, 'Las series están apagadas (office.config.json → dimitri.series).');
     if (!(Number(confirmarUsd) >= USD_PROPUESTA)) return err(409, `Proponer la biblia cuesta unos US$${USD_PROPUESTA.toFixed(2)} (estimado) y no confirmaste ese costo.`, { costoEstimadoUsd: USD_PROPUESTA });
+    if (proponiendo) return err(409, 'Ya hay una propuesta en marcha; espera a que termine.');
+    proponiendo = true;
+    try { return await proponerLibre(); } finally { proponiendo = false; }
+  }
+  async function proponerLibre() {
     try { presupuesto?.revisar(USD_PROPUESTA); } catch (e) { return err(409, e.message); }
     const imgs = imagenes(), nts = notas(), med = medidos();
     if (!nts.length && !imgs.length) return err(409, 'No hay con qué proponerla: ni notas de marca en el Cerebro ni imágenes aprobadas y descritas.');
@@ -49,12 +55,15 @@ export function crearBiblia({ BRAIN, DATA, renombrar, ask, notas = () => [], ima
     if (por !== 'dueno') return err(403, 'Guardar la biblia visual es del dueño.');
     const nueva = B.normalizarBiblia(biblia), problemas = B.validarBiblia(nueva), errores = problemas.filter(p => p.nivel === 'error');
     if (aprobar && errores.length) return err(422, 'No se puede aprobar: ' + errores.map(e => e.motivo).join(' '), { problemas });
-    const antes = leer();
-    const version = antes.existe && !antes.error ? B.versionSiguiente({ version: antes.version, biblia: antes.biblia }, nueva) : 1;
-    if (antes.existe && !antes.error && version !== antes.version) { try { fs.mkdirSync(dirHistoria, { recursive: true }); fs.copyFileSync(archivo, path.join(dirHistoria, `biblia-visual-v${antes.version}.md`)); } catch { /* sin historial no se frena el guardado */ } }
+    const antes = leer(), sana = antes.existe && !antes.error;
+    const guardarCopia = nombre => { try { fs.mkdirSync(dirHistoria, { recursive: true }); fs.copyFileSync(archivo, path.join(dirHistoria, nombre)); } catch { /* sin historial no se frena el guardado */ } };
+    if (antes.existe && antes.error) guardarCopia(`roto-${ahora()}.md`); // una nota dañada a mano se conserva antes de escribir encima
+    const version = sana ? B.versionSiguiente({ version: antes.version, biblia: antes.biblia }, nueva) : 1;
+    if (sana && version !== antes.version) guardarCopia(`biblia-visual-v${antes.version}-${B.huellaBiblia(antes.biblia).slice(0, 8)}.md`); // el hash evita pisar un historial viejo
     const estado = aprobar ? 'aprobada' : (antes.estado === 'aprobada' && version === antes.version ? 'aprobada' : 'propuesta');
+    const desaprobada = !aprobar && antes.estado === 'aprobada' && estado === 'propuesta'; // editar sin aprobar quita la vigencia: se dice
     escribir(archivo, B.serializarBiblia(nueva, { version, estado, aprobada_por: estado === 'aprobada' ? (nombre || 'dueño') : '', at: ahora() }));
-    return { estado: 200, cuerpo: { ok: true, version, estado, cambio: !antes.existe || version !== antes.version, problemas } };
+    return { estado: 200, cuerpo: { ok: true, version, estado, cambio: !antes.existe || version !== antes.version, desaprobada, problemas } };
   }
 
   function hojas() {
