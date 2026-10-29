@@ -31,10 +31,10 @@ test('CLASIFICACIÓN: toda tabla de D1, toda clave de `docs` y toda colección d
   assert.deepEqual(sinDecidir, [], 'tablas sin decidir: ' + sinDecidir.join());
   const codigo = fuentes(WORKER).filter((f) => !/restablecer\.js$/.test(f)).map((f) => readFileSync(f, 'utf8')).join('\n');
   // claves de docs: literales pasados a leerDoc/guardarDoc/mutarDoc y constantes DOC_*/CLAVE_*
-  const claves = new Set([...codigo.matchAll(/(?:leerDoc|guardarDoc|mutarDoc)\(\s*\w+(?:\.\w+)?,\s*'([^']+)'/g)].map((m) => m[1]), [...codigo.matchAll(/(?:DOC_[A-Z_]+|CLAVE_CONFIG)\s*=\s*'([^']+)'/g)].map((m) => m[1]));
+  const claves = new Set([...[...codigo.matchAll(/(?:leerDoc|guardarDoc|mutarDoc)\(\s*\w+(?:\.\w+)?,\s*'([^']+)'/g)].map((m) => m[1]), ...[...codigo.matchAll(/(?:DOC_[A-Z_]+|CLAVE_CONFIG)\s*=\s*'([^']+)'/g)].map((m) => m[1])]);
   const docSinDecidir = [...claves].filter((c) => !d.docs.has(c) && !d.prefijosDocs.some((p) => c.startsWith(p)));
   assert.deepEqual(docSinDecidir, [], 'claves de docs sin decidir: ' + docSinDecidir.join());
-  const colecciones = new Set([...codigo.matchAll(/(?:listarFilas|guardarFila|guardarFilas|leerFila|borrarFila|contarFilas)\(\s*\w+,\s*'([^']+)'/g)].map((m) => m[1]), [...codigo.matchAll(/coleccion = '([^']+)'/g)].map((m) => m[1]), [...codigo.matchAll(/(?:COLECCION|COL|COL_HILO|TAREAS)\s*=\s*'([^']+)'/g)].map((m) => m[1]));
+  const colecciones = new Set([...[...codigo.matchAll(/(?:listarFilas|guardarFila|guardarFilas|leerFila|borrarFila|contarFilas)\(\s*\w+,\s*'([^']+)'/g)].map((m) => m[1]), ...[...codigo.matchAll(/coleccion = '([^']+)'/g)].map((m) => m[1]), ...[...codigo.matchAll(/(?:COLECCION|COL|COL_HILO|TAREAS)\s*=\s*'([^']+)'/g)].map((m) => m[1])]);
   const filaSinDecidir = [...colecciones].filter((c) => !d.filas.has(c) && !d.prefijosFilas.some((p) => c.startsWith(p)));
   assert.deepEqual(filaSinDecidir, [], 'colecciones de filas sin decidir: ' + filaSinDecidir.join());
   // y lo que se restablece nunca incluye lo que debe conservarse

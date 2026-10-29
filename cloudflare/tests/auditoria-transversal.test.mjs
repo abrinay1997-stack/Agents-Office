@@ -50,6 +50,7 @@ const con = (o, fn) => conSesion(o.d1, fn);
 // Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
 // Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
 const ESCRIBEN = [
+  '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas',
   '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
   '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
   '/api/tasks', '/api/tasks/abc123', '/api/tasks/abc123/approve', '/api/tasks/abc123/reject', '/api/tasks/approve-batch', '/api/tasks/abc123/revise', '/api/tasks/abc123/undo', '/api/tasks/abc123/draft',
@@ -89,7 +90,7 @@ test('MATRIZ: sin sesión, toda ruta de escritura es 401 y nada se escribe', { s
 
 test('MATRIZ: un usuario de solo lectura no puede escribir en NINGUNA ruta (salvo su propia sesión y su perfil)', { skip: SALTAR }, async () => {
   const o = await oficina();
-  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar', '/api/vinculo-telegram/desvincular']); // (cada cuenta maneja SU vínculo) // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
+  const suyas = new Set(['/api/yo', '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar', '/api/vinculo-telegram/desvincular']); // (cada cuenta maneja SU vínculo) // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
   for (const r of ESCRIBEN) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
     if (suyas.has(r)) continue;
     const x = await o.lectura(m, r, {});
@@ -367,7 +368,7 @@ const TABLAS = {
   // tablas del equipo y la configuración: crecen con las personas y las decisiones del dueño, no con el uso
   users: 'acotada', perfiles: 'acotada', notas_vectores: 'acotada (un vector por pasaje de las notas escritas de ahora, tope de 4.000; los de pasajes que ya no existen se borran al indexar: lib/significado.js)', conectores: 'acotada', conectores_extra: 'acotada (una fila por conector, tope de 40 en modulos/conectores.js)', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
   // se podan en su uso o por el reloj
-  sessions: 'caduca (el reloj las borra cada minuto)', acceso_intentos: 'efímera (ventana de un minuto)', publica_tasa: 'efímera (ventana de un minuto)', anuncios_tasa: 'efímera', anuncios_candados: 'efímera',
+  sessions: 'caduca (el reloj las borra cada minuto)', sesiones_uso: 'acotada (una fila por sesión, cascada con sessions; el reloj borra las huérfanas)', acceso_intentos: 'efímera (ventana de un minuto)', publica_tasa: 'efímera (ventana de un minuto)', anuncios_tasa: 'efímera', anuncios_candados: 'efímera',
   anuncios_tokens: 'caduca en 2 minutos', contenido_candado: 'efímera', telegram_updates: 'poda a los 3 días (lib/telegram.js)', hook_eventos: 'poda cada hora (lib/disparadores.js)',
   corridas: 'una por tarea en curso; se borra al terminar', estudio_trabajos: 'poda al guardar (lib/estudio/trabajos.js)', estudio_archivos: 'la galería; su papelera se vacía a los 30 días',
   contenido_pubs: 'poda (lib/contenido/analiticas.js)', contenido_cola: 'una fila por pieza entregada; se limpia con la pieza', contenido_piezas: 'su papelera se vacía a los 30 días; el reloj lee por fecha (índice)',

@@ -5,7 +5,7 @@
 //   /api/invitacion/<t>    PÚBLICO (sin sesión): ver y aceptar una invitación (lo llama lib/rutas.js antes de pedir sesión)
 import { json, error, prohibido, cuerpo, noEncontrado } from '../lib/respuesta.js';
 import * as eq from '../lib/equipo.js';
-import { cambiarContrasena, abrirSesion, cookieSesion } from '../lib/sesion.js';
+import { cambiarContrasena, abrirSesion, cookieSesion, sesionDeslizante, HORAS_DESLIZANTE } from '../lib/sesion.js';
 import { cerrarDe, difundir } from '../lib/vivo.js';
 
 export const nombre = 'equipo';
@@ -168,7 +168,7 @@ export async function publicaInvitacion(req, env) {
     const cookie = await abrirSesion(db, a.id, req.headers.get('User-Agent') ?? '');
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'alta', a.email, JSON.stringify({ rol: a.rol })).run();
     difundir(env, { tipo: 'cambio', area: 'equipo', nombre: '', por: { id: a.id, nombre: a.nombre, tab: null }, at: Date.now() });
-    return json({ ok: true }, 200, { 'Set-Cookie': cookieSesion(cookie) });
+    return json({ ok: true }, 200, { 'Set-Cookie': cookieSesion(cookie, (await sesionDeslizante(db)) ? HORAS_DESLIZANTE * 3600 : undefined) });
   }
   const x = await eq.aplicarReinicio(db, testigo, b?.contrasena);
   if (x.error) return error(x.error, x.estado);
