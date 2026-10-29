@@ -2,6 +2,9 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), geolocation=(), microphone=(self), payment=()
+  Cross-Origin-Opener-Policy: same-origin
 
 /login.html
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'
@@ -23,6 +26,8 @@
 # (connect-src 'self') ni cargar scripts de fuera. Solo se sirve con sesión.
 # Las imágenes de Meta (fotos de perfil, miniaturas, adjuntos) NO se abren a sus hosts: nube.js las pide a /api/imagen-meta, que las baja una vez y las sirve del mismo origen (img-src sigue en 'self').
 # frame-src: UN solo marco, la vista previa de anuncios de Meta (Anuncios → Borradores → «Ver la de Meta»), con ese origen y esa ruta exactos; todo lo demás, sin marcos.
+# WEB-06: Trusted Types SOLO para medir (report-only): no bloquea nada. NO se activa en firme (la página usa cientos de innerHTML).
 /oficina/*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src https://www.facebook.com/ads/api/preview_iframe.php; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   Cache-Control: private, no-cache
+  Content-Security-Policy-Report-Only: require-trusted-types-for 'script'

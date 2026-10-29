@@ -13,14 +13,14 @@
 import { limiteMs } from './modelo.mjs';
 import { ordenCola } from './cola.mjs';
 import { DUENO, esMia, delegoYo, yoPagina } from './identidad.mjs';
+import { diaEnZona, sumarDias, etiquetaDia } from './etiqueta-dia.mjs'; // 29 oct 2026: el día y su nombre, en la zona de la oficina y sin sumar 24 h (CON-08/CON-15)
 
 // 26 oct 2026: «del dueño» es «mía». Sin cuentas (la oficina local) sigue siendo `person: 'Tú'`; en la nube, `yo` es quien mira (tareas/identidad.mjs):
 // su nombre, y si es administrador también 'Tú'. `yo` omitido = el de la página; el servidor lo pasa siempre (null = sin cuentas).
 export { DUENO };
 export const esDelDueno = (t, yo) => esMia(t, yo);
 export const delegadaPorMi = (t, yo) => !!t?.delegada && !esDelDueno(t, yo) && delegoYo(t, yo); // la pasé yo y ya la tiene otro
-const pad = n => String(n).padStart(2, '0');
-export const dia = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+export const dia = (ms, zona) => diaEnZona(ms, zona);
 const diaDe = t => (t.limite ? String(t.limite).slice(0, 10) : null);
 const abierta = t => t.state !== 'done';
 // lo que delegó y el agente NO pudo hacer (falló tras sus reintentos): no «volvió hecha», sigue siendo asunto suyo. Lo que el dueño
@@ -58,7 +58,7 @@ export const LISTAS = [
  * Las «hechas» son las que van bajo el separador COMPLETADAS · N de esa lista (Hoy: las de hoy; Todas: 7 días; un proyecto: todas).
  */
 export function deLista(tareas, k, { ahora = Date.now(), yo } = {}) {
-  const hoy = dia(ahora), fin = dia(ahora + 7 * 864e5), hace = n => ahora - n * 864e5;
+  const hoy = dia(ahora), fin = sumarDias(hoy, 7), hace = n => ahora - n * 864e5;
   const vivas = tareas.filter(t => t && !t.archived);
   const mias = vivas.filter(t => esDelDueno(t, yo));
   const abiertas = mias.filter(abierta), hechas = mias.filter(t => !abierta(t));
@@ -91,15 +91,15 @@ export function cuentas(tareas, { ahora = Date.now(), yo } = {}) {
 
 // el grupo por fecha de una tarea (Todas y Próximos, como TaskView agrupa): vencidas · hoy · mañana · esta semana · más adelante · sin fecha
 export const GRUPOS_FECHA = { vencidas: 'Vencidas', hoy: 'Hoy', manana: 'Mañana', semana: 'Esta semana', despues: 'Más adelante', sin: 'Sin fecha' };
-export function grupoFecha(t, ahora = Date.now()) {
+export function grupoFecha(t, ahora = Date.now(), zona) {
   const d = diaDe(t); if (!d) return 'sin';
   const lim = limiteMs(t.limite); if (lim != null && lim < ahora) return 'vencidas';
-  if (d === dia(ahora)) return 'hoy'; if (d === dia(ahora + 864e5)) return 'manana';
-  return d <= dia(ahora + 7 * 864e5) ? 'semana' : 'despues';
+  const hoy = dia(ahora, zona); if (d === hoy) return 'hoy'; if (d === sumarDias(hoy, 1)) return 'manana';
+  return d <= sumarDias(hoy, 7) ? 'semana' : 'despues';
 }
-export function porFecha(lista, ahora = Date.now()) {
+export function porFecha(lista, ahora = Date.now(), zona) {
   const g = new Map(Object.keys(GRUPOS_FECHA).map(k => [k, []]));
-  for (const t of lista) g.get(grupoFecha(t, ahora)).push(t);
+  for (const t of lista) g.get(grupoFecha(t, ahora, zona)).push(t);
   return [...g].filter(([, l]) => l.length).map(([k, l]) => ({ k, titulo: GRUPOS_FECHA[k], tareas: l }));
 }
 
@@ -112,10 +112,17 @@ export function gruposHoy(lista, ahora = Date.now()) {
 }
 // PRÓXIMOS 7 DÍAS con un título por día (8 oct 2026): «Mañana», «viernes 10 oct»… — tu agenda de la semana (antes: «Mañana» y «Esta semana»)
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'], MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-export const nombreDia = (d, ahora = Date.now()) => { if (d === dia(ahora)) return 'Hoy'; if (d === dia(ahora + 864e5)) return 'Mañana'; const x = new Date(d + 'T12:00'); return `${DIAS[x.getDay()]} ${x.getDate()} ${MESES[x.getMonth()]}`; };
-export function porDia(lista, ahora = Date.now()) {
+export const nombreDia = (d, ahora = Date.now(), zona) => etiquetaDia(d, null, ahora, zona).nombre;
+// la hora de una fecha límite («AAAA-MM-DDTHH:MM»), o null si es solo el día
+export const horaDe = t => (t?.limite && String(t.limite).length > 10 ? String(t.limite).slice(11, 16) : null);
+// dentro de un día: «Con hora» (por hora) y «Sin hora» (en el orden de la lista, que ya es por prioridad) — solo si hay de las dos (UX-04)
+export function conSinHora(l) {
+  const con = l.filter(horaDe).sort((a, b) => horaDe(a).localeCompare(horaDe(b))), sin = l.filter(t => !horaDe(t));
+  return con.length && sin.length ? [{ k: 'con', titulo: 'Con hora', tareas: con }, { k: 'sin', titulo: 'Sin hora', tareas: sin }] : null;
+}
+export function porDia(lista, ahora = Date.now(), zona) {
   const g = new Map(); for (const t of lista) { const d = diaDe(t) || ''; if (!g.has(d)) g.set(d, []); g.get(d).push(t); }
-  return [...g].sort(([a], [b]) => (a || '9').localeCompare(b || '9')).map(([d, l]) => ({ k: d || 'sin', dia: d || null, titulo: d ? nombreDia(d, ahora) : 'Sin fecha', tareas: l }));
+  return [...g].sort(([a], [b]) => (a || '9').localeCompare(b || '9')).map(([d, l]) => ({ k: d || 'sin', dia: d || null, titulo: d ? nombreDia(d, ahora, zona) : 'Sin fecha', tareas: l, sub: d ? conSinHora(l) : null }));
 }
 
 /* ---- el TABLERO personal: Por hacer · Haciendo · Hecha (48 h) ---- */

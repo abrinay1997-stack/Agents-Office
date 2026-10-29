@@ -22,7 +22,7 @@ on:
 
 concurrency:
   group: cloudflare-desplegar
-  cancel-in-progress: false
+  cancel-in-progress: false  # nunca se corta un despliegue a medias; el siguiente espera su turno
 
 permissions:
   contents: read
@@ -44,11 +44,14 @@ jobs:
       # Simulacro de empaquetado: rompe aquí, no en el despliegue, si el Worker importa algo que no cabe en Workers.
       - name: Empaquetar el Worker (sin publicar)
         working-directory: cloudflare
-        run: npm install --no-audit --no-fund && npx wrangler deploy --dry-run --outdir /tmp/ao-worker
+        run: npm ci --no-audit --no-fund && npx wrangler deploy --dry-run --outdir /tmp/ao-worker
 
   desplegar:
     needs: probar
-    if: ${{ github.event_name != 'pull_request' }}
+    # SEG-07: solo se despliega desde main (un workflow_dispatch lanzado desde otra rama o un PR no publica) y, además, tras la aprobación del entorno «produccion».
+    # El entorno se crea en Settings → Environments → produccion, con «Required reviewers» (el aprobador). Sin esa regla puesta a mano, el despliegue sigue solo.
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    environment: produccion
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -66,7 +69,7 @@ jobs:
           [ -z "$CLOUDFLARE_API_TOKEN" ]  && falta="$falta CLOUDFLARE_API_TOKEN"
           [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && falta="$falta CLOUDFLARE_ACCOUNT_ID"
           if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       # La interfaz REAL de la oficina (la misma de npm start): se construye en cada despliegue y el Worker la sirve detrás del login.
       - name: Construir la interfaz de la oficina
         working-directory: .

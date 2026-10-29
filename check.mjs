@@ -101,6 +101,12 @@ await step('secrets: nothing that looks like a key, a card or an ID card in the 
   const out = await sh('node', ['scripts/secrets-scan.mjs', '--all']).catch(e => { throw new Error(e.message + ' — npm run secrets'); });
   return out.trim();
 });
+await step('calidad: oxlint (no-undef, no-cycle), tipos de los *-core.mjs con @ts-check y topes del código nuevo', async () => { // Fase 10.1 (plan 29 oct 2026)
+  const l = await sh('node', ['node_modules/oxlint/bin/oxlint', '.']).catch(e => { throw new Error('oxlint — npm run lint: ' + e.message); });
+  await sh('node', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json']).catch(e => { throw new Error('tipos — npm run tipos: ' + (e.out || e.message).split('\n').slice(0, 4).join(' | ')); });
+  const t = await sh('node', ['scripts/topes-codigo-nuevo.mjs']).catch(e => { throw new Error('topes del código nuevo — npm run topes: ' + (e.out || e.message).trim().split('\n').slice(0, 4).join(' | ')); });
+  return (l.match(/Found .*/)?.[0] || 'oxlint limpio') + ' · ' + t.trim().split('\n').pop();
+});
 await step('costs: the price table is recent (models and prices change often)', async () => {
   const C = await import('./costs.mjs'); const days = Math.floor((Date.now() - Date.parse(C.PRICES_AS_OF)) / 864e5);
   if (days > 90) throw new Error(`la tabla de precios de costs.mjs es del ${C.PRICES_AS_OF} (${days} días): revísala con las páginas oficiales de cada proveedor`);

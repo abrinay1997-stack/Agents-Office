@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — Dimitri on Telegram (V4.4, 25 Sep 2026; audit F1, F2, F6, F9, E3).
 // The owner talks to the office from the phone: every approval arrives with ✅ Aprobar / ↩ Devolver buttons, failures and
 // the office's notices arrive as messages, quiet hours hold what is not urgent, and any other text goes to Dimitri.

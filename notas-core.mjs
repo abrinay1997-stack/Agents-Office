@@ -1,3 +1,4 @@
+// @ts-check
 // Escribir en el Cerebro (27 oct 2026) — lo PURO de crear, editar y añadir a una nota; lo comparten la oficina local (serve.mjs: archivos .md) y la nube (D1). Pedido del dueño:
 // «no puedo eliminar notas que yo he creado, no puedo editarlas, tengo que subir un documento… quisiera escribirlas, o pedirle a Dimitri que añada información a una nota».
 // Nada de red ni de archivos aquí.

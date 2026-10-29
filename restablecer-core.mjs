@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — «RESTABLECER OFICINA» (25 oct 2026), el núcleo que comparten la oficina local (restablecer-local.mjs, con archivos) y la nube (cloudflare/worker/lib/restablecer.js, con D1 y R2).
 // Pedido del dueño: «una opción en Ajustes de restablecer oficina: a versión por defecto, vacía y por defecto: PanaClaw en versión vacía (cerebro totalmente vacío, para que el usuario la complete con la
 // información de su empresa) y la de por defecto PanaClaw, con las 59 notas y todas las skills de marketing».

@@ -4,6 +4,12 @@ name: check
 on:
   push:
   pull_request:
+# SEG-07: el token del workflow solo lee. Una ejecución nueva de la misma rama cancela la anterior (menos en main: cada commit de main se comprueba entero).
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   check:
     runs-on: ubuntu-latest

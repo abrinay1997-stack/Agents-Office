@@ -16,8 +16,15 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cloudflare-telegram-webhook
+  cancel-in-progress: false
+
 jobs:
   telegram:
+    # SEG-07: maneja el token del bot: solo desde main y con la aprobación del entorno «produccion»
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: produccion
     runs-on: ubuntu-latest
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

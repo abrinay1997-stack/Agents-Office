@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — el NÚCLEO PURO de la Biblioteca de habilidades (25 oct 2026): lo que decide qué habilidades tiene cada puesto, cuál encaja con una tarea y qué dice el prompt.
 // Sin `fs`: lo usan la oficina local (biblioteca.mjs lee el disco y se lo pasa) y la nube (el Worker lee el índice de un activo y de D1). Una sola implementación, dos sitios.
 export const AREAS = { estrategia: 'Estrategia', 'contenido-y-texto': 'Contenido y textos', seo: 'SEO y búsqueda', conversion: 'Conversión', 'pagados-y-medicion': 'Pagados y medición', 'crecimiento-y-retencion': 'Crecimiento y retención', 'ventas-y-gtm': 'Ventas y salida al mercado', canales: 'Canales' };

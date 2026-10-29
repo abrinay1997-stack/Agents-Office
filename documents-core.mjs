@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — documents into the brain: the PURE half (which files are read, safe names, CSV and text → Markdown, the note). No libraries, no files:
 // the Cloudflare Worker imports it. documents.mjs adds Word, Excel and PDF (mammoth, exceljs, pdfjs: they do not fit in a Worker).
 export const KINDS = { pdf: 'PDF', docx: 'Word', xlsx: 'Excel', csv: 'CSV', txt: 'Texto', md: 'Markdown', json: 'JSON', html: 'HTML' };

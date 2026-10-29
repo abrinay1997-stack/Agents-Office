@@ -17,6 +17,7 @@
 // demás piezas (choques, huecos, la cuadrícula del perfil); `cuenta()` con qué cuenta sale; `medidaDe(id)` las medidas de un archivo.
 import { ESTADO, FORMATO, RED, FICON, nbRed, HORAS_RAPIDAS, mediaUrl, thumbHTML } from './pieza-base.js';
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
+import { etiquetaDia } from '../tareas/etiqueta-dia.mjs';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, FORMATOS_RED, formatoDe, formatoValido, nombreFormato, ponFormato, formatosConRedes } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
 import { iconoRed } from './redes-iconos.js';
@@ -369,7 +370,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     sec?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     if (foco) (sec?.querySelector('.pz-fix') || scroll.querySelector('[data-a="avisos"]'))?.focus({ preventScroll: true });
   }
-  const cuandoTexto = p => (p.fecha ? `${fmtDay(new Date(`${p.fecha}T00:00:00`).getTime())}${p.hora ? ' · ' + p.hora : ' · sin hora'}` : 'Sin día');
+  const cuandoTexto = p => (p.fecha ? etiquetaDia(p.fecha, p.hora, Date.now()).texto : 'Sin día');
   function paintCuandoBtn() { const b = foot.querySelector('[data-a="cuando"] .pz-cbt'); if (b && cur) b.textContent = cuandoTexto(cur); }
   function paintFoot() {
     if (!cur) return;

@@ -37,6 +37,7 @@ import umbralesDeFabrica from '../../../biblioteca/marketing/campanas-pagadas/um
 import { agentes } from './agentes.js';
 import { texto as textoIA } from './ia.js';
 import { leerDoc, guardarDoc, mutarDoc, listarFilas, leerFila, guardarFila } from './almacen.js';
+import { emitirAvisos } from './avisos.js';
 import { tokensD1 } from './tokens.js';
 import { crearColaD1 } from './contenido/cola.js';
 import { publica } from '../../../contenido/programador-core.mjs';
@@ -123,15 +124,7 @@ export function crearAvisos(db, { ahora = () => Date.now() } = {}) {
     async volcar() {
       if (cola.length) {
         const t = ahora();
-        await mutarDoc(db, 'notices', [], (lista) => {
-          const l = Array.isArray(lista) ? lista : [];
-          for (const n of cola) {
-            if (n.key && l.some((x) => x.key === n.key && t - x.t < 6 * 3600e3)) continue;
-            l.push({ id: crypto.randomUUID().slice(0, 12), t, kind: n.kind, level: n.level, text: n.text, task: n.task, key: n.key, read: false });
-          }
-          return l.slice(-200);
-        });
-        cola.length = 0;
+        await emitirAvisos(db, cola.splice(0), { ahora: ahora(), destino: 'doc', largoId: 12 });
       }
       for (const a of audit.splice(0)) {
         await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date(ahora()).toISOString(), 'anuncios', String(a.quien || 'sistema').slice(0, 120), JSON.stringify(a.entrada ?? {})).run();

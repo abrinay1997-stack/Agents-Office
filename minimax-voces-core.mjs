@@ -1,3 +1,4 @@
+// @ts-check
 // Agents Office — las voces de MiniMax: lo PURO (25 oct 2026, fase 8a del puerto a Cloudflare; salió de minimax-voices.mjs).
 // Los precios, la lista corta de voces del sistema y cómo se dice una voz a la página. Sin archivos: lo usan la oficina local
 // (minimax-voices.mjs, con data/minimax-voices.json) y la nube (cloudflare/worker/lib/estudio/voces.js, con D1).

@@ -21,6 +21,19 @@ const raiz = await fetch(base);
 ok(raiz.status === 200 && /text\/html/.test(raiz.headers.get('content-type') || ''), 'la página se sirve');
 ok(/default-src 'self'/.test(raiz.headers.get('content-security-policy') || ''), 'la página lleva CSP');
 
+// Fase 0a (SEG-08, WEB-06, PER-01): cabeceras de transporte y permisos en lo que genera el Worker (la API) y en lo que sirve Static Assets (el acceso)
+for (const [nombre, r] of [['la API', h], ['el acceso', await fetch(`${base}/login.html`)]]) {
+  ok(/max-age=\d{7,}/.test(r.headers.get('strict-transport-security') || ''), `${nombre} lleva HSTS`);
+  ok(/microphone=\(self\)/.test(r.headers.get('permissions-policy') || ''), `${nombre} lleva Permissions-Policy con microphone=(self)`);
+  ok((r.headers.get('cross-origin-opener-policy') || '') === 'same-origin', `${nombre} lleva COOP same-origin`);
+}
+{ // la compresión: fetch() de Node pide gzip/br y la descomprime sola, pero la cabecera dice si Cloudflare la aplicó. Es un aviso, no un fallo (depende del tamaño y de la zona).
+  const c = await fetch(`${base}/login.html`, { headers: { 'accept-encoding': 'br, gzip' } });
+  const enc = c.headers.get('content-encoding') || '';
+  if (!/br|gzip|zstd/.test(enc)) console.log('::warning::PER-01: /login.html no salió comprimido (content-encoding vacío). Revisa la compresión de la zona y que el Worker no la quite.');
+  else console.log(`✓ el acceso sale comprimido (${enc})`);
+}
+
 // Fase 10: el acceso y la invitación son nativos y con CSP estricta; lo de la nube (nube.js, dictado) pide sesión; el Hub no se alcanza desde fuera
 const lg = await fetch(`${base}/login.html`);
 ok(lg.status === 200 && !/unsafe-inline/.test(lg.headers.get('content-security-policy') || ''), 'el acceso lleva CSP sin unsafe-inline');

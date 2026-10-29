@@ -24,6 +24,9 @@
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
   "migrations": [{ "tag": "v1-hub", "new_sqlite_classes": ["Hub"] }],
 
+  // CON-01: convertir PNG/WebP a JPEG para Instagram (conductores.js → aJpegDeEnv). Cloudflare Images (binding de transformación): sin él Instagram falla con un mensaje claro.
+  "images": { "binding": "IMAGES" },
+
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "agents-office-contenido" }],
 
   "vars": { "AI_MODELO": "claude-sonnet-5-5", "CONTENIDO_MAX_LLAMADAS": "40", "CONTENIDO_MAX_CONSULTAS": "40", "CONTENIDO_MAX_ACCIONES": "6", "AGENTES_MAX_LLAMADAS": "60", "AGENTES_MAX_CONSULTAS": "300" },

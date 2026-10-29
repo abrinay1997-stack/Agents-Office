@@ -5,6 +5,7 @@ import { json, error, prohibido } from '../lib/respuesta.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
 import { leerPeticion, conversar } from '../lib/agentes/chat.js';
 import { limpiarSecretos } from '../lib/secretos.js';
+import { cupoDeModelo } from '../lib/equipo.js';
 
 export const nombre = 'chat-agente';
 export const grupos = ['chat'];
@@ -16,6 +17,8 @@ export async function manejar(ctx) {
   if (ruta !== '/api/chat') return null;
   if (req.method !== 'POST') return error('usa POST', 405);
   if (usuario.rol !== 'admin' && usuario.rol !== 'editor') return prohibido('Hablar con un agente es de quien puede trabajar en la oficina: tu cuenta es de solo lectura.');
+  const sinCupo = await cupoDeModelo(db, env, 'chat', usuario.id, { porMinuto: 10, porDia: 200 }); // SEG-01: cada turno gasta modelo con la clave del dueño
+  if (sinCupo) return error(sinCupo, 429);
   let b;
   try {
     const largo = Number(req.headers.get('content-length') || 0);
