@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
-import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos, filas, pagina, todoD1, URL_MCP } from './agentes-ayudas.mjs';
+import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos, filas, pagina, todoD1, URL_MCP, sis } from './agentes-ayudas.mjs';
 import { avanzar, crearCorrida, corridasVivas } from '../worker/lib/agentes/ejecutor.js';
 import { crearPresupuesto } from '../worker/lib/contenido/presupuesto.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
@@ -28,7 +28,7 @@ test('una tarea de la cola se ejecuta sola: entrega, costo, nota en el Cerebro, 
   const costo = filas(d1, 'select * from costos')[0]; assert.equal(costo.tarea, t.id); assert.equal(costo.agente, 'elead'); assert.equal(costo.modelo, 'claude-sonnet-5');
   const nota = filas(d1, 'select nombre, texto, oficina, tarea from notas where tarea = ?', t.id)[0];
   assert.ok(nota && nota.oficina === 1 && nota.texto.includes('Hola Ana')); assert.equal(d.note, nota.nombre);
-  const sistema = f.registro.anthropic[0].cuerpo.system;
+  const sistema = sis(f.registro.anthropic[0].cuerpo);
   assert.match(sistema, /You are EMAILS LEAD/); assert.match(sistema, /Fuentes:/); assert.match(sistema, /mcp__tareas|TAREAS/);
   assert.ok(f.registro.anthropic[0].cuerpo.tools.some(h => h.name === 'mcp__tareas__ver_mi_tarea'));
 });
@@ -144,7 +144,7 @@ test('DEVOLVER con una corrección: el agente rehace con lo que pediste y la cor
   // la lección entra al sistema de la siguiente tarea del agente
   await tarea(env, { text: 'Otra cosa' });
   const f2 = crearFetch({}); await minutos(env, f2.fetchFn);
-  assert.match(f2.registro.anthropic[0].cuerpo.system, /LESSONS[\s\S]*No poner el precio/);
+  assert.match(sis(f2.registro.anthropic[0].cuerpo), /LESSONS[\s\S]*No poner el precio/);
 });
 
 test('DESHACER: con la ventana de «deshacer», la tarea no sale hasta que pasa; deshacer la deja esperando', { skip: SALTAR }, async () => {

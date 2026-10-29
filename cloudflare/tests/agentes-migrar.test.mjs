@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { SALTAR } from './d1-memoria.mjs';
-import { oficina, tarea, crearFetch, minutos, pagina, filas, todoD1 } from './agentes-ayudas.mjs';
+import { oficina, tarea, crearFetch, minutos, pagina, filas, todoD1, sis } from './agentes-ayudas.mjs';
 import { exportar } from '../../scripts/migrar/agentes.mjs';
 
 function vaultDePrueba() {
@@ -42,7 +42,7 @@ test('lo que se sube lo usa el agente de la nube en su siguiente tarea', { skip:
   const ficha = (await web.admin('GET', '/api/agents/elead')).j; assert.ok(ficha.skills.some(s => s.name === 'saludo')); assert.equal(ficha.lessons.rules.length, 1);
   const lista = (await web.admin('GET', '/api/agents')).j.agents.find(a => a.id === 'elead'); assert.ok(lista.skills.includes('saludo')); assert.equal(lista.lessons, 1);
   await tarea(env); const f = crearFetch({}); await minutos(env, f.fetchFn);
-  const s = f.registro.anthropic[0].cuerpo.system;
+  const s = sis(f.registro.anthropic[0].cuerpo);
   assert.match(s, /SKILLS[\s\S]*### saludo — Cómo saludamos[\s\S]*Hola \{nombre\}/); assert.match(s, /LESSONS[\s\S]*Sé breve/); assert.match(s, /Precio base: 100 USD/); assert.match(s, /EXAMPLES THE OWNER LIKED[\s\S]*gracias/);
   assert.equal((await web.admin('POST', '/api/agents/elead/forget', { line: '2026-10-01 · Sé breve ← "muy largo" (t)' })).status, 200);
   assert.equal((await web.admin('GET', '/api/agents/elead')).j.lessons.rules.length, 0);

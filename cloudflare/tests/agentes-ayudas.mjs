@@ -5,6 +5,8 @@ import * as AGENTES from '../worker/modulos/agentes.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
 import { cargarTareas } from '../worker/lib/tareas/sesion.js';
 
+/** El texto del `system` de una petición a Anthropic: string, o bloques [{ type: 'text', text, cache_control }] (COS-01). */
+export const sis = c => Array.isArray(c?.system) ? c.system.map(b => b.text).join('\n') : c?.system;
 export const URL_MCP = 'https://gmail.mcp.example.com/mcp';
 export const respuesta = (content, extra = {}) => ({ content, stop_reason: 'end_turn', usage: { input_tokens: 100, output_tokens: 50 }, model: 'claude-sonnet-5', ...extra });
 export const texto = t => respuesta([{ type: 'text', text: t }]);

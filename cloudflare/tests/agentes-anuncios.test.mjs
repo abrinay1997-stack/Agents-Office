@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
-import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos } from './agentes-ayudas.mjs';
+import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos, sis } from './agentes-ayudas.mjs';
 import { herramientasInternas, OMITIDAS, DEPTS_ANUNCIOS } from '../worker/lib/agentes/herramientas.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
 import * as CONTENIDO from '../worker/modulos/contenido.js';
@@ -51,11 +51,11 @@ test('UNA TAREA de Operaciones que pide cifras de Meta no ve herramientas de Anu
   await minutos(env, f.fetchFn);
   assert.equal((await tareaEnDisco(d1, t.id)).state, 'done');
   assert.ok(!f.registro.anthropic[0].cuerpo.tools.some((h) => /anuncios/.test(h.name)));
-  assert.match(f.registro.anthropic[0].cuerpo.system, /NOTE ABOUT YOUR TOOLS: Anuncios de Meta: las herramientas .* son del departamento de Marketing/, 'el agente lo sabe');
+  assert.match(sis(f.registro.anthropic[0].cuerpo), /NOTE ABOUT YOUR TOOLS: Anuncios de Meta: las herramientas .* son del departamento de Marketing/, 'el agente lo sabe');
   // una tarea de Operaciones que NO habla de Meta no lleva la nota (no se gastan letras)
   const f2 = crearFetch({ guion: [texto('Hecho.\nFuentes: —')] });
   await tarea(env, { dept: 'ops', agent: 'olead', title: 'Revisar los contratos', needsOk: false }); await minutos(env, f2.fetchFn);
-  assert.doesNotMatch(f2.registro.anthropic[0].cuerpo.system, /NOTE ABOUT YOUR TOOLS/);
+  assert.doesNotMatch(sis(f2.registro.anthropic[0].cuerpo), /NOTE ABOUT YOUR TOOLS/);
 });
 
 test('CONFIGURACIÓN: `anuncios.departments` se lee de donde lo guarda la migración (anuncios.ajustes) y de config-local, que gana; sin él, Marketing', { skip: SALTAR }, async () => {
@@ -64,11 +64,11 @@ test('CONFIGURACIÓN: `anuncios.departments` se lee de donde lo guarda la migrac
   const tiene = (c) => c.tools.some((h) => /^mcp__anuncios__/.test(h.name));
   { // lo que subió la migración: Operaciones sí, Marketing no
     const { d1, env } = await oficina({ env: GRANDE, conector: false }); doc(d1, 'anuncios.ajustes', { anuncios: { departments: ['ops'] } });
-    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(tiene(c), 'Operaciones las recibe'); assert.doesNotMatch(c.system, /NOTE ABOUT YOUR TOOLS/);
+    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(tiene(c), 'Operaciones las recibe'); assert.doesNotMatch(sis(c), /NOTE ABOUT YOUR TOOLS/);
   }
   { // config-local gana sobre lo migrado
     const { d1, env } = await oficina({ env: GRANDE, conector: false }); doc(d1, 'anuncios.ajustes', { anuncios: { departments: ['ops'] } }); doc(d1, 'config-local', { anuncios: { departments: ['marketing'] } });
-    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(!tiene(c), 'con config-local = Marketing, Operaciones no'); assert.match(c.system, /NOTE ABOUT YOUR TOOLS/);
+    const c = await corre(d1, env, 'ops', 'olead'); assert.ok(!tiene(c), 'con config-local = Marketing, Operaciones no'); assert.match(sis(c), /NOTE ABOUT YOUR TOOLS/);
   }
   { // sin nada: Marketing
     const { d1, env } = await oficina({ env: GRANDE, conector: false });

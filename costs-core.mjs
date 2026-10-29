@@ -55,6 +55,18 @@ export function usdOf(usage, price) {
   const M = 1e6;
   return ((usage.input_tokens || 0) * price.in + (usage.output_tokens || 0) * price.out + (usage.cache_read_input_tokens || 0) * (price.cacheRead ?? price.in * 0.1) + (usage.cache_creation_input_tokens || 0) * (price.cacheWrite ?? price.in * 1.25)) / M;
 }
+/** COS-01: cuánto trabaja la caché de prompt en un conjunto de líneas del libro. hitRatio = lo leído de caché sobre todo lo que entró (entrada + escritura + lectura); ahorroUsd = lo que habría costado leer esos tokens
+ *  al precio normal de entrada menos lo que costó leerlos de caché, MENOS el sobrecosto de las escrituras (precio de escritura − precio normal). Negativo = la caché costó más de lo que ahorró. Es una estimación con la tabla de precios. */
+export function cacheStats(lines, cfgPrices) {
+  let read = 0, written = 0, input = 0, ahorroUsd = 0;
+  for (const l of lines || []) {
+    const r = l.cacheRead || 0, w = l.cacheWrite || 0; read += r; written += w; input += l.in || 0;
+    const p = priceFor(l.model, cfgPrices); if (!p || (!r && !w)) continue;
+    ahorroUsd += (r * (p.in - (p.cacheRead ?? p.in * 0.1)) - w * ((p.cacheWrite ?? p.in * 1.25) - p.in)) / 1e6;
+  }
+  const total = read + written + input;
+  return { cacheRead: read, cacheWrite: written, input, hitRatio: total ? read / total : 0, ahorroUsd: Math.round(ahorroUsd * 1e6) / 1e6 };
+}
 /** One ledger line. reported: what Claude Code said the run cost (only trusted for Anthropic's own models). */
 export function line({ task = null, agent = null, dept = null, kind = 'task', modelId, provider = 'anthropic', usage, reported, cfgPrices, t = Date.now() }) {
   const price = priceFor(modelId, cfgPrices);

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
-import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos, filas, pagina, todoD1 } from './agentes-ayudas.mjs';
+import { oficina, tarea, tareaEnDisco, crearFetch, texto, usar, minutos, filas, pagina, todoD1, sis } from './agentes-ayudas.mjs';
 import { avanzar, crearCorrida } from '../worker/lib/agentes/ejecutor.js';
 import { crearPresupuesto } from '../worker/lib/contenido/presupuesto.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
@@ -133,7 +133,7 @@ test('REVISIÓN DEL JEFE: en lo delicado (Contabilidad) el jefe revisa y el agen
   const f = crearFetch({ guion: [texto('Factura sin total.\nFuentes: —'), texto('{"ok": false, "fixes": ["Falta el total"]}'), texto('Factura con total US$100.\nFuentes: —')] });
   await minutos(env, f.fetchFn, 2); // el jefe revisa en un minuto; la corrección sigue en el siguiente
   const d = await tareaEnDisco(d1, t.id);
-  assert.equal(f.registro.anthropic.length, 3); assert.match(f.registro.anthropic[1].cuerpo.system, /jefe de/); assert.match(f.registro.anthropic[2].cuerpo.messages[0].content, /Falta el total/);
+  assert.equal(f.registro.anthropic.length, 3); assert.match(sis(f.registro.anthropic[1].cuerpo), /jefe de/); assert.match(f.registro.anthropic[2].cuerpo.messages[0].content, /Falta el total/);
   assert.equal(d.state, 'done'); assert.match(d.result, /total US\$100/); assert.equal(d.review.ok, false); assert.equal(d.review.by, 'alead');
   assert.ok(filas(d1, "select distinct tipo from costos").some(x => x.tipo === 'revision'), 'la revisión también se paga y se apunta');
 });
@@ -170,7 +170,7 @@ test('CONTEXTO: el agente trabaja con su brief, sus skills, las lecciones, las c
   d1._db.prepare("insert into notas (nombre, grupo, oficina, texto, bytes, actualizado) values (?,?,?,?,?,?)").run('politica-de-precios', '10-Business', 0, '# Política de precios\nEl descuento máximo es del 10% para clientes de Ana.', 80, Date.now());
   await tarea(env, { text: 'Responde a Ana sobre el descuento de precios.' });
   const f = crearFetch({}); await minutos(env, f.fetchFn);
-  const s = f.registro.anthropic[0].cuerpo.system;
+  const s = sis(f.registro.anthropic[0].cuerpo);
   assert.match(s, /SKILLS[\s\S]*Siempre tres precios/); assert.match(s, /Precio base: 100 USD/); assert.match(s, /LESSONS[\s\S]*Saluda con el nombre/); assert.match(s, /politica-de-precios\.md[\s\S]*descuento máximo/);
 });
 

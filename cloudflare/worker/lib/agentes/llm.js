@@ -5,6 +5,7 @@ import { modelFor, modelId, normModel, FROM_TEXT } from '../../../../src/models.
 import { delAjuste, buscar as buscarModelo } from '../../../../modelos-core.mjs';
 
 const API_ANTHROPIC = 'https://api.anthropic.com/v1/messages';
+const MARCA_CACHE = { type: 'ephemeral' };
 const API_META = 'https://api.meta.ai/v1/messages';
 
 /** Qué modelo corre una cosa. Precedencia: tarea > rutina > agente (campo `model` del roster) > Ajustes → Modelos (agente > departamento > función > oficina) > AI_MODELO > Ajustes «model» > Sonnet.
@@ -45,6 +46,11 @@ export function armarLlamada({ env, modelo, sistema, mensajes, herramientas = []
   const cuerpo = { model: modelo.id, max_tokens: maxTokens, system: sistema, messages: mensajes };
   if (herramientas.length && !modelo.meta) {
     cuerpo.tools = herramientas.map(h => ({ name: h.alias, description: String(h.descripcion || '').slice(0, 1000), input_schema: h.esquema || { type: 'object', properties: {} } }));
+    // COS-01: caché de prompt. El orden de la API es tools → system → messages; la marca va al final de lo que NO cambia entre vueltas (la última herramienta y el sistema, que en una ejecución se arma una vez
+    // y se guarda). No se marca ningún mensaje: la marca de un mensaje se movería cada vuelta y el prefijo no sería idéntico (regla de razonamiento-estable). Solo si hay herramientas = bucle de varias vueltas;
+    // una llamada suelta (revisión, clasificar) no relee nada y escribir caché cuesta un 25 % más. Un sistema que ya viene en bloques (Dimitri) trae su propia marca y no se toca.
+    if (typeof sistema === 'string' && sistema) cuerpo.system = [{ type: 'text', text: sistema, cache_control: MARCA_CACHE }];
+    cuerpo.tools[cuerpo.tools.length - 1].cache_control = MARCA_CACHE;
     if (sinHerramientas) cuerpo.tool_choice = { type: 'none' };
   }
   const clave = modelo.meta ? (env.META_API_KEY || env.MODEL_API_KEY) : env.ANTHROPIC_API_KEY;
