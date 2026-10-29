@@ -12,7 +12,7 @@ import { ESTADO, FORMATO } from '../../pieza-base.js';
 import { formatoDe, nombreFormato } from '../../contenido-reglas.js';
 import { mesGrid, cabeceraSemana } from '../agenda.js';
 import { esc, svg, vacio, esqueleto, falla } from '../ui.js';
-import { redes, miniatura, con, diaTexto, diaLargo, hoyYmd, sumaDias, aprobarPieza, resumenSalida, motivo, NOMBRE_RED } from './d-comun.js';
+import { redes, miniatura, con, diaTexto, diaLargo, hoyYmd, sumaDias, aprobarPieza, publicarAhora, motivoNoYa, resumenSalida, motivo, NOMBRE_RED } from './d-comun.js';
 import { montarBandeja } from './bandeja.js';
 
 const TABS = [['agenda', 'Agenda'], ['cola', 'Cola'], ['bandeja', 'Bandeja'], ['perfil', 'Perfil']];
@@ -155,6 +155,7 @@ export function registrar(shell) {
             <div class="md-acciones">
               <button type="button" class="mv-btn primario" data-a="editar">Editar</button>
               ${['revision', 'borrador', 'idea'].includes(p.estado) ? `<button type="button" class="mv-btn ${errores.length ? '' : 'primario'}" data-a="aprobar"${errores.length ? ' aria-disabled="true"' : ''}>Aprobar</button>` : ''}
+              ${E.ajustes.publicarYa === true && !['publicada', 'parcial'].includes(p.salida?.estado) ? `<button type="button" class="mv-btn peligro" data-a="ahora"${errores.length || motivoNoYa(E.ajustes) ? ' aria-disabled="true"' : ''}>Publicar ahora</button>` : ''}
               ${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" class="mv-btn" data-a="revision">Pedir mi revisión</button>' : ''}
               ${p.estado === 'aprobada' || p.estado === 'revision' ? '<button type="button" class="mv-btn" data-a="devolver">Devolver a borrador</button>' : ''}
               ${(sal?.acciones || []).map(a => `<button type="button" class="mv-btn" data-sal="${a}" data-id="${esc(p.id)}">${{ entregar: 'Entregar ya', quitar: 'Quitar de la cola', reintentar: 'Reintentar' }[a]}</button>`).join('')}
@@ -167,9 +168,13 @@ export function registrar(shell) {
           const a = b.dataset.a; if (!a) return;
           if (a === 'editar') { h.cerrar(); setTimeout(() => ctx.navegar('crear', { id: p.id }), 200); return; }
           if (a === 'aprobar') { const r = await aprobarPieza(ctx, p); if (r.ok) { h.cerrar(); ctx.toast('Aprobada. ' + resumenSalida(r.pieza || p)); await cargar({ silencioso: true }); } else if (r.error) ctx.toast(r.error); return; }
+          if (a === 'ahora') {
+            if (b.getAttribute('aria-disabled') === 'true') { ctx.toast(errores[0] || motivoNoYa(E.ajustes)); return; }
+            const r = await publicarAhora(ctx, p); if (r.ok) { h.cerrar(); ctx.toast('Publicando ahora… mira Cola para ver cómo va.'); await cargar({ silencioso: true }); } else if (r.error) ctx.toast(r.error); return;
+          }
           if (a === 'revision') { const r = await con(b, () => ctx.api(`/api/contenido/piezas/${p.id}`, { method: 'PATCH', body: { estado: 'revision' } }), { hecho: 'En revisión' }); if (r.ok) { h.cerrar(); await cargar({ silencioso: true }); } return; }
           if (a === 'devolver') { const r = await con(b, () => ctx.api(`/api/contenido/piezas/${p.id}/devolver`, { method: 'POST', body: {} }), { hecho: 'Devuelta' }); if (r.ok) { h.cerrar(); await cargar({ silencioso: true }); } return; }
-          if (a === 'papelera') { if (!(await ctx.confirmar({ titulo: '¿Mandar a la papelera?', texto: titulo(p) + '\nNo sale en ninguna red.', ok: 'A la papelera', peligro: true }))) return; try { await ctx.api(`/api/contenido/piezas/${p.id}`, { method: 'DELETE', body: {} }); h.cerrar(); ctx.toast('Mandada a la papelera.'); await cargar({ silencioso: true }); } catch (err) { ctx.toast(motivo(err)); } }
+          if (a === 'papelera') { if (!(await ctx.confirmar({ titulo: '¿Mandar a la papelera?', texto: titulo(p) + (['publicada', 'parcial'].includes(p.salida?.estado) ? '\nYa salió: aquí solo se quita de la oficina. En Instagram no se puede borrar desde aquí: hazlo desde la app de Instagram.' : '\nNo sale en ninguna red.'), ok: 'A la papelera', peligro: true }))) return; try { await ctx.api(`/api/contenido/piezas/${p.id}`, { method: 'DELETE', body: {} }); h.cerrar(); ctx.toast('Mandada a la papelera.'); await cargar({ silencioso: true }); } catch (err) { ctx.toast(motivo(err)); } }
         });
         return h;
       }

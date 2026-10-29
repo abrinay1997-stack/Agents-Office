@@ -19,7 +19,8 @@ import { ESTADO, FORMATO, RED, FICON, nbRed, HORAS_RAPIDAS, mediaUrl, thumbHTML 
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { etiquetaDia } from '../tareas/etiqueta-dia.mjs';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, FORMATOS_RED, formatoDe, formatoValido, nombreFormato, ponFormato, formatosConRedes } from './contenido-reglas.js';
-import { PRONTO_MIN, PRONTO_TXT } from './contenido-reglas.js'; // CON-14: el plazo de «pronto» sale de UNA constante
+import { PRONTO_MIN, PRONTO_TXT } from './contenido-reglas.js';
+import { AVISO_YA, motivoNoYa } from './contenido-ya.js'; // CON-04: «Publicar ahora» // CON-14: el plazo de «pronto» sale de UNA constante
 import { initPreview } from './contenido-preview.js';
 import { iconoRed } from './redes-iconos.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
@@ -105,7 +106,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   let cur = null, dirty = {}, timer = null, saving = Promise.resolve(), opener = null, isModal = false, gone = false, stateText = '', stateBad = false;
   // C1: lo que el editor recuerda mientras la pieza está abierta
   let ctaAbierta = ''; // 9 oct 2026: la lista de cuentas de esa red, desplegada
-  let porRed = false, tab = '', pop = '', verCom = false, verHash = false, verTextoHist = false, avisos = false, cuando = false, menu = false, confirmaYa = 0;
+  let porRed = false, tab = '', pop = '', verCom = false, verHash = false, verTextoHist = false, avisos = false, cuando = false, menu = false, confirmaYa = 0, aj = null, ahoraConf = 0; // `aj`: los ajustes de Contenido (¿está encendido «Publicar ahora»?, modo, conductor)
   let abiertos = new Set(), lastSel = null, dragI = null, guard = null, mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '', mirar: true, paso: '', lectura: null }, gConfirma = '', cacheVision = new Map();
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
   const rev = () => {
@@ -373,6 +374,36 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   }
   const cuandoTexto = p => (p.fecha ? etiquetaDia(p.fecha, p.hora, Date.now()).texto : 'Sin día');
   function paintCuandoBtn() { const b = foot.querySelector('[data-a="cuando"] .pz-cbt'); if (b && cur) b.textContent = cuandoTexto(cur); }
+  /* ---------- «Publicar ahora» (CON-04): solo con contenido.publicarYa encendido; sin deshacer; el segundo clic lo confirma ---------- */
+  const yaHttp = async (ruta, body) => { const r = await fetch(ruta, { method: body ? 'POST' : 'GET', headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `la oficina respondió ${r.status}`); return j; };
+  function cargarAjustes() { if (!datos.live || aj) return; datos.list({ desde: '2099-01-01', hasta: '2099-01-02' }).then(r => { aj = r.ajustes || {}; if (cur) paintFoot(); }).catch(() => {}); }
+  function ahoraHTML(p, reglas, sal) {
+    if (!datos.live || aj?.publicarYa !== true || !p.id || ['publicada', 'parcial'].includes(p.salida?.estado)) return '';
+    const motivo = motivoNoYa(aj) || (reglas.errores.length ? 'Todavía no puede salir: ' + reglas.errores[0] : ''), conf = ahoraConf > Date.now();
+    const txt = conf ? 'Pulsa otra vez para publicar ahora' : 'Publicar ahora · sale en este minuto';
+    return `<button type="button" role="menuitem" data-a="ahora"${motivo ? ` aria-disabled="true" title="${esc(motivo)}"` : ''}${conf ? ` aria-describedby="${I('ya')}"` : ''}>${esc(txt)}</button>${conf ? `<small class="pz-hn pz-ya-av" id="${I('ya')}" role="alert">${esc(AVISO_YA)}</small>` : ''}`;
+  }
+  async function publicarAhora() {
+    await flush(); if (!cur?.id) { setState('Escribe algo antes de publicarla.', true); return; }
+    const r = revisarPublicacion(postDePieza(cur), cur.redes); if (r.errores.length) { setState(r.errores[0], true); abrirAvisos(true); return; }
+    try {
+      setState('Publicando…'); const res = await yaHttp(`/api/contenido/piezas/${encodeURIComponent(cur.id)}/publicar-ya`, { confirmado: true });
+      cur.fecha = res.pieza.fecha; cur.hora = res.pieza.hora; adopt(res.pieza); paintBody(); onChange(res.pieza, { aprobada: true });
+      note(`Publicando ahora. ${(res.avisos || []).join(' ')}`.trim()); sondearYa(cur.id, Date.now());
+    } catch (err) { setState(err.message, true); }
+  }
+  /** La ruta contesta 202 al instante: aquí se mira la cola cada pocos segundos (hasta 2 min) y se dice cómo va. */
+  async function sondearYa(id, desde) {
+    for (let i = 0; i < 40; i++) {
+      await new Promise(f => setTimeout(f, 3000)); if (gone || !cur || cur.id !== id) return;
+      try {
+        const { pieza } = await yaHttp(`/api/contenido/piezas/${encodeURIComponent(id)}`), est = pieza.salida?.estado;
+        if (cur && cur.id === id) { cur.salida = pieza.salida; adopt(pieza); }
+        if (['publicada', 'parcial', 'fallo'].includes(est)) { setState(est === 'publicada' ? 'Publicada.' : est === 'parcial' ? 'Salió solo en algunas redes.' : 'No se pudo publicar: ' + (pieza.salida?.error || 'mira Programación'), est === 'fallo'); onChange(pieza, {}); return; }
+        setState(Date.now() - desde > 60e3 ? 'Sigue publicándose… (Programación dice cómo va)' : 'Publicando…');
+      } catch { /* un fallo de red al mirar no cambia nada: se vuelve a mirar */ }
+    }
+  }
   function paintFoot() {
     if (!cur) return;
     const p = cur, r = rev(), listo = !r.errores.length, n = r.errores.length;
@@ -384,7 +415,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const yaTxt = confirmaYa > Date.now() ? `Pulsa otra vez: sale en ${PRONTO_TXT} en ${p.redes.map(x => RED[x].name).join(', ')}` : `Publicar ya · sale en ${PRONTO_TXT}`;
     const menuHTML = `<div class="pz-menu" role="menu" id="${I('menu')}" aria-label="Más formas de guardarla"${menu ? '' : ' hidden'}>
         ${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" role="menuitem" data-a="review">Pasar a revisión</button>' : '<button type="button" role="menuitem" data-a="draft">Volver a borrador</button>'}
-        <button type="button" role="menuitem" data-a="ya"${puedeYa ? '' : ` aria-disabled="true" title="${esc('Todavía no puede salir: ' + (reglas.errores[0] || ''))}"`}>${esc(yaTxt)}</button>
+        ${ahoraHTML(p, reglas, sal) || `<button type="button" role="menuitem" data-a="ya"${puedeYa ? '' : ` aria-disabled="true" title="${esc('Todavía no puede salir: ' + (reglas.errores[0] || ''))}"`}>${esc(yaTxt)}</button>`}
       </div>`;
     const imp = impulsables(p, sal); // A4 (9 oct 2026): lo publicado en Instagram o Facebook se puede impulsar (un borrador de anuncio, en pausa)
     const impHTML = imp.length ? `<div class="pz-imp" role="group" aria-label="Impulsar con un anuncio">${imp.map(r => `<button type="button" class="pz-btn" data-a="impulsar" data-red="${r}" aria-describedby="${I('imp')}">${imp.length > 1 ? `Impulsar en ${RED[r].name}` : 'Impulsar'}</button>`).join('')}<small class="pz-hn" id="${I('imp')}">Crea una campaña en pausa con esta publicación; activarla te pedirá los dos clics.</small></div>` : '';
@@ -559,6 +590,11 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
       if (confirmaYa < Date.now()) { confirmaYa = Date.now() + 6000; b.textContent = `Pulsa otra vez: sale en ${PRONTO_TXT} en ${cur.redes.map(x => RED[x].name).join(', ')}`; setTimeout(() => { if (confirmaYa && confirmaYa <= Date.now() && b.isConnected) b.textContent = `Publicar ya · sale en ${PRONTO_TXT}`; }, 6100); return; }
       confirmaYa = 0; cerrarMenu(false); await aprobar({ pronto: true }); return;
     }
+    if (a === 'ahora') {
+      if (b.getAttribute('aria-disabled') === 'true') { setState(b.title, true); abrirAvisos(false); return; }
+      if (ahoraConf < Date.now()) { ahoraConf = Date.now() + 8000; paintFoot(); foot.querySelector('[data-a="ahora"]')?.focus({ preventScroll: true }); setTimeout(() => { if (ahoraConf && ahoraConf <= Date.now() && cur) { ahoraConf = 0; paintFoot(); } }, 8100); return; }
+      ahoraConf = 0; cerrarMenu(false); await publicarAhora(); return;
+    }
     if (a === 'impulsar') { // A4: a Anuncios → Borradores con el borrador de esta publicación (lo hace la vista de Anuncios: servida o en su demo)
       await flush();
       const m = (cur.medios || []).find(x => !/\.(mp4|webm|mov)$/i.test(x));
@@ -630,13 +666,14 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', formatos: {}, redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
     cur.medidas ||= {}; cur.textos ||= {}; cur.formatos ||= {}; masRedes = false; repAbierto = false; tplAbierto = false; ctaAbierta = ''; horaK = ''; horaSug = null;
     if (!p.id) Object.assign(cur, p.extra?.formatos ? formatosConRedes(cur, cur.redes) : formatosConRedes({ ...cur, redes: [] }, cur.redes)); // C1: una red sin ese formato (X en una historia) entra con el suyo; C3: la de una plantilla trae el suyo
-    porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '', mirar: true, paso: '', lectura: null }; cacheVision.clear();
+    porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; ahoraConf = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '', mirar: true, paso: '', lectura: null }; cacheVision.clear();
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato, formatos: cur.formatos } : {}) };
     if (!cur.id && p.extra) dirty = { ...dirty, ...p.extra, formato: cur.formato, formatos: cur.formatos, redes: cur.redes }; // C3: lo que trae una plantilla se guarda solo
     host.hidden = false; host.classList.add('on'); isModal = true; host.setAttribute('role', 'dialog'); host.setAttribute('aria-modal', 'true'); // ventana centrada (25 oct 2026)
     host.setAttribute('aria-label', 'Pieza de contenido'); if (isModal) modal.open(host);
     preview.reset(); swap('edit');
     paintHead(); paintBody(); paintFoot(); if (!cur.id && (cur.medios.length || p.extra)) schedule();
+    cargarAjustes();
     (cur.id ? scroll : head.querySelector('.pz-title')).focus({ preventScroll: true });
   }
   async function close(o = {}) {

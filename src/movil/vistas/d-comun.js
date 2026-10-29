@@ -5,6 +5,8 @@ import { esc } from '../ui.js';
 import { iconoRed } from '../../redes-iconos.js';
 import { conEstado } from '../../accion.js';
 import { mediaUrl } from '../../pieza-base.js';
+import { AVISO_YA, motivoNoYa } from '../../contenido-ya.js'; // CON-04: «Publicar ahora»
+export { motivoNoYa };
 
 export { esc, iconoRed, conEstado, mediaUrl };
 export const NOMBRE_RED = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', x: 'X', tiktok: 'TikTok', threads: 'Threads', bluesky: 'Bluesky', pinterest: 'Pinterest', youtube: 'YouTube', messenger: 'Messenger', whatsapp: 'WhatsApp' };
@@ -77,4 +79,15 @@ export async function aprobarPieza(ctx, p, { pronto = false } = {}) {
   if (!si) return { ok: false, cancelado: true };
   try { const r = await ctx.api(`/api/contenido/piezas/${encodeURIComponent(p.id)}/aprobar`, { method: 'POST', body: pronto ? { pronto: true } : {} }); return { ok: true, pieza: r.pieza, avisos: r.avisos || [] }; }
   catch (e) { return { ok: false, error: (e.datos?.errores?.[0]) || motivo(e) }; }
+}
+
+/** «Publicar ahora» (CON-04): SIN deshacer, así que la hoja dice la verdad y pide el segundo toque; el servidor vuelve a comprobar todo (flag, modo real, Meta directo, solo el dueño). Responde 202: la cola sigue sola.
+ *  → { ok: true, pieza } | { ok: false, error } | { ok: false, cancelado: true } */
+export async function publicarAhora(ctx, p) {
+  const errores = p.revision?.errores || [];
+  if (errores.length) return { ok: false, error: errores[0] };
+  const si = await ctx.confirmar({ titulo: '¿Publicar ahora?', texto: `${p.titulo || (p.texto || '').slice(0, 60) || 'Sin título'}\n${(p.redes || []).map(x => NOMBRE_RED[x] || x).join(', ')}\n${AVISO_YA}`, ok: 'Publicar ahora', peligro: true });
+  if (!si) return { ok: false, cancelado: true };
+  try { const r = await ctx.api(`/api/contenido/piezas/${encodeURIComponent(p.id)}/publicar-ya`, { method: 'POST', body: { confirmado: true } }); return { ok: true, pieza: r.pieza, avisos: r.avisos || [] }; }
+  catch (e) { return { ok: false, error: (e.datos?.error) || motivo(e) }; }
 }

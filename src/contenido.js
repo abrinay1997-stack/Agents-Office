@@ -398,7 +398,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   /* ---------- el panel de una pieza ---------- */
   function onPanel(p, info = {}) {
     if (!p) return;
-    if (info.eliminar) { if (p.id) later('p:' + p.id, `Eliminada: «${titleOf(p).slice(0, 60)}».`, () => datos.remove(p.id)); return; } // se va al momento; a los 8 segundos llega a la papelera de las piezas
+    if (info.eliminar) { if (p.id) later('p:' + p.id, `Eliminada: «${titleOf(p).slice(0, 60)}».${p.redes?.includes('instagram') && ['publicada', 'parcial'].includes(p.salida?.estado) ? ' En Instagram sigue publicada: bórrala allí (desde aquí no se puede).' : ''}`, () => datos.remove(p.id)); return; } // se va al momento; a los 8 segundos llega a la papelera de las piezas
     if (p.id && !info.cerrada) { // lo que se está escribiendo llega a la lista al momento, con su revisión recalculada (la del servidor es de antes del cambio)
       const r = revisarPublicacion(postDePieza(p), p.redes), q = { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos } };
       for (const list of [pieces, cola]) { const i = list.findIndex(x => x.id === p.id); if (i >= 0) list[i] = { ...list[i], ...q }; else list.push(q); }
