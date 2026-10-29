@@ -17,7 +17,14 @@ Rama `carril-d-presets-nube`. Alcance de esta entrega: fases A y B de §3.4 (EST
 - Archivos tocados: `presets.mjs`, `presets/fabrica.mjs`, `cloudflare/worker/modulos/estudio.js`, `cloudflare/worker/lib/estudio/trabajos.js`, `cloudflare/tests/estudio.test.mjs` (el 501 de presets ya no existe), `cloudflare/tests/auditoria-transversal.test.mjs` (solo la descripción de `filas`), `CLAUDE.md` (una viñeta), `docs/cloudflare.md`.
 - Cómo se deshace: quitar el bloque `/api/media/presets` de `modulos/estudio.js` (vuelve el 501); los datos del dueño (notas, versiones) se quedan.
 
+## Entrega 2: Fase D, el ejecutor local con IMAGES (rama `carril-d-ejecutor-images`)
+- ✅ `cloudflare/worker/lib/estudio/retoques.js` + `imagen-local.mjs` partido en `pipeline` (sharp) y `correrPasos` (el bucle, sin sharp). Interruptor `retoquesNube` (config del Estudio, **apagado por defecto**) + binding `IMAGES`. 15 pasos en `OPS_NUBE`; un preset se activa solo si TODOS los suyos están; los demás salen `on:false` con el paso que falta. Tres caminos: todo local (versión nueva, gratis), antes de la IA (`prep`) y después de la IA (cron). Detalle en `docs/cloudflare.md` → «Fase 4 (D)».
+- Reservas: ninguna migración, ninguna tabla nueva, delta de bytes de la página 0 (nada de `src/`).
+- **Probado:** `cloudflare/tests/retoques-nube.test.mjs` (7 casos, con un IMAGES falsificado con sharp: lista, apply todo-local, original intacto, historial, sin llamadas a motores, un paso no soportado = 400 sin crear nada, fondo blanco después de la IA por el cron, PNG propio válido, reducción a 2048 px, binding que no devuelve píxeles, `post` a mano por `/api/media/jobs` = 501) y `retoques-vivo.test.mjs` (workerd real: el Worker arranca con el módulo importado y la lista es la esperada).
+- **NO probado:** el binding IMAGES real de Cloudflare. `wrangler dev --local` contesta `RGB/RGBA output is not supported in local mode`, así que `output({ format: 'rgba' })` y la orientación EXIF solo se podrán confirmar en producción con el interruptor encendido sobre una foto de prueba. Tampoco se midió CPU/tiempo de un retoque de 2048 px en un Worker real.
+- **Sigue sin la nube:** encuadrar, ampliar, nitidez, ruido, enderezar, exportar por canal, LUT de fábrica, igualar serie, y la QA que mide.
+
 ## Pendiente (otra entrega)
 - Fase C: sinónimos/búsqueda ya van (`listar` los usa); falta probar con presets propios con IA real.
-- Fase D: ejecutor local con `IMAGES` (tabla preset → operación; los 31 `ejecutor:'local'`).
+- Fase D, lo que falta: encuadrar/exportar/nitidez/ruido/enderezar (necesitan un redimensionado propio o el binding con `fit`/`sharpen`/`rotate` de IMAGES) y la QA que mide.
 - Fase E: lotes por cron (CSV primero), plantillas, entender video/audio.

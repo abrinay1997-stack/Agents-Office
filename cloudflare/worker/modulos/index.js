@@ -20,6 +20,7 @@ import * as conexiones from './conexiones.js';
 import * as notificaciones from './notificaciones.js';
 import * as chat from './chat.js';
 import * as notasPersonales from './notas-personales.js';
+import * as vinculoTelegram from './vinculo-telegram.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -41,6 +42,7 @@ export const MODULOS = [
   conexiones, // /api/brain/actualizar: el botón «Actualizar conexiones» del Cerebro (solo administradores)
   chat, // C0: el chat interno del equipo (/api/chat/*, sin pantalla todavía)
   notificaciones, // N0: las notificaciones de cada persona (/api/notificaciones/*)
+  vinculoTelegram, // N2: «Conectar mi Telegram» (/api/vinculo-telegram/*)
   notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];

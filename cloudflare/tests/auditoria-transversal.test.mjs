@@ -61,7 +61,7 @@ const ESCRIBEN = [
   '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
   '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
-  '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/chat/config', '/api/chat/canales', '/api/chat/directo', '/api/chat/canales/abc123/mensajes', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/preferencias-conexion', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
+  '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/chat/config', '/api/chat/canales', '/api/chat/directo', '/api/chat/canales/abc123/mensajes', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar', '/api/vinculo-telegram/desvincular', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
   '/api/media/presets', '/api/media/presets/apply', '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
@@ -89,7 +89,7 @@ test('MATRIZ: sin sesión, toda ruta de escritura es 401 y nada se escribe', { s
 
 test('MATRIZ: un usuario de solo lectura no puede escribir en NINGUNA ruta (salvo su propia sesión y su perfil)', { skip: SALTAR }, async () => {
   const o = await oficina();
-  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/notas-personales/preferencias-conexion']); // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
+  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar', '/api/vinculo-telegram/desvincular']); // (cada cuenta maneja SU vínculo) // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
   for (const r of ESCRIBEN) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
     if (suyas.has(r)) continue;
     const x = await o.lectura(m, r, {});
@@ -375,9 +375,9 @@ const TABLAS = {
   filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); presets-versiones: las últimas 20 por preset, podadas al guardar (lib/estudio/presets.js); el resto es configuración',
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
-  auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', chat_mensajes: 'mantenimiento',
-  chat_canales: 'acotada (canales: los crean las personas con tope por persona; cascada con su creador)', chat_miembros: 'acotada (cascada con canales y cuentas)', notas_personales: 'mantenimiento',
-  notas_estado: 'acotada (cascada con su nota, que se poda a los 30 días de vencer)', presencia_cuenta: 'acotada (una fila por cuenta, cascada con users)',
+  auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', chat_mensajes: 'mantenimiento', notas_personales: 'mantenimiento',
+  cuenta_telegram: 'acotada (una fila por cuenta, cascada con users; los códigos caducan a los 10 min)', notas_estado: 'acotada (cascada con su nota, que se poda a los 30 días de vencer)', presencia_cuenta: 'acotada (una fila por cuenta, cascada con users)',
+  chat_canales: 'acotada (canales: los crean las personas con tope por persona; cascada con su creador)', chat_miembros: 'acotada (cascada con canales y cuentas)',
   // el libro contable: se conserva (una fila de ~150 bytes por llamada a un modelo), se lee por rango con índice
   costos: 'libro contable (se conserva)',
 };
