@@ -18,6 +18,7 @@ import * as imagenMeta from './imagen-meta.js';
 import * as chatAgente from './chat-agente.js';
 import * as conexiones from './conexiones.js';
 import * as notificaciones from './notificaciones.js';
+import * as chat from './chat.js';
 import * as notasPersonales from './notas-personales.js';
 export const MODULOS = [
   tareas,
@@ -38,6 +39,7 @@ export const MODULOS = [
   imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)
   chatAgente, // POST /api/chat: hablar con un agente (un turno, solo herramientas de lectura)
   conexiones, // /api/brain/actualizar: el botón «Actualizar conexiones» del Cerebro (solo administradores)
+  chat, // C0: el chat interno del equipo (/api/chat/*, sin pantalla todavía)
   notificaciones, // N0: las notificaciones de cada persona (/api/notificaciones/*)
   notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)

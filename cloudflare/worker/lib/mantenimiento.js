@@ -7,6 +7,7 @@
 //   · las plantillas de Contenido borradas (`contenido_papelera`): 30 días, como la papelera de las piezas
 //   · las notas del Cerebro mandadas a la papelera (`notas_papelera`): 30 días
 //   · las notas personales (`notas_personales`): 30 días DESPUÉS de vencer (su estado cae por cascada)
+//   · los mensajes del chat interno (`chat_mensajes`): 365 días (canales y miembros no crecen sin las personas)
 //   · las notificaciones por persona (`notificaciones`): leídas 60 días, sin leer 180 días
 // Cada tabla se poda por tandas (`LOTE`) y como mucho `TANDAS` por tabla y por día: una poda atrasada se pone al día en los días siguientes, sin gastar de golpe la CPU del reloj.
 export const LOTE = 2000, TANDAS = 5;
@@ -28,6 +29,7 @@ export async function podar(db, ahoraMs = Date.now()) {
     ['reinicios', 'delete from reinicios where id in (select id from reinicios where expires_at < ? limit ?)', iso(ahoraMs - R.reinicios * DIA_MS)],
     ['contenido_papelera', 'delete from contenido_papelera where id in (select id from contenido_papelera where borrada < ? limit ?)', ahoraMs - R.contenido_papelera * DIA_MS],
     ['notas_papelera', 'delete from notas_papelera where id in (select id from notas_papelera where borrada < ? limit ?)', ahoraMs - R.notas_papelera * DIA_MS],
+    ['chat_mensajes', 'delete from chat_mensajes where id in (select id from chat_mensajes where creado_at < ? limit ?)', ahoraMs - R.chat_mensajes * DIA_MS],
     ['notificaciones', 'delete from notificaciones where id in (select id from notificaciones where (leida_at is not null and leida_at < ?) or creada_at < ? limit ?)', [ahoraMs - R.notificaciones * DIA_MS, ahoraMs - NOTIFICACIONES_SIN_LEER_DIAS * DIA_MS]],
     ['notas_personales', 'delete from notas_personales where id in (select id from notas_personales where vence_at < ? limit ?)', ahoraMs - R.notas_personales * DIA_MS],
   ];
