@@ -2,7 +2,9 @@
 # If a change breaks something, GitHub marks it red before it reaches main.
 name: check
 on:
+  # Antes `push:` sin filtro corría el mismo `check` dos veces por cada rama con Pull Request (una por el push y otra por el PR): el doble de CI sin comprobar nada más. Ahora el push solo vale en main; las ramas se comprueban por su Pull Request (que además prueba la fusión con main).
   push:
+    branches: [main]
   pull_request:
 # SEG-07: el token del workflow solo lee. Una ejecución nueva de la misma rama cancela la anterior (menos en main: cada commit de main se comprueba entero).
 permissions:
