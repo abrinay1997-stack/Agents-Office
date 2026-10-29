@@ -61,7 +61,7 @@ const ESCRIBEN = [
   '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
   '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
-  '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
+  '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/preferencias-conexion', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
   '/api/media/presets', '/api/media/presets/apply', '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
@@ -88,7 +88,7 @@ test('MATRIZ: sin sesión, toda ruta de escritura es 401 y nada se escribe', { s
 
 test('MATRIZ: un usuario de solo lectura no puede escribir en NINGUNA ruta (salvo su propia sesión y su perfil)', { skip: SALTAR }, async () => {
   const o = await oficina();
-  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar']); // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
+  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir', '/api/notificaciones/leer', '/api/notas-personales', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/notas-personales/preferencias-conexion']); // (las notas: cualquier rol deja notas a personas y cierra las suyas, D09) // marcar leídas SUS notificaciones es personal (solo toca filas de su user_id)
   for (const r of ESCRIBEN) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
     if (suyas.has(r)) continue;
     const x = await o.lectura(m, r, {});

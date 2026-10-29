@@ -15,7 +15,7 @@ const leer = (f) => readFileSync(new URL(`../public/${f}`, import.meta.url), 'ut
 let nav;
 before(async () => { if (!SALTAR) nav = await chromium.launch().catch(() => null); });
 after(async () => { await nav?.close(); });
-const SHIM = `window.AO_NUBE = { esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])), yo: () => ({ rol: 'editor' }), aviso() {},
+const SHIM = `window.AO_NUBE = { esc: (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])), yo: () => ({ rol: 'editor' }), presentes: () => [{ userId: 'u1', nombre: '<b>Ana</b>' }, { userId: 'u2', nombre: 'Luis' }], aviso() {},
   api: async (ruta, { metodo = 'GET', cuerpo } = {}) => { const r = await fetch(ruta, { method: metodo, headers: { 'content-type': 'application/json' }, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'falló'); return d; } };`;
 
 async function abrir({ activa, ancho = 1280 }) {
@@ -70,5 +70,26 @@ for (const ancho of [390, 1280]) test(`encendido a ${ancho} px: cuenta lo nuevo,
   assert.equal(await p.locator('#nbCampana .nt-n').count(), 0);
   await p.keyboard.press('Escape'); await p.waitForSelector('#nbNotas', { state: 'detached' });
   assert.equal(await p.evaluate(() => document.activeElement?.id), 'nbCampana', 'el foco vuelve a la campanita');
+  assert.deepEqual(errores, []); await ctx.close();
+});
+
+test('«Ana se conectó»: aviso pequeño con el nombre escapado, se juntan las ráfagas, se va solo y «Escribirle» abre la nota; las preferencias de conexión se guardan', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const { p, ctx, d1, beto, errores } = await abrir({ activa: true });
+  await p.waitForSelector('#nbCampana');
+  await p.evaluate(() => window.dispatchEvent(new CustomEvent('ao:conexion', { detail: { userId: 'u1' } })));
+  await p.waitForSelector('#nbConexion');
+  assert.equal((await p.textContent('#nbConexion span')).trim(), '<b>Ana</b> se conectó'); assert.equal(await p.locator('#nbConexion b').count(), 0, 'el nombre se escapa');
+  await p.evaluate(() => window.dispatchEvent(new CustomEvent('ao:conexion', { detail: { userId: 'u2' } })));
+  assert.match(await p.textContent('#nbConexion span'), /y 1 más se conectaron/);
+  await p.waitForSelector('#nbConexion', { state: 'detached', timeout: 9000 });
+  await p.evaluate(() => window.dispatchEvent(new CustomEvent('ao:conexion', { detail: { userId: 'u2' } })));
+  await p.click('#nbConexion [data-a=escribir]'); await p.waitForSelector('#nbNotas #nt-texto');
+  assert.equal(await p.locator('#nbConexion').count(), 0);
+  await p.waitForSelector('.nt-pref [data-p=noAvisar]');
+  assert.equal(await p.locator('[data-p=avisarme]').count(), 0, 'un editor no ve la opción de recibir avisos');
+  await p.check('[data-p=noAvisar]'); await p.waitForFunction(() => document.querySelector('[data-p=noAvisar]')?.checked);
+  const doc = async () => { for (let i = 0; i < 50; i++) { const f = d1._db.prepare('select json from docs where clave = ?').get('presencia.pref:' + beto); if (f) return JSON.parse(f.json); await new Promise((r) => setTimeout(r, 100)); } return null; }; // el guardado es asíncrono: se espera al hecho
+  assert.equal((await doc())?.noAvisar, true);
   assert.deepEqual(errores, []); await ctx.close();
 });

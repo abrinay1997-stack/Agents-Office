@@ -1,19 +1,20 @@
 // N0 (Fase 8): notificaciones POR PERSONA, como proyección ADICIONAL de los avisos de la oficina (lib/avisos.js). No reemplaza a `filas('avisos')` ni al doc `notices`
 // (el semáforo y Dimitri siguen leyendo lo global; el `read` global y `st.avisosIds` no se tocan). Apagado por defecto: doc `notificaciones.config`.
 //   activo ................ enciende la proyección (un administrador, POST /api/notificaciones/config)
-//   lecturaVeResultados ... SEG-04 (SUPUESTO del plan, a confirmar por el dueño): por defecto `lectura` ve tareas y calendario, NO resultados de agentes, Cerebro interno ni anuncios.
-// Qué categoría ve cada rol (D05): lectura solo notas, menciones, chat y tareas; editor además contenido y fallos de agentes, sin gasto (anuncios) ni Bandeja; admin todo.
+//   lecturaVeResultados ... SEG-04, DECIDIDO por el dueño (29 oct 2026): `lectura` VE tareas, calendario, notas, menciones, chat propio, los resultados de los agentes, el Cerebro y Contenido; NO ve dinero, anuncios, Bandeja ni ajustes de seguridad.
+//                            Por defecto está ENCENDIDO (true); un administrador puede apagarlo (interruptor de seguridad) y `lectura` vuelve a ver solo lo básico.
+// Qué categoría ve cada rol (D05): lectura lo básico (+ agentes, Cerebro y contenido mientras `lecturaVeResultados` siga encendido); editor además contenido y fallos de agentes, sin gasto (anuncios) ni Bandeja; admin todo.
 // Un aviso que falla al proyectarse NUNCA tumba la acción que lo provocó (emitirAvisos lo atrapa).
 import { leerDoc, guardarDoc } from './almacen.js';
 import { claveNombre } from './equipo.js';
 import { nombrePorCorreo } from './sesion.js';
 
 export const DOC_CONFIG = 'notificaciones.config';
-export const CATEGORIAS = ['notas', 'chat', 'menciones', 'aprobaciones', 'tareas', 'contenido', 'agentes', 'anuncios', 'bandeja', 'sistema'];
+export const CATEGORIAS = ['notas', 'chat', 'menciones', 'aprobaciones', 'tareas', 'contenido', 'agentes', 'cerebro', 'anuncios', 'bandeja', 'sistema'];
 const BASE_LECTURA = ['notas', 'chat', 'menciones', 'tareas'];
 export const POR_ROL = Object.freeze({
   admin: CATEGORIAS,
-  editor: [...BASE_LECTURA, 'contenido', 'agentes'],
+  editor: [...BASE_LECTURA, 'contenido', 'agentes', 'cerebro'],
   lectura: BASE_LECTURA,
 });
 // kind del aviso → categoría. Lo que no se reconoce es 'sistema' (solo administradores): ante la duda, se avisa a menos gente.
@@ -33,9 +34,9 @@ export function categoriaDe(aviso) {
   return CATEGORIA_DE_KIND[aviso?.kind] || 'sistema';
 }
 
-export const leerConfig = async (db) => ({ activo: false, lecturaVeResultados: false, ...((await leerDoc(db, DOC_CONFIG, {})).valor || {}) });
+export const leerConfig = async (db) => ({ activo: false, lecturaVeResultados: true, ...((await leerDoc(db, DOC_CONFIG, {})).valor || {}) });
 export async function guardarConfig(db, cambios) {
-  const actual = await leerConfig(db), nueva = { activo: actual.activo === true, lecturaVeResultados: actual.lecturaVeResultados === true };
+  const actual = await leerConfig(db), nueva = { activo: actual.activo === true, lecturaVeResultados: actual.lecturaVeResultados !== false };
   for (const k of ['activo', 'lecturaVeResultados']) if (typeof cambios?.[k] === 'boolean') nueva[k] = cambios[k];
   await guardarDoc(db, DOC_CONFIG, nueva);
   return nueva;
@@ -44,7 +45,7 @@ export async function guardarConfig(db, cambios) {
 /** ¿Este rol ve esta categoría? (con el supuesto SEG-04 detrás de `lecturaVeResultados`). */
 export function veCategoria(rol, categoria, cfg = {}) {
   if ((POR_ROL[rol] || []).includes(categoria)) return true;
-  return rol === 'lectura' && cfg.lecturaVeResultados === true && ['agentes', 'contenido'].includes(categoria);
+  return rol === 'lectura' && cfg.lecturaVeResultados !== false && ['agentes', 'contenido', 'cerebro'].includes(categoria);
 }
 
 async function personasActivas(db) {

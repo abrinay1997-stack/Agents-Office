@@ -130,12 +130,12 @@ export async function personas(db, usuario) {
 
 /**
  * D07: marca que la cuenta está activa. Una sola sentencia, como mucho una escritura cada 5 min por cuenta; una VISITA nueva empieza cuando pasaron más de 30 min desde la última vez
- * (la decide D1, no abrir un socket). Nunca desde el Hub ni desde los estáticos. → { visto, entro, anterior }
+ * (la decide D1, no abrir un socket). Nunca desde el Hub ni desde los estáticos. → { visto, entro, anterior, nueva }
  */
 export async function tocarPresencia(db, userId, ahora = Date.now()) {
   await db.prepare(`insert into presencia_cuenta (user_id, visto_at, entro_at, visto_anterior) values (?,?,?,null)
       on conflict (user_id) do update set visto_anterior = case when ? - visto_at > ? then visto_at else visto_anterior end, entro_at = case when ? - visto_at > ? then ? else entro_at end, visto_at = ?
       where ? - presencia_cuenta.visto_at >= ?`).bind(userId, ahora, ahora, ahora, VISITA_NUEVA_MS, ahora, VISITA_NUEVA_MS, ahora, ahora, ahora, TOPE_ESCRITURA_PRESENCIA_MS).run();
   const f = await db.prepare('select visto_at, entro_at, visto_anterior from presencia_cuenta where user_id = ?').bind(userId).first();
-  return { visto: f?.visto_at ?? ahora, entro: f?.entro_at ?? ahora, anterior: f?.visto_anterior ?? null };
+  return { visto: f?.visto_at ?? ahora, entro: f?.entro_at ?? ahora, anterior: f?.visto_anterior ?? null, nueva: f?.entro_at === ahora }; // `nueva`: esta llamada abrió una visita
 }
