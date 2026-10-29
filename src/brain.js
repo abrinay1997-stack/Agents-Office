@@ -338,7 +338,14 @@ export function initBrain({ esc }) {
   });
   const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>', PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>';
   // the panel on the left folds away (remembered); on a phone it opens over the brain
-  function setSide(open) { side.classList.toggle('folded', !open); sideBtn.setAttribute('aria-expanded', open); try { if (!phone()) localStorage.setItem('ao.bv.side', open ? '1' : '0'); } catch {} requestAnimationFrame(insets); }
+  function setSide(open) { sideSolo = false; side.classList.toggle('folded', !open); sideBtn.setAttribute('aria-expanded', open); try { if (!phone()) localStorage.setItem('ao.bv.side', open ? '1' : '0'); } catch {} requestAnimationFrame(insets); }
+  // Fase 3 (DIM-04, 29 oct 2026): con la VISTA de menos de 800 px (Dimitri al lado) el panel de filtros se pliega solo y vuelve cuando hay sitio; lo que el dueño pliega o abre a mano se respeta
+  let sideSolo = false;
+  new ResizeObserver(() => {
+    const w = ov.clientWidth; if (!w || phone()) return; const abierto = !side.classList.contains('folded');
+    if (w < 800 && abierto) { side.classList.add('folded'); sideBtn.setAttribute('aria-expanded', 'false'); sideSolo = true; requestAnimationFrame(insets); }
+    else if (w >= 800 && sideSolo) { side.classList.remove('folded'); sideBtn.setAttribute('aria-expanded', 'true'); sideSolo = false; requestAnimationFrame(insets); }
+  }).observe(ov);
   side.querySelector('.bv-fold').addEventListener('click', () => { setSide(false); sideBtn.focus(); });
   sideBtn.addEventListener('click', () => { setSide(true); search.focus({ preventScroll: true }); });
 
