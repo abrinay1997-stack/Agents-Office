@@ -10,6 +10,8 @@
 //     Un 403 o «sin créditos» pausa el lote entero. Cada foto pasa por presets.aplicar → trabajos.pedir, que vuelve a mirar los topes del Estudio.
 //   · Nunca dos veces: la fila se marca «editando» y se guarda ANTES de mandarla; el trabajo lleva en su `purpose` la marca `lote <id>:<n>`, y una foto que se quedó «editando» sin trabajo
 //     se busca por esa marca antes de volver a la cola.
+//   · Pide Workers de PAGO: cada foto mandada cuesta ~30 consultas a D1 (compilar, topes, pedir); por eso el reloj manda como mucho MAX_ENVIOS_TICK (3) por minuto, de hasta 5 lotes, por turnos.
+//   · El dinero lo gasta un administrador VIGENTE (se vuelve a leer antes de cada foto) y el reloj no inventa uno.
 //   · No están (se dice): ZIP de fotos y Excel (.xlsx) como entrada (CSV sí), la QA que mide, la nota en el Cerebro y la memoria que aprende al aprobar.
 import * as C from '../../../../lotes-core.mjs';
 import * as H from '../../../../lotes-hoja.mjs';
@@ -26,7 +28,7 @@ import { emitirAviso } from '../avisos.js';
 H.usarColumnas(columnasJson);
 const { e400, e404, e409, usd, limpio, fold, slug, ID_RE } = C;
 const ahoraMs = () => Date.now();
-export const MAX_VIVOS = 200, HOJA_MS = 2 * 3600e3, ESTADOS_ACTIVOS = ['muestra', 'corriendo'];
+export const MAX_VIVOS = 200, MAX_HOJAS = 20, MAX_ENVIOS_TICK = 3, HOJA_MS = 2 * 3600e3, ESTADOS_ACTIVOS = ['muestra', 'corriendo'];
 const aleatorio = () => [...crypto.getRandomValues(new Uint8Array(3))].map((b) => b.toString(36)).join('').slice(0, 4);
 const lid = () => 'L' + Date.now().toString(36) + aleatorio();
 const esImagen = (id) => /\.(png|jpe?g|webp)$/i.test(String(id));
@@ -136,6 +138,7 @@ export async function leerHoja(env, db, { name, data, columnas } = {}) {
   const h = await H.leerHoja(nombre, buf, { maxFilas: opciones().max, columnas });
   const id = 'h' + Date.now().toString(36) + aleatorio(), at = ahoraMs();
   await db.prepare(`delete from estudio_lotes where estado = 'hoja' and at < ?`).bind(at - HOJA_MS).run();
+  if ((await db.prepare(`select count(*) n from estudio_lotes where estado = 'hoja'`).first()).n >= MAX_HOJAS) throw Object.assign(new Error('hay demasiadas hojas esperando (máximo ' + MAX_HOJAS + '): crea el lote con alguna o espera unos minutos'), { status: 429 });
   await db.prepare(`insert into estudio_lotes (id, json, estado, version, at) values (?,?,'hoja',1,?)`).bind(id, JSON.stringify({ nombre, h: H.sinBytes(h) }), at).run();
   return { id, ...H.sinBytes(h), resumen: H.resumenHoja(h), campos: Object.fromEntries(Object.entries(H.columnas()).map(([k, v]) => [k, v.es])) };
 }
@@ -243,7 +246,7 @@ export async function accion(env, db, id, acc, { by = 'you', usuario = null } = 
   const { l } = await mutar(db, id, (l) => {
     if (acc === 'autorizar' && !(humano && admin)) throw Object.assign(new Error('solo un administrador autoriza un lote que espera su OK'), { status: 403 });
     if (GASTAN.includes(acc) && !(humano && admin) && !(by === 'agent' && l.by === 'agent' && l.estado === 'previsto' && ['probar', 'iniciar'].includes(acc))) throw Object.assign(new Error('solo un administrador pone un lote a gastar'), { status: 403 });
-    if (acc === 'cancelar' && humano && !['admin', 'editor'].includes(usuario?.rol)) throw Object.assign(new Error('tu rol solo puede mirar los lotes'), { status: 403 });
+    if (['cancelar', 'pausar'].includes(acc) && humano && !['admin', 'editor'].includes(usuario?.rol)) throw Object.assign(new Error('tu rol solo puede mirar los lotes'), { status: 403 });
     const sig = C.transicion(l, acc);
     if (acc === 'cancelar') {
       for (const f of l.filas) { if (f.estado === 'editando') { f.cancelarJob = f.job || null; f.estado = 'omitida'; f.error = 'lote cancelado'; } else if (f.estado === 'en_cola') { f.estado = 'omitida'; f.error = 'lote cancelado'; } }
@@ -272,7 +275,7 @@ export async function accionFilas(env, db, id, b = {}, { by = 'you', usuario = n
   if (!['aprobar', 'reintentar', 'omitir'].includes(acc)) throw e400('la acción de una fila es aprobar, reintentar u omitir');
   if (by === 'agent' && acc === 'aprobar') throw Object.assign(new Error('un agente no aprueba fotos: lo hace el dueño'), { status: 403 });
   if (acc === 'reintentar' && usuario?.rol !== 'admin') throw Object.assign(new Error('solo un administrador reintenta (puede gastar)'), { status: 403 });
-  if (acc === 'aprobar' && !['admin', 'editor'].includes(usuario?.rol)) throw Object.assign(new Error('tu rol solo puede mirar los lotes'), { status: 403 });
+  if (['aprobar', 'omitir'].includes(acc) && !['admin', 'editor'].includes(usuario?.rol)) throw Object.assign(new Error('tu rol solo puede mirar los lotes'), { status: 403 });
   const cargado = acc === 'reintentar' ? await presets.cargar(db, env) : null;
   const { l, salida } = await mutar(db, id, async (l) => {
     if (acc === 'reintentar' && l.estado === 'cancelado') throw e409('el lote está cancelado: crea otro con estas fotos');
@@ -322,7 +325,7 @@ export async function accionFilas(env, db, id, b = {}, { by = 'you', usuario = n
 /* ---------- el goteo (el reloj de cada minuto) ---------- */
 const enVuelo = (l) => l.filas.filter((f) => f.estado === 'editando' || f.estado === 'verificando').length;
 const comprometido = (l) => +(l.filas.reduce((s, f) => s + (+f.comprometido || 0) + (f.estado === 'editando' ? +f.estimado || 0 : 0), 0)).toFixed(4);
-const marca = (l, f) => `lote ${l.id}:${f.n}`;
+const marca = (l, f) => `lote ${l.id}:${f.n}:${f.intentos || 0}`; // con el número de intento: un reintento tiene su propia marca y no confunde el trabajo de antes
 export const proposito = (l, f) => `banco de presets · ${marca(l, f)}`;
 function fallar(l, f, msg, definitivo, cfg) {
   const paso = definitivo ? { retry: false, why: 'el pedido no sirve así' } : nextStep({ attempts: f.intentos - 1 }, msg, cfg.retries, ahoraMs());
@@ -367,7 +370,7 @@ async function reconciliar(env, db, id, cfg) {
     for (const f of l.filas) {
       if (f.estado !== 'editando' || !vistos.has(f.n)) continue;
       const j = vistos.get(f.n);
-      if (!j) { if (!f.job && ahoraMs() - (f.envio || 0) > 3 * 60e3) { f.estado = 'en_cola'; f.intentos = Math.max(0, f.intentos - 1); } continue; } // un envío a medias de hace más de 3 min y sin trabajo: vuelve a la cola
+      if (!j) { if (ahoraMs() - (f.envio || 0) > 3 * 60e3) { f.estado = 'en_cola'; f.intentos = Math.max(0, f.intentos - 1); f.job = null; } continue; } // un envío de hace más de 3 min sin trabajo (nunca existió, o ya se podó): vuelve a la cola
       if (!f.job) f.job = j.id;
       if (j.state === 'done' || j.state === 'failed') terminar(l, f, j, cfg);
     }
@@ -378,6 +381,14 @@ async function enviarFila(env, db, cargado, id, n, cfg) {
   const f0 = await leerFila(db, id); if (!f0) return false;
   const l0 = f0.l, f = l0.filas.find((x) => x.n === n);
   if (!f || f.estado !== 'en_cola' || !ESTADOS_ACTIVOS.includes(l0.estado)) return false;
+  // el dinero lo gasta un administrador VIGENTE: quien inició el lote se vuelve a leer en cada foto (si ya no es administrador, o se borró, o nadie lo inició, el lote se pausa)
+  const quien = l0.inicioPor?.email ? await db.prepare('select rol from users where email = ?').bind(l0.inicioPor.email).first() : null;
+  if (!quien || quien.rol !== 'admin') {
+    const motivo = l0.inicioPor?.email ? 'quien lo inició ya no es administrador: un administrador debe reanudarlo.' : 'ningún administrador lo ha puesto a trabajar: un administrador debe iniciarlo o reanudarlo.';
+    await mutar(db, id, (l) => { if (ESTADOS_ACTIVOS.includes(l.estado)) pausar(l, motivo); });
+    return false;
+  }
+  const usuario = { email: l0.inicioPor.email, nombre: l0.inicioPor.nombre || l0.inicioPor.email, rol: 'admin' };
   const c = await compilarFila(env, db, cargado, l0, f);
   let motivoPausa = null, motivoFila = null, cost = 0;
   if (c.errores?.length) motivoFila = `no se puede editar así (${c.errores.join(' · ')}). La dejo para revisar, sin gastar.`;
@@ -398,9 +409,13 @@ async function enviarFila(env, db, cargado, id, n, cfg) {
   // se marca «editando» y se GUARDA antes de mandar: si el Worker muere después, la marca del trabajo permite no repetirla
   f.estado = 'editando'; f.envio = ahoraMs(); f.intentos++; f.estimado = cost; f.job = null; delete f.procesado;
   try { await guardarCas(db, l0, f0.version); } catch (e) { if (e.conflicto) return false; throw e; }
-  const usuario = l0.inicioPor || (l0.creadoPor ? { email: l0.creadoPor, rol: 'admin' } : { email: 'lotes', rol: 'admin' });
-  let r = null, error = null;
-  try { r = await presets.aplicar(env, db, pedidoDe(l0, f, cargado.banco), { usuario, cargado, purpose: proposito(l0, f) }); } catch (e) { error = e; }
+  let r = null, error = null, rescatado = null;
+  const clave = proposito(l0, f); // con el intento: un reintento no confunde el trabajo de antes
+  try { r = await presets.aplicar(env, db, pedidoDe(l0, f, cargado.banco), { usuario, cargado, purpose: clave }); } catch (e) { error = e; }
+  if (error) { // aplicar pudo fallar DESPUÉS de crear el trabajo (p. ej. al registrar algo): si el trabajo existe, esa foto ya va; no se reintenta ni se da por fallada
+    try { const w = await db.prepare(`select id from estudio_trabajos where json like ? order by at desc limit 1`).bind(`%"purpose":"${clave}"%`).first(); if (w) rescatado = await trabajos.job(db, w.id); } catch { /* sin poder mirar: se trata como el error que fue */ }
+    if (rescatado) { r = { jobs: [rescatado], plan: null }; error = null; }
+  }
   await mutar(db, id, (l) => {
     const g = l.filas.find((x) => x.n === n); if (!g) return;
     if (error) {
@@ -425,15 +440,16 @@ export async function cadaMinuto(env, db) {
   const cfg0 = await leerConfig(db); if (!hayLotes(cfg0)) return { activo: false };
   const cfg = opciones(), t = ahoraMs();
   await db.prepare(`delete from estudio_lotes where estado = 'hoja' and at < ?`).bind(t - HOJA_MS).run();
-  const { results } = await db.prepare(`select id from estudio_lotes where estado in ('muestra','corriendo') order by at limit 5`).all();
+  const { results } = await db.prepare(`select id from estudio_lotes where estado in ('muestra','corriendo') order by turno, at limit 5`).all(); // el que menos turno ha tenido, primero: los lotes nuevos no se quedan sin vez
   if (!results.length) return { activo: true, lotes: 0, enviadas: 0 };
   const cargado = await presets.cargar(db, env);
   let enviadas = 0;
   for (const { id } of results) {
     try {
+      await db.prepare('update estudio_lotes set turno = ? where id = ?').bind(t, id).run();
       await reconciliar(env, db, id, cfg);
       const f0 = await leerFila(db, id); if (!f0 || !ESTADOS_ACTIVOS.includes(f0.l.estado)) continue;
-      let cupo = Math.min(f0.l.concurrencia - enVuelo(f0.l), 6 - enviadas);
+      let cupo = Math.min(f0.l.concurrencia - enVuelo(f0.l), MAX_ENVIOS_TICK - enviadas);
       const cand = f0.l.filas.filter((f) => f.estado === 'en_cola' && !(f.despues > t) && (f0.l.estado !== 'muestra' || (f0.l.muestraFilas || []).includes(f.n)));
       for (const f of cand) {
         if (cupo <= 0) break;

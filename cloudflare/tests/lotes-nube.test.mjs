@@ -200,9 +200,10 @@ test('un envío que se cayó a medias no se repite: se busca por la marca del lo
     await patch(api, id, 'iniciar');
     const fila = await d1.prepare('select json from estudio_lotes where id = ?').bind(id).first(); const l = JSON.parse(fila.json);
     // la fila 1 quedó «editando» hace 5 minutos y SU trabajo existe (con la marca); la 2, también, pero sin trabajo
-    const j1 = await api('/api/media/jobs', { metodo: 'POST', cuerpo: { prompt: 'x', kind: 'image', model: 'prueba', purpose: lotes.proposito(l, l.filas[0]) } });
-    assert.equal(j1.status, 200);
     for (const f of l.filas) { f.estado = 'editando'; f.envio = Date.now() - 5 * 60e3; f.intentos = 1; f.job = null; }
+    const marca1 = lotes.proposito(l, l.filas[0]);
+    const j1 = await api('/api/media/jobs', { metodo: 'POST', cuerpo: { prompt: 'x', kind: 'image', model: 'prueba', purpose: marca1 } });
+    assert.equal(j1.status, 200);
     await d1.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').bind(JSON.stringify(l), id).run();
     await lotes.cadaMinuto(env, env.DB);
     const u = (await api('/api/media/lotes/' + id)).j.lote;
@@ -210,7 +211,7 @@ test('un envío que se cayó a medias no se repite: se busca por la marca del lo
     assert.ok(['editando', 'lista'].includes(u.filas[0].estado));
     assert.ok(['editando', 'en_cola'].includes(u.filas[1].estado), 'la fila 2 volvió a la cola (y se mandó de nuevo): ' + u.filas[1].estado);
     assert.equal(u.filas[1].intentos, 1, 'sin contar el envío que nunca existió como intento');
-    assert.equal((await api('/api/media/jobs')).j.jobs.filter((j) => j.purpose === lotes.proposito(l, l.filas[0])).length, 1, 'un solo trabajo para la fila 1');
+    assert.equal((await api('/api/media/jobs')).j.jobs.filter((j) => j.purpose === marca1).length, 1, 'un solo trabajo para la fila 1');
   } finally { await g.close(); }
 });
 
@@ -225,5 +226,108 @@ test('cancelar: lo que esperaba se omite, el gasto ya hecho se conserva y el lot
     assert.ok(x.j.lote.filas.every((f) => f.estado === 'omitida'));
     const antes = g.seen.length; await estudio.cadaMinuto(env); await estudio.cadaMinuto(env);
     assert.equal(g.seen.length, antes, 'el trabajo que estaba en cola se canceló: no gasta'); assert.equal((await patch(api, id, 'iniciar')).status, 409);
+  } finally { await g.close(); }
+});
+
+test('roles: un lector no pausa ni omite (ni por HTTP ni por el motor); un editor sí', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, como } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const c = await crearLote(api, await fotos(api, 2)); const id = c.j.lote.id;
+    await patch(api, id, 'iniciar');
+    const lector = await como('lectura'), editor = await como('editor');
+    assert.equal((await patch(lector, id, 'pausar')).status, 403);
+    assert.equal((await lector('/api/media/lotes/' + id + '/filas', { metodo: 'POST', cuerpo: { accion: 'omitir', filas: [1] } })).status, 403);
+    await assert.rejects(() => lotes.accion(env, env.DB, id, 'pausar', { by: 'you', usuario: { rol: 'lectura', email: 'x@y.z' } }), (e) => e.status === 403);
+    await assert.rejects(() => lotes.accionFilas(env, env.DB, id, { accion: 'omitir', filas: [1] }, { by: 'you', usuario: { rol: 'lectura' } }), (e) => e.status === 403);
+    assert.equal((await patch(editor, id, 'pausar')).j.lote.estado, 'pausado', 'un editor sí pausa');
+    assert.equal((await editor('/api/media/lotes/' + id + '/filas', { metodo: 'POST', cuerpo: { accion: 'omitir', filas: [1] } })).status, 200);
+  } finally { await g.close(); }
+});
+
+test('el dinero lo gasta un administrador VIGENTE: si quien inició deja de serlo, se borra, o nadie lo inició, el lote se pausa sin gastar', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, d1, admin } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const ids = await fotos(api, 3);
+    // 1) degradado a editor después de iniciar
+    const a = await crearLote(api, ids); await patch(api, a.j.lote.id, 'iniciar');
+    d1._db.prepare("update users set rol = 'editor' where email = ?").run(admin.email);
+    // (el reloj no necesita sesión: lee al usuario por su correo)
+    await lotes.cadaMinuto(env, env.DB);
+    const pa = (await lotes.uno(env, env.DB, a.j.lote.id)); assert.equal(pa.estado, 'pausado'); assert.match(pa.motivo, /ya no es administrador/); assert.equal(g.seen.length, 0);
+    assert.equal((await api('/api/media/jobs')).j.jobs.length, 0);
+    // 2) el usuario se borró (otro lote, iniciado por quien ya no existe)
+    d1._db.prepare("update users set rol = 'admin' where email = ?").run(admin.email);
+    const b = await crearLote(api, ids); await patch(api, b.j.lote.id, 'iniciar');
+    const fila = d1._db.prepare('select json from estudio_lotes where id = ?').get(b.j.lote.id); const l = JSON.parse(fila.json); l.inicioPor = { email: 'ya-no-existe@panaclaw.test', nombre: 'Fantasma' };
+    d1._db.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').run(JSON.stringify(l), b.j.lote.id);
+    await lotes.cadaMinuto(env, env.DB);
+    assert.match((await lotes.uno(env, env.DB, b.j.lote.id)).motivo, /ya no es administrador/);
+    // 3) nadie lo inició (un lote de agente arrancado por el agente): no se inventa un administrador
+    const s = await lotes.crear(env, env.DB, { nombre: 'S', origen: { ids: ids.slice(0, 2) }, receta: IA, agent: 'solo', task: 't2' }, { by: 'agent' });
+    await lotes.accion(env, env.DB, s.lote.id, 'iniciar', { by: 'agent' }); await lotes.cadaMinuto(env, env.DB);
+    const ps = await lotes.uno(env, env.DB, s.lote.id); assert.equal(ps.estado, 'pausado'); assert.match(ps.motivo, /ningún administrador/);
+    assert.equal(g.seen.length, 0, 'ni una llamada a un motor'); assert.equal((await api('/api/media/jobs')).j.jobs.length, 0);
+  } finally { await g.close(); }
+});
+
+test('si aplicar falla DESPUÉS de crear el trabajo, la foto no se reintenta: se toma el trabajo que ya existe', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, d1 } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const c = await crearLote(api, await fotos(api, 1), { muestra: 0 }); const id = c.j.lote.id;
+    await patch(api, id, 'iniciar');
+    // D1 «cae» al apuntar la auditoría del trabajo (pedir ya insertó la fila del trabajo)
+    let cae = true; const real = env.DB;
+    env.DB = new Proxy(real, { get: (t, k) => (k === 'prepare' ? (sql) => (cae && /insert into auditoria/.test(sql) ? { bind: () => ({ run: async () => { throw new Error('D1 se cayó'); } }) } : t.prepare(sql)) : (typeof t[k] === 'function' ? t[k].bind(t) : t[k])) });
+    await lotes.cadaMinuto(env, env.DB);
+    cae = false; env.DB = real;
+    const l = await lotes.uno(env, env.DB, id);
+    assert.equal(l.filas[0].estado, 'editando', 'no falló ni volvió a la cola: ya va'); assert.ok(l.filas[0].job);
+    assert.equal((await api('/api/media/jobs')).j.jobs.length, 1, 'un solo trabajo');
+    const h = await avanzar(env, api, id, (x) => x.estado === 'hecho'); assert.equal(h.cuentas.lista, 1); assert.equal(g.seen.length, 1);
+    void d1;
+  } finally { await g.close(); }
+});
+
+test('una fila «editando» cuyo trabajo ya se podó, o con un reintento, no se queda atascada ni confunde marcas', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, d1 } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const c = await crearLote(api, await fotos(api, 2), { muestra: 0 }); const id = c.j.lote.id;
+    await patch(api, id, 'pausar').catch(() => {}); await patch(api, id, 'iniciar');
+    const l = JSON.parse(d1._db.prepare('select json from estudio_lotes where id = ?').get(id).json);
+    l.filas[0].estado = 'editando'; l.filas[0].job = 'jbbbbbbbbbbb'; l.filas[0].envio = Date.now() - 10 * 60e3; l.filas[0].intentos = 1;
+    d1._db.prepare('update estudio_lotes set json = ?, version = version + 1 where id = ?').run(JSON.stringify(l), id);
+    await lotes.cadaMinuto(env, env.DB);
+    const u = await lotes.uno(env, env.DB, id);
+    assert.notEqual(u.filas[0].job, 'jbbbbbbbbbbb'); assert.ok(['en_cola', 'editando'].includes(u.filas[0].estado));
+    assert.notEqual(lotes.proposito(u, { n: 1, intentos: 1 }), lotes.proposito(u, { n: 1, intentos: 2 }), 'cada intento tiene su marca');
+  } finally { await g.close(); }
+});
+
+test('el goteo es por turnos y acotado: 3 fotos por minuto como mucho, y un lote nuevo no se queda sin vez; las hojas CSV tienen tope', { skip: SALTAR }, async () => {
+  const g = await google();
+  try {
+    const { api, env, d1 } = await montar({ GEMINI_API_KEY: CLAVE, AO_GEMINI_BASE: g.base });
+    await encender(api);
+    const ids = await fotos(api, 2), lotesIds = [];
+    for (let i = 0; i < 7; i++) { const c = await crearLote(api, ids, { nombre: 'L' + i, muestra: 0 }); lotesIds.push(c.j.lote.id); await patch(api, c.j.lote.id, 'iniciar'); }
+    const r1 = await lotes.cadaMinuto(env, env.DB);
+    assert.ok(r1.enviadas <= lotes.MAX_ENVIOS_TICK && r1.enviadas > 0, 'enviadas: ' + r1.enviadas); assert.equal(r1.lotes, 5);
+    const vistos = new Set(d1._db.prepare("select id from estudio_lotes where turno > 0").all().map((x) => x.id));
+    assert.equal(vistos.size, 5);
+    await lotes.cadaMinuto(env, env.DB);
+    const sin = lotesIds.filter((x) => !d1._db.prepare('select turno from estudio_lotes where id = ?').get(x).turno);
+    assert.deepEqual(sin, [], 'en la segunda vuelta les tocó a todos');
+    // hojas
+    const csv = dataUrl(Buffer.from('foto,sku\na.png,1\n'), 'text/csv');
+    for (let i = 0; i < lotes.MAX_HOJAS; i++) assert.equal((await api('/api/media/lotes/hoja', { metodo: 'POST', cuerpo: { name: 'h.csv', data: csv } })).status, 200);
+    const tope = await api('/api/media/lotes/hoja', { metodo: 'POST', cuerpo: { name: 'h.csv', data: csv } }); assert.equal(tope.status, 429); assert.match(tope.j.error, /demasiadas hojas/);
   } finally { await g.close(); }
 });

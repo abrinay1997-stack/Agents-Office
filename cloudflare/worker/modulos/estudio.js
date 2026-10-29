@@ -154,10 +154,11 @@ export async function manejar(ctx) {
         }
         if (id && !sub && metodo === 'GET') return json({ lote: puente.paraUI(await lotes.uno(env, db, id)) });
         if (id && !sub && metodo === 'PATCH') {
+          if (!puedeEscribir) return prohibido('Cambiar un lote es de un administrador o un editor.');
           const b = (await cuerpo(req)) || {}, l = await lotes.accion(env, db, id, String(b.accion || ''), { by: usuario.agente ? 'agent' : 'you', usuario });
           return json({ lote: puente.paraUI(l), budget: await trabajos.budget(env, db) });
         }
-        if (id && sub === 'filas' && metodo === 'POST') { const b = (await cuerpo(req)) || {}, r = await lotes.accionFilas(env, db, id, b, { by: usuario.agente ? 'agent' : 'you', usuario }); return json({ ...r, lote: puente.paraUI(r.lote) }); }
+        if (id && sub === 'filas' && metodo === 'POST') { if (!puedeEscribir) return prohibido('Cambiar las fotos de un lote es de un administrador o un editor.'); const b = (await cuerpo(req)) || {}, r = await lotes.accionFilas(env, db, id, b, { by: usuario.agente ? 'agent' : 'you', usuario }); return json({ ...r, lote: puente.paraUI(r.lote) }); }
         if (id && sub === 'zip' && metodo === 'GET') {
           const z = await lotes.zip(env, db, id, { que: puente.queZip(sp.get('que')) });
           return new Response(z.buf, { status: 200, headers: { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${z.nombre}"`, 'content-length': String(z.buf.length), 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' } });
