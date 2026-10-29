@@ -26,7 +26,7 @@ export const DESTINOS = {
   contenido: { tablas: ['contenido_piezas', 'contenido_cola', 'contenido_candado', 'contenido_papelera'], docs: ['contenido.simulacro', 'contenido.meta.agenda'], filas: ['contenido-piezas', 'contenido-cola', 'contenido-docs'] }, // las filas `contenido-*` son el paso de la migración (lib/contenido/migracion.js): de ahí pasan a las tablas
 };
 /** Lo que NO se restablece nunca (por tabla / clave / colección / prefijo): personas, accesos, llaves, auditoría, ajustes, Meta, respaldos. */
-export const CONSERVA_TABLAS = ['users', 'sessions', 'conectores', 'conectores_extra', 'auditoria', 'auditoria_agentes', 'costos', 'perfiles', 'invitaciones', 'acceso_intentos', 'reinicios', 'anuncios_tokens', 'anuncios_candados', 'anuncios_tasa', 'hook_eventos', 'publica_tasa', 'telegram_updates', 'contenido_dias', 'contenido_pubs', 'docs', 'filas',
+export const CONSERVA_TABLAS = ['users', 'sessions', 'conectores', 'conectores_extra', 'auditoria', 'auditoria_agentes', 'costos', 'perfiles', 'invitaciones', 'acceso_intentos', 'reinicios', 'anuncios_tokens', 'anuncios_candados', 'anuncios_tasa', 'hook_eventos', 'publica_tasa', 'telegram_updates', 'contenido_dias', 'contenido_pubs', 'docs', 'filas', 'bandeja_items',
   'notas_personales', 'notas_estado', 'presencia_cuenta', // N1: lo que las personas se dejan entre sí y su última visita no son de la oficina: un restablecimiento no lo toca
   'notificaciones', // N0: lo leído y no leído de cada persona no es de la oficina: un restablecimiento no lo toca
   'notas_vectores']; // los vectores de significado son datos derivados que se reconocen por el hash del texto: no entran al respaldo (pesan mucho) y se podan solos al indexar
