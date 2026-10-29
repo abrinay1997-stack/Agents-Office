@@ -108,7 +108,7 @@ export async function podarImagenesMeta(bucket, ahoraMs = Date.now(), { dias = D
   const t = (o) => new Date(o.uploaded ?? 0).getTime() || 0, corte = ahoraMs - dias * 864e5, borrar = [];
   let total = objetos.reduce((a, o) => a + (o.size || 0), 0);
   const vivos = [];
-  for (const o of objetos) { if (t(o) < corte) { borrar.push(o.key); total -= o.size || 0; } else vivos.push(o); }
+  for (const o of objetos) { if (!o.uploaded) { vivos.push(o); continue; } /* sin fecha NO se borra por edad */ if (t(o) < corte) { borrar.push(o.key); total -= o.size || 0; } else vivos.push(o); }
   if (total > tope) for (const o of vivos.sort((a, b) => t(a) - t(b))) { if (total <= objetivo) break; borrar.push(o.key); total -= o.size || 0; }
   for (let i = 0; i < borrar.length; i += 500) await bucket.delete(borrar.slice(i, i + 500));
   return { vistas: objetos.length, borradas: borrar.length, bytes: total, incompleta: Boolean(cursor) };

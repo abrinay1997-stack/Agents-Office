@@ -121,3 +121,15 @@ test('SEG-09: pasado el tope total se borra lo más viejo hasta el objetivo; baj
   assert.equal(x.borradas, 5); assert.ok(!r2._m.has(RAIZ + 'f9.jpeg') && !r2._m.has(RAIZ + 'f5.jpeg') && r2._m.has(RAIZ + 'f4.jpeg') && r2._m.has(RAIZ + 'f0.jpeg'));
   assert.equal((await podarImagenesMeta(null, ahora)).borradas, 0, 'sin R2 no hace nada');
 });
+
+test('SEG-09: sin `uploaded` no se borra por edad; la lista pagina (1.000 por página) y la poda se detiene en 5 páginas', async () => {
+  const r2 = crearR2(), ahora = Date.now();
+  await r2.put(RAIZ + 'sinfecha.jpeg', JPEG); r2._m.get(RAIZ + 'sinfecha.jpeg').up = undefined;
+  assert.equal((await podarImagenesMeta(r2, ahora, { dias: 0 })).borradas, 0, 'sin fecha, viva');
+  const grande = crearR2(); const dia = 864e5;
+  for (let i = 0; i < 5400; i++) grande._m.set(`${RAIZ}${String(i).padStart(5, '0')}.jpeg`, { buf: Buffer.alloc(1), meta: {}, up: new Date(ahora - 60 * dia) });
+  const p1 = await grande.list({ prefix: RAIZ, limit: 1000 }); assert.equal(p1.objects.length, 1000); assert.equal(p1.truncated, true); assert.equal(p1.cursor, '1000');
+  const x = await podarImagenesMeta(grande, ahora);
+  assert.equal(x.vistas, 5000, 'solo 5 páginas'); assert.equal(x.borradas, 5000); assert.equal(x.incompleta, true); assert.equal(grande._m.size, 400, 'el resto queda para mañana');
+  assert.equal((await podarImagenesMeta(grande, ahora)).borradas, 400, 'y se pone al día');
+});
