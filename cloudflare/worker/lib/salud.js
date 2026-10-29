@@ -14,7 +14,8 @@ import pkg from '../../../package.json' with { type: 'json' };
 import { leerCfg } from './ajustes.js';
 import { leerModelos } from './modelos.js';
 import { cargarRoster, agentesSalida } from './tareas/roster.js';
-import { leerDoc, listarFilas, mutarDoc } from './almacen.js';
+import { listarFilas } from './almacen.js';
+import { leerAvisos, leerAvisosDoc, marcarAvisosDocLeidos } from './avisos.js';
 import { json } from './respuesta.js';
 
 export const VERSION_OFICINA = pkg.version || '?';
@@ -76,10 +77,8 @@ export async function checksDeModulos(ctx, modulos = []) {
 
 /** Avisos de la oficina, de las DOS tablas donde se guardan (filas 'avisos' —tareas y agentes— y el doc `notices` —Contenido y Anuncios—), del más nuevo al más viejo. */
 export async function avisosTodos(db, limite = 30) {
-  const { results } = await db.prepare("select json from filas where coleccion = 'avisos' order by orden desc limit ?").bind(limite).all();
-  const a = results.map((r) => { try { return JSON.parse(r.json); } catch { return null; } }).filter(Boolean);
-  const b = (await leerDoc(db, 'notices', [])).valor;
-  const juntos = [...a, ...(Array.isArray(b) ? b : [])].filter((n) => n && n.id);
+  const a = await leerAvisos(db, limite), b = await leerAvisosDoc(db);
+  const juntos = [...a, ...b].filter((n) => n && n.id);
   const vistos = new Set();
   return juntos.sort((x, y) => (y.t || 0) - (x.t || 0)).filter((n) => (vistos.has(n.id) ? false : (vistos.add(n.id), true))).slice(0, limite);
 }
@@ -97,5 +96,5 @@ export async function completarEstado(respuesta, extra, db) {
 
 /** «Marcar todo como leído»: lo de la tabla `avisos` ya lo hace el módulo de agentes; aquí lo del doc `notices` (Contenido y Anuncios). */
 export async function marcarAvisosLeidos(db) {
-  await mutarDoc(db, 'notices', [], (lista) => (Array.isArray(lista) ? lista : []).map((n) => (n && !n.read ? { ...n, read: true } : n)));
+  await marcarAvisosDocLeidos(db);
 }
