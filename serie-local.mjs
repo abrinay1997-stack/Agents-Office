@@ -3,6 +3,16 @@
 // Apagada con `dimitri.series` (por defecto). GENERAR SERIE (token + hash + tope) llega en otro PR; hasta entonces esta ruta no puede gastar porque no tiene con qué.
 import { armarPropuesta, resumenPropuesta, preciosDeCifras } from './serie-propuesta-core.mjs';
 
+/** El cableado con el Estudio (media.mjs), aparte para probarlo con el de verdad. precio: null si no es fiable (falla cerrado). */
+export function cablearMedia(media) {
+  const modelo = id => (id ? media.models().find(x => x.id === id) : null);
+  return {
+    capsDe: id => { const m = modelo(id); return m && m.on && m.kind === 'image' ? media.capsOf(m) : null; },
+    precioPlano: (id, aj) => { const m = modelo(id); if (!m) return null; const e = media.estimate({ model: id, n: 1, settings: aj || {} });
+      return typeof e === 'number' && Number.isFinite(e) && (e > 0 || m.engine === 'prueba') ? { generacion: e, gratis: m.engine === 'prueba' } : null; },
+    existeRef: id => !!media.resolve(id),
+  };
+}
 export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = () => ({}), activo = () => false, id = () => 'serie-' + Date.now().toString(36), config = null, modeloUnico = () => null }) {
   const err = (estado, error, extra = {}) => ({ estado, cuerpo: { error, ...extra } });
   function proponer({ brief, planos, por = 'dueno' } = {}) {

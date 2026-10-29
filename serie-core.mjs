@@ -94,7 +94,7 @@ export function sha256(texto) {
 const canon = v => Array.isArray(v) ? `[${v.map(canon).join(',')}]` : v && typeof v === 'object' ? `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',')}}` : JSON.stringify(v ?? null);
 // Solo lo que cambia lo que se genera (no el estado, ni las versiones, ni los comentarios): cambiar un prompt o una ref invalida la autorización.
 export function hashEscaleta(serie) {
-  const e = (serie?.escaleta || []).map(p => ({ n: p.n, rol: p.rol, descripcion: p.descripcion, refs: p.refs, prompt_exacto: p.prompt_exacto, texto_en_imagen: p.texto_en_imagen, modelo: p.modelo, ajustes: p.ajustes, semilla: p.semilla }));
+  const e = (serie?.escaleta || []).map(p => ({ n: p.n, rol: p.rol, descripcion: p.descripcion, refs: p.refs, prompt_exacto: p.prompt_exacto, texto_en_imagen: p.texto_en_imagen, modelo: p.modelo, ajustes: p.ajustes, semilla: p.semilla, skip: p.estado === 'skipped' ? (p.motivo || 'skipped') : null }));
   return sha256(canon({ biblia_version: serie?.biblia_version ?? null, modelo_unico: serie?.modelo_unico ?? null, e }));
 }
 

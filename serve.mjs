@@ -65,7 +65,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
-import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { crearSeries } from './serie-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
+import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { crearSeries, cablearMedia } from './serie-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -567,8 +567,7 @@ const biblia = crearBiblia({ BRAIN, DATA, renombrar, ask: (sy, u, o) => askX(sy,
   presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) },
   imagenes: () => media.list({ limit: 600 }).filter(f => (f.fav || (Array.isArray(f.used) && f.used.length)) && f.desc).slice(0, 12),
   notas: () => [...vaultIndex().entries()].filter(([n]) => /brand|marca|voice|contexto|guideline|visual/i.test(n)).slice(0, 6).map(([nombre, texto]) => ({ nombre, texto: String(texto) })) }); // 11.2
-const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), existeRef: id => !!media.resolve(id), // 11.3: propone la serie con la biblia citada; no gasta ni guarda
-  capsDe: id => { const m = id && media.models().find(x => x.id === id); return m && m.on && m.kind === 'image' ? media.capsOf(m) : null; }, precioPlano: (m, aj) => ({ generacion: media.estimate({ model: m, n: 1, settings: aj || {} }) }), modeloUnico: () => media.defaultModel('image') });
+const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image') }); // 11.3: propone la serie con la biblia citada; no gasta ni guarda
 function parseJSON(text) {
   const s = text.replace(/```json|```/g, ''); const a = s.indexOf('{'), b = s.lastIndexOf('}');
   return JSON.parse(s.slice(a, b + 1));
@@ -3039,8 +3038,8 @@ const server = http.createServer(async (req, res) => {
       const b = req.method === 'GET' ? {} : await body(req), r = await biblia.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);
     }
-    if (url.pathname.startsWith('/api/series/')) { // 29 oct 2026 (11.3): PROPONER una serie (no gasta). Generarla es otro paso con el clic del dueño
-      const b = req.method === 'GET' ? {} : await body(req), r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
+    if (req.method === 'POST' && url.pathname === '/api/series/proponer') { // 29 oct 2026 (11.3): PROPONER una serie (no gasta). Generarla es otro paso con el clic del dueño
+      const b = await body(req, 128 * 1024), r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);
     }
     if (url.pathname === '/api/media/describir') { // 29 oct 2026 (11.1): GET = lo descrito y el costo de lo que falta (no gasta) · POST = describir con visión (solo el dueño, con el costo confirmado; apagado por defecto)
