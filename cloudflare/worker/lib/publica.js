@@ -21,9 +21,9 @@ export function origenToken(req, url, esperado) {
   if (tokenValido(url?.searchParams?.get('token') || '', esperado)) return 'query';
   return null;
 }
-/** `hooks.tokenEnQuery` de los ajustes (por defecto ENCENDIDO = compatible). Solo se lee con un token ya válido. */
+/** `hooks.tokenEnQuery` de los ajustes (por defecto ENCENDIDO = compatible). Solo se lee con un token ya válido. Si no se puede leer, FALLA CERRADO (rechaza ?token=). */
 export async function tokenEnQueryPermitido(db) {
-  try { return (await leerDoc(db, 'ajustes', {})).valor?.hooks?.tokenEnQuery !== false; } catch { return true; }
+  try { return (await leerDoc(db, 'ajustes', {})).valor?.hooks?.tokenEnQuery !== false; } catch (e) { console.warn('[hook] no se pudo leer hooks.tokenEnQuery; se rechaza ?token= (falla cerrado):', e?.message ?? e); return false; }
 }
 /** Cuenta un uso de ?token= en la ruta `clave` (hoy). Nunca guarda el token; un fallo al contar no tumba la petición. */
 export async function contarTokenQuery(db, clave, ahora = Date.now()) {

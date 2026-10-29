@@ -62,7 +62,8 @@ export const valoresDe = (cfg) => Object.fromEntries(FIELDS.map((f) => [f.path, 
 
 // Lo que NUNCA puede entrar por Ajustes aunque alguien invente una ruta: el nombre de algo que guarda una llave.
 const PINTA_DE_SECRETO = /(token|secret|secreto|api[-_]?key|apikey|passw|contrase|clave|credential|bearer|authorization)/i;
-export const esSecreto = (ruta) => PINTA_DE_SECRETO.test(String(ruta));
+const NO_ES_SECRETO = ['hooks.tokenEnQuery']; // un interruptor (sí/no) que solo lleva «token» en el nombre: no guarda ni muestra ningún secreto
+export const esSecreto = (ruta) => !NO_ES_SECRETO.includes(String(ruta)) && PINTA_DE_SECRETO.test(String(ruta));
 
 // Los campos de `contenido.*` y de `media.*` se guardan donde cada módulo los lee.
 const CONTENIDO_CLAVE = { 'contenido.modo': 'modo', 'contenido.conductor': 'conductor', 'contenido.redes': 'redes', 'contenido.entregarHorasAntes': 'entregarHorasAntes', 'contenido.bandejaFuente': 'bandejaFuente', 'contenido.departments': 'departamentos' };

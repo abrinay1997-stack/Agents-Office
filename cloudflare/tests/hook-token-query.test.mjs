@@ -48,3 +48,38 @@ test('la ruta de indicadores (/api/kpi) hace lo mismo', { skip: SALTAR }, async 
   const o2 = await con({ hooks: { tokenEnQuery: false } });
   assert.equal((await o2.anon('POST', `/api/kpi/ventas_semana?token=${HOOK}`, { value: 5 })).status, 401);
 });
+
+test('falla CERRADO: si no se puede leer el flag, ?token= se rechaza (la cabecera sigue valiendo)', { skip: SALTAR }, async () => {
+  const o = await con();
+  const prep = o.d1.prepare.bind(o.d1);
+  const roto = { ...o.d1, prepare: (sql) => { if (/from docs where clave/.test(sql)) { const q = prep(sql); const bind = q.bind.bind(q); return { ...q, bind: (...a) => (a[0] === 'ajustes' ? { first: async () => { throw new Error('D1 caída'); }, run: async () => { throw new Error('D1 caída'); }, all: async () => { throw new Error('D1 caída'); } } : bind(...a)) }; } return prep(sql); } };
+  const { manejar } = await import('../worker/lib/rutas.js');
+  const llamar = (ruta, cab = {}) => manejar(new Request('https://oficina.test' + ruta, { method: 'POST', headers: { 'content-type': 'application/json', ...cab }, body: JSON.stringify({ name: 'Ana', message: 'hola', id: 'f' + Math.random() }) }), { ...o.env, DB: roto });
+  const r = await llamar(`/api/hook/formulario-web?token=${HOOK}`);
+  assert.equal(r.status, 401); assert.match((await r.json()).error, /X-Office-Token/);
+  assert.equal(r.headers.get('deprecation'), null);
+});
+
+test('se apaga de verdad desde Ajustes (POST /api/settings) y el valor por defecto es encendido', { skip: SALTAR }, async () => {
+  const o = await con();
+  const g = (await o.admin('GET', '/api/settings')).j;
+  assert.equal(g.fields.find((f) => f.path === 'hooks.tokenEnQuery')?.group, 'seguridad'); assert.equal(g.fields.find((f) => f.path === 'hooks.tokenEnQuery').default, true); assert.notEqual(g.values['hooks.tokenEnQuery'], false);
+  assert.equal((await o.editor('POST', '/api/settings', { changes: { 'hooks.tokenEnQuery': false } })).status, 403);
+  const r = await o.admin('POST', '/api/settings', { changes: { 'hooks.tokenEnQuery': false } }); assert.equal(r.status, 200); assert.deepEqual(r.j.errors, []);
+  assert.equal((await o.admin('GET', '/api/settings')).j.values['hooks.tokenEnQuery'], false);
+  assert.equal((await o.anon('POST', `/api/hook/formulario-web?token=${HOOK}`, { name: 'A', message: 'h', id: 's1' })).status, 401);
+  assert.equal((await o.anon('POST', '/api/hook/formulario-web', { name: 'A', message: 'h', id: 's2' }, H)).status, 200);
+  assert.equal((await o.admin('GET', '/api/triggers')).j.tokenEnQuery.permitido, false);
+});
+
+test('una firma de Stripe válida con ?token= de más no se cuenta ni avisa; el 401 de esa rama tampoco', { skip: SALTAR }, async () => {
+  const o = await oficina6({ extraEnv: { STRIPE_WEBHOOK_SECRET: 'whsec_secreto_de_prueba_1234567890' } }); // secrets-ok: de mentira
+  assert.equal((await o.admin('PUT', '/api/triggers', { triggers: [{ id: 'pagos', dept: 'fin', source: 'stripe', text: 'Registra el pago.' }] })).status, 200);
+  const cuerpo = JSON.stringify({ id: 'evt_q', type: 'payment_intent.succeeded', data: { object: { amount_received: 5000, currency: 'usd', receipt_email: 'c@x.com' } } }), t = Math.floor(Date.now() / 1000);
+  const firma = 't=' + t + ',v1=' + (await import('node:crypto')).createHmac('sha256', 'whsec_secreto_de_prueba_1234567890').update(t + '.' + cuerpo).digest('hex'); // secrets-ok: de mentira
+  const ok = await o.anon('POST', `/api/hook/pagos?token=${HOOK}`, cuerpo, { 'stripe-signature': firma });
+  assert.equal(ok.status, 200, ok.texto); assert.equal(ok.cabeceras.get('deprecation'), null);
+  const sin = await o.anon('POST', `/api/hook/pagos?token=${HOOK}`, cuerpo);
+  assert.equal(sin.status, 401); assert.equal(sin.cabeceras.get('deprecation'), null);
+  assert.equal(filas(o.d1, 'select * from hook_token_query').length, 0);
+});

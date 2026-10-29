@@ -32,9 +32,7 @@ async function publicaInterna({ req, env, db, url, ruta }, aviso) {
   // 1) quién llama, antes que nada. Un sistema con firma propia (Stripe, WhatsApp) se identifica con ELLA (su secreto, no el de la oficina); el resto, con AO_HOOK_TOKEN.
   const via = origenToken(req, url, env.AO_HOOK_TOKEN), tokenCab = via === 'cabecera';
   let tokenOk = via !== null, rechazadoQuery = false;
-  if (via === 'query') { // el secreto en la dirección: solo con `hooks.tokenEnQuery` (encendido por defecto); se cuenta y la respuesta avisa
-    if (await tokenEnQueryPermitido(db)) { aviso.query = true; await contarTokenQuery(db, 'hook'); } else { tokenOk = false; rechazadoQuery = true; }
-  }
+  if (via === 'query' && !(await tokenEnQueryPermitido(db))) { tokenOk = false; rechazadoQuery = true; } // el secreto en la dirección: solo con `hooks.tokenEnQuery` (encendido por defecto; si no se puede leer, rechaza)
   const cabStripe = req.headers.get('stripe-signature'), cabHub = req.headers.get('x-hub-signature-256');
   if (!tokenOk && !cabStripe && !cabHub) return json({ error: rechazadoQuery ? 'el token en la dirección (?token=) ya no se acepta: mándalo en la cabecera X-Office-Token o Authorization: Bearer' : String(env.AO_HOOK_TOKEN || '').length >= 16 ? 'token incorrecto' : 'esta oficina no acepta webhooks: falta el secreto AO_HOOK_TOKEN' }, 401);
   // 2) el cuerpo, con tope (la firma se calcula sobre los bytes tal como llegaron)
@@ -56,6 +54,7 @@ async function publicaInterna({ req, env, db, url, ruta }, aviso) {
       await avisar(db, { kind: 'trigger', level: 'warn', text: `El disparador «${id}» (${tr.source}) está aceptando eventos SIN firma (sinFirma: true): cualquiera con el token puede inventar uno. Configura el secreto de ${tr.source === 'stripe' ? 'Stripe' : 'WhatsApp'}.`, key: 'sinfirma-' + id });
     }
   } else if (!tokenOk) return json({ error: rechazadoQuery ? 'el token en la dirección (?token=) ya no se acepta: mándalo en la cabecera X-Office-Token o Authorization: Bearer' : 'token incorrecto' }, 401); // una firma de otro sistema no abre un disparador común
+  if (!FIRMADAS.includes(tr.source) && via === 'query' && tokenOk) { aviso.query = true; await contarTokenQuery(db, 'hook'); } // solo cuando ?token= fue lo que autenticó: se cuenta y la respuesta avisa
   if (tr.paused) return json({ ok: true, skipped: 'pausado' }, 202);
   let data = {};
   try { data = /json/.test(req.headers.get('content-type') || '') || /^\s*[{[]/.test(raw) ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw)); } catch { return json({ error: 'el cuerpo no es JSON ni un formulario' }, 400); }
