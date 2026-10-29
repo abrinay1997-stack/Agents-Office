@@ -62,7 +62,7 @@ const ESCRIBEN = [
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
   '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
   '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
-  '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
+  '/api/media/presets', '/api/media/presets/apply', '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
 const SOLO_ADMIN = [
@@ -371,7 +371,7 @@ const TABLAS = {
   corridas: 'una por tarea en curso; se borra al terminar', estudio_trabajos: 'poda al guardar (lib/estudio/trabajos.js)', estudio_archivos: 'la galería; su papelera se vacía a los 30 días',
   contenido_pubs: 'poda (lib/contenido/analiticas.js)', contenido_cola: 'una fila por pieza entregada; se limpia con la pieza', contenido_piezas: 'su papelera se vacía a los 30 días; el reloj lee por fecha (índice)',
   contenido_dias: 'una fila por cuenta y día de Analíticas (pequeña)', notas: 'el índice de una ejecución deja fuera los entregables de más de 180 días',
-  filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); el resto es configuración',
+  filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); presets-versiones: las últimas 20 por preset, podadas al guardar (lib/estudio/presets.js); el resto es configuración',
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
   auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', notas_personales: 'mantenimiento',

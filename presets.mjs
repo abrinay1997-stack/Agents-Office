@@ -18,38 +18,8 @@ import { find as buscarEnGaleria } from './media/galeria.mjs'; // revisión F1: 
 import * as L from './imagen-local.mjs';
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
-const ID_RE = /^[a-z0-9-]{2,40}$/;
-const KINDS = ['image', 'video', 'music', 'audio']; // F5 y F6: el banco también compila video, música y voz
-const arr = v => (Array.isArray(v) ? v : v == null ? [] : [v]);
-const limpio = (s, n = 400) => String(s ?? '').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, n);
-const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-
-/** Las cifras de la empresa (cifras.json: [{ name, value }]) como objeto para «{cifras.precio}»: el nombre en minúsculas, sin
- *  tildes y con «_». Un precio nunca sale del preset. */
-export function cifrasComoObjeto(items) {
-  const o = {};
-  for (const x of arr(items)) if (x && x.name != null && x.value != null && String(x.value).trim()) o[fold(x.name)] = String(x.value).trim();
-  return o;
-}
-
-/** Limpia lo que manda la página: la pila, los parámetros, las entradas, la escena. Nada pasa sin forma conocida. */
-export function pedidoLimpio(b = {}) {
-  const pila = arr(b.pila).slice(0, 16).map(x => (typeof x === 'string' ? { id: x } : x)).filter(x => x && typeof x.id === 'string' && (ID_RE.test(x.id) || x.id === 'libre'))
-    .map(x => (x.id === 'libre' ? { id: 'libre', texto: limpio(x.texto, 600) } : { id: x.id, ...(x.params && typeof x.params === 'object' && !Array.isArray(x.params) ? { params: x.params } : {}) }));
-  const ids = v => arr(v).filter(x => typeof x === 'string' && x.length < 300).slice(0, 8);
-  const E = b.entradas && typeof b.entradas === 'object' ? b.entradas : {};
-  const referencias = arr(E.referencias).slice(0, 6).map(r => (typeof r === 'string' ? { id: r } : r)).filter(r => r && typeof r.id === 'string')
-    .map(r => ({ id: r.id, ...(r.ejes && typeof r.ejes === 'object' ? { ejes: Object.fromEntries(core.EJES_REF.filter(k => r.ejes[k] != null).map(k => [k, Math.max(0, Math.min(3, Math.round(+r.ejes[k] || 0)))])) } : {}) }));
-  const entradas = { foto: ids(E.foto ?? E.sujeto).slice(0, 1), referencias, ...(ids(E.lut).length ? { lut: ids(E.lut) } : {}) };
-  // F5 (10 oct 2026): el video — sus fotogramas (inicial, final), su video (origen) o el de guía (copiar movimiento); uno de cada
-  const kind = KINDS.includes(b.kind) ? b.kind : 'image';
-  if (kind === 'video') for (const k of ['inicial', 'final', 'origen', 'guia']) { const v = ids(E[k]).slice(0, 1); if (v.length) entradas[k] = v; }
-  const escena = b.escena && typeof b.escena === 'object' ? e3.normalizar(b.escena) : null;
-  const params = b.params && typeof b.params === 'object' && !Array.isArray(b.params) ? b.params : {};
-  return { kind, pila, params, entradas, escena, idea: limpio(b.idea, 2000), producto: limpio(b.producto, 120), model: typeof b.model === 'string' && ID_RE.test(b.model) ? b.model : undefined,
-    proporcion: typeof b.proporcion === 'string' && /^\d{1,2}(\.\d{1,2})?:\d{1,2}$/.test(b.proporcion) ? b.proporcion : undefined,
-    n: Math.max(1, Math.min(4, +b.n || 1)), orden: b.orden === 'barato' ? 'barato' : undefined, folder: typeof b.folder === 'string' ? b.folder : undefined };
-}
+import * as API from './presets-api-core.mjs';
+export { cifrasComoObjeto, pedidoLimpio } from './presets-api-core.mjs'; // siguen viviendo aquí para quien las importaba (tests, lotes)
 
 export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = () => {} } = {}) {
   let FAB = null, sharpOk = null;
@@ -64,79 +34,24 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
 
   /** Los presets del dueño: cada nota de <cerebro>/Estudio/Presets/*.md. Una nota rota se dice, no tumba el banco. */
   function propios() {
-    const out = [], problemas = [], byId = new Map(fab().presets.map(p => [p.id, p]));
-    let files = []; try { files = fs.readdirSync(carpeta()).filter(f => f.endsWith('.md')); } catch { return { propios: out, problemas }; }
-    const vistos = new Map(); // id → archivo: dos notas con el mismo id («Catálogo web» y «Catalogo web») no se cargan las dos
-    for (const f of files.sort()) {
-      let md = ''; try { md = fs.readFileSync(path.join(carpeta(), f), 'utf8'); } catch { continue; }
-      const r = notas.notaAPreset(md, { archivo: `${notas.CARPETA}/${f}`, byId, canales: canales() });
-      if (!r.preset) { problemas.push(`${f}: ${r.problemas.join('; ')}`); continue; }
-      if (vistos.has(r.preset.id)) { problemas.push(`${f}: tiene el mismo id (${r.preset.id}) que «${vistos.get(r.preset.id)}»; no se carga: renómbrala o cámbiale el id`); continue; }
-      vistos.set(r.preset.id, f);
-      if (r.problemas.length) problemas.push(`${f}: ${r.problemas.join('; ')}`);
-      out.push(r.preset);
-    }
-    return { propios: out, problemas };
+    let files = []; try { files = fs.readdirSync(carpeta()).filter(f => f.endsWith('.md')); } catch { return { propios: [], problemas: [] }; }
+    const lista = [];
+    for (const f of files.sort()) { let md = ''; try { md = fs.readFileSync(path.join(carpeta(), f), 'utf8'); } catch { continue; } lista.push({ archivo: `${notas.CARPETA}/${f}`, nombre: f, md }); }
+    return API.propiosDeNotas(lista, { fab: fab(), canales: canales() });
   }
   /** La fábrica y los del dueño en la forma del banco (un propio con el id de uno de fábrica lo tapa, §4.2). */
-  function todos() {
-    const { propios: ps, problemas } = propios();
-    const byId = new Map(fab().presets.map(p => [p.id, p]));
-    const banco = ps.map(p => notas.aPresetDeBanco(p, { byId, iconos: fab().iconos }));
-    const tapados = new Set(banco.map(p => p.id));
-    return { presets: [...fab().presets.filter(p => !tapados.has(p.id)), ...banco], propios: ps, problemas };
-  }
+  function todos() { return API.bancoDe({ fab: fab(), ...propios() }); }
   const contexto = () => {
     const models = media.models();
-    return { models, caps: m => media.capsOf(m.id || m, { familias: fab().familias }), familias: fab().familias, tipos: fab().tipos, canales: fab().canales,
-      cifras: cifrasComoObjeto(cifras()), capacidades: { local: sharpOk !== false }, escena3d: e3 };
+    return API.contextoDe({ fab: fab(), models, caps: m => media.capsOf(m.id || m, { familias: fab().familias }), cifras: cifras(), local: sharpOk !== false });
   };
-
-  /** Por qué un preset local no se puede hacer en esta versión (o '' si sí): su LUT de fábrica aún no está en presets/luts, o
-   *  pide un archivo que el Estudio no sabe recibir (un .cube). Revisión F1: salían «gratis · en tu máquina» y el trabajo
-   *  terminaba «done» con una copia idéntica. */
-  function faltaLocal(p) {
-    if (!p || p.ejecutor !== 'local') return '';
-    for (const o of arr(p.local)) if (o && typeof o.archivo === 'string' && /\.cube$/i.test(o.archivo) && !fs.existsSync(path.join(L.DIR_LUTS, path.basename(o.archivo)))) return 'su LUT todavía no viene con la oficina';
-    for (const en of arr(p.entradas)) if (en && (en.min || 0) > 0 && !['image', 'video', 'audio', 'music'].includes(en.medio)) return `el Estudio todavía no recibe ${en.medio === 'cube' ? 'archivos .cube' : `archivos «${en.medio}»`}`;
-    return '';
-  }
+  const lutExiste = nombre => fs.existsSync(path.join(L.DIR_LUTS, path.basename(nombre)));
 
   /** GET /api/media/presets: la mezcla, filtrada por medio, modo y texto, cada uno con si algún modelo encendido (o lo local) lo sirve. */
-  function lista({ medio, modo, q } = {}) {
-    const t = todos(), ctx = contexto();
-    let ps = t.presets.filter(p => !medio || arr(p.medios).includes(medio)).filter(p => !modo || core.modoAdmite(p, modo));
-    if (q && String(q).trim()) { const hits = core.buscar(String(q).slice(0, 120), ps, { max: 40 }); const by = new Map(ps.map(p => [p.id, p])); ps = hits.map(h => ({ ...by.get(h.id), score: h.score, por: h.por })).filter(p => p.id); }
-    const sirve = p => {
-      if (p.ejecutor === 'local') { const falta = faltaLocal(p); return { on: sharpOk !== false && !falta, modelos: [], motivo: falta || (sharpOk === false ? 'no disponible en esta máquina' : '') }; }
-      const kind = arr(p.medios)[0] || 'image';
-      const c = core.modelosPara([{ id: p.id, preset: p, params: {} }], ctx.models, ctx.caps, { kind, modo: arr(p.modos)[0], familias: ctx.familias });
-      const on = c.filter(x => x.on);
-      return { on: on.length > 0, modelos: on.slice(0, 3).map(x => x.id), motivo: on.length ? '' : c[0]?.motivo || 'ningún modelo encendido' };
-    };
-    const f = fab(); // lo que la página necesita para pintar el banco (grupos, canales, iconos…); los presets van aparte, ya filtrados
-    return { version: f.version, sharp: sharpOk !== false, presets: ps.map(p => ({ ...p, ...sirve(p) })), propios: t.propios.map(p => p.id), problemas: t.problemas,
-      fabrica: { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos } };
-  }
+  function lista(filtro = {}) { return API.listar(todos(), contexto(), filtro, { fab: fab(), lutExiste, sharp: sharpOk }); }
 
   /** POST /api/media/presets/compile: el plan, sin gastar nada. */
-  function compilar(b = {}) {
-    const P = pedidoLimpio(b), { presets } = todos();
-    const byId = new Map(presets.map(p => [p.id, p]));
-    // un preset propio en la pila se abre en su receta (su pila, su canal, su escena y sus ejes)
-    const pila = [], params = { ...P.params }; let escena = P.escena, refs = P.entradas.referencias;
-    for (const it of P.pila) {
-      const p = byId.get(it.id);
-      if (p?.propio) {
-        pila.push(...p.propio.pila);
-        if (p.propio.canal && params.canal == null) params.canal = p.propio.canal;
-        if (p.propio.escena && !escena) escena = e3.normalizar(p.propio.escena);
-        if (p.propio.ejes && refs.length) refs = refs.map(r => ({ ...r, ejes: { ...p.propio.ejes, ...(r.ejes || {}) } }));
-      } else pila.push(it);
-    }
-    const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, proporcion: P.proporcion, escena, n: P.n, orden: P.orden, kind: P.kind });    for (const it of pila) { const falta = faltaLocal(byId.get(it.id)); if (falta) c.errores = [...arr(c.errores), `«${byId.get(it.id).nombre || it.id}» aún no se puede: ${falta}`]; }
-    return { plan: c, pedido: { ...P, pila, params, escena, entradas: { ...P.entradas, referencias: refs } } };
-  }
+  function compilar(b = {}) { return API.compilar(b, todos(), contexto(), { lutExiste }); }
 
   /** La imagen guía de la escena, subida una vez por escena (la galería la muestra como «Guía de composición»). */
   function guiaDe(escena) {
@@ -164,12 +79,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
 
   /** POST /api/media/presets/apply: compila y lo manda a hacer. Lo único que gasta, y pasa por los topes del Estudio (submit). */
   async function aplicar(b = {}, { by = 'you', agent = null, task = null } = {}) { // E8: un agente llega con su id y su tarea (el trabajo y su archivo dicen para qué tarea fue)
-    const { plan: c0, pedido: P } = compilar(b);
-    if (c0.errores.length) { const e = new Error(c0.errores.join(' · ')); e.status = 400; e.plan = c0; throw e; }
-    const foto = P.entradas.foto[0];
-    const receta = { kind: P.kind, pila: P.pila, params: P.params, ejes: P.entradas.referencias[0]?.ejes || null, escena: P.escena, canal: c0.request?.preset?.find(x => x.params?.canal)?.params.canal || P.params.canal || null, modelo: c0.model || null };
-    const canal = receta.canal || undefined;
-    const esEscena = !!(P.escena && P.escena.fondo?.tipo !== 'color') || P.pila.some(it => /^esc-/.test(it.id));
+    const { plan: c0, pedido: P, foto, receta, canal, esEscena } = API.planAplicar(b, todos(), contexto(), { lutExiste });
     if (c0.soloLocal) {
       if (!foto) { const e = new Error('Lo local trabaja sobre tu foto: súbela o elige una de la galería'); e.status = 400; throw e; }
       const ops = [...c0.local.antes, ...c0.local.despues];
@@ -205,39 +115,17 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
    *  Cerebro). Desde un archivo de la galería (su receta) o desde la receta que manda el compositor. Si ya existe con ese nombre,
    *  la versión de antes va a data/history/presets/<id>/<ts>.md y la nueva sube su v (sus «## Notas» se conservan). */
   function guardar(b = {}) {
-    const nombre = limpio(b.nombre, 48).replace(/[\\/:*?"<>|#^[\]]/g, '');
-    if (!nombre) throw Object.assign(new Error('ponle un nombre al preset'), { status: 400 });
-    let r = b.receta && typeof b.receta === 'object' ? b.receta : null;
-    if (!r && typeof b.desde === 'string') {
-      const it = media.item(b.desde);
-      if (!it) throw Object.assign(new Error('no encuentro ese archivo en el Estudio'), { status: 404 });
-      r = it.receta || (Array.isArray(it.preset) ? { pila: it.preset.map(p => ({ id: p.id, params: p.params || {} })) } : null);
-      if (!r) throw Object.assign(new Error('esa imagen no salió de un preset: no hay receta que guardar'), { status: 400 });
-    }
-    if (!r || !arr(r.pila).length) throw Object.assign(new Error('la receta está vacía: elige algún preset antes de guardarla'), { status: 400 });
-    const byId = new Map(fab().presets.map(p => [p.id, p]));
-    const pila = arr(r.pila).map(x => (typeof x === 'string' ? { id: x, params: {} } : { id: String(x.id), params: x.params && typeof x.params === 'object' ? x.params : {} })).filter(x => byId.has(x.id)).slice(0, 16);
-    if (!pila.length) throw Object.assign(new Error('ningún preset de esa receta existe en la fábrica'), { status: 400 });
+    const nombre = API.nombreLimpio(b);
+    let it = null; if (!(b.receta && typeof b.receta === 'object') && typeof b.desde === 'string') it = media.item(b.desde);
+    const r = API.recetaDeGuardar(b, it);
     // Revisión F1: el id quita las tildes y el archivo no. «Catalogo web» cuando ya está «Catálogo web» es el mismo preset:
     // se guarda en esa nota (y su historial), no en una segunda con el mismo id.
     const mismo = propios().propios.find(x => x.id === notas.idDesdeNombre(nombre));
     const archivo = mismo ? path.basename(mismo.archivo) : notas.archivoDeNombre(nombre), f = path.join(carpeta(), archivo);
     const previa = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
-    const antes = previa ? notas.notaAPreset(previa, { byId }).preset : null;
-    const hoy = new Date().toISOString().slice(0, 10);
-    const base = pila[0] && byId.get(pila[0].id);
-    // F5: el medio sale de la receta (o, si no lo dice, del primer preset): una receta de video se guarda como preset de video
-    const medio = KINDS.includes(r.kind) ? r.kind : KINDS.includes(b.kind) ? b.kind : arr(base?.medios)[0] || 'image';
-    const p = {
-      tipo: 'propio', id: antes?.id || notas.idDesdeNombre(nombre), nombre, v: (antes?.v || 0) + 1, medio, icono: base?.icono?.id || 'marca',
-      frase: limpio(b.frase, 140) || antes?.frase || `Mi receta: ${pila.map(x => byId.get(x.id)?.nombre || x.id).join(' + ')}`.slice(0, 140),
-      basadoEn: base ? `${base.id}@${base.v || 1}` : null,
-      receta: { pila, ejes: r.ejes && typeof r.ejes === 'object' ? r.ejes : null, escena: r.escena ? e3.normalizar(r.escena) : null, canal: typeof r.canal === 'string' ? r.canal : null, modelo: typeof r.modelo === 'string' ? r.modelo : null, fijas: arr(r.fijas).filter(x => typeof x === 'string').slice(0, 6) },
-      marca: limpio(b.marca, 60) || antes?.marca || null, campana: limpio(b.campana, 60) || antes?.campana || null,
-      enlaces: antes?.enlaces || [], buscar: antes?.buscar || [], estado: 'beta', creado: antes?.creado || hoy, actualizado: hoy,
-    };
-    const prob = notas.validarPropio(p, { byId, canales: canales() });
-    if (prob.length) throw Object.assign(new Error(prob.join(' · ')), { status: 400 });
+    const byId0 = new Map(fab().presets.map(p => [p.id, p]));
+    const antes = previa ? notas.notaAPreset(previa, { byId: byId0 }).preset : null;
+    const { p, byId } = API.presetParaGuardar(b, r, { fab: fab(), antes, hoy: new Date().toISOString().slice(0, 10), canales: canales() });
     fs.mkdirSync(carpeta(), { recursive: true });
     if (previa) { const h = path.join(dataDir, 'history', 'presets', p.id); fs.mkdirSync(h, { recursive: true }); fs.writeFileSync(path.join(h, `${Date.now()}.md`), previa); }
     const md = notas.presetANota(p, { byId, previa });
@@ -254,7 +142,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   }
   /** GET /api/media/presets/<id>/versiones: las versiones de antes de un preset del dueño. */
   function versiones(id) {
-    if (!ID_RE.test(id)) return [];
+    if (!API.ID_RE.test(id)) return [];
     const h = path.join(dataDir, 'history', 'presets', id); let l = []; try { l = fs.readdirSync(h).filter(f => f.endsWith('.md')); } catch { return []; }
     return l.sort().reverse().map(f => { const md = fs.readFileSync(path.join(h, f), 'utf8'); const p = notas.notaAPreset(md).preset; return { at: +f.replace('.md', ''), v: p?.v || null, nombre: p?.nombre || id }; });
   }
