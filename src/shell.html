@@ -1013,7 +1013,7 @@
   }
   #brainOv.on { opacity: 1; pointer-events: auto; }
   #bvCv { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; } /* V4.1: the page never scrolls or zooms under a finger on the graph: the graph does */
-  .bv-top { position: absolute; left: 22px; top: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 62vw; }
+  .bv-top { position: absolute; left: 22px; top: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 62%; } /* Fase 3 (DIM-04): % del Cerebro, no vw de la ventana: Dimitri puede ocupar una parte */
   #bvSearch {
     width: 300px; background: #181B24; border: 1px solid rgba(253,255,248,.14); border-radius: 99px; outline: none;
     padding: 9px 16px; font-family: var(--ui); font-size: 13px; color: #E8E6DF;
@@ -1065,8 +1065,8 @@
   .bv-pane { transition: width .35s var(--ease); scrollbar-width: thin; scrollbar-color: #3A3F4E transparent; }
   .bv-pane::-webkit-scrollbar { display: block; width: 8px; } .bv-pane::-webkit-scrollbar-thumb { background: #3A3F4E; border-radius: 8px; }
   .bv-pane.reading { width: min(620px, 46vw); }
-  #brainOv:has(.bv-pane.reading) .bv-top { max-width: calc(100vw - min(620px, 46vw) - 70px); }
-  .bv-top { max-width: calc(100vw - 420px); }
+  #brainOv:has(.bv-pane.reading) .bv-top { max-width: calc(100% - min(620px, 46vw) - 70px); }
+  .bv-top { max-width: calc(100% - 420px); }
   .bv-facts { font-size: 12px; line-height: 1.5; color: #A9A7A0; margin: 2px 0 14px; }
   .bv-facts b { color: #E8E6DF; font-weight: 600; }
   .bv-note { border-top: 1px solid rgba(253,255,248,.1); padding-top: 12px; margin-top: 4px; }

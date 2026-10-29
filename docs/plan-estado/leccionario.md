@@ -1,0 +1,22 @@
+# Cuaderno de lecciones (orquestador)
+
+Formato: fecha · síntoma → causa → arreglo → cómo evitarlo → carril/PR.
+
+- **2026-10-29 · (i)** Un `check` rojo con muchas pruebas de humo fallando en cadena tras un solo timeout, y que pasa en el otro job del mismo commit → intermitente (carga del runner). Arreglo: repetir el job UNA vez (`rerun_failed_jobs`). Evitar: nunca saltar ni quitar una prueba. · transversal
+- **2026-10-29 · (ii)** `contenido-siglas.test.mjs` y otras pruebas de navegador fallan en local → `dist/` viejo. Arreglo: `node build.mjs` antes de probar. · transversal
+- **2026-10-29 · (iii)** `contenido-migracion.test.mjs` («más de 120 filas») falló una vez en CI bajo carga y pasa sola → intermitente. Re-run una vez; si repite, abrir issue. · carril C
+- **2026-10-29 · (iv)** El log completo de un job no se descarga por red desde la sesión (proxy 403 al blob). Usar `get_job_logs` con `return_content` y `tail_lines` grande; buscar «not ok» / «✗».
+- **2026-10-29 · (v)** `per_page` no limita `list_workflow_runs`: consultar un run por id.
+- **2026-10-29 · (vi)** Al fusionar un PR, el resto queda probado contra un `main` viejo → actualizar la rama (`update_pull_request_branch`) y esperar CI nuevo antes de fusionar los que tocan `check.mjs`/`package.json`/`build.mjs`. Carril J siempre el último.
+- **2026-10-29 · (vii)** `dist/command-centre-v2.html` y `src/braingraph.js` se regeneran solos: no se commitean.
+- **2026-10-29 · (viii)** `.github/workflows/*` no se pueden probar en local; el entorno de GitHub `produccion` (SEG-07) debe existir sin revisores para que los despliegues sigan solos. El PR dependabot #62 (checkout/setup-node v7) toca TODOS los workflows: fusionarlo solo con CI verde y vigilando el primer despliegue.
+- **2026-10-29 · (ix)** El despliegue solo se dispara si el PR toca `cloudflare/**`.
+- **2026-10-29 · (x)** Un clon con índice obsoleto da avisos falsos del hook «cambios sin commitear»: usar worktrees limpios.
+- **2026-10-29 · (xi)** «No hay Chromium en este entorno» puede ser falso: hay uno en /opt/pw-browsers/chromium (usar `executablePath` si el proyecto pinea otra versión).
+- **2026-10-29 · (xii)** El tope de bytes de la página ya no vive literal en `check.mjs` (grep de 2306867 no lo halla); la cifra figura en los docs (tope 2.306.867 B, gzip 716.800). Medir con `node build.mjs` antes de sumar bytes entre ramas; margen tras Fase 0.0: ~141 KB brutos.
+- **2026-10-29 · (xiii)** Pasada 2: al tocar `lib/avisos.js` (único escritor de avisos), el carril H lo hace de forma aditiva (proyección tras guardar, atrapa errores, flag apagado). Patrón correcto para tablas D1 nuevas: migración en el rango del carril + poda en `mantenimiento.js` + entrada en `TABLAS` de `auditoria-transversal.test.mjs` en el MISMO PR. · carril H #66
+- **2026-10-29 · (xiv)** Un carril puede declarar un archivo grande en común (`cloudflare/tests/auditoria-transversal.test.mjs`, `modulos/index.js`) sin que sea conflicto hoy: se vuelve conflicto cuando dos ramas añaden una tabla o un módulo en la misma línea. Fusionar H y las ramas con tablas nuevas de una en una, actualizando rama entre cada una.
+- **2026-10-29 · (xv)** Pruebas de navegador con escena 3D (carril B): en el Chromium sin GPU la escena three.js va por software y es lenta/inestable; esperar a un estado concreto (selector, evento) en vez de tiempos fijos, y no medir rendimiento de la escena en CI. · carril B #69/#70
+- **2026-10-29 · (xvi)** Foco tras plegar Dimitri: al ocultar/plegar un panel, devolver el foco al control que lo abrió (y no dejarlo en un nodo oculto); si no, Tab y Escape dejan de funcionar. Probar con teclado, no solo con clic. · carril B
+- **2026-10-29 · (xvii)** `dist/command-centre-v2.html` y `src/braingraph.js` SÍ están rastreados por git en main (son snapshots viejos: el de main mide 2.303.817 B y el real tras la Fase 0.0 es ~2.165.080). Por eso `git add -A` los mete en el PR y generan conflicto entre ramas (la rama A ya los lleva modificados). Añadir archivos por nombre (`git add <ruta>`), nunca `-A`; si chocan, quedarse con cualquiera y reconstruir con `node build.mjs`. · carriles A, B
+- **2026-10-29 · (xviii)** PR apilado (#70 sobre #69): fusionar primero la base y luego retargetear/actualizar el apilado; si se fusiona la base con «squash» el apilado hereda commits duplicados. · carril B

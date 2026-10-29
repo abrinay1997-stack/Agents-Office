@@ -39,13 +39,13 @@ import { setRoot, startIndex } from './media/galeria.mjs';
 import { setFiles, loadJobs } from './media/trabajos.mjs';
 
 export { ENGINES, NAMES, DEFAULT_MODELS, KINDS, TIER_NAME, hfSchemas, hfRoute, hfBody, model, models, editModels, engines, providers, defaultModel, defaultProvider, estimate, capsOf } from './media/catalogo.mjs';
-export { dir, folders, folderOf, addFolder, renameFolder, removeFolder, moveTo, ready, list, PAGE_MAX, query, resolve, item, update, trash, restore, BIN_DAYS, trashList, trashFile, purge, upload, zip, markUsed, wasUsed } from './media/galeria.mjs';
+export { dir, folders, folderOf, addFolder, renameFolder, removeFolder, moveTo, arbolOn, moveFolder, reorderFolders, planFolderDelete, removeFolderTree, undoFolderDelete, ready, list, PAGE_MAX, query, resolve, item, update, trash, restore, BIN_DAYS, trashList, trashFile, purge, upload, zip, markUsed, wasUsed } from './media/galeria.mjs';
 export { veoRequest } from './media/motores.mjs';
 export { setHooks, budget, checkBudget, charge, setLimits, jobs, job, submit, wait, cancel, retry, forget, markAttached, generate, ratioOf, editRequest, needsNote, writeStudioNote, refsLine, learnId, learnArgs } from './media/trabajos.mjs';
 
 export function configure(officeCfg, brainPath, dataDir, h = {}) {
   const m = officeCfg.media || {};
-  S.cfg = { dailyLimit: 40, maxPerRequest: 8, concurrency: 3, ...m, models: { ...DEFAULT_MODELS, ...(m.models || {}) } };
+  S.cfg = { dailyLimit: 40, maxPerRequest: 8, concurrency: 3, ...m, models: { ...DEFAULT_MODELS, ...(m.models || {}) }, ...(officeCfg.estudio?.carpetasArbol === true ? { carpetasArbol: true } : {}) }; // Fase 1.a: carpetas en árbol, apagado por defecto
   setRoot(path.join(brainPath, 'Agents Office', 'media'));
   setFiles(dataDir, h);
   setCustom(m.custom); // your own models: office.config.json → media.custom

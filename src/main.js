@@ -973,9 +973,11 @@ function enterFocus(k, pendingAgentId) {
 // V4.5 (27 Sep 2026): the centre comes to rest in the room the page leaves it — between Dimitri's chat (#subOv, on the left,
 // when it is open) and the task panel (on the right) — the way a department sits beside its own chat. The chat counts only
 // when the room beside it can hold the centre (a tablet with the panel open has none: the centre stays under the chat).
+let subAncho = null; // Fase 3: la medida real de Dimitri, del evento ao:sub-ancho (src/dimitri-ancho.js); chatLeft corre en cada fotograma y no lee el DOM
+addEventListener('ao:sub-ancho', e => { subAncho = e.detail; });
 function chatLeft(rightPx) {
-  if (innerWidth < 900 || !document.body.classList.contains('subOpen')) return 0;
-  const l = Math.max(340, Math.min(440, innerWidth * 0.34)); // V4.8: the panel is pinned to the left, var(--subW) wide (src/css/dimitri.css)
+  if (innerWidth < 900 || !document.body.classList.contains('subOpen') || subAncho?.ampliado) return 0;
+  const l = subAncho ? subAncho.w : Math.max(340, Math.min(440, innerWidth * 0.34)); // the panel is pinned to the left, var(--subW) wide (src/css/dimitri.css)
   return innerWidth - rightPx - l >= 240 ? l : 0;
 }
 function centreTarget(zoom) {

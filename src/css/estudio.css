@@ -242,12 +242,12 @@ body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414;
 #studioOv.st-basico .st-foot { grid-template-columns: 1fr; }
 /* Fase 6 (modo avanzado) */
 /* IMG-42: con sitio, el banco y el escenario 3D son un panel al lado de la galería: tu foto y los resultados siguen a la vista */
-@media (min-width: 1100px) {
-  #studioOv.st-hoja:not(.st-hoja-oculta):not(.st-hoja-max) .st-gal > :not(.st-bank):not(.st-rsz):not(.st-hmandos):not(.st-hver) { margin-right: var(--st-der, 460px); }
-  #studioOv.st-hoja .st-gal > .st-bank { left: auto; width: var(--st-der, 460px); box-shadow: -12px 0 30px rgba(21,20,20,.08); }
+/* Fase 3 (29 oct 2026): «con sitio» es el ancho de la VISTA (data-ancho, src/studio-paneles.js), no el de la ventana: Dimitri puede ocupar una parte */
+  #studioOv[data-ancho="ancho"].st-hoja:not(.st-hoja-oculta):not(.st-hoja-max) .st-gal > :not(.st-bank):not(.st-rsz):not(.st-hmandos):not(.st-hver) { margin-right: var(--st-der, 460px); }
+  #studioOv[data-ancho="ancho"].st-hoja .st-gal > .st-bank { left: auto; width: var(--st-der, 460px); box-shadow: -12px 0 30px rgba(21,20,20,.08); }
   /* 6 oct 2026 (el dueño): el compositor se ensancha arrastrando su borde; su tamaño de siempre es el más angosto */
-  #studioOv:not(.st-folded) .st-body { grid-template-columns: var(--st-izq, 420px) minmax(0, 1fr); }
-}
+  @media (min-width: 901px) { #studioOv:not([data-ancho="estrecho"]):not(.st-folded) .st-body { grid-template-columns: var(--st-izq, 420px) minmax(0, 1fr); } }
+
 /* los bordes que se arrastran (studio-paneles.js): una línea fina que se marca al pasar o con el foco */
 #studioOv .st-gen { position: relative; }
 #studioOv .st-rsz { position: absolute; top: 0; bottom: 0; width: 24px; z-index: 12; cursor: col-resize; touch-action: none; display: flex; justify-content: center; }

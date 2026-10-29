@@ -3,12 +3,15 @@
 // las carpetas del dueño en el documento `estudio.carpetas`. Otros módulos (Contenido, Anuncios) leen de R2 con esas claves.
 // Lo puro (nombres, bytes, filtros, zip) es el mismo que usa la oficina local: media/galeria-core.mjs y src/galeria-filtro.js.
 import * as GF from '../../../../src/galeria-filtro.js';
-import { slug, dims, AUDIO_EXT, kindOfExt, FILE_RE, cleanName, nombreBase, BIN_RE, BIN_DAYS, UPLOAD, MAGIC, sniffExt, MEDIA_MIME, zipFiles } from '../../../../media/galeria-core.mjs';
+import { S } from '../../../../media/estado.mjs';
+import { normalizarCarpetas, arbol, carpetaNueva, nombreEntreHermanos, validarMover, reordenar, descendientes, planBorrado, confirmaBorrado, textoBorrado, topeCarpetas, UNDO_CARPETA_MS, UNDO_GRACIA_MS, slug, dims, AUDIO_EXT, kindOfExt, FILE_RE, cleanName, nombreBase, BIN_RE, BIN_DAYS, UPLOAD, MAGIC, sniffExt, MEDIA_MIME, zipFiles } from '../../../../media/galeria-core.mjs';
 import { leerDoc, mutarDoc, guardarDoc } from '../almacen.js';
 
 export { slug, MEDIA_MIME, BIN_DAYS, AUDIO_EXT };
 export const PAGE_MAX = 600;
-const CARPETAS = 'estudio.carpetas', REV = 'estudio.rev';
+const CARPETAS = 'estudio.carpetas', REV = 'estudio.rev', BORRADAS = 'estudio.carpetas-borradas';
+/** Fase 1.a: ¿están encendidas las carpetas en árbol? (estudio.config → carpetasArbol; prepararEstudio lo deja en S.cfg al empezar cada petición) */
+export const arbolOn = () => S.cfg.carpetasArbol === true;
 export const ZONA = (env) => (typeof env?.AO_ZONA === 'string' && env.AO_ZONA) || 'America/Panama'; // el día del dueño, no el de UTC
 
 /** Las partes de la fecha del dueño (año, mes, día, hora…) en su zona horaria. */
@@ -83,19 +86,38 @@ export async function markUsed(db, file, how) { if (!USES.includes(how)) return 
 export const wasUsed = (it) => !!it && (it.fav === true || (Array.isArray(it.used) && it.used.length > 0));
 
 /* ---------- carpetas: etiquetas del dueño, no directorios; el archivo no se mueve ---------- */
-async function leerCarpetas(db) { const { valor } = await leerDoc(db, CARPETAS, { folders: [] }); return Array.isArray(valor.folders) ? valor.folders.filter((f) => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; }
-export const carpetas = async (db, items, fl) => { fl = fl || await leerCarpetas(db); const count = new Map(); for (const it of items || []) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1); return fl.map((f) => ({ ...f, n: count.get(f.id) || 0 })); };
+async function leerCarpetas(db) { const { valor } = await leerDoc(db, CARPETAS, { folders: [] }); const l = Array.isArray(valor.folders) ? valor.folders.filter((f) => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; return arbolOn() ? normalizarCarpetas(l) : l; }
+const nuevoId = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const guardaLista = (d, l) => ({ ...(arbolOn() ? { v: 2 } : {}), folders: l });
+export const carpetas = async (db, items, fl) => { fl = fl || await leerCarpetas(db); if (arbolOn()) return arbol(items, fl); const count = new Map(); for (const it of items || []) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1); return fl.map((f) => ({ ...f, n: count.get(f.id) || 0 })); };
 export async function folderOf(db, id) { return (await leerCarpetas(db)).find((f) => f.id === id) || null; }
 async function todas(db) { const { results } = await db.prepare('select json from estudio_archivos where papelera_at is null order by at desc, file desc').all(); return results.map(parse); }
-export async function resumenCarpetas(db) { return carpetas(db, await todas(db)); }
-export async function addFolder(db, name) {
+/** Los recuentos por carpeta con UNA consulta agrupada (índice estudio_archivos_carpeta), sin leer todas las fichas. */
+async function conteosPorCarpeta(db) {
+  const { results } = await db.prepare(`select json_extract(json, '$.folder') f, count(*) n from estudio_archivos where papelera_at is null and json_extract(json, '$.folder') is not null group by 1`).all();
+  return new Map(results.map((r) => [r.f, r.n]));
+}
+export async function resumenCarpetas(db) { if (arbolOn()) return arbol(null, await leerCarpetas(db), { conteos: await conteosPorCarpeta(db) }); return carpetas(db, await todas(db)); }
+/** `opts` (solo con el árbol encendido): { parentId, tipo, color, creadaPor, loteId, auto }. Un padre que no existe se trata como raíz. */
+export async function addFolder(db, name, opts = {}) {
+  if (arbolOn()) {
+    let nueva;
+    await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
+      const l = normalizarCarpetas(d.folders || []), t = topeCarpetas(l.length, true); if (!t.ok) throw new Error(`como mucho ${t.max} carpetas (ya hay ${t.n})`);
+      const por = opts.creadaPor || 'you';
+      nueva = carpetaNueva(l, { id: nuevoId(), name, parentId: opts.parentId || null, tipo: opts.tipo, color: opts.color, creadaPor: por, loteId: opts.loteId, auto: opts.auto === true || por !== 'you' });
+      if (t.aviso) nueva = { ...nueva, aviso: t.aviso };
+      const { aviso, ...limpia } = nueva; return guardaLista(d, [...l, limpia]);
+    });
+    await subirRev(db); return nueva;
+  }
   const nm = cleanName(name); if (!nm) throw new Error('ponle un nombre a la carpeta');
   let nueva;
   await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
     const l = d.folders || [];
     if (l.some((f) => f.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
     if (l.length >= 200) throw new Error('como mucho 200 carpetas');
-    nueva = { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: nm, at: Date.now() };
+    nueva = { id: nuevoId(), name: nm, at: Date.now() };
     return { folders: [...l, nueva] };
   });
   await subirRev(db); return nueva;
@@ -105,10 +127,106 @@ export async function renameFolder(db, id, name) {
   let hecha;
   await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
     const l = d.folders || [], f = l.find((x) => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
-    if (l.some((x) => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
-    f.name = nm; hecha = { ...f }; return { folders: l };
+    if (arbolOn()) f.name = nombreEntreHermanos(l, f.parentId ?? null, nm, { excluir: id }); // único entre hermanos
+    else { if (l.some((x) => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`); f.name = nm; }
+    hecha = { ...f }; return guardaLista(d, l);
   });
   await subirRev(db); return hecha;
+}
+/** 1.a (solo con el árbol): mover una carpeta con todo lo que lleva a otro padre (null = raíz). Ciclo → error 422 (codigo); los archivos no se tocan. */
+export async function moveFolder(db, id, parentId) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  let hecha;
+  await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
+    const l = normalizarCarpetas(d.folders || []), v = validarMover(l, id, parentId || null); if (!v.ok) throw Object.assign(new Error(v.error), { codigo: v.codigo });
+    const f = l.find((x) => x.id === id), np = parentId || null;
+    if ((f.parentId ?? null) !== np) {
+      f.name = nombreEntreHermanos(l, np, f.name, { excluir: id }); f.parentId = np;
+      const h = l.filter((x) => x.id !== id && (x.parentId ?? null) === np); f.orden = h.length ? Math.max(...h.map((x) => x.orden)) + 1 : 0;
+    }
+    hecha = { ...f }; return guardaLista(d, l);
+  });
+  await subirRev(db); return hecha;
+}
+/** 1.a (solo con el árbol): el orden de las carpetas de un nivel. */
+export async function reorderFolders(db, parentId, ids) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
+    const l = normalizarCarpetas(d.folders || []); if (parentId && !l.some((f) => f.id === parentId)) throw new Error('esa carpeta ya no existe');
+    return guardaLista(d, reordenar(l, parentId || null, ids));
+  });
+  await subirRev(db); return resumenCarpetas(db);
+}
+/** Los archivos (que no están en la papelera) de estas carpetas, de 90 en 90 (D1: 100 parámetros por sentencia). → [file] */
+async function archivosDe(db, idsCarpetas) {
+  const ids = [...idsCarpetas], out = [];
+  for (let i = 0; i < ids.length; i += 90) {
+    const lote = ids.slice(i, i + 90);
+    const { results } = await db.prepare(`select file from estudio_archivos where papelera_at is null and json_extract(json, '$.folder') in (${lote.map(() => '?').join(',')}) order by file`).bind(...lote).all();
+    for (const r of results) out.push(r.file);
+  }
+  return out;
+}
+/** 1.a: lo que se llevaría borrar una carpeta con todo lo que tiene (sin tocar nada). */
+export async function planFolderDelete(db, id) {
+  const l = await leerCarpetas(db), f = l.find((x) => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
+  const set = descendientes(l, id), archivos = await archivosDe(db, set);
+  const plan = { carpetas: [...set], archivos, subcarpetas: Math.max(0, set.size - 1), nArchivos: archivos.length };
+  return { ...plan, nombre: f.name, texto: textoBorrado(f.name, plan) };
+}
+/** Pone la ficha de estos archivos (de 90 en 90) en `papelera_at = stamp` / de vuelta. Devuelve cuántos cambiaron. */
+async function aPapelera(db, files, stamp) {
+  let n = 0;
+  for (let i = 0; i < files.length; i += 90) { const lote = files.slice(i, i + 90); const r = await db.prepare(`update estudio_archivos set papelera_at = ? where papelera_at is null and file in (${lote.map(() => '?').join(',')})`).bind(stamp, ...lote).run(); n += r.meta?.changes ?? 0; }
+  return n;
+}
+async function dePapelera(db, files, stamp) {
+  let n = 0;
+  for (let i = 0; i < files.length; i += 90) { const lote = files.slice(i, i + 90); const r = await db.prepare(`update estudio_archivos set papelera_at = null where papelera_at = ? and file in (${lote.map(() => '?').join(',')})`).bind(stamp, ...lote).run(); n += r.meta?.changes ?? 0; }
+  return n;
+}
+/**
+ * 1.a (decidido por el dueño, 29 oct): borrar una carpeta borra TODO su contenido — subcarpetas y archivos; los archivos van a la papelera (30 días).
+ * Sin `confirmar` no toca nada y devuelve { pendiente, confirmar:{archivos,subcarpetas}, texto, usadas }. Con un `confirmar` que ya no coincide, { desfase }.
+ * `usadas(files)` → Map file → piezas de Contenido que lo usan: si hay alguna y no se pide `dejar`, { enUso } sin tocar nada; con `dejar` esos archivos
+ * quedan en «Sin carpeta» y el resto se borra. → { ok, carpetas, archivos, dejadas, deshacer:{token,hasta} }
+ */
+export async function removeFolderTree(db, id, { confirmar = null, usadas = async () => new Map(), dejar = false } = {}) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const p = await planFolderDelete(db, id);
+  const info = { nombre: p.nombre, confirmar: { archivos: p.nArchivos, subcarpetas: p.subcarpetas }, texto: p.texto };
+  const uso = await usadas(p.archivos), enUso = [...uso].filter(([, v]) => v && v.length).map(([file, piezas]) => ({ file, piezas }));
+  if (!confirmar) return { pendiente: true, ...info, usadas: enUso };
+  if (!confirmaBorrado(p, confirmar)) return { desfase: true, ...info, usadas: enUso };
+  if (enUso.length && !dejar) return { enUso: true, ...info, usadas: enUso };
+  const quedan = new Set(enUso.map((u) => u.file)), van = p.archivos.filter((f) => !quedan.has(f)), stamp = Date.now();
+  // los archivos usados se quedan en «Sin carpeta» (antes de borrar la carpeta, para que ninguno apunte a una que ya no está)
+  for (const f of quedan) await update(db, f, { folder: null });
+  await aPapelera(db, van, stamp);
+  const idsC = new Set(p.carpetas); let borradas = [];
+  await mutarDoc(db, CARPETAS, { folders: [] }, (d) => { const l = normalizarCarpetas(d.folders || []); borradas = l.filter((x) => idsC.has(x.id)); return guardaLista(d, l.filter((x) => !idsC.has(x.id))); });
+  const token = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await mutarDoc(db, BORRADAS, { borrados: [] }, (d) => ({ borrados: [...(d.borrados || []).filter((u) => stamp - u.at < BIN_DAYS * 864e5), { token, at: stamp, carpetas: borradas, archivos: van }].slice(-10) }));
+  await subirRev(db);
+  return { ok: true, carpetas: borradas.length, archivos: van.length, dejadas: quedan.size, deshacer: { token, hasta: stamp + UNDO_CARPETA_MS } };
+}
+/** DESHACER del borrado de una carpeta (30 s): vuelven la carpeta, sus subcarpetas (mismos ids) y sus archivos. */
+export async function undoFolderDelete(db, token) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const { valor } = await leerDoc(db, BORRADAS, { borrados: [] }), u = (valor.borrados || []).find((x) => x.token === String(token || ''));
+  if (!u) throw new Error('ya no se puede deshacer');
+  if (Date.now() - u.at > UNDO_CARPETA_MS + UNDO_GRACIA_MS) throw new Error('pasaron más de 30 segundos: recupera los archivos desde la papelera');
+  let vuelven = 0;
+  await mutarDoc(db, CARPETAS, { folders: [] }, (d) => {
+    const l = normalizarCarpetas(d.folders || []), ya = new Set(l.map((x) => x.id)), nuevas = [];
+    for (const c of u.carpetas) { if (ya.has(c.id)) continue; const padre = c.parentId && (ya.has(c.parentId) || u.carpetas.some((x) => x.id === c.parentId)) ? c.parentId : null; nuevas.push({ ...c, parentId: padre }); }
+    const todo = [...l, ...nuevas]; for (const c of nuevas) c.name = nombreEntreHermanos(todo.filter((x) => x !== c), c.parentId, c.name, { auto: true });
+    vuelven = nuevas.length; return guardaLista(d, todo);
+  });
+  const n = await dePapelera(db, u.archivos, u.at);
+  await mutarDoc(db, BORRADAS, { borrados: [] }, (d) => ({ borrados: (d.borrados || []).filter((x) => x.token !== u.token) }));
+  await subirRev(db);
+  return { ok: true, carpetas: vuelven, archivos: n };
 }
 /** La carpeta se va; sus archivos se quedan, sin carpeta. → cuántos tenía */
 export async function removeFolder(db, id) {
@@ -134,7 +252,7 @@ export async function moveTo(db, files, folder) {
 /* ---------- consulta paginada (como media/galeria.mjs → query) ---------- */
 export async function query(db, { q = '', filter = 'all', folder = 'all', kind = null, before = null, offset = 0, n = 120, upto = null, extra = null, exclude = null } = {}) {
   const items = await todas(db), fl = await leerCarpetas(db), ids = new Set(fl.map((f) => f.id));
-  const skipF = new Set(Array.isArray(exclude) ? exclude.slice(0, 50).map(String) : []), m0 = GF.matcher({ q, filter, folder, kind }, ids, extra);
+  const skipF = new Set(Array.isArray(exclude) ? exclude.slice(0, 50).map(String) : []), m0 = GF.matcher({ q, filter, folder, kind, sub: arbolOn() && ids.has(folder) ? descendientes(fl, folder) : null }, ids, extra);
   const ok = skipF.size ? (it) => !skipF.has(it.file) && m0(it) : m0, cur = GF.parseCursor(before);
   const size = Math.max(0, Math.min(PAGE_MAX, Number.isFinite(+n) ? Math.floor(+n) : 120));
   let skip = Math.max(0, Math.floor(+offset || 0)), total = 0, after = 0, hit = -1, far = null, farAt = -1; const page = [];

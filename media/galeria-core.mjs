@@ -55,3 +55,123 @@ export function zipFiles(files, d = new Date()) {
   e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(files.length, 8); e.writeUInt16LE(files.length, 10); e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);
   return { buf: Buffer.concat([...parts, cd, e]), count: files.length };
 }
+
+/* ---------- Carpetas en árbol (Fase 1.a, 29 oct 2026; plan §3.1) ----------
+   Lo PURO, igual en la oficina local y en la nube: ninguna función toca disco ni base. Una carpeta es
+   { id, name, parentId|null, orden, tipo?, color?, creadaPor?, creada?, loteId? }. La ruta se CALCULA al leer, nunca se guarda.
+   Un archivo conserva su campo `folder` (el id de la carpeta hoja): ningún archivo se mueve en disco ni en R2.
+   Un folders.json viejo ({id,name,at}) es válido: todas raíces, orden = su posición (migración perezosa). */
+export const MAX_PROFUNDIDAD = 8;
+export const MAX_CARPETAS = 500;        // con el árbol encendido
+export const MAX_CARPETAS_PLANO = 200;  // el tope de siempre (flag apagado)
+export const AVISO_CARPETAS = 490;
+export const TIPOS_CARPETA = ['proyecto', 'carpeta', 'lote', 'carrusel'];
+export const CREADA_POR = ['you', 'agent', 'dimitri', 'lote'];
+/** Para comparar nombres: sin mayúsculas ni acentos. */
+export const nombreClave = n => cleanName(n).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const ORD = (a, b) => (a.orden - b.orden) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0) || (a.id < b.id ? -1 : 1);
+
+/** Completa lo que falta (padre, orden) y corrige lo imposible: un padre que no existe, que es ella misma o que forma un ciclo pasa a raíz. */
+export function normalizarCarpetas(lista) {
+  const l = (Array.isArray(lista) ? lista : []).map((f, i) => ({ ...f, parentId: f.parentId ?? null, orden: Number.isFinite(+f.orden) ? +f.orden : i }));
+  const por = new Map(l.map(f => [f.id, f]));
+  for (const f of l) if (f.parentId && (f.parentId === f.id || !por.has(f.parentId))) f.parentId = null;
+  for (const f of l) { // un ciclo: se rompe en la carpeta donde se detecta
+    let p = f.parentId, pasos = 0;
+    while (p && pasos++ <= l.length) { if (p === f.id) { f.parentId = null; break; } p = por.get(p)?.parentId ?? null; }
+  }
+  return l;
+}
+/** Los hijos directos de una carpeta (null = raíz), en su orden. */
+export const hijosDe = (lista, parentId = null) => lista.filter(f => (f.parentId ?? null) === (parentId ?? null)).sort(ORD);
+/** La carpeta y todas las que cuelgan de ella. → Set de ids (vacío si no existe) */
+export function descendientes(lista, id) {
+  const out = new Set(); if (!lista.some(f => f.id === id)) return out;
+  const hij = new Map(); for (const f of lista) { const p = f.parentId ?? null; if (!hij.has(p)) hij.set(p, []); hij.get(p).push(f.id); }
+  const pila = [id]; while (pila.length) { const x = pila.pop(); if (out.has(x)) continue; out.add(x); for (const h of hij.get(x) || []) pila.push(h); }
+  return out;
+}
+/** Los ids desde la raíz hasta la carpeta (ella incluida); [] si no existe. */
+export function rutaIds(lista, id) {
+  const por = new Map(lista.map(f => [f.id, f])), out = [];
+  for (let x = id, n = 0; x && por.has(x) && n <= lista.length; x = por.get(x).parentId ?? null, n++) out.unshift(x);
+  return por.has(id) ? out : [];
+}
+/** Cuántos niveles tiene el subárbol de una carpeta (ella sola = 1). */
+export function alturaSubarbol(lista, id) {
+  const hij = new Map(); for (const f of lista) { const p = f.parentId ?? null; if (!hij.has(p)) hij.set(p, []); hij.get(p).push(f.id); }
+  const h = (x, vistos) => { if (vistos.has(x)) return 0; vistos.add(x); let m = 0; for (const c of hij.get(x) || []) m = Math.max(m, h(c, vistos)); return m + 1; };
+  return h(id, new Set());
+}
+/** ¿Se puede poner `id` dentro de `nuevoPadre` (null = raíz)? → { ok:true } o { ok:false, codigo, error } */
+export function validarMover(lista, id, nuevoPadre, max = MAX_PROFUNDIDAD) {
+  const f = lista.find(x => x.id === id); if (!f) return { ok: false, codigo: 'no-existe', error: 'esa carpeta ya no existe' };
+  const np = nuevoPadre || null;
+  if (np && !lista.some(x => x.id === np)) return { ok: false, codigo: 'padre', error: 'la carpeta de destino ya no existe' };
+  if (np && descendientes(lista, id).has(np)) return { ok: false, codigo: 'ciclo', error: 'no puedes meter una carpeta dentro de sí misma' };
+  const base = np ? rutaIds(lista, np).length : 0;
+  if (base + alturaSubarbol(lista, id) > max) return { ok: false, codigo: 'profundidad', error: `las carpetas llegan como mucho a ${max} niveles` };
+  return { ok: true };
+}
+/** El nombre entre hermanos: único sin mayúsculas ni acentos. Con `auto`, uno repetido recibe « (2)», « (3)»… (lotes y agentes); si no, lanza. */
+export function nombreEntreHermanos(lista, parentId, nombre, { excluir = null, auto = false } = {}) {
+  const nm = cleanName(nombre); if (!nm) throw new Error('ponle un nombre a la carpeta');
+  const usados = new Set(lista.filter(f => f.id !== excluir && (f.parentId ?? null) === (parentId ?? null)).map(f => nombreClave(f.name)));
+  if (!usados.has(nombreClave(nm))) return nm;
+  if (!auto) throw new Error(`ya hay una carpeta «${nm}»${parentId ? ' ahí dentro' : ''}`);
+  for (let n = 2; n < 1000; n++) { const c = cleanName(`${nm.slice(0, 60 - String(n).length - 3).trim()} (${n})`); if (!usados.has(nombreClave(c))) return c; }
+  throw new Error('no encontré un nombre libre para la carpeta');
+}
+/** El tope de carpetas: { ok, n, max, aviso? } */
+export function topeCarpetas(n, arbol = true) {
+  const max = arbol ? MAX_CARPETAS : MAX_CARPETAS_PLANO;
+  return { ok: n < max, n, max, ...(arbol && n >= AVISO_CARPETAS && n < max ? { aviso: `ya hay ${n} de ${max} carpetas` } : {}) };
+}
+/** Una carpeta nueva con todos sus campos (los de lotes y agentes pasan por las opciones). */
+export function carpetaNueva(lista, { id, name, parentId = null, tipo, color, creadaPor = 'you', loteId, ahora = Date.now(), auto = false } = {}) {
+  const padre = parentId && lista.some(f => f.id === parentId) ? parentId : null; // un padre que no existe se trata como raíz
+  if (padre && rutaIds(lista, padre).length >= MAX_PROFUNDIDAD) throw new Error(`las carpetas llegan como mucho a ${MAX_PROFUNDIDAD} niveles`);
+  const nm = nombreEntreHermanos(lista, padre, name, { auto });
+  const hermanos = hijosDe(lista, padre), orden = hermanos.length ? Math.max(...hermanos.map(h => h.orden)) + 1 : 0;
+  return { id, name: nm, parentId: padre, orden, at: ahora, ...(TIPOS_CARPETA.includes(tipo) ? { tipo } : {}), ...(typeof color === 'string' && /^#[0-9a-f]{3,8}$/i.test(color) ? { color } : {}), creadaPor: CREADA_POR.includes(creadaPor) ? creadaPor : 'you', ...(loteId ? { loteId: String(loteId).slice(0, 60) } : {}) };
+}
+/** Pone `ids` (hijos de `parentId`) en ese orden; los demás hijos siguen detrás. → la lista nueva */
+export function reordenar(lista, parentId, ids) {
+  const hij = hijosDe(lista, parentId), ok = new Set(hij.map(h => h.id));
+  const pedidos = [...new Set((Array.isArray(ids) ? ids : []).map(String))];
+  if (pedidos.some(i => !ok.has(i))) throw new Error('una de las carpetas no está en ese nivel');
+  const resto = hij.filter(h => !pedidos.includes(h.id)).map(h => h.id), orden = new Map([...pedidos, ...resto].map((i, k) => [i, k]));
+  return lista.map(f => orden.has(f.id) && (f.parentId ?? null) === (parentId ?? null) ? { ...f, orden: orden.get(f.id) } : f);
+}
+/**
+ * El árbol con sus recuentos, en UNA pasada O(archivos + carpetas). Devuelve las carpetas en orden de recorrido (cada una detrás de su padre):
+ * { id, name, parentId, orden, tipo?, color?, creadaPor?, path:[ids], ruta:'A / B', profundidad, n (directo), nTotal (con las subcarpetas), hijos:[ids] }.
+ * `n` es el de siempre (solo lo que está en esa carpeta). Un archivo cuya carpeta ya no existe no cuenta en ninguna.
+ * `conteos` (Map id→n) sustituye a `items` cuando el recuento ya viene hecho (la nube lo saca con un group by).
+ */
+export function arbol(items, lista, { conteos = null } = {}) {
+  const l = normalizarCarpetas(lista), por = new Map(l.map(f => [f.id, f]));
+  const n = new Map(); if (conteos) { for (const [k, v] of conteos) if (por.has(k)) n.set(k, v); } else for (const it of items || []) if (it.folder && por.has(it.folder)) n.set(it.folder, (n.get(it.folder) || 0) + 1);
+  const hij = new Map(); for (const f of l) { if (!hij.has(f.parentId)) hij.set(f.parentId, []); hij.get(f.parentId).push(f); }
+  for (const v of hij.values()) v.sort(ORD);
+  const out = [];
+  const visita = (f, path, nombres) => {
+    const p = [...path, f.id], nm = [...nombres, f.name], pos = out.length;
+    out.push({ ...f, path: p, ruta: nm.join(' / '), profundidad: p.length, n: n.get(f.id) || 0, nTotal: 0, hijos: (hij.get(f.id) || []).map(h => h.id) });
+    let t = out[pos].n; for (const h of hij.get(f.id) || []) t += visita(h, p, nm);
+    out[pos].nTotal = t; return t;
+  };
+  for (const r of hij.get(null) || []) visita(r, [], []);
+  return out;
+}
+/** Qué se llevaría borrar una carpeta con todo lo que tiene. → { carpetas:[ids], archivos:[file], subcarpetas, nArchivos } (lo que ya está en la papelera no cuenta) */
+export function planBorrado(lista, items, id) {
+  const set = descendientes(normalizarCarpetas(lista), id);
+  const archivos = (items || []).filter(it => it.folder && set.has(it.folder)).map(it => it.file);
+  return { carpetas: [...set], archivos, subcarpetas: Math.max(0, set.size - 1), nArchivos: archivos.length };
+}
+/** ¿Coincide lo que el dueño vio con lo que hay ahora? (así un cambio entre medias no borra de más) */
+export const confirmaBorrado = (plan, c) => !!c && Number.isInteger(c.archivos) && Number.isInteger(c.subcarpetas) && c.archivos === plan.nArchivos && c.subcarpetas === plan.subcarpetas;
+/** El mensaje que ve el dueño en el segundo toque. */
+export const textoBorrado = (nombre, plan) => `Se borrará «${nombre}»${plan.subcarpetas ? ` con ${plan.subcarpetas} ${plan.subcarpetas === 1 ? 'subcarpeta' : 'subcarpetas'}` : ''}${plan.nArchivos ? `${plan.subcarpetas ? ' y' : ' con'} ${plan.nArchivos} ${plan.nArchivos === 1 ? 'archivo' : 'archivos'} (van a la papelera 30 días)` : ''}.`;
+export const UNDO_CARPETA_MS = 30_000, UNDO_GRACIA_MS = 5_000;

@@ -15,3 +15,14 @@ test('si no cabe, cede primero el panel derecho y la galería conserva su mínim
   const b = anchos(1200, 760, 1100);
   assert.equal(b.der, DER.min, 'el derecho no baja de su mínimo'); assert.equal(b.izq, 1200 - DER.min - GALERIA_MIN, 'después cede el compositor');
 });
+
+import { nivelAncho, DESDE, PLEGAR_BAJO } from '../src/studio-paneles.js';
+test('Fase 3: el nivel de la VISTA decide si el banco va al lado y si el compositor se pliega solo', () => {
+  assert.equal(DESDE, IZQ.min + DER.min + GALERIA_MIN);
+  assert.equal(nivelAncho(1512), 'ancho');
+  assert.equal(nivelAncho(1512 - 440), 'medio', 'con Dimitri a 440 el banco ya no cabe al lado: pasa a hoja');
+  assert.equal(nivelAncho(DESDE - 1), 'medio');
+  assert.equal(nivelAncho(PLEGAR_BAJO), 'medio');
+  assert.equal(nivelAncho(PLEGAR_BAJO - 1), 'estrecho');
+  assert.equal(nivelAncho(1024 - 340), 'estrecho', 'a 1024 con Dimitri la vista mide 684: el compositor se pliega');
+});
