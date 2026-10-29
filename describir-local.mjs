@@ -3,13 +3,14 @@
 // (la galería, la reducción de la imagen, la llamada al modelo, la auditoría), así que se prueba sin red ni sharp.
 //   · `plan()` y `leer()` NO gastan nada. `ejecutar()` es lo único que llama a un modelo y exige que quien lo pide haya visto el costo (`confirmarUsd`).
 //   · Cada imagen que sale hacia el modelo pasa por privacidad-core.puedeEnviar (dentro del plan) y deja una línea `envio-tercero` en la auditoría.
-//   · El tope se vigila ANTES de cada tanda con lo ya gastado de verdad (lo que informa el modelo), no solo con la estimación.
+//   · El tope se vigila ANTES de cada tanda con lo ya gastado de verdad (lo que informa el modelo): el de este pedido y, vía `presupuesto`, el del día y el del mes del Estudio (cada tanda se cobra ahí).
+//   · `destino` sale del proveedor real de la oficina y, si su modelo no mira imágenes (`puedeVer`), no se ejecuta.
 //   · Flag: office.config.json → estudio.descripcionesIA (apagado por defecto). Con el flag apagado, lo ya descrito se sigue leyendo.
 import fs from 'node:fs';
 import * as D from './descripcion-core.mjs';
 import { lineaAuditoria } from './media/privacidad-core.mjs';
 
-export function crearDescripcionLocal({ media, copiaParaVer, ask, auditar = () => {}, ahora = () => Date.now(), activo = () => false, topeUsd = () => 1, destino = 'anthropic', modelo = '' }) {
+export function crearDescripcionLocal({ media, copiaParaVer, ask, auditar = () => {}, ahora = () => Date.now(), activo = () => false, topeUsd = () => 1, destino = 'anthropic', modelo = '', puedeVer = () => true, motivoSinVer = 'el modelo de esta oficina no mira imágenes', presupuesto = null }) {
   const bytesDe = f => { try { const p = media.resolve(f.file); return p ? fs.statSync(p).size : 0; } catch { return 0; } };
   /** Las fichas de imagen que pide el llamador: ids explícitos, o una carpeta / búsqueda de la galería. */
   function seleccionar({ ids, folder, q } = {}) {
@@ -23,12 +24,14 @@ export function crearDescripcionLocal({ media, copiaParaVer, ask, auditar = () =
 
   async function ejecutar(sel, { forzar = false, confirmarUsd = 0, por = 'dueno' } = {}) {
     if (!activo()) { const e = new Error('Describir imágenes está apagado (office.config.json → estudio.descripcionesIA).'); e.status = 409; throw e; }
+    if (!puedeVer()) { const e = new Error(`No se puede describir: ${motivoSinVer}.`); e.status = 409; throw e; } // nunca se manda una foto a un modelo que no la mira
     const { plan: p } = plan(sel, { forzar });
     if (!p.pendientes.length) return { descritas: [], yaDescritas: p.yaDescritas, omitidas: p.omitidas, errores: [], gastoUsd: 0, costoEstimadoUsd: 0 };
     if (!(Number(confirmarUsd) >= p.costoEstimadoUsd)) { const e = new Error(`Describir ${p.pendientes.length} imágenes cuesta unos US$${p.costoEstimadoUsd.toFixed(3)} (estimado) y no confirmaste ese costo.`); e.status = 409; e.costoEstimadoUsd = p.costoEstimadoUsd; throw e; }
     const descritas = [], errores = [], omitidas = [...p.omitidas]; let gasto = 0, pausa = null;
     for (const tanda of p.tandas) {
       if (gasto + tanda.length * D.USD_POR_IMAGEN > topeUsd() + 1e-9) { pausa = `se paró al llegar al tope de US$${topeUsd().toFixed(2)} (llevaba US$${gasto.toFixed(3)})`; for (const id of tanda) omitidas.push({ id, motivo: pausa }); continue; }
+      try { presupuesto?.revisar(tanda.length * D.USD_POR_IMAGEN); } catch (e) { pausa = e.message; for (const id of tanda) omitidas.push({ id, motivo: pausa }); continue; } // el tope del día y del mes del Estudio, además del de este pedido
       const imgs = [], ids = [], huellas = {};
       for (const id of tanda) {
         try { const c = await copiaParaVer(media.resolve(id)); imgs.push({ media_type: c.media_type, data: c.data, file: id }); ids.push(id); huellas[id] = D.huellaImagen(media.item(id), bytesDe({ file: id })); }
@@ -38,7 +41,7 @@ export function crearDescripcionLocal({ media, copiaParaVer, ask, auditar = () =
       for (const id of ids) auditar(lineaAuditoria(id, destino, por));
       let r; try { const { system, user } = D.promptDescripcion(ids.length); r = await ask(system, user, { images: imgs, kind: 'vision', maxTokens: 1500, timeout: 120000, tools: false }); }
       catch (e) { for (const id of ids) errores.push({ id, motivo: e.message }); continue; }
-      gasto += Number(r.usd) || 0;
+      gasto += Number(r.usd) || 0; presupuesto?.cobrar(Number(r.usd) || 0);
       const lei = D.leerRespuesta(r.text, ids, { modelo: r.modelId || modelo, ahora: ahora(), huellas });
       for (const [id, f] of lei) { if (f.error) { errores.push({ id, motivo: f.error }); continue; } media.update(id, f); descritas.push(id); } // un campo a la vez nunca pisa lo del dueño: update() mezcla
     }

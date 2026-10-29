@@ -28,3 +28,10 @@
 - ⏳ Bucle de herramientas de lectura de Dimitri en local (`askX` rama sin agente con `--strict-mcp-config` + `--allowedTools` exacto, cargando `dimitri-lectura-mcp.mjs`) y la ficha en `INTERNAL` de safety.
 - ⏳ Nube: `ver_galeria`/`ver_imagen` con expansión `ao_imagen`, trabajo de servidor `describir_imagenes` en tandas de 4 (IMAGES a 1568 px), `json_set` único en D1.
 - ⏳ Ampliar las regex de INJECTION de safety.mjs (K3) y clave `desc` en `dataInjection`; `desc` aún no se muestra en la página (el listado de `/api/media` ya la trae por ser parte de la ficha).
+
+## Correcciones de revisión en #76
+- ✅ `destino` ya no es fijo: `destinoDeProveedor(PROVIDER)` (anthropic · meta-contributor · compatible); la auditoría `envio-tercero` dice el destino real y Meta Contributor no recibe nada.
+- ✅ `ejecutar` se niega (409) si `!PUEDE_VER` (mismo criterio que `prepararVistas`).
+- ✅ Presupuesto: además del tope por pedido, cada tanda pasa por `media.checkBudget` y se cobra con `media.charge` (día y mes del Estudio).
+- ✅ `injectionIn` también al LEER (`descripcionParaPrompt`, `ver_galeria`).
+- ⚠️ Guardas dormidas: `privada` (ficha y carpeta) y `consentimiento_rostros` hoy NO las escribe nada, así que `puedeEnviar` no bloquea en la práctica; y los rostros se envían la primera vez (el conteo `personas` solo existe tras describir). Falta una UI/ajuste que las marque.

@@ -7,6 +7,7 @@
 import readline from 'node:readline';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { injectionIn } from './safety.mjs';
 import { VER_IMAGEN, textoVista, topeDeTarea } from './ver-imagen-core.mjs';
 
 const OFFICE = process.env.AO_OFFICE || 'http://127.0.0.1:4520';
@@ -33,7 +34,7 @@ export async function llamar(name, a = {}) {
     const f = await carpetaId(a.carpeta), n = Math.min(30, a.cantidad || 12);
     const page = await office(`/api/media?n=${n}${a.buscar ? '&q=' + encodeURIComponent(a.buscar) : ''}${f ? '&folder=' + encodeURIComponent(f) : ''}`);
     const items = (page.items || []).slice(0, n); if (!items.length) return 'Nada en la galería con eso.';
-    return items.map(it => `${it.file} · ${it.kind || 'image'}${it.desc && !it.desc_sospecha ? ` · ${String(it.desc).slice(0, 140)}` : it.desc_sospecha ? ' · (descripción retenida)' : ''}`).join('\n') + (page.total > items.length ? `\n(${items.length} de ${page.total}; afina la búsqueda)` : '');
+    return items.map(it => `${it.file} · ${it.kind || 'image'}${it.desc && !it.desc_sospecha && !injectionIn(`${it.desc} ${it.texto_visible || ''}`) ? ` · ${String(it.desc).slice(0, 140)}` : it.desc ? ' · (descripción retenida)' : ''}`).join('\n') + (page.total > items.length ? `\n(${items.length} de ${page.total}; afina la búsqueda)` : '');
   }
   if (name === 'ver_descripciones') {
     const f = await carpetaId(a.carpeta);

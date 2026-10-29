@@ -65,7 +65,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
-import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; // 29 oct 2026: 11.1
+import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -562,7 +562,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   });
 }
 const ask = async (system, user, opts) => (await askX(system, user, { tools: false, ...opts })).text;
-const descripcionLocal = crearDescripcionLocal({ media, copiaParaVer, ask: (sy, u, o) => askX(sy, u, o), auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, activo: () => cfg.estudio?.descripcionesIA === true, topeUsd: () => +cfg.estudio?.descripcionesTopeUsd || 1, modelo: cfg.model }); // 11.1
+const descripcionLocal = crearDescripcionLocal({ media, copiaParaVer, ask: (sy, u, o) => askX(sy, u, o), auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, activo: () => cfg.estudio?.descripcionesIA === true, topeUsd: () => +cfg.estudio?.descripcionesTopeUsd || 1, modelo: cfg.model, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`, presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) } }); // 11.1
 function parseJSON(text) {
   const s = text.replace(/```json|```/g, ''); const a = s.indexOf('{'), b = s.lastIndexOf('}');
   return JSON.parse(s.slice(a, b + 1));

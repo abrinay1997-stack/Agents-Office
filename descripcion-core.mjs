@@ -60,6 +60,7 @@ export function necesitaDescribir(ficha, { bytes = 0, forzar = false } = {}) {
 /** La descripción que SÍ puede entrar a un prompt: nunca la sospechosa. → null | { desc, etiquetas, texto_visible, personas, producto, calidad, apta_para, confianza } */
 export function descripcionParaPrompt(ficha) {
   if (!ficha || !ficha.desc || ficha.desc_sospecha) return null;
+  if (injectionIn([ficha.desc, ficha.texto_visible, ficha.producto, (ficha.etiquetas || []).join(' ')].join('\n'))) return null; // también al LEER: una ficha editada a mano o por otra vía no se fía de la marca guardada
   const { desc, etiquetas, texto_visible, personas, producto, calidad, apta_para, confianza } = ficha;
   return { desc, etiquetas: etiquetas || [], texto_visible: texto_visible || '', personas: personas || 0, producto: producto || null, calidad: calidad ?? null, apta_para: apta_para || [], confianza: confianza ?? 0.5 };
 }
@@ -123,7 +124,7 @@ export function resumenParaChat(fichas, { pagina = 1, porPagina = 12 } = {}) {
   const nom = f => String(f.file || f.id).split('/').pop();
   const lineas = fichas.slice((p - 1) * porPagina, p * porPagina).map(f => {
     const d = descripcionParaPrompt(f);
-    if (f.desc_sospecha) return `- ${nom(f)}: (descripción retenida: trae algo que parece una orden escondida; revísala tú)`;
+    if (f.desc_sospecha || (f.desc && !d)) return `- ${nom(f)}: (descripción retenida: trae algo que parece una orden escondida; revísala tú)`;
     if (!d) return `- ${nom(f)}: (sin describir)`;
     const extra = [d.etiquetas.slice(0, 5).join(', '), d.texto_visible ? `texto visible: «${d.texto_visible.slice(0, 80)}»` : '', d.personas ? `${d.personas} persona(s)` : '', d.producto ? `producto: ${d.producto}` : ''].filter(Boolean).join(' · ');
     return `- ${nom(f)}: ${d.desc.slice(0, 160)}${extra ? ` [${extra}]` : ''}`;
