@@ -1,6 +1,6 @@
 # Plan: el chat interno del equipo (módulo «Chat»), a la manera de D'CASA
 
-**Estado:** plan escrito, nada construido (27 oct 2026). Pedido del dueño: *«me interesa tener un chat interno como lo tienen ellos, parecido al de Odoo… y dejar el plan escrito de un módulo de chat dentro, igual al de D'CASA»*.
+**Estado:** C0 construido el 29 oct 2026 (modelo `0143_chat.sql`, `chat-core.mjs`, `cloudflare/worker/modulos/chat.js` y `lib/chat/`, flag `chat.config.activo` APAGADO, sin pantalla ni sockets); C1 en adelante, pendiente. Plan escrito el 27 oct 2026. Pedido del dueño: *«me interesa tener un chat interno como lo tienen ellos, parecido al de Odoo… y dejar el plan escrito de un módulo de chat dentro, igual al de D'CASA»*.
 
 **Fuente estudiada:** el repositorio `dcasapty/D_Casa_new_word` (commit `741930d`, leído en esta sesión, solo lectura). Las rutas de abajo son de ese repositorio. Odoo mismo (`vendor/odoo`) **no** está en el clon (es un submódulo vacío), así que lo que digo de «Discuss» es lo que se sabe de Odoo en general, no algo que yo haya leído en su código.
 
@@ -68,7 +68,7 @@ chat_mensajes  id INTEGER AUTOINCREMENT  (sirve de cursor: «dame lo que pasó d
                responde_a  ·  menciones (json de user_id)  ·  adjuntos (json: clave R2, nombre, tipo, bytes)
                creado_at  ·  editado_at  ·  borrado_at          -- borrar = dejar la lápida, cuerpo vacío
 chat_reacciones mensaje_id, user_id, emoji  (PK)
-chat_avisados  mensaje_id, user_id, via  (PK)                   -- «ya avisé», para no repetir
+(chat_avisados NO existe, D10: «ya avisé» lo da la tabla `notificaciones`, única por (persona, aviso); reacciones y adjuntos llegan en C4)
 ```
 
 - Índices: `chat_mensajes(canal_id, id)`, `chat_miembros(user_id)`, `chat_canales(clave_directo)`.
@@ -107,7 +107,9 @@ Toda ruta comprueba la pertenencia en D1 (`chat_miembros`) antes de leer o escri
 
 ## 8. Avisos y contador
 
-- **Campanita** (escritorio: ícono en el dock; celular: ícono en la cabecera junto a Buscar y ⚠). Contador rojo que late como el de D'CASA, **apagado con «reducir movimiento»**, y que no vive solo de color (lleva el número).
+**Un solo sistema de avisos (D10, 29 oct 2026).** El chat NO tiene campanita ni tabla de «ya avisé» propias: la campanita es la de las notificaciones por persona (`notificaciones`, N0) y un mensaje que debe avisar (un directo o una mención) escribe ahí una fila (`categoria` `chat` o `menciones`, `aviso_id` = `chat-<id del mensaje>`, única por persona: una vez por hecho), SIN el texto, nunca al autor, y atrapando todo error (el mensaje se guarda igual). Un mensaje normal de un canal no avisa: cuenta como no leído en `chat_miembros.leido_hasta`. `/chat` de Telegram llega con C1 y solo devuelve conteos.
+
+- **Campanita** (escritorio: ícono en el dock; celular: ícono en la cabecera junto a Buscar y ⚠): la misma de N0/N1. Contador rojo que late como el de D'CASA, **apagado con «reducir movimiento»**, y que no vive solo de color (lleva el número).
 - **Qué cuenta:** mensajes sin leer de canales no silenciados, y siempre las menciones y los directos. «No molestar» y las horas de silencio de Telegram se respetan.
 - **Telegram** solo para directos y menciones, y solo si la persona **no tiene un socket vivo** desde hace unos minutos (si está mirando, no se le insiste). Por defecto el aviso dice «Ana te escribió en #ventas» **sin el texto** (Telegram es un tercero); que lleve el texto es una decisión del dueño (§13).
 - **Mención con tarea** (como D'CASA): al mencionar, un botón «dejarle una tarea para el… (fecha)» llama a `POST /api/tareas/mias { persona, limite }`. Solo si la persona mencionada está en el canal.
