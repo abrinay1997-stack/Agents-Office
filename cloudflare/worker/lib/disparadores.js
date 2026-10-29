@@ -25,7 +25,7 @@ export async function guardarDisparadores(db, lista, agents) {
 }
 
 /** Quita lo viejo (más de 3 días) para que la tabla no crezca. */
-export async function limpiarEventos(db, ahora = Date.now()) { await db.prepare('delete from hook_eventos where abs(t) < ?').bind(ahora - 3 * 864e5).run(); }
+export async function limpiarEventos(db, ahora = Date.now()) { await db.prepare('delete from hook_eventos where abs(t) < ?').bind(ahora - 3 * 864e5).run(); await db.prepare('delete from hook_token_query where dia < ?').bind(Math.floor(ahora / 864e5) - 60).run(); }
 
 /** Apunta el evento. → { ok } | { ok:false, dup:true } | { ok:false, why } (el tope por hora). Nada de esto pasa antes de que el token se haya comprobado. */
 export async function admitir(db, tr, eventId, ahora = Date.now()) {

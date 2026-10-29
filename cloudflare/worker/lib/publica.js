@@ -1,6 +1,7 @@
 // Lo común de las rutas PÚBLICAS (los webhooks de otros sistemas): el secreto se comprueba ANTES de abrir nada, el cuerpo tiene tope, y hay un tope de peticiones por minuto
 // contado en D1 (el Worker no recuerda entre peticiones). Un token malo nunca toca D1 ni lee el cuerpo.
 import { igualSeguro } from './ids.js';
+import { leerDoc } from './almacen.js';
 
 export const TOPE_CUERPO = 1_000_000; // 1 MB, como serve.mjs → hookIn
 /** El secreto debe ser de 16+ caracteres (si no, la oficina "no acepta webhooks") y coincidir en tiempo constante. */
@@ -11,6 +12,31 @@ export function tokenValido(dado, esperado) {
 /** El token como lo manda cada sistema: cabecera X-Office-Token, `Authorization: Bearer …` o `?token=` (esta última deja el secreto en los registros de quien envía: se acepta por compatibilidad). */
 export function tokenDe(req, url) {
   return req.headers.get('x-office-token') || String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || url?.searchParams?.get('token') || '';
+}
+/* ---------- el secreto en la dirección (?token=): se acepta por compatibilidad, se cuenta y se puede apagar (SEG-08) ---------- */
+export const AVISO_TOKEN_QUERY = 'El token en la dirección (?token=) queda en los registros de quien envía y se va a retirar: manda el secreto en la cabecera X-Office-Token o Authorization: Bearer.';
+/** De dónde vino el secreto bueno: 'cabecera' | 'query' | null (ninguno vale). La cabecera gana. No toca D1. */
+export function origenToken(req, url, esperado) {
+  if (tokenValido(tokenDeCabecera(req), esperado)) return 'cabecera';
+  if (tokenValido(url?.searchParams?.get('token') || '', esperado)) return 'query';
+  return null;
+}
+/** `hooks.tokenEnQuery` de los ajustes (por defecto ENCENDIDO = compatible). Solo se lee con un token ya válido. */
+export async function tokenEnQueryPermitido(db) {
+  try { return (await leerDoc(db, 'ajustes', {})).valor?.hooks?.tokenEnQuery !== false; } catch { return true; }
+}
+/** Cuenta un uso de ?token= en la ruta `clave` (hoy). Nunca guarda el token; un fallo al contar no tumba la petición. */
+export async function contarTokenQuery(db, clave, ahora = Date.now()) {
+  try { await db.prepare('insert into hook_token_query (clave, dia, n) values (?,?,1) on conflict (clave, dia) do update set n = n + 1').bind(String(clave).slice(0, 20), Math.floor(ahora / 864e5)).run(); } catch (e) { console.warn('[hook] conteo ?token=:', e?.message ?? e); }
+}
+/** Usos de ?token= en los últimos `dias` días. */
+export async function usosTokenQuery(db, dias = 30, ahora = Date.now()) {
+  try { const f = await db.prepare('select coalesce(sum(n),0) n from hook_token_query where dia > ?').bind(Math.floor(ahora / 864e5) - dias).first(); return Number(f?.n ?? 0); } catch { return 0; }
+}
+/** Añade la señal de deprecación a una respuesta ya construida. */
+export function conAvisoDeprecacion(res) {
+  if (res?.headers) { res.headers.set('deprecation', 'true'); res.headers.set('x-ao-aviso', AVISO_TOKEN_QUERY); }
+  return res;
 }
 /** Cuenta ESTA petición en el minuto actual de `clave`. → { ok, n } (ok = cabe en `max`). */
 export async function tasaPublica(db, clave, max, ahora = Date.now()) {
