@@ -247,7 +247,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     let n = 0;
     const card = s => {
       const st = stOf(s), i = 'cpd' + (n++), logo = LOGOS[s.key] || LOGOS[s.id];
-      const img = s.iconUri || (logo ? logo.img : tile(s.name));
+      const img = s.iconUri || (logo ? logo.img : tile(s.name, s.key));
       const sub = s.plugin ? `plugin ${s.plugin}` : s.source === 'claude.ai' ? 'claude.ai' : s.browser ? 'tu navegador' : s.source === 'local' ? 'en esta computadora' : '';
       return `<div class="cp-item" data-sid="${escH(s.id)}"><button type="button" class="cp-c${st === 'connected' ? '' : ' off'}" aria-expanded="false" aria-controls="${i}"><img src="${img}" alt=""><span class="cp-n">${escH(pretty(s.name))}</span>` +
         `<span class="cp-d">${escH(STATE_TXT[st] || st)}${sub ? ' · ' + escH(sub) : ''}</span></button><div class="cp-det" id="${i}" hidden>${detailHTML(s)}</div></div>`;

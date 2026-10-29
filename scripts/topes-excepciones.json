@@ -1,1 +1,3 @@
-{}
+{
+  "src/iconos-registro.mjs": "Datos, no lógica: cada línea es el trazado SVG de 24×24 de un logo (Simple Icons, CC0); partir un trazado en varias cadenas no lo hace más legible y complica compararlo con su fuente."
+}
