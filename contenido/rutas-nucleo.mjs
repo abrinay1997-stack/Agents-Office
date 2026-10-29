@@ -12,15 +12,24 @@ import { hashtagsUsados } from './guardados-core.mjs';
 import { emparejar, comoEvento } from '../src/contenido-publicadas.js';
 import { huecos as huecosDe, queVuelven, repartir, encargo, origenVuelve, raizDe } from '../src/contenido-llenar.js';
 import { NOMBRE_RED, REDES } from './piezas-core.mjs';
+import { avisosDeFormato } from '../media/formatos-imagen.mjs';
 import { validateVision, MAX_IMAGES, MAX_B64 } from '../vision.mjs';
 
 export const LIMITE_VISION = MAX_IMAGES * (MAX_B64 + 400) + 256 * 1024; // lo que pesa un «Mejorar» con las 4 imágenes que Claude puede ver (+ la pieza)
 const ID = '[a-z0-9-]+';
+/** CON-04/B03: lo único que se promete con «Publicar ahora» y cuándo no hay ningún «ahora» posible. */
+export const AVISO_YA = 'Sale ahora en Instagram y Facebook. No se puede deshacer: después solo se puede borrar o archivar (en Instagram no se puede borrar desde aquí). Lo programado sí se puede deshacer.';
+export function motivoNoYa(aj = {}) {
+  if (aj.modo === 'apagado') return 'Contenido está apagado: no sale nada. Enciéndelo en Ajustes → Contenido.';
+  if (aj.modo !== 'real') return 'Estás en simulacro: nada sale de verdad. Pasa a «Real» en Ajustes → Contenido para publicar ahora.';
+  if (aj.conductor !== 'meta') return '«Publicar ahora» solo existe con «Meta directo»: con Metricool la publicación se programa con su mínimo de espera. Usa «Aprobar».';
+  return '';
+}
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const R = (status, datos) => ({ status, datos });
 
-export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
+export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, puedeConvertir = () => true, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
   // `segundoPlano(promesa)` — lo que no se espera para contestar (en el Worker: ctx.waitUntil, para que la vuelta de la cola no se corte al responder)
   const revisado = async p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? await programador.salidaDe(p.id) : null }; };
   const todasRevisadas = async piezas => { const out = []; for (const p of piezas) out.push(await revisado(p)); return out; };
@@ -200,6 +209,21 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
         for (const f of fechas) { const r = await almacen.crear({ ...copiaDe(pz), fecha: f, estado: 'borrador', origen: 'repetida' }, { por: 'dueno' }); if (r.pieza) creadas.push(await revisado(r.pieza)); }
         return R(200, { ok: true, creadas });
       }
+      const py = new RegExp(`^/api/contenido/piezas/(${ID})/publicar-ya$`).exec(p); // CON-04: «Publicar ahora» — SOLO el dueño en la pantalla (ni agentes, ni Dimitri, ni el asistente, ni Telegram)
+      if (py && metodo === 'POST') {
+        const b = await body(); if (b.por !== undefined && b.por !== 'dueno') return R(403, { error: 'publicar ahora es solo del dueño, en la pantalla: ni los agentes ni los asistentes lo hacen' });
+        const aj = (await ajustes()) || {};
+        if (aj.publicarYa !== true) return R(409, { error: '«Publicar ahora» está apagado: se enciende en Ajustes → Contenido' });
+        if (!programador) return R(404, { error: 'sin cola' });
+        const motivo = motivoNoYa(aj); if (motivo) return R(409, { error: motivo });
+        if (b.confirmado !== true) return R(409, { error: 'falta la confirmación: publicar ahora no se puede deshacer', confirmar: true, texto: AVISO_YA });
+        const antes = await almacen.leer(py[1]); if (!antes) return R(404, { error: 'esa pieza ya no existe' });
+        const ret = await programador.retirarAhora(py[1]); if (ret.error) return R(409, { error: ret.error });
+        const r = await almacen.aprobar(py[1], { por: String(b.quien || 'dueno').slice(0, 40), ya: true });
+        if (r.error) return R(r.nada ? 404 : 409, { error: r.error, errores: r.errores });
+        segundoPlano(programador.tick({ solo: py[1] })); // no se espera (B04): lo que no termine ahora lo sigue la cola cada minuto
+        return R(202, { ok: true, publicando: true, pieza: await revisado(r.pieza), avisos: [...(r.avisos || []), ...(r.pieza.historiaTambien ? ['La historia sale 15 minutos después.'] : [])], texto: AVISO_YA });
+      }
       const mc = new RegExp(`^/api/contenido/piezas/(${ID})/(reintentar|entregar|quitar)$`).exec(p);
       if (mc && metodo === 'POST') {
         const b = await body(); if (b.por === 'agente') return R(403, { error: 'los agentes no programan ni quitan piezas de la cola: es del dueño' });
@@ -229,7 +253,9 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
           const b = await body();
           if (b.por === 'agente') return R(403, { error: 'los agentes no aprueban ni devuelven piezas: es del dueño' });
           const r = accion === 'aprobar' ? await almacen.aprobar(id, { por: String(b.quien || 'dueno').slice(0, 40), pronto: b.pronto === true }) : await almacen.devolver(id, b.estado);
-          return r.error ? R(r.nada ? 404 : 409, { error: r.error, errores: r.errores }) : R(200, { ok: true, pieza: await revisado(r.pieza), avisos: r.avisos || [] });
+          if (r.error) return R(r.nada ? 404 : 409, { error: r.error, errores: r.errores });
+          const fmt = accion === 'aprobar' && ((await ajustes()) || {}).modo === 'real' ? avisosDeFormato(r.pieza.medios, { redes: r.pieza.redes, puedeConvertir: await puedeConvertir() }) : []; // CON-13: qué pasará con cada imagen que no es JPEG
+          return R(200, { ok: true, pieza: await revisado(r.pieza), avisos: [...(r.avisos || []), ...fmt] });
         }
       }
       if (p === '/api/contenido/usos' && metodo === 'GET') return R(200, { usos: await almacen.usos(query.get('medio') || '') });

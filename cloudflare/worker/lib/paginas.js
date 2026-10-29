@@ -2,8 +2,21 @@
 // Con `run_worker_first: ["/*"]` TODO pasa por aquí: ningún archivo de la oficina sale sin sesión.
 const PUBLICAS = new Set(['/login.html', '/login.js', '/acceso.css', '/acceso-tema.js', '/invitacion.html', '/invitacion.js']);
 const RE_INVITACION = /^\/invitacion(\/([0-9a-f]{1,64})?)?$/; // el enlace de una invitación: sin sesión, la página nativa que la acepta
-const PAQUETES = new Set(['/estudio-extra.js', '/tareas-vista.js', '/anuncios-vista.js', '/pieza-editor.js', '/dictado.js', '/movil.js', '/movil-d.js', '/ajustes-extra.js']); // los pide la página bajo demanda
-const NUBE = new Set(['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión (/nube-cerebro.js no se inyecta: lo trae nube.js la primera vez que alguien abre «Actualizar conexiones»)
+// Los paquetes que pide la página bajo demanda. Los cuatro de la primera alternativa los pide su cargador con `?v=<versión de la construcción>`
+// (PER-04); `dictado`, `movil`, `movil-d` y `ajustes-extra` van sin versión y siguen en `no-cache`.
+const PAQUETES = /^\/(estudio-extra|tareas-vista|anuncios-vista|pieza-editor|dictado|movil|movil-d|ajustes-extra)\.js$/;
+const CON_VERSION = /^\/(estudio-extra|tareas-vista|anuncios-vista|pieza-editor)\.js$/;
+const VERSION_VALIDA = /^[0-9A-Za-z._-]{4,64}$/; // «dev» (una construcción sin versión) no entra: 3 letras
+
+/** `?v=<versión>` en un paquete que la lleva: la dirección cambia con cada construcción, así que la respuesta no caduca nunca (`immutable`). `_headers` no distingue la query, por eso lo decide el Worker. Solo una respuesta 200; el ETag se conserva. */
+export function cacheDePaquete(p, url, resp) {
+  if (!resp.ok || resp.status !== 200 || !CON_VERSION.test(p)) return resp;
+  const v = url.searchParams.get('v');
+  if (!v || !VERSION_VALIDA.test(v)) return resp;
+  const h = new Headers(resp.headers); h.set('cache-control', 'private, max-age=31536000, immutable');
+  return new Response(resp.body, { status: resp.status, headers: h });
+}
+const NUBE = new Set(['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-cerebro.js', '/nube-notas.js']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión (/nube-cerebro.js no se inyecta: lo trae nube.js la primera vez que alguien abre «Actualizar conexiones»)
 const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script><script src="/ajustes-extra.js" defer></script><script src="/nube-modelos.js" defer></script><script src="/nube-conectores.js" defer></script>'; // + «Restablecer oficina» y «Revisar lo que leí» (src/ajustes-extra.js)
 
 /** La oficina real con las dos líneas de la nube añadidas al final del <body>. La página local NO las lleva: sin Worker no hay presencia ni equipo. */
@@ -33,7 +46,7 @@ export async function servirPagina(req, env, usuario) {
   if (RE_INVITACION.test(p)) return archivo('/invitacion.html');
   if (p === '/' || p === '/index.html') return usuario ? conNube(await archivo('/oficina/index.html'), req) : archivo('/login.html');
   if (NUBE.has(p)) return usuario ? archivo(p) : texto('Entra primero.', 401);
-  if (PAQUETES.has(p)) return usuario ? archivo('/oficina' + p) : texto('Entra primero.', 401);
+  if (PAQUETES.test(p)) return usuario ? cacheDePaquete(p, url, await archivo('/oficina' + p)) : texto('Entra primero.', 401);
   if (PANEL.has(p)) {
     if (!usuario) return Response.redirect(url.origin + '/', 302);
     return archivo(p === '/app.js' ? '/app.js' : '/panel.html');

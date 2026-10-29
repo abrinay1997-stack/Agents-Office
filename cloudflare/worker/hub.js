@@ -122,10 +122,12 @@ export class Hub {
   }
 
   difundir(evento, excluir, fuera = null) {
-    const { soloAdmin, ...limpio } = evento;
+    const { soloAdmin, para, ...limpio } = evento; // `para`: lista de ids de cuenta; sin ella, a todos. Un aviso dirigido lleva ids, nunca texto.
+    const dirigido = Array.isArray(para) ? new Set(para.map(String)) : null;
     const payload = JSON.stringify(limpio);
     for (const ws of this.state.getWebSockets()) {
       if (ws === excluir || fuera?.has(ws)) continue;
+      if (dirigido && !dirigido.has(datosDe(ws)?.userId)) continue; // N1: solo a quien va dirigido
       if (soloAdmin && datosDe(ws)?.rol !== 'admin') continue; // lo de los ajustes, los conectores, Dimitri… solo para administradores
       try { ws.send(payload); } catch { /* socket muerto aún sin limpiar: el cliente reconecta y se pone al día */ }
     }

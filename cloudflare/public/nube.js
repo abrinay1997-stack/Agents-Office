@@ -178,6 +178,7 @@
       if (m.tipo === 'hola') { intentos = 0; conexion = 'conectado'; presentes = m.presentes ?? []; ultimaVista = ''; enviarVista(); pintarBarra(); }
       else if (m.tipo === 'presencia') { presentes = m.presentes ?? []; pintarBarra(); }
       else if (m.tipo === 'cambio') alCambio(m);
+      else if (m.tipo === 'nota') window.dispatchEvent(new Event('ao:nota')); // N1: llegó una nota (la señal no lleva texto; la hoja la pide a la API)
     };
     s.onopen = () => { clearInterval(latido); latido = setInterval(() => { mandar('ping'); clearTimeout(pongT); pongT = setTimeout(() => { try { s.close(); } catch { /* ya cerrado */ } }, 10000); }, 25000); };
     s.onclose = async (e) => {
@@ -379,6 +380,7 @@
     try { yo = (await api('/api/yo')).usuario; } catch { return; }
     window.dispatchEvent(new Event('ao:yo')); // las tareas «mías» son de cada cuenta: la página rehace sus listas ahora que sabe quién eres
     pintarBarra(); vigilarVista(); conectar(); cargarEquipo();
+    { const n = document.createElement('script'); n.src = '/nube-notas.js'; n.defer = true; document.head.appendChild(n); } // N1: la campanita; si el servidor la tiene apagada no pinta nada
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();

@@ -4,7 +4,8 @@
 // Lo que SÍ está: el catálogo y el estado de los motores (según los secretos del Worker), la galería (listar, subir, carpetas,
 // mover, favoritos y «usado», papelera de 30 días, recuperar, vaciar, zip, servir cada archivo), los trabajos (pedir, estado, esperar,
 // cancelar, reintentar, olvidar, editar una imagen), los topes del día y del mes, «mejorar el prompt» y las voces propias de MiniMax.
-// Lo que NO está (contesta 501 en español): el banco de presets, los lotes, las plantillas, «Mandar a un departamento» (tareas),
+// El banco de presets (Fase 4 A+B, lib/estudio/presets.js) sí está; lo que usa sharp dentro de él se dice y no corre.
+// Lo que NO está (contesta 501 en español): los lotes, las plantillas, «Mandar a un departamento» (tareas),
 // entender un video o un audio, y todo lo que dependa de `sharp` (los retoques locales y la QA): no existe en un Worker.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { agentes } from '../lib/agentes.js';
@@ -12,15 +13,17 @@ import { texto as textoIA } from '../lib/ia.js';
 import * as catalogo from '../../../media/catalogo.mjs';
 import { MEDIA_MIME, sniffExt } from '../../../media/galeria-core.mjs';
 import * as galeria from '../lib/estudio/galeria.js';
+import { prepararSubida } from '../../../media/formatos-imagen.mjs';
+import { aJpegDeEnv } from '../lib/contenido/conductores.js';
 import * as trabajos from '../lib/estudio/trabajos.js';
 import * as voces from '../lib/estudio/voces.js';
+import * as presets from '../lib/estudio/presets.js';
 import { prepararEstudio, guardarConfig, validarConfig, leerConfig, motoresEncendidos } from '../lib/estudio/entorno.js';
 
 export const nombre = 'estudio';
 export const grupos = ['media', 'voces'];
 
 const NO_ESTA = {
-  presets: 'El banco de presets del Estudio todavía no está en la nube: sigue en la oficina de tu computadora.',
   lotes: 'Los lotes del Estudio todavía no están en la nube: siguen en la oficina de tu computadora.',
   plantillas: 'Las plantillas del Estudio todavía no están en la nube.',
   understand: 'Entender un video o un audio todavía no está en la nube.',
@@ -35,6 +38,17 @@ const motoresNube = () => catalogo.engines().map((e) => ({ ...e, how: comoActiva
 const minimaxOn = () => catalogo.engines().some((e) => e.id === 'minimax' && e.on);
 const porDefecto = () => Object.fromEntries(catalogo.KINDS.map((k) => [k, catalogo.defaultModel(k)]));
 const NOMBRE_AGENTE = (id) => agentes().find((a) => a.id === id)?.name || '';
+
+/** Lo mismo para muchos archivos de una vez (borrar una carpeta): Map file → piezas. Falla CERRADO (lanza si no puede comprobar). */
+async function usosDeVarios(db, files) {
+  const mapa = new Map(files.map((f) => [f, []])); if (!files.length) return mapa;
+  const { results } = await db.prepare(`select id, json from contenido_piezas where borrada = 0 limit 5000`).all();
+  for (const r of results) {
+    let v = null; try { v = JSON.parse(r.json); } catch { continue; }
+    for (const f of [...(v.medios || []), ...(v.historias || [])]) if (mapa.has(f)) mapa.get(f).push({ id: r.id, titulo: v.titulo || '' });
+  }
+  return mapa;
+}
 
 /** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa): `contenido_piezas`, las que no están en su papelera.
  *  Antes miraba una colección `piezas` que no existe y nada estaba nunca «en uso»: una imagen programada se iba a la papelera y a los 30 días de R2.
@@ -88,6 +102,34 @@ export async function manejar(ctx) {
   let m;
 
   try {
+    /* ---- el banco de presets (Fase 4 A+B): compilar no gasta; aplicar es el clic GENERAR y pasa por los topes ---- */
+    if (ruta === '/api/media/presets' || ruta.startsWith('/api/media/presets/')) {
+      const pm = ruta.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/), puedeEscribir = usuario.rol === 'admin' || usuario.rol === 'editor';
+      try {
+        if (ruta === '/api/media/presets' && metodo === 'GET') return json(await presets.lista(db, { medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
+        if (ruta === '/api/media/presets/compile' && metodo === 'POST') { const { plan } = await presets.compilar(db, (await cuerpo(req)) || {}); return json({ plan, budget: await trabajos.budget(env, db) }); }
+        if (ruta === '/api/media/presets/apply' && metodo === 'POST') {
+          const out = await presets.aplicar(env, db, (await cuerpo(req)) || {}, { usuario });
+          return json({ ...out, budget: await trabajos.budget(env, db) });
+        }
+        if (ruta === '/api/media/presets' && metodo === 'POST') {
+          if (!puedeEscribir) return prohibido('Guardar un preset es de un administrador o un editor.');
+          return json(await presets.guardar(env, db, (await cuerpo(req)) || {}, { usuario }));
+        }
+        if (pm && pm[2] && metodo === 'GET') return json({ versiones: await presets.versiones(db, pm[1]) });
+        if (pm && !pm[2] && metodo === 'DELETE') {
+          if (!puedeEscribir) return prohibido('Borrar un preset es de un administrador o un editor.');
+          return (await presets.borrar(db, pm[1], { usuario })) ? json({ ok: true }) : error('ese preset no es tuyo o ya no está', 404);
+        }
+      } catch (e) {
+        if (e instanceof trabajos.ErrorPedido) return json({ error: e.message }, e.estado);
+        if (e?.plan) return json({ error: e.message, plan: e.plan }, e.status || 400);
+        if (Number.isInteger(e?.status)) return error(e.message, e.status);
+        throw e;
+      }
+      return error('no such route', 404);
+    }
+
     /* ---- lo que todavía no está ---- */
     for (const [k, msg] of Object.entries(NO_ESTA)) if (ruta === `/api/media/${k}` || ruta.startsWith(`/api/media/${k}/`)) return noEsta(msg);
 
@@ -117,13 +159,43 @@ export async function manejar(ctx) {
     }
 
     /* ---- carpetas ---- */
+    if (ruta === '/api/media/folders' && metodo === 'GET' && galeria.arbolOn()) return json({ folders: await galeria.resumenCarpetas(db) }); // Fase 1.a: el árbol (con ruta, n y nTotal)
     if (ruta === '/api/media/folders' && metodo === 'POST') {
       const b = (await cuerpo(req)) || {};
-      try { const f = await galeria.addFolder(db, b.name); const moved = Array.isArray(b.files) && b.files.length ? await galeria.moveTo(db, b.files, f.id) : 0; return json({ folder: f, moved, folders: await galeria.resumenCarpetas(db) }); }
+      try { const f = await galeria.addFolder(db, b.name, galeria.arbolOn() ? { parentId: b.parentId, tipo: b.tipo, color: b.color, creadaPor: b.creadaPor } : {}); const moved = Array.isArray(b.files) && b.files.length ? await galeria.moveTo(db, b.files, f.id) : 0; return json({ folder: f, moved, folders: await galeria.resumenCarpetas(db) }); }
       catch (e) { return error(e.message, 400); }
     }
+    if (galeria.arbolOn() && ruta === '/api/media/folders/reorder' && metodo === 'PATCH') {
+      const b = (await cuerpo(req)) || {};
+      try { return json({ folders: await galeria.reorderFolders(db, b.parentId || null, b.ids) }); } catch (e) { return error(e.message, 400); }
+    }
+    if (galeria.arbolOn() && ruta === '/api/media/folders/deshacer' && metodo === 'POST') {
+      if (usuario.rol !== 'admin') return prohibido('Solo un administrador deshace el borrado de una carpeta.');
+      const b = (await cuerpo(req)) || {};
+      try { return json({ ...(await galeria.undoFolderDelete(db, b.token)), folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 410); }
+    }
     if ((m = ruta.match(/^\/api\/media\/folders\/(c[a-z0-9]{4,20})$/))) {
-      if (metodo === 'PATCH') { const b = (await cuerpo(req)) || {}; try { return json({ folder: await galeria.renameFolder(db, m[1], b.name), folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 400); } }
+      if (metodo === 'PATCH') {
+        const b = (await cuerpo(req)) || {};
+        try {
+          const arbol = galeria.arbolOn(); let folder = arbol && b.name === undefined ? await galeria.folderOf(db, m[1]) : await galeria.renameFolder(db, m[1], b.name);
+          if (!folder) return error('esa carpeta ya no existe', 400);
+          if (arbol && b.parentId !== undefined) folder = await galeria.moveFolder(db, m[1], b.parentId || null);
+          if (arbol && Number.isInteger(b.orden)) { const sib = (await galeria.resumenCarpetas(db)).filter((x) => (x.parentId ?? null) === (folder.parentId ?? null) && x.id !== m[1]).map((x) => x.id); sib.splice(Math.max(0, Math.min(sib.length, b.orden)), 0, m[1]); await galeria.reorderFolders(db, folder.parentId ?? null, sib); }
+          const folders = await galeria.resumenCarpetas(db); return json({ folder: folders.find((x) => x.id === m[1]) || folder, folders });
+        } catch (e) { return e.codigo ? json({ error: e.message, codigo: e.codigo }, 422) : error(e.message, 400); }
+      }
+      if (metodo === 'DELETE' && galeria.arbolOn()) { // 1.a: borra la carpeta, sus subcarpetas y sus archivos (a la papelera, 30 días); sin `confirmar` solo cuenta
+        if (usuario.rol !== 'admin') return prohibido('Solo un administrador borra carpetas.');
+        const b = (await cuerpo(req).catch(() => null)) || {};
+        try {
+          const r = await galeria.removeFolderTree(db, m[1], { confirmar: b.confirmar || null, dejar: b.dejar === true, usadas: (files) => usosDeVarios(db, files) });
+          if (r.pendiente) return json({ error: 'confirmar', ...r }, 409);
+          if (r.desfase) return json({ error: 'desfase', ...r }, 409);
+          if (r.enUso) return json({ error: 'en-uso', ...r }, 409);
+          return json({ ...r, freed: r.archivos, folders: await galeria.resumenCarpetas(db) });
+        } catch (e) { return error(e.message, /ya no existe/.test(e.message) ? 404 : 503); }
+      }
       if (metodo === 'DELETE') { try { const n = await galeria.removeFolder(db, m[1]); return json({ ok: true, freed: n, folders: await galeria.resumenCarpetas(db) }); } catch (e) { return error(e.message, 404); } }
     }
     if (ruta === '/api/media/move' && metodo === 'POST') {
@@ -135,7 +207,7 @@ export async function manejar(ctx) {
     if (ruta === '/api/media/upload' && metodo === 'POST') {
       if (+req.headers.get('content-length') > MAX_JSON_SUBIDA) return error('el archivo es demasiado grande para subirlo así (máx. unos 17 MB de archivo)', 413);
       const b = (await cuerpo(req, MAX_JSON_SUBIDA)) || {};
-      try { return json({ item: await galeria.upload(env, db, b) }); } catch (e) { return error(e.message, 400); }
+      try { return json({ item: await galeria.upload(env, db, await prepararSubida(b, env['IMAGES']?.input ? aJpegDeEnv(env) : null)) }); } catch (e) { return error(e.message, 400); }
     }
     // la migración desde la computadora del dueño: los bytes de un archivo con su clave de siempre, solo administrador (scripts/migrar/estudio.mjs)
     if ((m = ruta.match(/^\/api\/media\/archivo\/(.+)$/)) && metodo === 'PUT') {

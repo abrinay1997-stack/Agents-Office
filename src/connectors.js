@@ -3,6 +3,7 @@
 // the `connectors` object initMcp() draws. Opened as a file: null → the demo list plays.
 import { MCP_LOGOS } from './mcplogos.js';
 import { DEPT_KEYS } from './data.js';
+import { resolverId, iconoTesela, monograma, uriDeSvg } from './iconos-registro.mjs';
 
 // brand inks for shared looms (a shared connector is wired to four or more pods)
 const INK = { notion: '#151414', gmail: '#EA4335', slack: '#4A154B', zapier: '#FF4F00', claude_ai_Google_Drive: '#1FA463', googledrive: '#1FA463', chrome: '#4285F4' }; // V3.2 (16 Sep): Chrome is wired to every pod
@@ -10,22 +11,11 @@ const norm = s => String(s).toLowerCase().replace(/^plugin:[^:]+:/, '').replace(
 function hue(name) { let h = 0; for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
 export const inkOf = name => `hsl(${hue(name)} 52% 42%)`;
 
-// a tile for a server we have no logo for: same white rounded square as the baked ones, the
-// name's initials in a colour hashed from the name — stable across boots
-export function tile(name) {
-  const c = document.createElement('canvas'); c.width = c.height = 160;
-  const x = c.getContext('2d');
-  const r = 34;
-  x.beginPath(); x.roundRect(1, 1, 158, 158, r); x.fillStyle = '#fff'; x.fill();
-  x.lineWidth = 2; x.strokeStyle = 'rgba(28,26,23,0.10)'; x.stroke();
-  name = String(name).replace(/^plugin:[^:]+:/i, '').replace(/^claude\.ai\s+/i, '') || String(name); // auditoría MCP-10: «plugin:small-business:gmail» was «PS»
-  const words = String(name).replace(/[^A-Za-z0-9 ]/g, ' ').trim().split(/\s+/);
-  const ini = (words.length > 1 ? words[0][0] + words[1][0] : String(name).slice(0, 2)).toUpperCase();
-  x.fillStyle = inkOf(name);
-  x.font = `700 ${ini.length > 1 ? 64 : 76}px -apple-system, "Helvetica Neue", Arial, sans-serif`;
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(ini, 80, 86);
-  return c.toDataURL('image/png');
+// a tile for a server we have no logo for. 29 oct 2026 (ICO-06): ya no es un canvas propio; sale del registro único de íconos
+// (src/iconos-registro.mjs): si el nombre o la clave es un servicio conocido, su logo; si no, el MONOGRAMA único (iniciales sobre un color estable).
+export function tile(name, key) {
+  const id = resolverId(key) || resolverId(name);
+  return uriDeSvg(id ? iconoTesela(id) : monograma(String(name).replace(/^plugin:[^:]+:/i, '').replace(/^claude\.ai\s+/i, '') || String(name))); // auditoría MCP-10: «plugin:small-business:gmail» was «PS»
 }
 
 // auditoría MCP (1 oct 2026): the bar shows what is connected and what really fails; the servers that wait for a login,
@@ -43,7 +33,7 @@ export function fromSummary(m, agents) {
   for (const [key, s] of Object.entries(win)) {
     const st = stateOf(s);
     if (!IN_BAR.has(st)) { hidden++; continue; }
-    logos[key] = s.iconUri ? { name: s.name, img: s.iconUri } : MCP_LOGOS[key] || { name: s.name, img: tile(s.name) }; // en la nube cada conector trae su icono (plantilla o monograma)
+    logos[key] = s.iconUri ? { name: s.name, img: s.iconUri } : MCP_LOGOS[key] || { name: s.name, img: tile(s.name, key) }; // en la nube cada conector trae su icono (plantilla o monograma)
     names[key] = s.name;
     status[key] = st;
     // only a usable server is wired to pods; the rest sit in the strip, grey, unwired — nothing flows

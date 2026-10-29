@@ -16,6 +16,7 @@ import { crearIndicadores } from '../lib/contenido/aprender.js';
 import { hayQueAdoptar, adoptar } from '../lib/contenido/migracion.js';
 import { describirZona } from '../lib/zona.js';
 import { crearPresupuesto, contarD1, contarR2 } from '../lib/contenido/presupuesto.js';
+import { avisosDeFormato } from '../../../media/formatos-imagen.mjs';
 import { LIMITE_VISION } from '../../../contenido/rutas-nucleo.mjs';
 
 export const nombre = 'contenido';
@@ -24,7 +25,7 @@ export const grupos = ['contenido'];
 const MAX_CUERPO = 1_000_000;
 // Lo que SOLO hace un administrador (el dueño): decidir qué sale, tocar Meta, gastar en el agente, escribir en el Cerebro.
 const SOLO_ADMIN = [
-  /^\/api\/contenido\/piezas\/[a-z0-9-]+\/(aprobar|devolver|reintentar|entregar|quitar|repetir)$/,
+  /^\/api\/contenido\/piezas\/[a-z0-9-]+\/(aprobar|devolver|reintentar|entregar|quitar|repetir|publicar-ya)$/,
   /^\/api\/contenido\/(cola\/tick|conductor\/comprobar|llenar|mejorar|guardados|plantillas|config|meta\/sincronizar|analiticas\/actualizar|analiticas\/indicadores)(\/.*)?$/,
 ];
 const soloAdmin = (metodo, ruta) => metodo !== 'GET' && SOLO_ADMIN.some(r => r.test(ruta));
@@ -65,7 +66,7 @@ export async function manejar(ctx) {
   const crudo = cuerpo; // (un arreglo o un texto no es un cuerpo válido para las rutas; los ajustes lo dicen en palabras)
   if (cuerpo === null || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) cuerpo = {};
   // Quién aprueba lo pone el servidor (la sesión), no lo que diga el cuerpo.
-  if (/\/aprobar$/.test(ruta)) cuerpo = { ...cuerpo, quien: usuario.email };
+  if (/\/(aprobar|publicar-ya)$/.test(ruta)) cuerpo = { ...cuerpo, quien: usuario.email };
 
   return conServicio(env, async (svc, config) => {
     if (svc.adoptando && metodo !== 'GET' && ruta !== '/api/contenido/config') return error('Se está mudando Contenido a la nube y todavía no terminó (por tandas, cada minuto): espera un momento y vuelve a intentarlo.', 409);
@@ -99,25 +100,14 @@ export async function manejar(ctx) {
     }
     // ---- todo lo demás: el controlador de la oficina local ----
     const r = await svc.controlador.responder({ metodo, p: ruta, query: url.searchParams, cuerpo: async () => cuerpo });
-    // B4 / CON-01: Instagram solo acepta JPEG. Se dice AL APROBAR (no a la hora de salir) si alguna imagen no es JPEG y esta nube no puede convertirla.
-    if (/\/aprobar$/.test(ruta) && r.status === 200 && r.datos?.pieza && config.modo === 'real') {
-      const aviso = avisoDeFormato(r.datos.pieza, !!env['IMAGES']);
-      if (aviso) r.datos.avisos = [...(r.datos.avisos || []), aviso];
-    }
     return json(r.datos, r.status);
   }, { waitUntil: ctx.waitUntil });
 }
 
-/** CON-01: el aviso de aprobar una pieza para Instagram con una imagen que no es JPEG. Con el binding IMAGES se convierten PNG y WebP; lo demás (GIF, HEIC, AVIF…) aún no (CON-02). null si no hay nada que decir. */
+/** CON-01/13: el aviso (uno por archivo) de aprobar una pieza para Instagram con imágenes que no son JPEG. Lo calcula `media/formatos-imagen.mjs` y lo añade el controlador al aprobar. null si no hay nada que decir. */
 export function avisoDeFormato(pz, hayBinding) {
-  if (!(pz?.redes || []).includes('instagram')) return null;
-  const imagenes = (pz.medios || []).map(m => String(m)).filter(m => !/\.(jpe?g|mp4|mov|m4v)$/i.test(m)); // todo lo que no es JPEG ni video
-  if (!imagenes.length) return null;
-  if (hayBinding) {
-    const rara = imagenes.filter(m => !/\.(png|webp)$/i.test(m));
-    return rara.length ? 'Esta pieza lleva una imagen que no es JPEG, PNG ni WebP y va a Instagram, que solo acepta JPEG: esta nube todavía no sabe convertir ese formato y a su hora fallaría. Súbela en JPEG.' : null;
-  }
-  return 'Esta pieza lleva una imagen que no es JPEG y va a Instagram, que solo acepta JPEG: esta nube todavía no puede convertirla (falta el binding IMAGES de Cloudflare) y a su hora fallaría. Sube la imagen en JPEG o pídele al administrador que active IMAGES.';
+  const a = avisosDeFormato(pz?.medios || [], { redes: pz?.redes || [], puedeConvertir: !!hayBinding });
+  return a.length ? a.join(' ') : null;
 }
 
 /** La foto de las cuentas que faltan (o de todas) mientras queden llamadas; con el candado «analiticas» (una a la vez). Después, los indicadores del dueño y aprender. */

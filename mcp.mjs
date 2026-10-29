@@ -40,8 +40,8 @@ export const CLAUDE_BIN = (() => {
   return 'claude';
 })();
 
-// known brands → logo key in src/mcplogos.js. Anything else gets a generated tile.
-const ALIASES = {
+// known brands → logo key in src/iconos-registro.mjs (the single icon registry). Anything else gets a monogram.
+export const ALIASES = {
   gmail: ['gmail', 'googlegmail'], notion: ['notion'], canva: ['canva'], meta: ['metaads', 'meta', 'facebookads', 'facebook'],
   slack: ['slack'], fullenrich: ['fullenrich'], apollo: ['apollo', 'apolloio'], xero: ['xero'], stripe: ['stripe'],
   pandadoc: ['pandadoc'], clarity: ['clarity', 'microsoftclarity'], beehiiv: ['beehiiv'], loops: ['loops'],

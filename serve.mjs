@@ -65,7 +65,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
-import * as media from './media.mjs';
+import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -93,6 +93,7 @@ import * as understand from './understand.mjs'; // V4.8: video and audio → tex
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { prepararSubida } from './media/formatos-imagen.mjs'; // CON-02: gif/avif/bmp/tiff al subir → JPEG
 import { porDefecto as porDefectoCuentasContenido, motivoNoPublica, listaCuentas, MOTIVO_METRICOOL } from './src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
 import { agenteDeContenido, promptMejorar, leerPropuesta, prepararVistas } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
@@ -296,7 +297,7 @@ const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.d
 const ANUNCIOS_MCP = path.join(ROOT, 'anuncios-mcp.mjs');
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
 const metricool = crearMetricool();
-const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
+const aJpeg = async b => (await import('sharp')).default(b).rotate().flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
 const CONDUCTORES = {
   simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
   metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json'),
@@ -561,6 +562,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   });
 }
 const ask = async (system, user, opts) => (await askX(system, user, { tools: false, ...opts })).text;
+const descripcionLocal = crearDescripcionLocal({ media, copiaParaVer, ask: (sy, u, o) => askX(sy, u, o), auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, activo: () => cfg.estudio?.descripcionesIA === true, topeUsd: () => +cfg.estudio?.descripcionesTopeUsd || 1, modelo: cfg.model, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`, presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) } }); // 11.1
 function parseJSON(text) {
   const s = text.replace(/```json|```/g, ''); const a = s.indexOf('{'), b = s.lastIndexOf('}');
   return JSON.parse(s.slice(a, b + 1));
@@ -1922,7 +1924,7 @@ const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, pro
   plantillas: crearPlantillasContenido({ cerebro: BRAIN }), // C3: las plantillas de publicación (notas del Cerebro)
   cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: cfg.contenido?.metaPagina || '', conductor: conductorActual().id }), // 9 oct 2026: a qué cuenta sale
   alBorrador: p => TG?.pieza?.(p, 'Un agente dejó un borrador'), // C3: aprobar desde el teléfono, con la vista previa
-  analiticasTexto: async (dias, redes, cuenta = '') => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, cuenta, cuentas: meta.estado().cuentas || [], hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+  analiticasTexto: async (dias, redes, cuenta = '') => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, cuenta, cuentas: meta.estado().cuentas || [], hora: await mejorHora.horas(redes) }), ajustes: () => ({ publicarYa: cfg.contenido?.publicarYa === true, departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 // F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
 const pulsoMeta = () => { if (contenidoModo() === 'real') CONDUCTORES.meta.pulso().catch(e => console.warn('contenido: meta —', e.message)); };
@@ -2900,9 +2902,20 @@ const server = http.createServer(async (req, res) => {
       return fs.createReadStream(f).pipe(res);
     }
     // V4.6: folders to organise the gallery — labels in each file's record, never a move on disk
-    if (url.pathname === '/api/media/folders' && req.method === 'POST') { const b = await body(req); try { const f = media.addFolder(b.name); const moved = Array.isArray(b.files) && b.files.length ? media.moveTo(b.files, f.id) : 0; return json(res, 200, { folder: f, moved, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (url.pathname === '/api/media/folders' && req.method === 'GET' && media.arbolOn()) return json(res, 200, { folders: media.folders() }); // Fase 1.a: el árbol (con ruta, n y nTotal)
+    if (url.pathname === '/api/media/folders' && req.method === 'POST') { const b = await body(req); try { const f = media.addFolder(b.name, media.arbolOn() ? { parentId: b.parentId, tipo: b.tipo, color: b.color, creadaPor: b.creadaPor } : {}); const moved = Array.isArray(b.files) && b.files.length ? media.moveTo(b.files, f.id) : 0; return json(res, 200, { folder: f, moved, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (media.arbolOn() && url.pathname === '/api/media/folders/reorder' && req.method === 'PATCH') { const b = await body(req); try { return json(res, 200, { folders: media.reorderFolders(b.parentId || null, b.ids) }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (media.arbolOn() && url.pathname === '/api/media/folders/deshacer' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ...media.undoFolderDelete(b.token), folders: media.folders() }); } catch (e) { return json(res, 410, { error: e.message }); } }
     { const fm = url.pathname.match(/^\/api\/media\/folders\/(c[a-z0-9]{4,20})$/);
-      if (fm && req.method === 'PATCH') { const b = await body(req); try { return json(res, 200, { folder: media.renameFolder(fm[1], b.name), folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (fm && req.method === 'PATCH') { const b = await body(req); try { let folder = media.folderOf(fm[1]) && media.arbolOn() && b.name === undefined ? media.folderOf(fm[1]) : media.renameFolder(fm[1], b.name); if (media.arbolOn() && b.parentId !== undefined) folder = media.moveFolder(fm[1], b.parentId || null); if (media.arbolOn() && Number.isInteger(b.orden)) { const sib = media.folders().filter(x => (x.parentId ?? null) === (folder.parentId ?? null) && x.id !== fm[1]).map(x => x.id); sib.splice(Math.max(0, Math.min(sib.length, b.orden)), 0, fm[1]); media.reorderFolders(folder.parentId ?? null, sib); } return json(res, 200, { folder: media.folders().find(x => x.id === fm[1]) || folder, folders: media.folders() }); } catch (e) { return json(res, e.codigo ? 422 : 400, { error: e.message, ...(e.codigo ? { codigo: e.codigo } : {}) }); } }
+      if (fm && req.method === 'DELETE' && media.arbolOn()) { // 1.a: borra la carpeta, sus subcarpetas y sus archivos (a la papelera, 30 días); sin `confirmar` solo cuenta
+        const b = await body(req).catch(() => ({})); try {
+          const r = media.removeFolderTree(fm[1], { confirmar: b?.confirmar || null, dejar: b?.dejar === true, usadas: f => contenido.usos(f) });
+          if (r.pendiente) return json(res, 409, { error: 'confirmar', ...r });
+          if (r.desfase) return json(res, 409, { error: 'desfase', ...r });
+          if (r.enUso) return json(res, 409, { error: 'en-uso', ...r });
+          return json(res, 200, { ...r, freed: r.archivos, folders: media.folders() });
+        } catch (e) { return json(res, 404, { error: e.message }); } }
       if (fm && req.method === 'DELETE') { try { const n = media.removeFolder(fm[1]); return json(res, 200, { ok: true, freed: n, folders: media.folders() }); } catch (e) { return json(res, 404, { error: e.message }); } } }
     if (url.pathname === '/api/media/move' && req.method === 'POST') { const b = await body(req); try { const n = media.moveTo(b.files, b.folder || null); return json(res, 200, { ok: true, moved: n, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
     if (url.pathname === '/api/media' && req.method === 'GET') { /* INF-03: pages over the whole gallery. ?n ?before (cursor) ?offset ?q ?filter ?folder ?kind ?upto ?not (repeated: files left out of the pages and the total); without any, the old answer (600, with the catalog) plus total/next/counts. A paged answer carries the catalog only with ?catalog=1. */
@@ -3016,6 +3029,12 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
     }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: STUDIO_DEFAULTS(), ...(minimaxOn() ? { voices: voces.summary() } : {}) });
+    if (url.pathname === '/api/media/describir') { // 29 oct 2026 (11.1): GET = lo descrito y el costo de lo que falta (no gasta) · POST = describir con visión (solo el dueño, con el costo confirmado; apagado por defecto)
+      const sel = req.method === 'GET' ? { ids: (url.searchParams.get('ids') || '').split(',').filter(Boolean), folder: url.searchParams.get('folder') || undefined, q: url.searchParams.get('q') || undefined } : null;
+      if (sel) return json(res, 200, { ...descripcionLocal.leer(sel, { pagina: +url.searchParams.get('pagina') || 1 }), activo: cfg.estudio?.descripcionesIA === true });
+      if (req.method === 'POST') { const b = await body(req); if (b.by === 'agent' || b.agent) return json(res, 403, { error: 'Describir imágenes gasta visión: es del dueño.' });
+        try { return json(res, 200, await descripcionLocal.ejecutar(b, { forzar: b.forzar === true, confirmarUsd: b.confirmarUsd, por: 'dueno' })); } catch (e) { return json(res, e.status || 500, { error: e.message, ...(e.costoEstimadoUsd != null ? { costoEstimadoUsd: e.costoEstimadoUsd } : {}) }); } }
+    }
     if (url.pathname === '/api/media/vision' && req.method === 'GET') { // 28 oct 2026: la copia que un agente MIRA (ver_imagen): JPEG ≤ 1568 px y ≤ 1,5 MB. Solo lee; el id sale de la galería (media.resolve nunca sale de ella)
       const id = String(url.searchParams.get('file') || ''), f = media.resolve(id);
       if (!f) return json(res, 404, { error: 'esa imagen ya no está en el Estudio (¿en la papelera?)' });
@@ -3062,7 +3081,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/media/upload' && req.method === 'POST') { // the owner's own photo or video (a product, a logo, a face) to use as a reference or a first frame
       const b = await body(req, 40 << 20);
-      try { const it = media.upload(b); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
+      try { const it = media.upload(await prepararSubida(b, async x => new Uint8Array(await aJpeg(Buffer.from(x))))); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
     if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = MEDIA_MIME[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }

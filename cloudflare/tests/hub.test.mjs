@@ -95,3 +95,13 @@ test('lo solo-admin (ajustes, conectores, Dimitri…) llega a los administradore
   h.difundir({ tipo: 'cambio', area: 'tareas', nombre: 'Tareas' });
   assert.deepEqual([adm, ed, le].map((s) => s.enviados.length), [2, 1, 1]);
 });
+
+test('N1: un evento con `para` solo llega a esas cuentas (y no sale la lista de destinatarios); sin `para` va a todos', () => {
+  const a = persona('ana'), b = persona('bruno'), c = persona('carla');
+  const { h } = hub([a, b, c]);
+  h.difundir({ tipo: 'nota', para: ['bruno'] });
+  assert.equal(a.enviados.length, 0); assert.equal(c.enviados.length, 0); assert.deepEqual(b.enviados, [{ tipo: 'nota' }]);
+  h.difundir({ tipo: 'cambio', area: 'tareas' });
+  assert.equal(a.enviados.length, 1); assert.equal(c.enviados.length, 1); assert.equal(b.enviados.length, 2);
+  h.difundir({ tipo: 'nota', para: [] }); assert.equal(a.enviados.length, 1, 'una lista vacía no es «todos»');
+});

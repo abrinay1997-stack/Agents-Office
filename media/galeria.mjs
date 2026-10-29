@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as GF from '../src/galeria-filtro.js'; // INF-03: qué ficha entra en una vista, igual en el servidor y en la página
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
-import { slug, dims, AUDIO_EXT, MONTH_RE, FILE_RE, cleanName, BIN_RE, BIN_DAYS, UPLOAD, MAGIC, zipFiles } from './galeria-core.mjs'; // 25 oct 2026: lo puro, compartido con la nube
+import { slug, dims, AUDIO_EXT, MONTH_RE, FILE_RE, cleanName, BIN_RE, BIN_DAYS, UPLOAD, MAGIC, zipFiles, normalizarCarpetas, arbol, carpetaNueva, nombreEntreHermanos, validarMover, reordenar, descendientes, planBorrado, confirmaBorrado, textoBorrado, topeCarpetas, UNDO_CARPETA_MS, UNDO_GRACIA_MS } from './galeria-core.mjs';
+import { S } from './estado.mjs'; // el flag estudio.carpetasArbol (S.cfg.carpetasArbol): apagado, todo funciona como antes // 25 oct 2026: lo puro, compartido con la nube
 
 let root = '';
 export const dir = () => root;
@@ -47,15 +48,25 @@ export function store(buf, ext, meta) {
    Folders are the owner's own labels, not directories: a file stays where it is (the links in the deliverables and the
    references keep working) and its record says which folder it is in. <media>/folders.json keeps their names. */
 const foldersFile = () => path.join(root, 'folders.json');
-function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(), 'utf8')); return Array.isArray(j.folders) ? j.folders.filter(f => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; } catch { return []; } }
-function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); renombrar(f + '.tmp', f); }
+/** Fase 1.a (29 oct 2026): ¿están encendidas las carpetas en árbol? (office.config.json → estudio.carpetasArbol) */
+export const arbolOn = () => S.cfg.carpetasArbol === true;
+function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(), 'utf8')); const l = Array.isArray(j.folders) ? j.folders.filter(f => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; return arbolOn() ? normalizarCarpetas(l) : l; } catch { return []; } }
+function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify(arbolOn() ? { v: 2, folders: l } : { folders: l }, null, 1)); renombrar(f + '.tmp', f); }
 /** The folders, with how many files each holds (the ones in the bin do not count). */
 export function folders(items = index().sorted, fl = readFolders()) { // INF-03: the index itself (read only), never a copy of 5,000 records per request
+  if (arbolOn()) return arbol(items, fl); // 1.a: en orden de árbol, con parentId, ruta, n (directo) y nTotal (con subcarpetas)
   const count = new Map(); for (const it of items) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1);
   return fl.map(f => ({ ...f, n: count.get(f.id) || 0 }));
 }
 export const folderOf = id => readFolders().find(f => f.id === id) || null;
-export function addFolder(name) {
+const newFolderId = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+/** `opts` (solo con el árbol encendido): { parentId, tipo, color, creadaPor, loteId, auto }. Un padre que no existe se trata como raíz. */
+export function addFolder(name, opts = {}) {
+  if (arbolOn()) {
+    const l = readFolders(), t = topeCarpetas(l.length, true); if (!t.ok) throw new Error(`como mucho ${t.max} carpetas (ya hay ${t.n})`);
+    const por = opts.creadaPor || 'you', f = carpetaNueva(l, { id: newFolderId(), name, parentId: opts.parentId || null, tipo: opts.tipo, color: opts.color, creadaPor: por, loteId: opts.loteId, auto: opts.auto === true || por !== 'you' });
+    writeFolders([...l, f]); return t.aviso ? { ...f, aviso: t.aviso } : f;
+  }
   const nm = cleanName(name); if (!nm) throw new Error('ponle un nombre a la carpeta');
   const l = readFolders(); if (l.some(f => f.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
   if (l.length >= 200) throw new Error('como mucho 200 carpetas');
@@ -65,8 +76,69 @@ export function addFolder(name) {
 export function renameFolder(id, name) {
   const nm = cleanName(name); if (!nm) throw new Error('ponle un nombre a la carpeta');
   const l = readFolders(), f = l.find(x => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
-  if (l.some(x => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
-  f.name = nm; writeFolders(l); return f;
+  if (arbolOn()) f.name = nombreEntreHermanos(l, f.parentId, nm, { excluir: id }); // único entre hermanos
+  else { if (l.some(x => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`); f.name = nm; }
+  writeFolders(l); return f;
+}
+/** 1.a (solo con el árbol): mover una carpeta con todo lo que lleva a otro padre (null = raíz). Ciclo → error; los archivos no se tocan. */
+export function moveFolder(id, parentId) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const l = readFolders(), v = validarMover(l, id, parentId || null); if (!v.ok) throw Object.assign(new Error(v.error), { codigo: v.codigo });
+  const f = l.find(x => x.id === id), np = parentId || null;
+  if ((f.parentId ?? null) === np) return f;
+  f.name = nombreEntreHermanos(l, np, f.name, { excluir: id }); f.parentId = np;
+  const hermanos = l.filter(x => x.id !== id && (x.parentId ?? null) === np); f.orden = hermanos.length ? Math.max(...hermanos.map(h => h.orden)) + 1 : 0;
+  writeFolders(l); return f;
+}
+/** 1.a (solo con el árbol): el orden de las carpetas de un nivel. */
+export function reorderFolders(parentId, ids) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const l = readFolders(); if (parentId && !l.some(f => f.id === parentId)) throw new Error('esa carpeta ya no existe');
+  writeFolders(reordenar(l, parentId || null, ids)); return folders();
+}
+/** 1.a: lo que se llevaría borrar una carpeta con todo lo que tiene (sin tocar nada). */
+export function planFolderDelete(id) {
+  const l = readFolders(), f = l.find(x => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
+  const plan = planBorrado(l, all(), id); return { ...plan, nombre: f.name, texto: textoBorrado(f.name, plan) };
+}
+const undoFile = () => path.join(binDir(), 'carpetas.json');
+function readUndo() { try { const j = JSON.parse(fs.readFileSync(undoFile(), 'utf8')); return Array.isArray(j.borrados) ? j.borrados : []; } catch { return []; } }
+function writeUndo(l) { fs.mkdirSync(binDir(), { recursive: true }); const f = undoFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ borrados: l.slice(-10) }, null, 1)); renombrar(f + '.tmp', f); }
+/**
+ * 1.a (decidido por el dueño, 29 oct): borrar una carpeta borra TODO su contenido — subcarpetas y archivos; los archivos van a la papelera (30 días).
+ * Sin `confirmar` no toca nada y devuelve { pendiente, confirmar:{archivos,subcarpetas}, texto, usadas }. Con `confirmar` que no coincide con lo que hay
+ * ahora, { desfase } y tampoco toca nada. `usadas(file)` → piezas de Contenido que lo usan: si hay alguna y no se pide `dejar`, { enUso } sin tocar nada;
+ * con `dejar` esos archivos quedan en «Sin carpeta» y el resto se borra. → { ok, carpetas, archivos, dejadas, deshacer:{token,hasta} }
+ */
+export function removeFolderTree(id, { confirmar = null, usadas = () => [], dejar = false } = {}) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const l = readFolders(), f = l.find(x => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
+  const items = all(), plan = planBorrado(l, items, id), info = { nombre: f.name, confirmar: { archivos: plan.nArchivos, subcarpetas: plan.subcarpetas }, texto: textoBorrado(f.name, plan) };
+  const enUso = plan.archivos.map(file => ({ file, piezas: usadas(file) })).filter(u => u.piezas.length);
+  if (!confirmar) return { pendiente: true, ...info, usadas: enUso };
+  if (!confirmaBorrado(plan, confirmar)) return { desfase: true, ...info, usadas: enUso };
+  if (enUso.length && !dejar) return { enUso: true, ...info, usadas: enUso };
+  const quedan = new Set(enUso.map(u => u.file)), idsC = new Set(plan.carpetas), hechos = [];
+  for (const file of plan.archivos) { if (quedan.has(file)) { update(file, { folder: null }); continue; } const t = trash(file); if (t) hechos.push(t); }
+  const borradas = l.filter(x => idsC.has(x.id));
+  writeFolders(l.filter(x => !idsC.has(x.id)));
+  const token = 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), ahora = Date.now();
+  writeUndo([...readUndo().filter(u => ahora - u.at < BIN_DAYS * 864e5), { token, at: ahora, carpetas: borradas, archivos: hechos }]);
+  return { ok: true, carpetas: borradas.length, archivos: hechos.length, dejadas: quedan.size, deshacer: { token, hasta: ahora + UNDO_CARPETA_MS } };
+}
+/** DESHACER del borrado de una carpeta (30 s): vuelven la carpeta, sus subcarpetas (con los mismos ids) y sus archivos. → { ok, carpetas, archivos } o lanza */
+export function undoFolderDelete(token) {
+  if (!arbolOn()) throw new Error('las carpetas en árbol están apagadas');
+  const u = readUndo().find(x => x.token === String(token || '')); if (!u) throw new Error('ya no se puede deshacer');
+  if (Date.now() - u.at > UNDO_CARPETA_MS + UNDO_GRACIA_MS) throw new Error('pasaron más de 30 segundos: recupera los archivos desde la papelera');
+  const l = readFolders(), ya = new Set(l.map(x => x.id)), vuelven = [];
+  for (const c of u.carpetas) { if (ya.has(c.id)) continue; const padre = c.parentId && (ya.has(c.parentId) || u.carpetas.some(x => x.id === c.parentId)) ? c.parentId : null; vuelven.push({ ...c, parentId: padre }); }
+  const nuevaLista = [...l, ...vuelven];
+  for (const c of vuelven) c.name = nombreEntreHermanos(nuevaLista.filter(x => x !== c), c.parentId, c.name, { auto: true }); // si alguien tomó el nombre entre medias
+  writeFolders(nuevaLista);
+  let n = 0; for (const t of u.archivos) if (restore(t)) n++;
+  writeUndo(readUndo().filter(x => x.token !== u.token));
+  return { ok: true, carpetas: vuelven.length, archivos: n };
 }
 /** The folder goes; its files stay, with no folder. → how many files it held */
 export function removeFolder(id) {
@@ -183,7 +255,7 @@ export function find(pred) {
 export const PAGE_MAX = 600; // the old answer's size: a page is never bigger
 export function query({ q = '', filter = 'all', folder = 'all', kind = null, before = null, offset = 0, n = 120, upto = null, extra = null, exclude = null } = {}) {
   const X = index(), fl = readFolders(), ids = new Set(fl.map(f => f.id)), sig = X.rev + ':' + [...ids].join(',');
-  const skipF = new Set(Array.isArray(exclude) ? exclude.slice(0, 50).map(String) : []), m0 = GF.matcher({ q, filter, folder, kind }, ids, extra); // exclude: files the asker already has (a piece's own media), out of the pages AND the total, so «Ves X de Y» adds up
+  const skipF = new Set(Array.isArray(exclude) ? exclude.slice(0, 50).map(String) : []), m0 = GF.matcher({ q, filter, folder, kind, sub: arbolOn() && ids.has(folder) ? descendientes(fl, folder) : null }, ids, extra); // exclude: files the asker already has (a piece's own media), out of the pages AND the total, so «Ves X de Y» adds up
   const ok = skipF.size ? it => !skipF.has(it.file) && m0(it) : m0, cur = GF.parseCursor(before);
   const size = Math.max(0, Math.min(PAGE_MAX, Number.isFinite(+n) ? Math.floor(+n) : 120));
   let skip = Math.max(0, Math.floor(+offset || 0)), total = 0, after = 0, hit = -1, far = null, farAt = -1; const page = [];
@@ -206,7 +278,7 @@ export function resolve(id) {
   const p = path.join(root, rel); return fs.existsSync(p) ? p : null;
 }
 export function item(id) { const p = resolve(id); if (!p) return null; try { return JSON.parse(fs.readFileSync(p.replace(/\.[^.]+$/, '.json'), 'utf8')); } catch { return null; } }
-export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); bump(path.dirname(j)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
+export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j + '.tmp', JSON.stringify(it, null, 2)); renombrar(j + '.tmp', j); bump(path.dirname(j)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
 /** To <media>/.papelera (emptied after 30 days). Returns what `restore` needs to bring it back, or null. */
 export function trash(id) {
   const p = resolve(id); if (!p) return null;

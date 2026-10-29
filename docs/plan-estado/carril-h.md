@@ -4,4 +4,24 @@
   - `cloudflare/worker/lib/avisos.js` es el único que escribe avisos: `emitirAviso`, `emitirAvisos` (lote, destino `filas` por defecto o `doc` para `notices`), más `leerAvisos`, `leerAvisosDoc`, `marcarAvisosLeidos`, `marcarAvisosDocLeidos`. `avisar()` queda como alias.
   - Refactorizados: `lib/tareas/sesion.js` (volcado en lote), `lib/agentes/ejecutor.js`, `lib/contenido/servicio.js` y `lib/anuncios-nube.js` (doc `notices`), `modulos/agentes.js` (leer / marcar leídos) y `lib/salud.js` (lectura de las dos tablas).
   - Test: `cloudflare/tests/emitir-aviso.test.mjs` (mismo aviso que antes por emisor + grep estructural que falla si aparece un escritor directo).
-- ⬜ Tabla `notificaciones` y su poda: es N0 (cimientos), no N0.0. No se creó migración.
+- ✅ **N0 cimientos (parte servidor)** (rama `carril-h-n0-cimientos`).
+  - Migración reservada: `cloudflare/migraciones/0140_notificaciones.sql` (deshacer: `drop table if exists notificaciones;`).
+  - Archivos: `worker/lib/notificaciones.js` (categorías por rol, destinatarios, `proyectar`, `listar`, `marcarLeidas`), `worker/modulos/notificaciones.js` (`GET /api/notificaciones`, `POST /api/notificaciones/leer`, `GET|POST /api/notificaciones/config`), enganche en `lib/avisos.js`, poda en `lib/mantenimiento.js` (leídas 60 d, sin leer 180 d), `CONSERVA_TABLAS`/`CONSERVA_DOCS` en `lib/restablecer.js`, `TABLAS`/`ESCRIBEN` en `tests/auditoria-transversal.test.mjs`.
+  - Flags (doc `notificaciones.config`, apagados): `activo` y `lecturaVeResultados` (SEG-04, supuesto del plan: `lectura` ve tareas y calendario, no agentes/Cerebro/anuncios).
+  - Delta de bytes en la página: 0 (solo Worker). Test: `cloudflare/tests/notificaciones.test.mjs`.
+  - Pendiente: `visto_at`/`entro_at`, preferencias, `para:[userIds]` del Hub, campanita/push (paquete aparte).
+- ✅ **N1 (parte servidor): notas para cuando entres + última visita** (rama `carril-h-n1`, PR 1 de 2).
+  - Migración reservada: `cloudflare/migraciones/0141_notas_personales.sql` (tablas `notas_personales`, `notas_estado`, `presencia_cuenta`; deshacer: `drop table if exists notas_estado; drop table if exists notas_personales; drop table if exists presencia_cuenta;`).
+  - Poda: `notas_personales` 30 días DESPUÉS de vencer (`mantenimiento.js`); `notas_estado` por cascada; `presencia_cuenta` una fila por cuenta. Declaradas en `TABLAS` (auditoría transversal) y en `CONSERVA_TABLAS`/`CONSERVA_DOCS` (`notas.config`).
+  - Flag apagado: doc `notas.config` `{activo:false}` (`POST /api/notas-personales/config`, solo admin). Archivos: `worker/lib/notas-personales.js`, `worker/modulos/notas-personales.js`, `tests/notas-personales.test.mjs`.
+  - D09 aplicado: `lectura` solo a personas concretas; tope 5 abiertas por par, 20/día por remitente, 3 grupales abiertas; texto plano ≤ 500 sin autoenlace; enlace solo `tipo:id`; el administrador ve existencia y estado sin texto (salvo «reportada»); vence a 30 días (máx. 90).
+  - D07 aplicado: `tocarPresencia` (una sentencia, escribe como mucho cada 5 min, visita nueva tras 30 min, guarda `visto_anterior`); la llaman las rutas de notas (no `sesion.js`, no el Hub). `GET /api/notas-personales/entrada` = «mientras no estabas».
+  - `para:[userIds]` en `Hub.difundir` (3 líneas en `hub.js`, test en `hub.test.mjs`); la nota difunde `{tipo:'nota', para}` sin texto.
+  - Delta de bytes de la página: 0 (solo Worker).
+  - ⬜ Presencia filtrada por política (D08) y `visible`: NO hecha (cambia lo que ven hoy todos los roles; va con N2b). ⬜ Notificaciones ya existentes no generan aún «nota» ni campanita (UI = PR 2).
+- ✅ **N1 (interfaz)** (rama `carril-h-n1-ui`, PR 2 de 2, apilado sobre `carril-h-n1`).
+  - `cloudflare/public/nube-notas.js` (campanita + hoja «Mientras no estabas» + formulario para dejar una nota) lo trae `nube.js` tras saber quién eres; con el flag apagado no pinta nada. Estilos `.nt-*` al final de `nube.css`. `nube.js`: 2 líneas (cargar el paquete y reaccionar al evento `nota` del socket). `paginas.js`: `/nube-notas.js` solo con sesión.
+  - Delta de bytes de `dist/command-centre-v2.html`: 0 (la UI vive en `cloudflare/public`, fuera de la página de la oficina). Test: `cloudflare/tests/navegador-notas.test.mjs` (Chromium: apagado, 390 y 1280 px, escapado, foco, Escape).
+  - ⬜ No hecho: versión móvil propia dentro de `src/movil` (la hoja se adapta con `body.movil`), «Enterado»/Telegram (N2), presencia filtrada D08.
+  - Revisión: arreglado el repintado de la hoja (conservaba mal el destinatario por código pegado a un comentario), sondeo en pausa con la pestaña oculta, hoja declarada no modal y sin tapar la barra móvil, texto honesto de «Reportar».
+  - ⬜ Anotado de #77: los topes de `crear` (par/día/grupales) cuentan y luego insertan sin atomicidad; una carrera podría pasarse por 1-2 notas. Pendiente: pasarlo a una sola sentencia `insert … select … where`.
