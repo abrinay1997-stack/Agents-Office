@@ -12,6 +12,8 @@ import { texto as textoIA } from '../lib/ia.js';
 import * as catalogo from '../../../media/catalogo.mjs';
 import { MEDIA_MIME, sniffExt } from '../../../media/galeria-core.mjs';
 import * as galeria from '../lib/estudio/galeria.js';
+import { prepararSubida } from '../../../media/formatos-imagen.mjs';
+import { aJpegDeEnv } from '../lib/contenido/conductores.js';
 import * as trabajos from '../lib/estudio/trabajos.js';
 import * as voces from '../lib/estudio/voces.js';
 import { prepararEstudio, guardarConfig, validarConfig, leerConfig, motoresEncendidos } from '../lib/estudio/entorno.js';
@@ -135,7 +137,7 @@ export async function manejar(ctx) {
     if (ruta === '/api/media/upload' && metodo === 'POST') {
       if (+req.headers.get('content-length') > MAX_JSON_SUBIDA) return error('el archivo es demasiado grande para subirlo así (máx. unos 17 MB de archivo)', 413);
       const b = (await cuerpo(req, MAX_JSON_SUBIDA)) || {};
-      try { return json({ item: await galeria.upload(env, db, b) }); } catch (e) { return error(e.message, 400); }
+      try { return json({ item: await galeria.upload(env, db, await prepararSubida(b, env['IMAGES']?.input ? aJpegDeEnv(env) : null)) }); } catch (e) { return error(e.message, 400); }
     }
     // la migración desde la computadora del dueño: los bytes de un archivo con su clave de siempre, solo administrador (scripts/migrar/estudio.mjs)
     if ((m = ruta.match(/^\/api\/media\/archivo\/(.+)$/)) && metodo === 'PUT') {

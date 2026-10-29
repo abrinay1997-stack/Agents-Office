@@ -12,6 +12,7 @@ import { hashtagsUsados } from './guardados-core.mjs';
 import { emparejar, comoEvento } from '../src/contenido-publicadas.js';
 import { huecos as huecosDe, queVuelven, repartir, encargo, origenVuelve, raizDe } from '../src/contenido-llenar.js';
 import { NOMBRE_RED, REDES } from './piezas-core.mjs';
+import { avisosDeFormato } from '../media/formatos-imagen.mjs';
 import { validateVision, MAX_IMAGES, MAX_B64 } from '../vision.mjs';
 
 export const LIMITE_VISION = MAX_IMAGES * (MAX_B64 + 400) + 256 * 1024; // lo que pesa un «Mejorar» con las 4 imágenes que Claude puede ver (+ la pieza)
@@ -20,7 +21,7 @@ const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const R = (status, datos) => ({ status, datos });
 
-export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
+export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, puedeConvertir = () => true, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
   // `segundoPlano(promesa)` — lo que no se espera para contestar (en el Worker: ctx.waitUntil, para que la vuelta de la cola no se corte al responder)
   const revisado = async p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? await programador.salidaDe(p.id) : null }; };
   const todasRevisadas = async piezas => { const out = []; for (const p of piezas) out.push(await revisado(p)); return out; };
@@ -229,7 +230,9 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
           const b = await body();
           if (b.por === 'agente') return R(403, { error: 'los agentes no aprueban ni devuelven piezas: es del dueño' });
           const r = accion === 'aprobar' ? await almacen.aprobar(id, { por: String(b.quien || 'dueno').slice(0, 40), pronto: b.pronto === true }) : await almacen.devolver(id, b.estado);
-          return r.error ? R(r.nada ? 404 : 409, { error: r.error, errores: r.errores }) : R(200, { ok: true, pieza: await revisado(r.pieza), avisos: r.avisos || [] });
+          if (r.error) return R(r.nada ? 404 : 409, { error: r.error, errores: r.errores });
+          const fmt = accion === 'aprobar' && ((await ajustes()) || {}).modo === 'real' ? avisosDeFormato(r.pieza.medios, { redes: r.pieza.redes, puedeConvertir: await puedeConvertir() }) : []; // CON-13: qué pasará con cada imagen que no es JPEG
+          return R(200, { ok: true, pieza: await revisado(r.pieza), avisos: [...(r.avisos || []), ...fmt] });
         }
       }
       if (p === '/api/contenido/usos' && metodo === 'GET') return R(200, { usos: await almacen.usos(query.get('medio') || '') });

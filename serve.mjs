@@ -93,6 +93,7 @@ import * as understand from './understand.mjs'; // V4.8: video and audio → tex
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { prepararSubida } from './media/formatos-imagen.mjs'; // CON-02: gif/avif/bmp/tiff al subir → JPEG
 import { porDefecto as porDefectoCuentasContenido, motivoNoPublica, listaCuentas, MOTIVO_METRICOOL } from './src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
 import { agenteDeContenido, promptMejorar, leerPropuesta, prepararVistas } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
@@ -296,7 +297,7 @@ const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.d
 const ANUNCIOS_MCP = path.join(ROOT, 'anuncios-mcp.mjs');
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
 const metricool = crearMetricool();
-const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
+const aJpeg = async b => (await import('sharp')).default(b).rotate().flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
 const CONDUCTORES = {
   simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
   metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json'),
@@ -3062,7 +3063,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/media/upload' && req.method === 'POST') { // the owner's own photo or video (a product, a logo, a face) to use as a reference or a first frame
       const b = await body(req, 40 << 20);
-      try { const it = media.upload(b); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
+      try { const it = media.upload(await prepararSubida(b, async x => new Uint8Array(await aJpeg(Buffer.from(x))))); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
     if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = MEDIA_MIME[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
