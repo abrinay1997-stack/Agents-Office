@@ -5,6 +5,7 @@
 // Descartar · Deshacer 30 s) y preguntas con opciones. Lo que GASTA (generar en el Estudio, activar un anuncio) NO se confirma aquí: la
 // tarjeta lo manda a la vista de escritorio, donde están los dos clics y los topes. Todo lo que dice Dimitri se pinta con md.js.
 import { mdToHtml } from '../../md.js';
+import { alertasIa, avisosParaHilo, popoverHTML } from '../../dimitri-ia.js';
 import { pastChoices } from '../../sub-ops.js';
 import { esc, svg, vacio, hace } from '../ui.js';
 import { hacer, hacerYa, interruptor, alternar } from './tareas-comun.js';
@@ -23,7 +24,7 @@ export function registrar(shell) {
   shell.registrarVista({
     id: 'dimitri', titulo: 'Dimitri', icono: 'dimitri', grupo: 'tab',
     montar(el, ctx) {
-      let mensajes = [], pasosVivos = [], iaInfo = null, cargado = false, ocupado = false, nombre = 'Dimitri', error = '', fallo = null, vivo = '', vivoModo = '', corrida = '', deteniendo = false, sinCtx = false, ctxUlt = '', tic = 0;
+      let mensajes = [], pasosVivos = [], iaInfo = null, avisosIa = [], iaFallo = null, cargado = false, ocupado = false, nombre = 'Dimitri', error = '', fallo = null, vivo = '', vivoModo = '', corrida = '', deteniendo = false, sinCtx = false, ctxUlt = '', tic = 0;
       const edits = new Map(), opEdits = new Map(), picks = new Map(), opsOcupadas = new Set();
       let gente = []; // 26 oct 2026: las personas del equipo a las que se les puede pasar una pieza (cuentas de la plataforma y Ajustes → Equipo)
       const cargarGente = () => ctx.api('/api/team').then(j => { const yo = globalThis.AO_NUBE?.yo?.()?.nombre; gente = (j.people || []).map(p => p.name).filter(n => n && n !== 'Tú' && n !== yo); }).catch(() => {});
@@ -38,7 +39,7 @@ export function registrar(shell) {
       const viendo = () => (sinCtx ? null : ctx.viendo());
 
       async function cargar() {
-        try { const j = await ctx.api('/api/sub'); mensajes = j.messages || []; if (j.name) nombre = j.name; iaInfo = j.ia || null; cargado = true; error = ''; } catch (e) { error = e.message; }
+        try { const j = await ctx.api('/api/sub'); mensajes = j.messages || []; if (j.name) nombre = j.name; iaInfo = j.ia || null; cargado = true; error = ''; ponerIa(false); } catch (e) { error = e.message; }
         ctx.cabecera({ titulo: nombre }); pintar(true);
       }
 
@@ -63,8 +64,8 @@ export function registrar(shell) {
         if (!cargado) { hilo.innerHTML = error ? `<div class="mv-vacio" role="alert"><h3>No se pudo abrir el chat</h3><p>${esc(error)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>` : '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div><span class="mv-sr" role="status">Abriendo el chat…</span>'; return; }
         const nuevo = !mensajes.length && !ocupado;
         const ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
-        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p>${iaInfo?.nombre ? `<p class="mv-ia">IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa'}. Se cambia en Ajustes → Modelos.${iaInfo.gasto ? ` Gasto de IA del mes: <b>US$${iaInfo.gasto.usd.toFixed(2).replace('.', ',')}${iaInfo.gasto.tope ? ' de US$' + iaInfo.gasto.tope.toFixed(2).replace('.', ',') : ''}</b>.` : ''}${window.AO_NUBE ? ' 🔒 Solo tú ves este chat.' : ''}</p>` : ''}</div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
-          + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
+        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p></div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
+          + avisosIa.map(t => `<div class="mv-ia-aviso" role="status">⚠ ${esc(t)}</div>`).join('') + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
         env.disabled = !puede(); chipViendo();
         if (fondo !== false) abajo();
         arrancaCuenta();
@@ -113,7 +114,7 @@ export function registrar(shell) {
           mensajes = mensajes.filter(m => m.id !== 'tmp');
           const mio = { id: 'tmp-fallo', who: 'user', text: texto, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) };
           try { const j = await ctx.api('/api/sub'); const l = j.messages || []; if (l.some(m => m.who === 'sub' && m.at >= desde)) { mensajes = l; throw null; } } catch (x) { if (x === null) { ocupado = false; pintar(); ctx.store.refrescar(); return; } }
-          mensajes.push(mio); fallo = { texto, motivo: e.message, answers, via, adj: salida ? guardadas : null }; if (salida) X.devolver(guardadas); // su mensaje se queda a la vista, con el motivo y «Reintentar» debajo
+          iaFallo = { at: Date.now(), motivo: e.message }; ponerIa(false); mensajes.push(mio); fallo = { texto, motivo: e.message, answers, via, adj: salida ? guardadas : null }; if (salida) X.devolver(guardadas); // su mensaje se queda a la vista, con el motivo y «Reintentar» debajo
         }
         ocupado = false; vivo = ''; corrida = ''; pintar(); ctx.store.refrescar();
       }
@@ -245,7 +246,17 @@ export function registrar(shell) {
         const r = await hacerYa(ctx, () => ctx.api('/api/sub/clear', { method: 'POST', body: {} }), { aviso: 'Conversación nueva. La anterior está en el historial.', reintentar: true, deshacer: v => ctx.api('/api/sub/restore', { method: 'POST', body: { id: v.archived } }).then(j => { mensajes = j.messages || antes; }), despues: v => { if (v && v.archived !== undefined && mensajes === antes) { mensajes = []; edits.clear(); opEdits.clear(); picks.clear(); fallo = null; pintar(false); } else pintar(false); } });
         if (!r.ok) pintar(false);
       }
-      ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }, { icono: 'mas1', etiqueta: 'Conversación nueva', alTocar: nueva }] });
+      // UX-11: el ⓘ (hoja con el modelo, las consultas y el gasto) y su punto de alerta; el aviso se dice una vez en el hilo
+      const dichas = new Set((() => { try { return JSON.parse(localStorage.getItem('ao.sub.ia.dicho') || '[]'); } catch { return []; } })());
+      function abrirIa() { ctx.hoja({ titulo: 'La IA de Dimitri', cuerpo: popoverHTML(iaInfo, alertasIa(iaInfo, iaFallo), { esc, nube: !!window.AO_NUBE }).replace(/<ul class="sb-ia-al"/, '<ul class="mv-ia-al"').replace(/<dl class="sb-ia-dl"/, '<dl class="mv-ia-dl"') + (iaInfo?.nombre ? '<p class="mv-ia-nota">Se cambia en Ajustes → Modelos.</p>' : '') }); }
+      function cabeceraIa() { ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'info', etiqueta: alertasIa(iaInfo, iaFallo).length ? 'Con qué IA corre Dimitri (hay un aviso)' : 'Con qué IA corre Dimitri', punto: alertasIa(iaInfo, iaFallo).length > 0, alTocar: abrirIa }, { icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }, { icono: 'mas1', etiqueta: 'Conversación nueva', alTocar: nueva }] }); }
+      function ponerIa(pinta = true) {
+        const nuevas = avisosParaHilo(alertasIa(iaInfo, iaFallo), dichas);
+        for (const x of nuevas) { dichas.add(x.id); avisosIa.push(x.texto); }
+        if (nuevas.length) { try { localStorage.setItem('ao.sub.ia.dicho', JSON.stringify([...dichas].slice(-20))); } catch {} }
+        cabeceraIa(); if (pinta && nuevas.length) pintar(true);
+      }
+      cabeceraIa();
       el._tick = () => { clearInterval(el._timer); el._timer = setInterval(() => { if (!el.hidden && !ocupado && !fallo && document.visibilityState === 'visible') ctx.api('/api/sub').then(j => { const l = j.messages || []; if (!ocupado && (l.length !== mensajes.length || (l.at(-1)?.id !== mensajes.at(-1)?.id))) { mensajes = l; pintar(); } }).catch(() => {}); }, 9000); };
       el._cargar = () => { sinCtx = false; ctxUlt = ''; return cargar(); }; el._adjuntar = id => X.agregarGaleria([id]); pintar();
     },
