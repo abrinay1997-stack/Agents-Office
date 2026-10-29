@@ -189,7 +189,9 @@ body.movil .ch-btn { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ch-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .ch-nuevo { display: grid; gap: 6px; } .ch-nuevo input[type=text], .ch-nuevo #ch-nom { font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }
 .ch-chk { display: flex; gap: 8px; align-items: center; min-height: 36px; font-size: 14px; } .ch-chk input { width: 20px; height: 20px; } .ch-nuevo fieldset { border: 1px solid var(--hairline); border-radius: 8px; max-height: 180px; overflow: auto; }
-@media (max-width: 820px) { #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid-template-columns: 1fr; padding-top: env(safe-area-inset-top); padding-bottom: calc(56px + env(safe-area-inset-bottom)); } .ch-izq { border-right: 0; } #nbChat .sg-btn { min-height: 44px; min-width: 44px; } .ch-m { max-width: 94%; } }
+@media (max-width: 820px) { .ch-chk { min-height: 44px; } .ch-chk input { width: 24px; height: 24px; } .ch-acc button { min-height: 44px; padding: 0 8px; } #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid-template-columns: 1fr; padding-top: env(safe-area-inset-top); padding-bottom: calc(56px + env(safe-area-inset-bottom)); } .ch-izq { border-right: 0; } #nbChat .sg-btn { min-height: 44px; min-width: 44px; } .ch-m { max-width: 94%; } }
 body.movil #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid-template-columns: 1fr; padding-bottom: calc(56px + env(safe-area-inset-bottom)); } body.movil #nbChat .sg-btn { min-height: 44px; min-width: 44px; }
 @media (prefers-reduced-motion: no-preference) { .ch-btn { transition: none; } }
 .ch-izq:empty, .ch-der:empty { display: none; }
+
+.ch-edit textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: #1b1b1b; }

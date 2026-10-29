@@ -219,8 +219,9 @@ test('salir de un canal: no se saca a quien no está, el canal nunca queda sin d
   assert.equal((await o.llamar(o.dani, `${C}/novedades?desde=0`)).j.mensajes.some((x) => x.canal === id), false, 'lo archivado no aparece en novedades');
 });
 
-test('GET /personas: las cuentas activas sin la que pregunta ni el correo; apagado no hay nada', { skip: SALTAR }, async () => {
+test('GET /personas: las cuentas activas sin la que pregunta ni el correo; a quien solo lee y con el chat apagado, nada', { skip: SALTAR }, async () => {
   const o = await oficina();
+  assert.deepEqual((await o.llamar(o.carla, `${C}/personas`)).j, { personas: [] }, 'lectura no recibe la lista de cuentas');
   const r = (await o.llamar(o.beto, `${C}/personas`)).j.personas; assert.deepEqual(r.map((p) => p.nombre).sort(), ['Ana', 'Carla', 'Dani María']); assert.ok(!JSON.stringify(r).includes('@'));
   o.db.prepare("insert into perfiles (user_id, baja_at) values (?, 1) on conflict (user_id) do update set baja_at = 1").run(o.carla);
   assert.equal((await o.llamar(o.beto, `${C}/personas`)).j.personas.length, 2, 'quien ya no está no aparece');

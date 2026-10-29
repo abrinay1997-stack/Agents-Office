@@ -25,20 +25,22 @@ async function mundo() {
   const ana = d1._db.prepare('select id from users where email = ?').get(c.email).id; d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(ana, 'Ana');
   return { d1, env, ana, beto: nueva('beto@panaclaw.test', 'editor', 'Beto'), carla: nueva('carla@panaclaw.test', 'lectura', 'Carla'), dani: nueva('dani@panaclaw.test', 'editor', 'Dani') };
 }
-async function pagina(o, quien, rol, { ancho = 1280, activo = true } = {}) {
+async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0 } = {}) {
   if (activo) await guardarConfig(o.d1, { activo: true });
   const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 } }), p = await ctx.newPage(), errores = [];
-  p.on('pageerror', (e) => errores.push(String(e)));
+  const peticiones = []; p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (r) => {
     const req = r.request(), u = new URL(req.url());
     if (u.pathname === '/') return r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--ink:#111;--cream:#fff;--hairline:#ddd;--grey:#555;--focus:#06c}${leer('nube.css')}</style></head><body><main>oficina</main></body></html>` });
     if (u.pathname === '/shim.js') return r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: SHIM(rol) });
     if (u.pathname === '/nube-chat.js') return r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: leer('nube-chat.js') });
+    if (lento && req.method() === 'POST' && /\/mensajes$/.test(u.pathname)) await new Promise((r) => setTimeout(r, lento));
+    peticiones.push(req.method() + ' ' + u.pathname);
     const resp = await manejar(new Request(u.href, { method: req.method(), headers: { 'content-type': 'application/json', cookie }, body: req.postData() || undefined }), o.env);
     return r.fulfill({ status: resp.status, headers: { 'content-type': 'application/json' }, body: await resp.text() });
   });
   await p.goto('https://oficina.test/'); await p.addScriptTag({ url: '/shim.js' }); await p.addScriptTag({ url: '/nube-chat.js' });
-  return { p, ctx, errores };
+  return { p, ctx, errores, peticiones };
 }
 const llamar = async (o, quien, ruta, metodo = 'GET', cuerpo) => { const r = await manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { cookie: `__Host-sesion=${await abrirSesion(o.d1, quien)}`, 'content-type': 'application/json' }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }), o.env); return { status: r.status, j: await r.json().catch(() => null) }; };
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
@@ -96,4 +98,77 @@ test('teléfono (390 px): pantalla completa, lista → hilo → atrás, sin desb
   assert.ok((await p.evaluate(() => document.querySelector('[data-a=atras]').getBoundingClientRect().height)) >= 44);
   await p.click('[data-a=atras]'); await p.waitForSelector('.ch-fila'); await p.keyboard.press('Escape'); await p.waitForSelector('#nbChat', { state: 'detached' });
   assert.deepEqual(errores, []); await ctx.close();
+});
+
+const visible = (p) => p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+
+test('dos Enter seguidos mandan UN mensaje; si el envío falla, el texto vuelve a la caja', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const { p, ctx } = await pagina(o, o.beto, 'editor', { lento: 400 });
+  await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('#ch-texto');
+  await p.fill('#ch-texto', 'una sola vez'); await p.press('#ch-texto', 'Enter'); await p.press('#ch-texto', 'Enter');
+  await p.waitForFunction(() => document.querySelectorAll('.ch-m.mio').length === 1);
+  assert.equal(o.d1._db.prepare("select count(*) n from chat_mensajes where cuerpo = 'una sola vez'").get().n, 1);
+  await ctx.close();
+});
+
+test('lo que otra persona edita o borra se ve al actualizar (no solo un mensaje nuevo)', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const m = (await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'primero' })).j.mensaje.id; await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'segundo' });
+  const { p, ctx } = await pagina(o, o.beto, 'editor'); await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('.ch-m');
+  await llamar(o, o.dani, `/api/chat/mensajes/${m}`, 'PATCH', { cuerpo: 'primero corregido' }); await visible(p);
+  await p.waitForFunction(() => /primero corregido/.test(document.getElementById('ch-hilo').textContent));
+  await llamar(o, o.dani, `/api/chat/mensajes/${m}`, 'DELETE'); await visible(p);
+  await p.waitForFunction(() => /Mensaje borrado/.test(document.getElementById('ch-hilo').textContent) && !/primero corregido/.test(document.getElementById('ch-hilo').textContent));
+  await ctx.close();
+});
+
+test('accesibilidad: región en vivo sin el texto, foco al abrir y tras repintar (con lo escrito y el cursor), Escape solo si el foco es del chat', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const { p, ctx } = await pagina(o, o.beto, 'editor');
+  await p.evaluate(() => { const i = document.createElement('input'); i.id = 'otro'; document.body.appendChild(i); });
+  await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('#ch-texto');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'ch-texto', 'al abrir un canal el foco va a la caja');
+  await p.fill('#ch-texto', 'borrador a medias'); await p.evaluate(() => document.getElementById('ch-texto').setSelectionRange(3, 7));
+  await llamar(o, o.dani, '/api/chat/canales/general/mensajes', 'POST', { cuerpo: 'texto-privado-del-mensaje' }); await visible(p);
+  await p.waitForFunction(() => /texto-privado/.test(document.getElementById('ch-hilo').textContent));
+  assert.deepEqual(await p.evaluate(() => { const t = document.getElementById('ch-texto'); return [document.activeElement.id, t.value, t.selectionStart, t.selectionEnd]; }), ['ch-texto', 'borrador a medias', 3, 7]);
+  await p.waitForFunction(() => /mensaje nuevo/.test(document.querySelector('[role=status][aria-live=polite]').textContent));
+  const vivo = await p.evaluate(() => document.querySelector('[role=status][aria-live=polite]').textContent); assert.match(vivo, /1 mensaje nuevo en #general/); assert.ok(!vivo.includes('texto-privado'), 'se anuncia que hay algo, no el texto');
+  assert.equal(await p.evaluate(() => !!document.querySelector('[role=alert]')), true);
+  await p.focus('#otro'); await p.keyboard.press('Escape'); assert.equal(await p.locator('#nbChat').count(), 1, 'otra ventana tiene el foco: el chat no se cierra');
+  await p.focus('#ch-texto'); await p.keyboard.press('Escape'); await p.waitForSelector('#nbChat', { state: 'detached' });
+  await ctx.close();
+});
+
+test('solo lectura: no pide la lista de cuentas ni ofrece «+ Nuevo»; el servidor tampoco se la da', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const { p, ctx, peticiones } = await pagina(o, o.carla, 'lectura'); await p.click('#nbChatBtn'); await p.waitForSelector('.ch-fila');
+  assert.equal(await p.locator('[data-a=nuevo]').count(), 0); assert.ok(!peticiones.some((x) => /\/api\/chat\/personas/.test(x)));
+  assert.deepEqual((await llamar(o, o.carla, '/api/chat/personas')).j, { personas: [] }); await ctx.close();
+});
+
+test('teléfono: las casillas de «añadir gente» miden 44 px aunque la página no tenga body.movil', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const { p, ctx } = await pagina(o, o.beto, 'editor', { ancho: 390 }); await p.click('#nbChatBtn'); await p.click('[data-a=nuevo]'); await p.click('[data-k=canal]'); await p.waitForSelector('input[name=m]');
+  assert.ok((await p.evaluate(() => document.querySelector('.ch-nuevo fieldset .ch-chk').getBoundingClientRect().height)) >= 44); await ctx.close();
+});
+
+test('editar y borrar son en el propio mensaje (sin ventanas del navegador); y «Cargar mensajes anteriores» trae el resto', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  const o = await mundo(); await guardarConfig(o.d1, { activo: true });
+  const ahora = Date.now(); for (let i = 1; i <= 60; i++) o.d1._db.prepare("insert into chat_mensajes (canal_id, user_id, cuerpo, creado_at) values ('general', ?, ?, ?)").run(o.dani, 'viejo ' + i, ahora - (100 - i) * 1000);
+  await llamar(o, o.beto, '/api/chat/resumen');
+  const { p, ctx } = await pagina(o, o.beto, 'editor'); let dialogos = 0; p.on('dialog', (d) => { dialogos++; d.dismiss(); });
+  await p.click('#nbChatBtn'); await p.click('.ch-fila'); await p.waitForSelector('.ch-m');
+  assert.equal(await p.locator('.ch-m').count(), 50); await p.click('[data-a=viejos]'); await p.waitForFunction(() => document.querySelectorAll('.ch-m').length === 60);
+  await p.fill('#ch-texto', 'mío'); await p.press('#ch-texto', 'Enter'); await p.waitForSelector('.ch-m.mio');
+  await p.click('.ch-m.mio [data-a=editar]'); await p.fill('#ch-ed', 'mío editado'); await p.click('.ch-edit [type=submit]'); await p.waitForFunction(() => /mío editado/.test(document.querySelector('.ch-m.mio').textContent));
+  await p.click('.ch-m.mio [data-a=borrar]'); await p.click('[data-a=borrar-si]'); await p.waitForFunction(() => !document.querySelector('.ch-m.mio'));
+  assert.equal(dialogos, 0, 'ni prompt ni confirm'); await ctx.close();
 });

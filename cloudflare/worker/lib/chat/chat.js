@@ -5,7 +5,6 @@
 // Todo detrás del flag `chat.config.activo` (apagado).
 import { leerDoc, guardarDoc } from '../almacen.js';
 import { claveNombre } from '../equipo.js';
-import { nombrePorCorreo } from '../sesion.js';
 import { leerConfig as leerConfigNotif } from '../notificaciones.js';
 import { tasaPublica } from '../publica.js';
 import { cuerpoValido, nombreCanalValido, claveDirecto, leerMenciones, puedeEditar, tituloAviso, pagina, MAX_MENSAJES_POR_MINUTO } from '../../../../chat-core.mjs';
@@ -23,7 +22,7 @@ export async function guardarConfig(db, cambios) {
   return nueva;
 }
 
-const nombreDe = (f) => (f.nombre || '').trim() || nombrePorCorreo(f.email);
+const nombreDe = (f) => (f.nombre || '').trim() || 'Persona'; // nunca el prefijo del correo: no se regala
 const trozos = (a, n = TROZO) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 const idCorto = () => { const a = 'abcdefghijkmnpqrstuvwxyz23456789', b = crypto.getRandomValues(new Uint8Array(8)); return [...b].map((x) => a[x % a.length]).join(''); };
 const err = (error, estado) => ({ error, estado });
@@ -87,7 +86,8 @@ export async function resumen(db, usuario) {
 
 /** Las cuentas activas con las que se puede abrir un directo o armar un canal (id, nombre, color), sin el correo ni la que pregunta. */
 export async function personasChat(db, usuario) {
-  const { results } = await db.prepare('select u.id, u.email, u.rol, p.nombre, p.color from users u left join perfiles p on p.user_id = u.id where p.baja_at is null and u.id != ? order by lower(coalesce(p.nombre, u.email)) limit 200').bind(usuario.id).all();
+  if (usuario.rol === 'lectura') return []; // quien solo lee no abre directos ni arma canales: no necesita (ni recibe) la lista de cuentas
+  const { results } = await db.prepare('select u.id, p.nombre, p.color from users u left join perfiles p on p.user_id = u.id where p.baja_at is null and u.id != ? order by lower(coalesce(p.nombre, \'\')) limit 200').bind(usuario.id).all();
   return results.map((r) => ({ id: r.id, nombre: nombreDe(r), color: r.color || null }));
 }
 
