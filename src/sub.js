@@ -15,6 +15,7 @@ import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
 import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes, loteVivo, esHoja } from './sub-studio.js'; // F3: the lote's live card and a sheet attached
 import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS, gastoBody, gastoHecho } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
+import { alertasIa, avisosParaHilo, popoverHTML } from './dimitri-ia.js';
 import { isQuickStatus } from './sub-stream.js'; // Auditoría 1 oct 2026: «¿Cómo vamos?» at once (DIM-10); the answer arrives while it is written, with «Detener» (DIM-14)
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
@@ -38,8 +39,8 @@ export function initSub(ctx) {
   let NAME = ctx.name || 'Dimitri';
   const el = document.createElement('div'); el.id = 'subOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'sbName'); el.hidden = true; // a <div>: role=dialog is not allowed on <aside>
   el.setAttribute('data-shell', ''); // V4.8: beside a view it is part of the page, like the top bar — modal.js leaves it out of the inert set
-  el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, dime qué hay que hacer y lo reparto entre los jefes, o pídeme creativos para el Estudio. Nada sale sin tu OK.</div><div class="sb-ia-head" hidden></div></div>
-      <span class="sp"></span><button type="button" class="sb-histb" title="Historial: tus conversaciones con él (abrir o borrar)" aria-label="Historial de conversaciones" aria-expanded="false">🕘</button><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc o S)">✕</button></div>
+  el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, dime qué hay que hacer y lo reparto entre los jefes, o pídeme creativos para el Estudio. Nada sale sin tu OK.</div></div>
+      <span class="sp"></span><button type="button" class="sb-iab" aria-label="Con qué IA corre Dimitri" aria-expanded="false"><b aria-hidden="true">i</b><i class="sb-ia-dot" hidden></i></button><button type="button" class="sb-histb" title="Historial: tus conversaciones con él (abrir o borrar)" aria-label="Historial de conversaciones" aria-expanded="false">🕘</button><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc o S)">✕</button></div>
     <div class="sb-hist" hidden role="region" aria-label="Historial de conversaciones"></div><div class="sb-msgs" role="log" aria-live="off"></div><div class="sb-live vh" role="status" aria-live="polite"></div>
     <div class="sb-chips"></div>
     <div class="sb-ctx" hidden></div>
@@ -50,16 +51,28 @@ export function initSub(ctx) {
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   const box = $('.sb-msgs'), input = $('.sb-in textarea'), sendBtn = $('.sb-send'), live = $('.sb-live'), fileIn = $('.sb-file');
-  /** 27 oct 2026: con qué IA corre Dimitri y dónde se cambia (el dueño preguntó «no sé qué inteligencia artificial estoy usando»). */
+  /** UX-11 (29 oct 2026): sin línea fija. El ⓘ abre un popover con el modelo, las consultas y el gasto; solo una alerta real pinta su punto y se dice una vez en el hilo. */
+  let iaFallo = null; const iaAvisos = []; // los avisos de alerta viven aparte del hilo del servidor: el sondeo de cada 3 s no los borra
+  const iaB = $('.sb-iab'), iaDot = $('.sb-ia-dot'), iaP = document.createElement('div');
+  iaP.className = 'sb-ia-pop'; iaP.id = 'sbIaPop'; iaP.hidden = true; iaP.setAttribute('role', 'region'); iaP.setAttribute('aria-label', 'IA'); iaP.tabIndex = -1; iaB.setAttribute('aria-controls', 'sbIaPop'); $('.sb-head').appendChild(iaP);
+  const iaDichas = new Set((() => { try { return JSON.parse(localStorage.getItem('ao.sub.ia.dicho') || '[]'); } catch { return []; } })());
+  const iaNube = () => !!window.AO_NUBE;
+  function iaClose(foco) { if (iaP.hidden) return; iaP.hidden = true; iaB.setAttribute('aria-expanded', 'false'); if (foco) iaB.focus(); }
   function paintIa() {
-    const h = $('.sb-ia-head'); if (!h) return;
-    if (!iaInfo || !iaInfo.nombre) { h.hidden = true; return; }
-    const cambia = typeof window !== 'undefined' && window.AO_NUBE && ctx.openSettings;
-    h.hidden = false;
-    const g = iaInfo.gasto, usd = n => 'US$' + n.toFixed(2).replace('.', ','); // la pastilla del mes: lo que lleva gastado la oficina en IA (frente a su tope, si lo hay)
-    h.innerHTML = `IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa (este modelo no usa herramientas)'}${cambia ? ' · <button type="button" class="sb-ia-cambiar">cambiar</button>' : ''}${g ? ` · gasto de IA del mes: <b${g.nivel === 'over' || g.nivel === 'alert' ? ' class="sb-ia-alto"' : ''}>${usd(g.usd)}${g.tope ? ' de ' + usd(g.tope) : ''}</b>` : ''}${window.AO_NUBE ? ' · 🔒 solo tú ves este chat' : ''}`;
-    const b = h.querySelector('.sb-ia-cambiar'); if (b) b.onclick = () => ctx.openSettings('nube-modelos');
+    const al = alertasIa(iaInfo, iaFallo);
+    iaDot.hidden = !al.length;
+    const nuevas = avisosParaHilo(al, iaDichas);
+    if (nuevas.length) { for (const x of nuevas) { iaDichas.add(x.id); iaAvisos.push(x.texto); } try { localStorage.setItem('ao.sub.ia.dicho', JSON.stringify([...iaDichas].slice(-20))); } catch {} if (loaded) render(true); }
+    if (!iaP.hidden) iaFill();
   }
+  function iaFill() {
+    const cambia = iaNube() && ctx.openSettings;
+    iaP.innerHTML = popoverHTML(iaInfo, alertasIa(iaInfo, iaFallo), { esc, nube: iaNube(), cambia });
+    const b = iaP.querySelector('.sb-ia-cambiar'); if (b) b.onclick = () => { iaClose(); ctx.openSettings('nube-modelos'); };
+  }
+  iaB.onclick = () => { if (!iaP.hidden) { iaClose(true); return; } iaFill(); iaP.hidden = false; iaB.setAttribute('aria-expanded', 'true'); iaP.focus(); };
+  iaP.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); iaClose(true); } });
+  document.addEventListener('pointerdown', e => { if (!iaP.hidden && !iaP.contains(e.target) && !iaB.contains(e.target)) iaClose(false); });
   function setName(n) { NAME = String(n || 'Dimitri'); $('.sb-name').textContent = NAME.toUpperCase(); $('.sb-av').textContent = NAME.charAt(0).toUpperCase(); input.placeholder = `Escríbele a ${NAME}: una pregunta, una idea, lo que hay que hacer, o los creativos que quieres (puedes adjuntar fotos)`; }
   setName(NAME);
   let messages = [], loaded = false, busy = false, sending = false, timer = null, opener = null, pollAt = 0; // sending: from the click until the answer, also while the images still upload (a 2nd Enter used to send the text twice)
@@ -319,9 +332,9 @@ export function initSub(ctx) {
     const openDet = new Set([...box.querySelectorAll('.sb-item[data-msg] details[open]')].map(d => d.closest('.sb-item').dataset.msg + ':' + d.closest('.sb-item').dataset.i)); // what the owner unfolded stays unfolded
     sigs.clear();
     const list = applyDiscards(messages, discarded);
-    box.innerHTML = !isLive() ? `<div class="sb-empty">${esc(NAME)} trabaja con la oficina real: abre la oficina desde el iniciador (.bat).</div>`
+    box.innerHTML = (!isLive() ? `<div class="sb-empty">${esc(NAME)} trabaja con la oficina real: abre la oficina desde el iniciador (.bat).</div>`
       : !messages.length ? `<div class="sb-empty">Hola, soy ${esc(NAME)}. Háblame como a tu mano derecha: pregúntame cómo va la oficina, el contenido o las redes, pensemos una decisión, cuéntame qué hay que hacer — una cosa o diez — o pídeme creativos, una locución o un jingle. Tú decides qué se envía, qué se genera y qué cambia en el calendario.</div>`
-      : list.map(m => { sigs.set(m.id, sigOf(m)); return msgHTML(m); }).join('') + busyHTML();
+      : list.map(m => { sigs.set(m.id, sigOf(m)); return msgHTML(m); }).join('') + busyHTML()) + iaAvisos.map(t => `<div class="sb-ia-aviso" role="status">⚠ ${esc(t)}</div>`).join('');
     for (const k of openDet) { const [msg, i] = k.split(':'); const d = box.querySelector(`.sb-item[data-msg="${msg}"][data-i="${i}"] details`); if (d) d.open = true; }
     if (stick || atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = keep;
   }
@@ -373,13 +386,13 @@ export function initSub(ctx) {
         catch (e) { if (!e.lost) throw e; stopping = false; streaming = false; render(true); const ms = await recover(since); if (!ms) throw e; j = { messages: ms.filter(m => m.at >= since && !messages.some(x => x.id === m.id)) }; if (!j.messages.length) throw e; }
       } else { j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); } // an older server: one JSON at the end, as before
       liveText = ''; streaming = false; stopping = false;
-      messages = messages.filter(m => m.id !== 'tmp').concat(j.messages);
+      messages = messages.filter(m => m.id !== 'tmp').concat(j.messages); if (iaFallo) { iaFallo = null; paintIa(); }
       for (const a of kept) if (a.preview && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview);
       const last = j.messages[j.messages.length - 1];
       if (last && last.studio) await loadMedia(true);
       say(`${NAME}: ${String(last?.text || '').slice(0, 200)}${last && last.studio && (last.studio.creatives || []).length ? ` · propone ${last.studio.creatives.length} ${last.studio.creatives.length === 1 ? 'creativo' : 'creativos'}` : ''}`); // the new answer is read out, not the whole chat every 3 s
       if (j.answered) { const q = messages.find(x => x.id === j.answered.msg); if (q && q.plan) q.plan.answers = j.answered.answers; qPicks.delete(j.answered.msg); }
-    } catch (e) { messages = messages.filter(m => m.id !== 'tmp'); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). ${extra.answers ? 'Tus respuestas siguen marcadas: pulsa Responder otra vez.' : 'Te dejé tu mensaje en la caja para que lo envíes de nuevo.'}` }); if (!extra.answers) input.value = text; attachments = kept; }
+    } catch (e) { iaFallo = { at: Date.now(), motivo: e.message }; paintIa(); messages = messages.filter(m => m.id !== 'tmp'); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). ${extra.answers ? 'Tus respuestas siguen marcadas: pulsa Responder otra vez.' : 'Te dejé tu mensaje en la caja para que lo envíes de nuevo.'}` }); if (!extra.answers) input.value = text; attachments = kept; }
     busy = false; sending = false; livePasos = []; liveText = ''; liveMode = null; runId = null; streaming = false; stopping = false; renderAtts(); render(true); input.focus();
   }
   /** DIM-10: «¿Cómo vamos?» — the server's summary, computed at once (POST /api/sub/estado); «Analizar con Dimitri» asks him after. */
@@ -640,7 +653,7 @@ export function initSub(ctx) {
       const nx = all[e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (k + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length];
       if (g.getAttribute('role') === 'radiogroup' && !nx.dataset.other) { choose(nx, true); } else { all.forEach(b => b.setAttribute('tabindex', b === nx ? '0' : g.getAttribute('role') === 'radiogroup' ? '-1' : '0')); nx.focus(); }
     }
-    else if (e.key === 'Escape') { e.preventDefault(); if (!hist.hidden) { histClose(); input.focus(); } else if (busy && streaming && !stopping) stop(); else if (!stopping) close(); } // DIM-14: while he writes, Esc stops him (a second Esc, after, closes)
+    else if (e.key === 'Escape') { e.preventDefault(); if (!iaP.hidden) iaClose(true); else if (!hist.hidden) { histClose(); input.focus(); } else if (busy && streaming && !stopping) stop(); else if (!stopping) close(); } // DIM-14: while he writes, Esc stops him (a second Esc, after, closes)
     else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.sb-item[data-sid]')) { e.preventDefault(); e.target.click(); }
   });
   // images in: paste (Ctrl+V), drop files from the computer, or drop cards from the Estudio's gallery

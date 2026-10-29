@@ -10,7 +10,7 @@ const P = {
   dimitri: '<path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3.5V16A2.5 2.5 0 0 1 5 13.5z"/><path d="M9 9.5h6M9 12.5h3.5"/>',
   mas: '<circle cx="6" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18" cy="12" r="1.3"/>',
   atras: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>', cerrar: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>', der: '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>', izq: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
-  mas1: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5.5 12.5 4.2 4.2 8.8-9.4"/>', alerta: '<path d="M12 4.5 3.8 19h16.4z"/><path d="M12 10v4M12 16.8v.2"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.2M12 7.8v.1"/>', mas1: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5.5 12.5 4.2 4.2 8.8-9.4"/>', alerta: '<path d="M12 4.5 3.8 19h16.4z"/><path d="M12 10v4M12 16.8v.2"/>',
   enviar: '<path d="M5 12 19 5l-4 14-3.5-5.5z"/>', reloj: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>', historial: '<path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 5v4h4M12 8v4.2l2.8 1.6"/>',
   buscar: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>', cerebro: '<path d="M9 5a3 3 0 0 0-3 3 3 3 0 0 0-1.5 5.3A3.2 3.2 0 0 0 8 18.5a2.5 2.5 0 0 0 4-.7V6.5A2.3 2.3 0 0 0 9 5z"/><path d="M15 5a3 3 0 0 1 3 3 3 3 0 0 1 1.5 5.3 3.2 3.2 0 0 1-3.5 5.2 2.5 2.5 0 0 1-4-.7"/>',
   estudio: '<rect x="3.5" y="9" width="17" height="10.5" rx="2"/><path d="m3.8 9 15.4-4.2M8 7.8l2 3M13 6.4l2 3"/>', contenido: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M4 9.5h16M4 14.5h16M9.5 4v16M14.5 4v16"/>',
