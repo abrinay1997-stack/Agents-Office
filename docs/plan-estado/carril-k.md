@@ -16,6 +16,15 @@
 - ✅ Tests: `tests/descripcion-core.test.mjs`.
 - Archivos: `descripcion-core.mjs`, `media/privacidad-core.mjs`, `src/galeria-filtro.js` (1 línea), tests. Sin migraciones, sin flags, sin rutas.
 
-## Pendiente de 11.1 (honesto)
-- ⏳ PR 2: adaptador local (`describir-local.mjs`: escribe la ficha con tmp+`renombrar`, ledger `kind:'vision'`, auditoría `envio-tercero`), ruta `POST /api/media/describir` (enganche ≤10 líneas en serve.mjs), MCP de solo lectura `dimitri-lectura-mcp.mjs` (test: ninguna herramienta gasta).
-- ⏳ Bucle de herramientas de lectura de Dimitri en local (`askX` rama sin agente) y `ver_galeria`/`ver_imagen` en la nube + trabajo `describir_imagenes` del Worker: no hechos.
+## PR 2 (rama `carril-k-111b`, sobre PR 1) — adaptador local, ruta y MCP de lectura
+- ✅ `describir-local.mjs`: `plan`/`leer` (no gastan) y `ejecutar` (exige `confirmarUsd` ≥ estimado, flag `estudio.descripcionesIA` encendido, vigila el tope con lo gastado de verdad ANTES de cada tanda, auditoría `envio-tercero` por imagen, `kind:'vision'` en el ledger vía `askX`, un fallo por imagen no tumba el resto). Todo inyectado: se prueba sin red.
+- ✅ `media/galeria.mjs → update()` ahora escribe tmp + `renombrar` (K1-06).
+- ✅ `serve.mjs`: `GET /api/media/describir` (lo descrito + costo de lo que falta, no gasta) y `POST` (solo el dueño: `by:'agent'`/`agent` → 403; flag apagado → 409; sin costo confirmado → 409). Enganche: 1 import + 1 `const` + 8 líneas de ruta.
+- ✅ `dimitri-lectura-mcp.mjs`: `ver_galeria`, `ver_descripciones`, `ver_imagen`; solo GET; test estático de que no hay POST ni nombres de gasto ni `estudio-mcp`. NO está conectado todavía a Dimitri.
+- Flags: `estudio.descripcionesIA` (apagado), `estudio.descripcionesTopeUsd` (1). Sin migraciones (rango 0200-0219 sin usar). Página: +105 B en total (solo `galeria-filtro.js`).
+- Tests: `tests/describir-local.test.mjs` (8, incluida la oficina real y el MCP por stdio).
+
+## Pendiente de 11.1 (honesto; no hecho)
+- ⏳ Bucle de herramientas de lectura de Dimitri en local (`askX` rama sin agente con `--strict-mcp-config` + `--allowedTools` exacto, cargando `dimitri-lectura-mcp.mjs`) y la ficha en `INTERNAL` de safety.
+- ⏳ Nube: `ver_galeria`/`ver_imagen` con expansión `ao_imagen`, trabajo de servidor `describir_imagenes` en tandas de 4 (IMAGES a 1568 px), `json_set` único en D1.
+- ⏳ Ampliar las regex de INJECTION de safety.mjs (K3) y clave `desc` en `dataInjection`; `desc` aún no se muestra en la página (el listado de `/api/media` ya la trae por ser parte de la ficha).

@@ -65,7 +65,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
-import * as media from './media.mjs';
+import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; // 29 oct 2026: 11.1
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -562,6 +562,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   });
 }
 const ask = async (system, user, opts) => (await askX(system, user, { tools: false, ...opts })).text;
+const descripcionLocal = crearDescripcionLocal({ media, copiaParaVer, ask: (sy, u, o) => askX(sy, u, o), auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, activo: () => cfg.estudio?.descripcionesIA === true, topeUsd: () => +cfg.estudio?.descripcionesTopeUsd || 1, modelo: cfg.model }); // 11.1
 function parseJSON(text) {
   const s = text.replace(/```json|```/g, ''); const a = s.indexOf('{'), b = s.lastIndexOf('}');
   return JSON.parse(s.slice(a, b + 1));
@@ -3028,6 +3029,12 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
     }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: STUDIO_DEFAULTS(), ...(minimaxOn() ? { voices: voces.summary() } : {}) });
+    if (url.pathname === '/api/media/describir') { // 29 oct 2026 (11.1): GET = lo descrito y el costo de lo que falta (no gasta) · POST = describir con visión (solo el dueño, con el costo confirmado; apagado por defecto)
+      const sel = req.method === 'GET' ? { ids: (url.searchParams.get('ids') || '').split(',').filter(Boolean), folder: url.searchParams.get('folder') || undefined, q: url.searchParams.get('q') || undefined } : null;
+      if (sel) return json(res, 200, { ...descripcionLocal.leer(sel, { pagina: +url.searchParams.get('pagina') || 1 }), activo: cfg.estudio?.descripcionesIA === true });
+      if (req.method === 'POST') { const b = await body(req); if (b.by === 'agent' || b.agent) return json(res, 403, { error: 'Describir imágenes gasta visión: es del dueño.' });
+        try { return json(res, 200, await descripcionLocal.ejecutar(b, { forzar: b.forzar === true, confirmarUsd: b.confirmarUsd, por: 'dueno' })); } catch (e) { return json(res, e.status || 500, { error: e.message, ...(e.costoEstimadoUsd != null ? { costoEstimadoUsd: e.costoEstimadoUsd } : {}) }); } }
+    }
     if (url.pathname === '/api/media/vision' && req.method === 'GET') { // 28 oct 2026: la copia que un agente MIRA (ver_imagen): JPEG ≤ 1568 px y ≤ 1,5 MB. Solo lee; el id sale de la galería (media.resolve nunca sale de ella)
       const id = String(url.searchParams.get('file') || ''), f = media.resolve(id);
       if (!f) return json(res, 404, { error: 'esa imagen ya no está en el Estudio (¿en la papelera?)' });
