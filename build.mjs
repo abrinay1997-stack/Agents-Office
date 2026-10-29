@@ -60,7 +60,9 @@ const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.e
 // 25 oct 2026: y sin la sangría ni los saltos de línea (cssCorto, ~22 KB): la página tenía 5 KB de margen y cada mejora de la interfaz se los comía. Antes del marcador, que se queda.
 const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.split('/* <css-vistas> */').map(cssCorto).join('/* <css-vistas> */')}</style>`);
 const shell = sinComentarios(readFileSync('src/shell.html', 'utf8')).replace('/* <css-vistas> */', () => vistasCss);
-const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
+// Fase 0.0 (29 oct 2026): la demo file:// trae sus datos de mentira (dist/v1demo.js, ~135 KB) con un <script> sincrónico ANTES de la página; servida no lo pide.
+const CARGA_DEMO = `<script>if(location.protocol==='file:')document.write('<script src="v1demo.js"><\\/script>')</script>`;
+const html = shell.replace('<!--APP-->', () => `${CARGA_DEMO}<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
 // write-then-rename, retried: on Windows the running office may be reading the file at that instant (EBUSY / UNKNOWN), and a reader
 // never sees half a file (serve.mjs caches dist/estudio-extra.js by its mtime: a half-written one stayed cached until the next build).
@@ -74,6 +76,7 @@ escribirEntero('dist/anuncios-vista.js', anunciosV.js); // la vista Anuncios, ig
 escribirEntero('dist/pieza-editor.js', piezaE.js); // el editor de piezas de Contenido, igual
 escribirEntero('dist/movil.js', movilV.js); // la versión móvil, igual
 escribirEntero('dist/movil-d.js', movilD.js); // y su paquete de Contenido, Analíticas y Anuncios
+escribirEntero('dist/v1demo.js', (await build({ entryPoints: ['src/v1data.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text); // los datos de la demo file://, antes que la página
 escribirEntero('dist/command-centre-v2.html', html);
 // dictado por voz (fase 10): un script suelto junto a la página (src/dictado-carga.js lo pide solo si el navegador sabe dictar); sin versión: no comparte nada con la página
 escribirEntero('dist/dictado.js', (await build({ entryPoints: ['src/dictado-app.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
@@ -84,6 +87,6 @@ escribirEntero('dist/ajustes-extra.js', (await build({ entryPoints: ['src/ajuste
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/presets-fabrica.js', `window.AO_PRESETS_FABRICA=${JSON.stringify(FAB)};\n`); // the demo's preset factory, beside the page
 writeFileSync('dist/app.js', js);
-writeFileSync('dist/dev.html', shell.replace('<!--APP-->', '<script src="app.js"></script>'));
+writeFileSync('dist/dev.html', shell.replace('<!--APP-->', CARGA_DEMO + '<script src="app.js"></script>'));
 console.log(`built dist/command-centre-v2.html (${(html.length / 1024).toFixed(0)} KB) + dist/estudio-extra.js (${(extra.js.length / 1024).toFixed(0)} KB, on demand) + dist/anuncios-vista.js (${(anunciosV.js.length / 1024).toFixed(0)} KB, on demand)`);
 

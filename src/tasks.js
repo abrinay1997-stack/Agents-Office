@@ -21,7 +21,7 @@
 // with the combined deliverable. Live: the server does it (serve.mjs runTeam, one Claude process per
 // desk); this page reads `task.team` off /api/tasks. Demo: the same theatre on a timer.
 import { DEPTS, AGENTS, DEPT_KEYS } from './data.js';
-import { P, rnd, ri } from './v1data.js';
+import { P, rnd, ri } from './v1base.js';
 import { applyTasks, PROFILE, titleCase } from './profile.js';
 import { parseWhen, parseOnce, describe, nextRun, fromPicker, untilText } from './when.js';
 import { initCalendar } from './calendar.js';

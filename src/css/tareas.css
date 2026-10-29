@@ -377,3 +377,6 @@ body.dark #tvOv .tv-toast { background: #ECEAE3; color: #151414; } body.dark #tv
   #tvOv .tv-tabs button svg { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) { #tvOv .tv-fila { transition: border-color .15s; } }
+/* UX-04 (29 oct 2026): dentro de un día, «Con hora» y «Sin hora · todo el día» */
+#tvOv .tv-gsub { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--tv-mut); margin: 8px 0 4px; font-weight: 600; }
+#tvOv .tv-gsub span { text-transform: none; letter-spacing: 0; font-weight: 400; }

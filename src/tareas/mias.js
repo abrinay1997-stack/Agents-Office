@@ -53,7 +53,7 @@ export function miasHTML(tareas, ctx, { lista = 'hoy', modo = 'lista', ahora = D
   const grupos = lista === 'proximos' ? porDia(pendientes, ahora) : lista === 'hoy' ? gruposHoy(pendientes, ahora) : lista === 'todas' || esProy ? porFecha(pendientes, ahora) : null;
   const filas = l => `<div class="tv-filas" role="list">${l.map(fila).join('')}</div>`;
   const cuerpo = !pendientes.length ? (lista === 'hechas' ? '' : vacioHTML(VACIO[lista]?.[0] || 'Nada por aquí', VACIO[lista]?.[1] || 'Escribe abajo para añadir una.'))
-    : grupos && (lista !== 'hoy' || grupos.length > 1) ? grupos.map(g => `<h3 class="tv-gh${g.k === 'vencidas' ? ' rojo' : ''}">${esc(g.titulo)} <span>${g.tareas.length}</span></h3>${filas(g.tareas)}`).join('') : filas(pendientes);
+    : grupos && (lista !== 'hoy' || grupos.length > 1) ? grupos.map(g => `<h3 class="tv-gh${g.k === 'vencidas' ? ' rojo' : ''}">${esc(g.titulo)} <span>${g.tareas.length}</span></h3>${g.sub ? g.sub.map(x => `<h4 class="tv-gsub">${x.k === 'sin' ? 'Sin hora <span>· todo el día</span>' : 'Con hora'}</h4>${filas(x.tareas)}`).join('') : filas(g.tareas)}`).join('') : filas(pendientes);
   const hechasK = 'mias-hechas-' + lista;
   const comp = hechas.length ? (lista === 'hechas' ? filas(hechas) : `<details class="tv-hechas"${plegadas.has(hechasK) ? '' : ' open'} data-hechask="${esc(hechasK)}"><summary>${lista === 'delegadas' ? 'VOLVIERON HECHAS' : 'COMPLETADAS'} · ${hechas.length}</summary>${filas(hechas)}</details>`) : lista === 'hechas' ? vacioHTML('Todavía nada', 'Lo que termines estos 30 días aparece aquí.') : '';
   return `${cab}<div class="tv-mlist">${cuerpo}${anadir}${comp}</div>`;

@@ -14,7 +14,7 @@ import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 import { avisarCambio } from './vivo.js';
 import * as equipo from '../modulos/equipo.js';
-import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
+import { tasa, tasaVer, ipDe, relojDe, cupoDeModelo } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 import { podar, tocaPodar } from './mantenimiento.js';
 import { registrarSecretos } from './secretos.js';
@@ -160,6 +160,8 @@ export async function manejar(req, env, exec = null) {
   let m;
   if ((m = ruta.match(/^\/api\/agentes\/([a-z0-9-]{2,30})\/ejecutar$/)) && req.method === 'POST') {
     if (usuario.rol === 'lectura') return prohibido();
+    const sinCupo = await cupoDeModelo(db, env, 'ejecutar', usuario.id, { porMinuto: 6, porDia: 100 }); // SEG-01
+    if (sinCupo) return error(sinCupo, 429);
     const b = await cuerpo(req);
     const r = await ejecutar({ env, db, usuario, agenteId: m[1], texto: b?.texto, aprobada: b?.aprobada === true });
     return r.error ? error(r.error, r.estado) : json(r.ejecucion);

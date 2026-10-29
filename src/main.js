@@ -23,7 +23,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import './i18n.js'; // FASE 1 (20 Sep 2026): sistema i18n central (es por defecto); los textos visibles ya están traducidos directo al español, el wiring total a t() queda para fase 2
 import { TOKENS, DEPTS, DEPT_KEYS, AGENTS, LAYOUT, WORKLINES, APPROVAL_ASKS, APPROVAL_BY_AGENT } from './data.js';
 import { hasScreens, makeScreen } from './screens.js'; // live screens (14 Sep): no-op without window.SCREENS
-import { V1, FILE_GEN, STATS, KPIS, P, rnd, ri, person, money } from './v1data.js';
+import { P, rnd, ri, person, money } from './v1base.js';
+// Fase 0.0 (29 oct 2026): los personajes, archivos de muestra y cifras de ejemplo (~135 KB) son SOLO de la demo file://: los trae dist/v1demo.js
+// (un <script> sincrónico antes de la página, solo si se abre como archivo) en window.AO_V1DEMO. La oficina servida no los lleva.
+const DEMO = (typeof window !== 'undefined' && window.AO_V1DEMO) || {};
+const V1 = DEMO.V1 || [], FILE_GEN = DEMO.FILE_GEN || {}, KPIS = DEMO.KPIS || [];
+const STATS = DEMO.STATS || new Proxy({}, { get: (o, k) => (k in o ? o[k] : 0) }); // servida: sin cifras inventadas (las cuentas reales las pone SERVED)
 import { PROFILE, profileRows, profileTickKpi, profileMockup, applyTopbar } from './profile.js';
 import {
   PLINTH_H, mat, rbox, makePlinth, makeFloorTitle, makeDesk, makeChair,
@@ -288,7 +293,7 @@ for (const a of AGENTS) {
     a, person, warn, pill, seat: person.position.clone(), seatRot: ANG + Math.PI,
     stand: person.position.clone().add(rot(new THREE.Vector3(1.5, 0, 0.15))),
     state: 'working', bob: Math.random() * 10, path: null, pathI: 0, speed: 9.5, ask: null,
-    v1: V1.find(x => x.id === a.id), feed: [],
+    v1: V1.find(x => x.id === a.id) || { role: '', tagline: '', greeting: '', chips: [] }, feed: [], // servida: lo de cada agente lo pone applyRoster
     station, desk, screenSet, // hero mode reaches the monitor and the desk through these
   };
 }
@@ -396,7 +401,7 @@ function tickDim(dt) {
 let dimApplied = -1, dimCount = -1;
 
 /* ---------- department billboards — v1's exact agreed metric rows + amber approval row ---------- */
-const kv = id => KPIS.find(k => k.id === id).val;
+const kv = id => (KPIS.find(k => k.id === id) || {}).val || 0;
 let brainNotes = brain.state.notes;
 const BB_ROWS = profileRows() || {
   emails: [
@@ -1349,6 +1354,7 @@ function weightedEv(evs) {
 function fireAgentEvent(seedTs) {
   if (SERVED) return; // served by the owner's server = a real office: no invented activity in feeds or chats
   const ids = Object.keys(R).filter(id => R[id].v1 && R[id].v1.ev && R[id].state !== 'stuck');
+  if (!ids.length) return; // la demo sin dist/v1demo.js (o sin sus personajes): nada que inventar
   const r = R[ids[Math.floor(Math.random() * ids.length)]];
   const ev = weightedEv(r.v1.ev);
   const text = ev.t();
