@@ -36,7 +36,7 @@ export async function estadoVinculo(db, userId, ahora = Date.now()) {
   const f = await db.prepare('select telegram_id, telegram_username, vinculada_at, codigo_vence_at, codigo_hmac, pend_telegram_id, pend_username, pend_vence_at, silencio_hasta from cuenta_telegram where user_id = ?').bind(userId).first();
   if (!f) return { estado: 'ninguna' };
   if (f.telegram_id) return { estado: 'activa', username: f.telegram_username || null, desde: f.vinculada_at, silencioHasta: f.silencio_hasta > ahora ? f.silencio_hasta : null };
-  if (f.pend_telegram_id && f.pend_vence_at > ahora) return { estado: 'pendiente', username: f.pend_username || null, vence: f.pend_vence_at };
+  if (f.pend_telegram_id && f.pend_vence_at > ahora) return { estado: 'pendiente', username: f.pend_username || null, telegramId: f.pend_telegram_id, vence: f.pend_vence_at };
   if (f.codigo_hmac && f.codigo_vence_at > ahora) return { estado: 'codigo', vence: f.codigo_vence_at };
   return { estado: 'ninguna' };
 }
@@ -61,8 +61,9 @@ export async function canjearCodigo(db, env, { telegramId, username, codigo }, a
   if (!f || f.rol === 'admin') return false;
   const ocupado = await db.prepare('select 1 x from cuenta_telegram where (telegram_id = ? or (pend_telegram_id = ? and pend_vence_at > ? and user_id != ?))').bind(id, id, ahora, f.user_id).first();
   if (ocupado) return false;
-  await db.prepare('update cuenta_telegram set pend_telegram_id = ?, pend_username = ?, pend_vence_at = ?, codigo_hmac = null, codigo_vence_at = null where user_id = ?').bind(id, String(username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || null, ahora + VIDA_PENDIENTE_MS, f.user_id).run();
-  return true;
+  // atómico: el código se gasta en la MISMA sentencia que lo reclama; dos /vincular a la vez con el mismo código, solo uno pasa
+  const r = await db.prepare('update cuenta_telegram set pend_telegram_id = ?, pend_username = ?, pend_vence_at = ?, codigo_hmac = null, codigo_vence_at = null where user_id = ? and codigo_hmac = ? and telegram_id is null and codigo_vence_at > ?').bind(id, String(username || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || null, ahora + VIDA_PENDIENTE_MS, f.user_id, h, ahora).run();
+  return (r.meta?.changes ?? 0) > 0;
 }
 
 /** La app confirma o rechaza lo que canjeó el bot. → { ok, telegramId } | { error, estado } */
@@ -100,8 +101,8 @@ export function telegramDeAdmin(cfg, email) {
 export async function chatDe(db, cfg, userId) {
   const f = await db.prepare('select u.email, u.rol, c.telegram_id, c.silencio_hasta, c.silencio_desde_h, c.silencio_hasta_h from users u left join cuenta_telegram c on c.user_id = u.id left join perfiles p on p.user_id = u.id where u.id = ? and p.baja_at is null').bind(userId).first();
   if (!f) return null;
-  if (f.telegram_id) return { chat: f.telegram_id, silencio: { hasta: f.silencio_hasta, desde_h: f.silencio_desde_h, hasta_h: f.silencio_hasta_h } };
-  if (f.rol === 'admin') { const id = telegramDeAdmin(cfg, f.email); if (id) return { chat: id, silencio: null }; }
+  if (f.telegram_id) return { chat: f.telegram_id, vinculada: true, silencio: { hasta: f.silencio_hasta, desde_h: f.silencio_desde_h, hasta_h: f.silencio_hasta_h } };
+  if (f.rol === 'admin') { const id = telegramDeAdmin(cfg, f.email); if (id) return { chat: id, vinculada: false, silencio: null }; }
   return null;
 }
 
@@ -136,7 +137,7 @@ export async function avisarPorTelegram(env, db, cfg, userId, texto, { botones =
     if (conectados && conectados.has(userId)) return 'omitido:conectado';
     const c = await chatDe(db, cfg, userId); if (!c) return 'omitido:sin-telegram';
     if (enSilencio(c.silencio, ahora)) return 'omitido:silencio';
-    return (await enviarTelegram(env, c.chat, texto, botones ? { reply_markup: botones } : {})) ? 'enviado' : 'omitido:falló';
+    return (await enviarTelegram(env, c.chat, texto, botones && c.vinculada ? { reply_markup: botones } : {})) ? 'enviado' : 'omitido:falló';
   } catch { return 'omitido:error'; }
 }
 

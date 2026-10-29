@@ -61,7 +61,7 @@
     const e = tg.estado, caja = (t) => `<div class="nt-tg"><b>Telegram</b> ${t}</div>`;
     if (tg.rol === 'admin') return caja(e === 'admin' ? 'conectado (por la lista de administradores).' : 'sin conectar: pon tu id en Ajustes → Telegram.');
     if (e === 'activa') return caja(`conectado${tg.username ? ' como @' + esc(tg.username) : ''}. <button type="button" class="sg-btn" data-a="tg-quitar">Desvincular</button>`);
-    if (e === 'pendiente') return caja(`<p>El Telegram <b>${tg.username ? '@' + esc(tg.username) : 'sin nombre de usuario'}</b> quiere vincularse a tu cuenta. ¿Eres tú?</p><button type="button" class="sg-btn pri" data-a="tg-ok">Confirmar</button> <button type="button" class="sg-btn" data-a="tg-no">Rechazar</button>`);
+    if (e === 'pendiente') return caja(`<p>El Telegram <b>${tg.username ? '@' + esc(tg.username) : 'sin nombre de usuario'}</b> (id ${esc(tg.telegramId)}) quiere vincularse a tu cuenta. ¿Eres tú?</p><button type="button" class="sg-btn pri" data-a="tg-ok">Confirmar</button> <button type="button" class="sg-btn" data-a="tg-no">Rechazar</button>`);
     if (e === 'codigo' && codigoTg) return caja(`<p>Escríbele al bot de la oficina: <code class="nt-cod">/vincular ${esc(codigoTg)}</code></p><small>Vale 10 minutos y se usa una vez. Después, vuelve aquí a confirmar.</small>`);
     return caja('sin conectar. <button type="button" class="sg-btn" data-a="tg-codigo">Conectar mi Telegram</button>');
   };

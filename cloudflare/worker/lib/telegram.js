@@ -171,12 +171,13 @@ export async function salientes(t) {
 
 /** Un aviso para una persona del equipo (con su id de Telegram en Ajustes → Equipo): solo a ella, nunca al dueño. */
 async function alPersona(t, n) {
-  // N2 (D03): si la persona tiene una CUENTA con su Telegram vinculado, el aviso va ahí (con su «no molestar»); si no, el id de Ajustes → Equipo, como siempre.
+  // N2 (D03): una persona de Ajustes → Equipo con ese nombre manda (su id de siempre y el texto de siempre). Solo si NO hay tal persona, el aviso va a la CUENTA con su Telegram vinculado
+  // (con su «no molestar»), y entonces es un aviso genérico: nunca el texto de un aviso pensado para otra persona.
+  const p = t.C.persona(n.persona);
+  if (p && !p.soloCuenta) { if (p.telegram && /^-?\d{4,15}$/.test(String(p.telegram))) await t.send(String(p.telegram), esc(n.text)); return; }
   try {
     const u = await usuarioPorNombre(t.db, n.persona);
-    if (u) { const r = await avisarPorTelegram(t.env, t.db, t.cfg, u.id, esc(n.text), { conectados: await conectadosAhora(t.env) }); if (r !== 'omitido:sin-telegram' && r !== 'omitido:apagado') return; } // con su Telegram de cuenta (aunque esté en silencio) no se le manda también por el viejo
-  } catch { /* cae al camino de siempre */ }
-  const p = t.C.persona(n.persona);
-  if (p?.telegram && /^-?\d{4,15}$/.test(String(p.telegram))) await t.send(String(p.telegram), esc(n.text));
+    if (u) await avisarPorTelegram(t.env, t.db, t.cfg, u.id, 'Tienes un aviso nuevo en la oficina. Ábrelo allí.', { conectados: await conectadosAhora(t.env) });
+  } catch { /* un aviso que falla no tumba nada */ }
 }
 export { COMANDOS, approvalText, approvalButtons };

@@ -143,3 +143,32 @@ test('presencia por Telegram: el administrador que lo pidió recibe «se conect�
   assert.equal(dicho(o, DUENO_TG).filter((x) => /se conectó/.test(x)).length, 1);
   await o.editor('GET', '/api/notas-personales/entrada'); assert.equal(dicho(o, DUENO_TG).filter((x) => /se conectó/.test(x)).length, 1, 'una vez por visita');
 });
+
+test('canje ATÓMICO: dos /vincular a la vez con el mismo código, solo uno lo gasta', { skip: SALTAR }, async () => {
+  const o = await mundo(); const { canjearCodigo } = await import('../worker/lib/telegram-cuentas.js');
+  const c = (await o.editor('POST', '/api/vinculo-telegram/codigo', {})).j.codigo;
+  const r = await Promise.all([canjearCodigo(o.d1, o.env, { telegramId: '700100201', username: 'a', codigo: c }), canjearCodigo(o.d1, o.env, { telegramId: '700100202', username: 'b', codigo: c })]);
+  assert.deepEqual(r.filter(Boolean).length, 1);
+  const est = (await o.editor('GET', '/api/vinculo-telegram')).j; assert.equal(est.estado, 'pendiente'); assert.match(est.telegramId, /^7001002/, 'la app enseña también el id numérico');
+});
+
+test('los extraños tienen su cubo: ni las cuentas vinculadas ni /vincular lo gastan, y un extraño cuenta una sola vez', { skip: SALTAR }, async () => {
+  const o = await mundo(); await o.vincular('editor', ED_TG);
+  const cubo = () => filas(o.d1, "select coalesce(sum(n),0) n from publica_tasa where clave = 'telegram-extranos'")[0].n; // secrets-ok: no es una clave
+  for (let i = 0; i < 30; i++) await tg(o, msg(ED_TG, '/ayuda')); for (let i = 0; i < 3; i++) await tg(o, msg(EXTRANO_TG, '/vincular ABCDEFGHJK'));
+  assert.equal(cubo(), 0, 'cuentas y /vincular no cuentan como extraños');
+  await tg(o, msg(EXTRANO_TG, 'hola')); assert.equal(cubo(), 1, 'un extraño, una vez');
+  assert.equal(filas(o.d1, 'select count(*) n from telegram_updates')[0].n >= 0, true);
+  const antes = filas(o.d1, 'select count(*) n from telegram_updates')[0].n; await tg(o, msg(EXTRANO_TG, 'otra')); assert.equal(filas(o.d1, 'select count(*) n from telegram_updates')[0].n, antes, 'un extraño no escribe en D1');
+});
+
+test('un aviso de una persona de Ajustes → Equipo no llega a una cuenta de otro con el mismo nombre; la cuenta sola recibe un aviso genérico', { skip: SALTAR }, async () => {
+  const o = await mundo(); await o.vincular('lectura', LE_TG);
+  const nombreLe = (await o.lectura('GET', '/api/yo')).j.usuario.nombre;
+  const { armar, salientes } = await import('../worker/lib/telegram.js'); const { MODULOS_BOT } = await import('../worker/modulos/telegram.js');
+  const { emitirAviso } = await import('../worker/lib/avisos.js');
+  const t = await armar({ env: o.env, db: o.d1, modulos: MODULOS_BOT }); await salientes(t); // la primera pasada solo apunta lo que ya había
+  await emitirAviso(o.d1, { kind: 'persona', text: 'Te asignaron «Factura privada»', persona: nombreLe });
+  const t2 = await armar({ env: o.env, db: o.d1, modulos: MODULOS_BOT }); t2.st.avisosHasta = Date.now() - 5000; await salientes(t2);
+  const dicho2 = dicho(o, LE_TG).join('|'); assert.match(dicho2, /Tienes un aviso nuevo/); assert.ok(!dicho2.includes('Factura privada'), 'la cuenta no recibe el texto del aviso');
+});

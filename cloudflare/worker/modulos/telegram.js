@@ -52,25 +52,24 @@ export async function publica({ req, env, db, url, ruta, exec }) {
     // N2: un id que no es del dueño, de un administrador ni de un aprobador solo puede (a) canjear un código de vinculación o (b) ser una CUENTA ya vinculada. Todo lo demás: silencio total, como siempre.
     if (m?.chat?.type === 'private' && !(update.message && reenviado(update.message)) && (await leerConfigNotif(db)).activo) {
       const texto = String(update.message?.text || ''), vinc = /^\/vincular(?:@\w+)?\s+(\S+)\s*$/i.exec(texto);
-      if (!(await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO)).ok) return OK(); // el tope de los desconocidos va ANTES de escribir nada
-      const nuevo = (await db.prepare('insert or ignore into telegram_updates (update_id, t) values (?,?)').bind(update.update_id, Date.now()).run()).meta?.changes;
-      if (!nuevo) return OK(); // Telegram reintentó: ya se atendió
-      if (vinc) {
+      const nuevo = async () => (await db.prepare('insert or ignore into telegram_updates (update_id, t) values (?,?)').bind(update.update_id, Date.now()).run()).meta?.changes > 0; // Telegram reintenta: un update, una vez
+      if (vinc) { // /vincular usa SOLO sus cubos: no gasta el de los extraños ni el de las cuentas
         const propio = await tasaPublica(db, 'telegram-vincular:' + de, MAX_FALLOS_POR_ID), global = await tasaPublica(db, 'telegram-vincular', MAX_FALLOS_GLOBAL);
         if (!propio.ok || !global.ok) { if (!global.ok) await emitirAviso(db, { kind: 'login', level: 'warn', text: 'Hubo demasiados intentos de vincular un Telegram en un minuto. Revisa que no sea un ataque.', key: 'telegram-vincular-ataque' }).catch(() => {}); return OK(); }
+        if (!(await nuevo())) return OK();
         try { await canjearCodigo(db, env, { telegramId: de, username: update.message?.from?.username, codigo: vinc[1] }); } catch { /* igual que un código malo */ }
         await enviarTelegram(env, de, RESPUESTA_UNIFORME); // la MISMA respuesta con un código bueno, malo, vencido o ajeno: sin oráculo
         return OK();
       }
-      const cuenta = await cuentaPorTelegram(db, de);
+      const cuenta = await cuentaPorTelegram(db, de); // primero se sabe si es una cuenta: solo los que NO lo son gastan el cubo de los extraños
       if (cuenta) {
-        if (!(await tasaPublica(db, 'telegram-cuentas', MAX_POR_MINUTO)).ok) return OK();
+        if (!(await tasaPublica(db, 'telegram-cuentas', MAX_POR_MINUTO)).ok || !(await nuevo())) return OK();
         const trabajo = atenderCuenta({ env, db, cfg, update, cuenta, modulos: MODULOS_BOT }).catch((e) => console.warn('[telegram] cuenta:', String(e?.message || e).slice(0, 200)));
         if (exec?.waitUntil) { exec.waitUntil(trabajo); return OK(); }
         await trabajo; return OK();
       }
     }
-    await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO); return OK();
+    await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO); return OK(); // un extraño se cuenta UNA vez, y sin escribir nada en D1
   }
   if (!(await tasaPublica(db, 'telegram', MAX_POR_MINUTO)).ok) return OK();
   if (m?.chat?.type !== 'private') return OK();

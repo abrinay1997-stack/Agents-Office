@@ -3,7 +3,7 @@
 --   codigo_hmac / codigo_vence_at ... el código de vinculación que pidió la app: de 10 caracteres sin ambiguos, guardado como HMAC con un secreto del Worker (nunca en claro), un solo uso, 10 minutos.
 --   pend_telegram_id / pend_username / pend_vence_at ... lo canjeado en el bot que espera la CONFIRMACIÓN en la app (Confirmar / Rechazar); caduca a los 10 minutos.
 --   silencio_hasta ........ «no molestar» hasta ese instante (ms) · silencio_desde_h / silencio_hasta_h: ventana diaria en horas de la oficina (null = sin ventana).
--- Poda: una fila por cuenta, sin crecimiento; lo caducado (códigos y pendientes) se limpia al usarse y en lib/mantenimiento.js. Quitar a la persona del equipo la desvincula (cascada + baja_at).
+-- Poda: una fila por cuenta, sin crecimiento. Un código o un pendiente caducado NO sirve (se comprueba el vencimiento en cada uso) y se sobrescribe al pedir uno nuevo. Quitar a la persona del equipo la desvincula (cascada + baja_at).
 -- Cómo se deshace: `drop table if exists cuenta_telegram;` (nada depende de ella; con el flag apagado queda sin uso).
 create table if not exists cuenta_telegram (
   user_id text primary key references users(id) on delete cascade,
