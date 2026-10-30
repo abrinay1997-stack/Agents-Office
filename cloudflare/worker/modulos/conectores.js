@@ -75,10 +75,11 @@ export async function manejar(ctx) {
        on conflict (nombre) do update set url=excluded.url, secreto=excluded.secreto, departamentos=excluded.departamentos,
          herramientas_lectura=excluded.herramientas_lectura, herramientas_envio=excluded.herramientas_envio`)
       .bind(ctx.uuid(), c.nombre, c.url, c.secreto, JSON.stringify(c.departamentos), JSON.stringify(c.herramientas_lectura), JSON.stringify(c.herramientas_envio), ctx.ahora()).run();
-    await db.prepare(`insert into conectores_extra (nombre, auth_tipo, cabecera, token_cifrado, plantilla, etiqueta, updated_at) values (?,?,?,?,?,?,?)
-       on conflict (nombre) do update set auth_tipo=excluded.auth_tipo, cabecera=excluded.cabecera, token_cifrado=excluded.token_cifrado, plantilla=excluded.plantilla, etiqueta=excluded.etiqueta, updated_at=excluded.updated_at`)
-      .bind(c.nombre, c.auth_tipo, c.cabecera, cifrado, c.plantilla, c.etiqueta || null, ctx.ahora()).run();
-    await auditar(db, ctx, 'conector', { nombre: c.nombre, accion: previo ? 'cambiado' : 'creado', auth: c.auth_tipo, token: cifrado ? 'guardado' : c.secreto ? 'secreto del Worker' : 'ninguno' });
+    const dominios = c.dominios_permitidos === undefined ? (previo?.dominios_permitidos || null) : (c.dominios_permitidos.length ? JSON.stringify(c.dominios_permitidos) : null); // SEG-02: sin el campo, se conserva la lista; con él, se reemplaza (vacío = quitarla)
+    await db.prepare(`insert into conectores_extra (nombre, auth_tipo, cabecera, token_cifrado, plantilla, etiqueta, dominios_permitidos, updated_at) values (?,?,?,?,?,?,?,?)
+       on conflict (nombre) do update set auth_tipo=excluded.auth_tipo, cabecera=excluded.cabecera, token_cifrado=excluded.token_cifrado, plantilla=excluded.plantilla, etiqueta=excluded.etiqueta, dominios_permitidos=excluded.dominios_permitidos, updated_at=excluded.updated_at`)
+      .bind(c.nombre, c.auth_tipo, c.cabecera, cifrado, c.plantilla, c.etiqueta || null, dominios, ctx.ahora()).run();
+    await auditar(db, ctx, 'conector', { nombre: c.nombre, accion: previo ? 'cambiado' : 'creado', auth: c.auth_tipo, token: cifrado ? 'guardado' : c.secreto ? 'secreto del Worker' : 'ninguno', ...(dominios !== (previo?.dominios_permitidos || null) ? { dominios: dominios ? JSON.parse(dominios) : [] } : {}) });
     return json({ conector: publico(await unoPorNombre(db, c.nombre), env) }, previo ? 200 : 201);
   }
 

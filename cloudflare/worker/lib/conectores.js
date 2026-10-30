@@ -35,6 +35,32 @@ export function urlPermitida(texto) {
   return null;
 }
 
+export const MAX_DOMINIOS = 20;
+/** Sufijos públicos donde cualquiera puede publicar o subir contenido: permitirlos entera abre la exfiltración por la dirección. Lista corta a propósito, no es la lista completa de sufijos públicos. */
+// La lista es una AYUDA, no una garantía: hay miles de sufijos públicos y servicios de subida; la responsabilidad de que la lista sea de confianza es de quien la escribe.
+const SUFIJOS_AMPLIOS = ['gitlab.io', 'r2.dev', 'supabase.co', 'duckdns.org', 'firebaseio.com', 'ac.uk', 'gov.uk', 'github.io', 'githubusercontent.com', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'herokuapp.com', 's3.amazonaws.com', 'amazonaws.com', 'cloudfront.net', 'blogspot.com', 'wordpress.com', 'appspot.com', 'web.app', 'firebaseapp.com', 'azurewebsites.net', 'ngrok.io', 'ngrok-free.app', 'trycloudflare.com', 'glitch.me', 'repl.co', 'onrender.com', 'fly.dev', 'surge.sh', 'weebly.com', 'wixsite.com', 'co.uk', 'com.pa', 'com.mx', 'com.br', 'com.ar', 'com.co', 'co.jp', 'com.au', 'org.uk', 'gob.pa', 'edu.pa'];
+const esAmplio = (base) => SUFIJOS_AMPLIOS.includes(base);
+/** SEG-02: «Dominios que puede consultar» de un conector. Una lista de hosts (`ejemplo.com`, que cubre sus subdominios, o `*.ejemplo.com`): sin esquema, sin ruta, sin puerto, sin `*` suelto,
+ *  sin IPs ni nombres locales, ≤ 20. Acepta un arreglo o texto (uno por línea). → { ok, lista } o { ok: false, errores }. Solo la edita un administrador (POST /api/conectores). */
+export function validarDominios(entrada) {
+  const crudo = Array.isArray(entrada) ? entrada : String(entrada ?? '').split(/[\n,;]+/);
+  const errores = [], lista = [];
+  for (const x of crudo) {
+    const t = String(x ?? '').trim().toLowerCase(); if (!t) continue;
+    const base = t.startsWith('*.') ? t.slice(2) : t;
+    if (/^[a-z][a-z0-9+.-]*:\/\//.test(t) || /[/?#@:\s\\]/.test(t)) errores.push(`«${t.slice(0, 40)}»: solo el dominio, sin https://, ruta, puerto ni espacios.`);
+    else if (t === '*' || base.includes('*') || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(base)) errores.push(`«${t.slice(0, 40)}»: no es un dominio válido (por ejemplo ejemplo.com o *.ejemplo.com).`);
+    else if (esAmplio(base)) errores.push(`«${t.slice(0, 40)}»: es un dominio público donde cualquiera puede publicar contenido (permitirlo entero deja sacar datos por la dirección). Pon un dominio propio o de confianza, por ejemplo docs.tuempresa.com.`);
+    else { const m = urlPermitida('https://' + base + '/'); if (m) errores.push(`«${t.slice(0, 40)}»: ${m}.`); else if (!lista.includes(t)) lista.push(t); }
+  }
+  if (lista.length > MAX_DOMINIOS) errores.push(`Como mucho ${MAX_DOMINIOS} dominios por conector.`);
+  return errores.length ? { ok: false, errores } : { ok: true, lista };
+}
+/** Los dominios guardados de una fila (JSON en `dominios_permitidos`); lo roto o ausente = ninguno (como siempre). */
+export function dominiosDe(fila) { try { const v = JSON.parse(fila?.dominios_permitidos || '[]'); if (!Array.isArray(v)) return []; return v.filter((x) => typeof x === 'string' && validarDominios([x]).ok && x === x.trim().toLowerCase()).slice(0, MAX_DOMINIOS); } catch { return []; } } // se revalida al leer: una fila escrita por otra vía (migración, SQL a mano) no puede meter `*`, rutas ni dominios amplios
+/** → { servidor: [hosts] } de las filas que tienen lista: lo que recibe el guardián como `ctx.dominios`. */
+export const dominiosPorServidor = (filas) => Object.fromEntries((filas || []).map((c) => [c.nombre, dominiosDe(c)]).filter(([, l]) => l.length));
+
 const lista = (v) => (Array.isArray(v) ? [...new Set(v.map((x) => String(x).trim()).filter(Boolean))] : []);
 
 const AUTENTICACIONES = ['ninguna', 'bearer', 'cabecera'];
@@ -88,8 +114,10 @@ export function validarConector(entrada) {
   // haría que todo contara como lectura, así que ese nombre no puede usarse para un conector.
   if (NOMBRE_CONECTOR.test(nombre) && kindOf(`mcp__${nombre}__send_message`) !== 'write') errores.push(`«${nombre}» es un nombre reservado de la oficina.`);
   for (const t of lectura) if (kindOf(`mcp__${nombre}__${t}`) !== 'read') errores.push(`«${t}» no parece de solo lectura: ponla en «envío» (solo corre en ejecuciones aprobadas).`);
+  let dominios;
+  if (e.dominios_permitidos !== undefined) { const r = validarDominios(e.dominios_permitidos); if (r.ok) dominios = r.lista; else errores.push(...r.errores); }
   if (errores.length) return { ok: false, errores };
-  return { ok: true, token, valor: { nombre, url: new URL(e.url).toString(), secreto, departamentos, herramientas_lectura: lectura, herramientas_envio: envio,
+  return { ok: true, token, valor: { ...(dominios !== undefined ? { dominios_permitidos: dominios } : {}), nombre, url: new URL(e.url).toString(), secreto, departamentos, herramientas_lectura: lectura, herramientas_envio: envio,
     auth_tipo: auth ?? (secreto || token ? 'bearer' : 'ninguna'), cabecera: auth === 'cabecera' ? cabecera : null, plantilla, etiqueta } };
 }
 
@@ -112,6 +140,7 @@ export function publico(fila, env) {
     departamentos: JSON.parse(fila.departamentos || '[]'),
     herramientas_lectura: JSON.parse(fila.herramientas_lectura || '[]'),
     herramientas_envio: JSON.parse(fila.herramientas_envio || '[]'),
+    dominios_permitidos: dominiosDe(fila),
     activo: !!fila.activo,
   };
 }
