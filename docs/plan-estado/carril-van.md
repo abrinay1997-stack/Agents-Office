@@ -27,3 +27,8 @@ Diseño propuesto:
 5. **UI mínima:** en Ajustes → Conectores, campo «Dominios que puede consultar» (uno por línea) en el editor de un conector, solo administradores; validar (sin esquema, sin rutas, sin `*` solo, ≤ 20, no IPs privadas ni `localhost`). `public/nube-conectores.js` y `src/movil/vistas/conectores.js`.
 6. **Pruebas:** casos del banco (`tests/fixtures/banco-ataques.mjs`) con y sin lista: host de la lista pasa, `lista.com.evil.test` no, homoglifos y `@` siguen ajenos, lista vacía = comportamiento actual; test de que el token no sale y de que un administrador es el único que edita.
 7. **Riesgo:** una lista amplia reabre la exfiltración por la dirección (un dominio que el atacante controla dentro de un dominio permitido, p. ej. un servicio de subidas). Documentarlo en la pantalla: lista corta, solo dominios propios de confianza.
+
+## VAN-03 · carril 2 (30 oct 2026): cerrado el hueco de `\n`/`\t` escapados
+- `safety.mjs → injectionIn` prueba UNA forma más (normalizada y sin tildes, una sola pasada extra) con `\n`, `\r` y `\t` literales cambiados por espacio (solo si el texto los trae; lo demás igual). Cierra `tool-07` y `tool-08`; se añadieron `tool-09..11` (ataques que SÍ fallan contra main: dependen de la frontera `\b` y de la forma escapada) y `ok-41..43` (rutas de Windows, código y JSON inocente).
+- Antes/después: ataques 58/76 (76 %) → 63/79 (80 %); inocentes bloqueados 4/40 → 4/43 (los mismos 4, sin falsos positivos nuevos); falsos negativos 18 → 16.
+- Rendimiento (200 KB, node, ms por llamada, main → rama): `\n` repetidos 2,1 → 5,0; JSON con muchos `\n`/`\t` 3,1 → 6,0; texto sin barras 4,9 → 5,0. Con una sola forma extra el costo es de pocos ms; con las tres formas del primer intento era 2,2→5,4 y 3,1→7,7.
