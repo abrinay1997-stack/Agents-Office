@@ -60,6 +60,7 @@
         <div class="sg-f" id="cn-aqui"${f.donde === 'aqui' ? '' : ' hidden'}><label for="cn-token">Token</label><input id="cn-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${editar && f.tokenGuardado ? '••• guardado (escribe uno nuevo para reemplazarlo)' : 'Pégalo aquí'}"><small>Se guarda cifrado, no se vuelve a mostrar y no sale en ninguna pantalla. Sin la palabra «Bearer».</small></div>
         <div class="sg-f" id="cn-sec"${f.donde === 'secreto' ? '' : ' hidden'}><label for="cn-secreto">Nombre del secreto</label><input id="cn-secreto" maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="MCP_${esc(slug(f.etiqueta || p.nombre).toUpperCase().replace(/-/g, '_').slice(0, 20))}_TOKEN" value="${esc(f.secreto)}"><small>Es el NOMBRE (empieza por MCP_), nunca el token. El token lo guardas en GitHub como secreto del repositorio y vuelves a desplegar.</small></div></div>
       <fieldset class="sg-f"><legend>Departamentos que lo usan</legend><div class="cn-deptos">${DEPTS.map(([k, n]) => `<label class="cn-chk"><input type="checkbox" name="cn-dep" value="${k}"${f.departamentos.includes(k) ? ' checked' : ''}> ${n}</label>`).join('')}</div></fieldset>
+      <div class="sg-f"><label for="cn-dominios">Dominios que puede consultar</label><textarea id="cn-dominios" rows="3" maxlength="900" autocapitalize="none" spellcheck="false" placeholder="ejemplo.com">${esc(f.dominios || '')}</textarea><small>Uno por línea (ejemplo.com o *.ejemplo.com). Vacío = ninguno. Solo cuenta si el dueño enciende «Dominios por conector» en Ajustes → Seguridad. Lista corta y solo dominios propios de confianza: un dominio que deja subir o publicar texto sirve para sacar datos por la dirección.</small></div>
       <div class="cn-barra"><button type="button" class="sg-btn" data-a="probar-form">Probar conexión</button><span class="nb-msg" id="cn-pmsg" role="status" aria-live="polite"></span></div>
       <div id="cn-tools">${herramientas()}</div>
       <div class="cn-barra"><button type="button" class="sg-btn pri" data-a="guardar-form">${editar ? 'Guardar cambios' : 'Guardar conector'}</button><span class="nb-msg" id="cn-gmsg" role="status" aria-live="polite"></span></div></section>`;
@@ -77,10 +78,11 @@
     f.auth = pane.querySelector('input[name=cn-auth]:checked')?.value || 'bearer'; f.cabecera = q('#cn-cabecera')?.value || '';
     f.donde = pane.querySelector('input[name=cn-donde]:checked')?.value || f.donde; f.secreto = q('#cn-secreto')?.value.trim() || ''; f.token = q('#cn-token')?.value || '';
     f.departamentos = [...pane.querySelectorAll('input[name=cn-dep]:checked')].map((x) => x.value);
+    f.dominios = q('#cn-dominios')?.value ?? f.dominios ?? '';
     return f;
   }
   const cuerpoForm = (f, conTools) => {
-    const b = { nombre: f.nombre, etiqueta: f.etiqueta || undefined, plantilla: f.plantilla === 'otro' ? undefined : f.plantilla, auth_tipo: f.auth, cabecera: f.auth === 'cabecera' ? f.cabecera : undefined, departamentos: f.departamentos };
+    const b = { nombre: f.nombre, etiqueta: f.etiqueta || undefined, plantilla: f.plantilla === 'otro' ? undefined : f.plantilla, auth_tipo: f.auth, cabecera: f.auth === 'cabecera' ? f.cabecera : undefined, departamentos: f.departamentos, dominios_permitidos: String(f.dominios || '').split('\n').map((x) => x.trim()).filter(Boolean) };
     if (f.url) b.url = f.url;
     if (f.auth !== 'ninguna') { if (f.donde === 'secreto' && f.secreto) b.secreto = f.secreto; else if (f.token) b.token = f.token; }
     if (conTools) { const m = [...f.marcadas]; const t = f.tools || []; b.herramientas_lectura = t.filter((h) => h.tipo === 'lectura' && m.includes(h.name)).map((h) => h.name); b.herramientas_envio = t.filter((h) => h.tipo === 'envio' && m.includes(h.name)).map((h) => h.name); }
@@ -109,7 +111,7 @@
         if (a === 'cerrar') { FORM = null; repintar(); return; }
         if (a === 'plantilla') { const p = PLANT.find((x) => x.id === b.dataset.id); FORM = { paso: 'datos', plantilla: p.id, etiqueta: p.id === 'otro' ? '' : p.nombre, url: '', auth: p.auth, cabecera: '', donde: CIFRADO ? 'aqui' : 'secreto', secreto: '', token: '', departamentos: [], tools: null, marcadas: new Set() }; repintar(); (pane.querySelector('#cn-url') || pane).focus?.(); return; }
         if (a === 'editar') {
-          FORM = { paso: 'datos', existente: true, nombre: c.nombre, plantilla: c.plantilla || 'otro', etiqueta: c.etiqueta || '', urlVisible: c.url, url: '', auth: c.auth_tipo, cabecera: c.cabecera || '', donde: c.secreto ? 'secreto' : CIFRADO ? 'aqui' : 'secreto', secreto: c.secreto || '', tokenGuardado: c.tokenGuardado, token: '', departamentos: [...c.departamentos], tools: null, marcadas: new Set([...c.herramientas_lectura, ...c.herramientas_envio]) };
+          FORM = { paso: 'datos', existente: true, nombre: c.nombre, plantilla: c.plantilla || 'otro', etiqueta: c.etiqueta || '', urlVisible: c.url, url: '', auth: c.auth_tipo, cabecera: c.cabecera || '', donde: c.secreto ? 'secreto' : CIFRADO ? 'aqui' : 'secreto', secreto: c.secreto || '', tokenGuardado: c.tokenGuardado, token: '', departamentos: [...c.departamentos], dominios: (c.dominios_permitidos || []).join('\n'), tools: null, marcadas: new Set([...c.herramientas_lectura, ...c.herramientas_envio]) };
           FORM.tools = [...c.herramientas_lectura.map((x) => ({ name: x, tipo: 'lectura' })), ...c.herramientas_envio.map((x) => ({ name: x, tipo: 'envio' }))];
           repintar(); pane.querySelector('#cn-form').scrollIntoView?.({ block: 'start' }); return;
         }

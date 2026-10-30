@@ -31,6 +31,7 @@ export function camposOpacos(entrada, prof = 0) {
 
 /**
  * ctx: { run, tarea, agente, dept, writes, runMode, policy, known, safety, amountLimit, servers, urls }
+ *   dominios (opcional, SEG-02): { servidor: [hosts] } de `dominios_permitidos`; solo cuenta con `safety.dominiosPorConector` encendido (el propio guardián lo comprueba). Una lista vacía o ausente = como siempre.
  *   urls (opcional, SEG-02): { servidor: url del conector }. Con él, un argumento con una dirección que no es del conector se bloquea (code «url-ajena», motivo fijo, queda en la auditoría).
  * estado: el objeto de datos de la corrida, SE MODIFICA: estado.taint = { why, tool, t } cuando algo leído trae órdenes, estado.bloqueos = [{ tool, why, kind, code }].
  */
@@ -59,7 +60,8 @@ export function crearGuardian({ db, ctx, estado, ahora = () => Date.now() }) {
         const kind = kindOfCall(tool, entrada, seguridad.safeTools, seguridad.toolKinds);
         const counts = kind === 'write' ? await contar() : { agentToday: 0, byTarget: {} };
         const urlConector = ctx.urls?.[splitTool(tool).server];
-        const ajena = urlConector ? urlAjenaEn(entrada, urlConector) : null;
+        const extra = seguridad.dominiosPorConector ? ctx.dominios?.[splitTool(tool).server] : null; // SEG-02: solo con el interruptor del dueño encendido; sin él, la lista se ignora
+        const ajena = urlConector ? urlAjenaEn(entrada, urlConector, extra || []) : null;
         if (ajena) d = { allow: false, kind: 'read', code: 'url-ajena', why: 'Bloqueado: un argumento lleva una dirección que no es del conector. Las consultas no mandan direcciones a otros sitios; pide el dato sin ella.' }; // el motivo es fijo: no repite la dirección (podría ser el dato que se quería sacar)
         else d = decide(tool, entrada, { writes: !!ctx.writes, known: ctx.known ?? null, safety: seguridad, tainted: estado.taint?.why || null, counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0, policy: ctx.policy, servers: Array.isArray(ctx.servers) ? ctx.servers : undefined });
       } catch (e) { d = { allow: false, kind: 'write', code: 'guardian', why: 'Bloqueado: el guardián de la oficina falló, así que no se envía nada.' }; } // falla cerrado

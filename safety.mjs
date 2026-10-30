@@ -16,7 +16,7 @@
 //   toolKinds      { "*test_connection": "read" }   the owner's word on what a tool is (read · write · cost), over the name rule (MCP-01)
 
 export const WRITE_MODES = ['aprobar', 'pedido', 'nunca'];
-export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true, toolKinds: {} };
+export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true, toolKinds: {}, dominiosPorConector: false };
 
 export function normalize(s = {}) {
   const o = { ...DEFAULTS, ...s, limits: { ...DEFAULTS.limits, ...(s.limits || {}) } };
@@ -24,6 +24,7 @@ export function normalize(s = {}) {
   o.departments = Object.fromEntries(Object.entries(o.departments || {}).filter(([, v]) => WRITE_MODES.includes(v)));
   for (const k of ['browserSites', 'browserBlock', 'safeTools']) o[k] = Array.isArray(o[k]) ? o[k].map(String).filter(Boolean) : DEFAULTS[k];
   o.toolKinds = o.toolKinds && typeof o.toolKinds === 'object' && !Array.isArray(o.toolKinds) ? Object.fromEntries(Object.entries(o.toolKinds).filter(([, v]) => KINDS.includes(v))) : {};
+  o.dominiosPorConector = o.dominiosPorConector === true; // SEG-02: solo el booleano true lo enciende (apagado por defecto)
   return o;
 }
 /** Problems in plain words, for `npm run check`. */
@@ -214,10 +215,13 @@ export function parametrosUrl(schema, hondo = 0, ruta = '') {
   return out;
 }
 export const esquemaConUrlLibre = schema => parametrosUrl(schema).length > 0;
+/** SEG-02: ¿se oculta una herramienta con parámetro de dirección? Sí, salvo que el dueño encendiera `safety.dominiosPorConector` Y el conector tenga una lista no vacía (entonces el guardián obliga a que cada dirección caiga en ella). */
+export const ocultaPorUrlLibre = (schema, { activo = false, dominios = [] } = {}) => esquemaConUrlLibre(schema) && !(activo === true && Array.isArray(dominios) && dominios.length > 0);
 /** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
  *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
  *  una barra de ancho completo— cuenta como ajeno. → el host (o un trozo) ajeno, o null. */
-export function urlAjenaEn(args, urlConector) {
+export function urlAjenaEn(args, urlConector, extra = []) {
+  const permitidos = Array.isArray(extra) ? extra.filter(x => typeof x === 'string' && x.trim()) : []; // SEG-02: dominios que el dueño dejó consultar a ESTE conector (la lista vacía = el comportamiento de siempre)
   const propio = hostOf(urlConector || '');
   if (!propio) return null;
   const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: clavesUrl(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
@@ -228,7 +232,7 @@ export function urlAjenaEn(args, urlConector) {
     if (/[^\x21-\x7e]|[\\@]/.test(autoridad)) return autoridad.slice(0, 60) || token.slice(0, 40); // no ASCII, controles, espacios, «@» o «\\» en el host
     const h = hostOf(conEsquema ? token : 'https://' + sinEsquema);
     if (!h) return autoridad.slice(0, 60);
-    return h === propio || h.endsWith('.' + propio) ? null : h;
+    return h === propio || h.endsWith('.' + propio) || permitidos.some(p => hostMatch(h, p)) ? null : h;
   };
   for (const { t, claveUrl } of textos) {
     const texto = t.slice(0, 20000);

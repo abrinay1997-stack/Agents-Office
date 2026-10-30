@@ -15,7 +15,9 @@
 - Correr el banco también en el despliegue (hoy corre dentro de `npm test` y de `check`, que ya corre en CI).
 - Casos de imagen y PDF (el texto escrito dentro de una imagen no pasa por `injectionIn`: es un límite conocido de `ver_imagen`).
 
-## `dominiosPermitidos` por conector (SEG-02, pendiente) — solo DISEÑO, no construido
+## `dominiosPermitidos` por conector (SEG-02) — CONSTRUIDO (30 oct 2026, rama `carril-van-dominios`, PR en borrador), APAGADO por defecto
+
+Hecho: migración `0302_conectores_dominios.sql` (columna `dominios_permitidos` en `conectores_extra`, sin tabla nueva: no hay poda ni restablecer que añadir); `safety.mjs` (`urlAjenaEn(args, url, extra)`, `ocultaPorUrlLibre`, `normalize().dominiosPorConector`, solo el booleano `true`); `lib/conectores.js` (`validarDominios`, `dominiosDe`, `dominiosPorServidor`, `publico().dominios_permitidos`); guardián (`ctx.dominios`, gateado por el propio guardián con el interruptor); chat con agentes y consultas de Dimitri (con interruptor Y lista no vacía la herramienta con dirección se ofrece; si no, se oculta); POST `/api/conectores` (solo admin, sin el campo conserva la lista, `[]` la quita, auditado); ajuste `safety.dominiosPorConector` (Ajustes → Seguridad) y campo «Dominios que puede consultar» en escritorio (`public/nube-conectores.js`) y móvil. El interruptor se llama `safety.dominiosPorConector` (el bloque de ajustes de seguridad se llama `safety`, no `seguridad`). Tests: `tests/dominios-conector.test.mjs`, `cloudflare/tests/dominios-conector.test.mjs`. NO verificado: la pantalla en navegador (escritorio y móvil) ni un conector real que lea webs; el ejecutor de tareas (`ejecutor.js`) nunca tuvo `ctx.urls`, así que no aplica `url-ajena` (igual que antes). Los conectores de secreto (`MCP_…`) sí tienen fila en `conectores`/`conectores_extra` y pueden llevar lista. Abajo, el diseño original:
 
 Por qué no se hizo en este PR: toca una migración de D1, `lib/conectores.js`, `modulos/conectores.js`, el guardián, el chat de agentes, las consultas de Dimitri y la pantalla de Ajustes (escritorio y móvil): es más grande que un PR de pruebas y comparte archivos con otros carriles.
 
