@@ -74,8 +74,28 @@ export function armarPedidoVision({ biblia, hojas = [], plano = {}, nRefs = 0 } 
 
 const noVerificado = (motivo, extra = {}) => ({ estado: 'no_verificado', cumple: null, problemas: [], confianza: 0, motivo: cad(motivo, 240), revision_humana: true, aprueba: false, ...extra });
 export { noVerificado };
-let candado = Promise.resolve();
-const enCandado = f => { const p = candado.then(f, f); candado = p.catch(() => {}); return p; };
+export const MAX_ESPERANDO = 3; // revisiones esperando su turno además de la que está en marcha
+export const TIEMPO_MAX_MS = 125000; // tope duro de un turno (el modelo corta a 120 s)
+let activas = 0, cadena = Promise.resolve();
+/** Serializa: devuelve null si ya hay 1 en marcha + MAX_ESPERANDO esperando. Libera SIEMPRE (también si `f` lanza). */
+function enCandado(f) {
+  if (activas >= 1 + MAX_ESPERANDO) return null;
+  activas++;
+  const p = cadena.then(() => f());
+  cadena = p.then(() => {}, () => {});
+  return p.finally(() => { activas--; });
+}
+/** Corre `f(estado)` con un tope de tiempo: al vencer devuelve un no_verificado y, si ya se había enviado, anota el estimado como «pudo cobrarse». */
+async function conTope(f, ms, pedido) {
+  const estado = { vencido: false, enviado: false, anotar: null }; let timer;
+  const vence = new Promise(res => { timer = setTimeout(() => res('vencio'), Math.max(1, ms)); });
+  try {
+    const r = await Promise.race([f(estado), vence]);
+    if (r !== 'vencio') return r;
+    estado.vencido = true; const ok = estado.enviado && estado.anotar ? estado.anotar() : true;
+    return noVerificado('el modelo de visión no contestó a tiempo', { codigo: 'tiempo', ...(estado.enviado ? { puedeHaberCobrado: true, costoUsd: pedido.costoEstimadoUsd, ...(ok ? {} : { cobroFallido: true }) } : {}) });
+  } finally { clearTimeout(timer); }
+}
 
 const CLAVES = new Set(['cumple', 'problemas', 'confianza', 'texto_leido']);
 const CLAVES_PROBLEMA = new Set(['tipo', 'detalle', 'evidencia']);
@@ -121,36 +141,48 @@ export function leerVeredicto(texto, { esperado = '' } = {}) {
 
 /**
  * Revisa UN plano ya generado. Todo lo que gasta o sale va INYECTADO; sin `mirar` no hay llamada. Nunca lanza: un fallo es «no_verificado».
- * @param {{ pedido: any, imagen: { media_type: string, data: string, file?: string }, refs?: any[], ficha?: any, carpeta?: any, refsFichas?: {ficha:any, carpeta:any}[],
- *   activo?: boolean, puedeVer?: boolean, motivoSinVer?: string, destino?: string, por?: string,
- *   presupuesto?: { revisar(est:number):void, cobrar(usd:number):void } | null, auditar?: (l:any)=>void, mirar?: (p:{system:string,user:string,imagenes:any[]})=>Promise<{text:string,usd?:number,modelId?:string}> }} a
+ * Las revisiones SE SERIALIZAN (una a la vez en este proceso): la que llega con otra en marcha ESPERA su turno, vuelve a mirar el tope con el libro ya cobrado y solo
+ * recibe `codigo:'tope'` si ya no cabe (con el tope holgado sí llama, después de la primera). Hay como mucho `MAX_ESPERANDO` esperando: la siguiente recibe `codigo:'cola_llena'`
+ * SIN cargar su imagen ni llamar a nada. Cada turno tiene un tope duro de tiempo (`tiempoMaxMs`): si el modelo no contesta, el candado se libera y se anota el estimado.
+ * Códigos de un no_verificado que la ruta distingue: 'tope' (no cabe) · 'interno' (falló el libro del presupuesto: falla cerrado) · 'cola_llena' · 'carga' (no se pudo preparar la imagen).
+ * `cargar` (opcional) = async () => ({ imagen, refs }): se llama DENTRO del turno, así una petición en cola no tiene su imagen en memoria.
+ * @param {any} a
  */
-export async function revisarPlano({ pedido, imagen, refs = [], ficha = {}, carpeta = null, refsFichas = [], activo = false, puedeVer = false, motivoSinVer, destino = '', por = 'dimitri', presupuesto = null, auditar = () => {}, mirar = null } = {}) {
+export async function revisarPlano({ pedido, imagen = null, refs = [], cargar = null, ficha = {}, carpeta = null, refsFichas = [], activo = false, puedeVer = false, motivoSinVer, destino = '', por = 'dimitri', presupuesto = null, auditar = () => {}, mirar = null, tiempoMaxMs = TIEMPO_MAX_MS } = {}) {
   if (!pedido?.ok) return noVerificado(pedido?.motivo || 'no hay pedido de revisión');
   const permiso = puedeRevisar({ activo, puedeVer, motivoSinVer, ficha, carpeta, destino });
   if (!permiso.ok) return noVerificado(permiso.motivo);
   for (const rf of refsFichas) { const p = puedeEnviar({ ficha: rf.ficha, carpeta: rf.carpeta, destino }); if (!p.ok) return noVerificado(`una referencia no puede salir: ${p.motivo}`); }
   if (typeof mirar !== 'function') return noVerificado('no hay un modelo de visión conectado');
-  if (!imagen?.data || !imagen?.media_type) return noVerificado('no hay imagen que revisar');
-  const listaRefs = (Array.isArray(refs) ? refs : []).filter(r => r?.data && r?.media_type).slice(0, MAX_REFS_VISION);
-  if (listaRefs.length !== pedido.nRefs) return noVerificado('las referencias que llegaron no son las del pedido');
-  return enCandado(async () => { // de revisar el tope a cobrar: UNA revisión a la vez en este proceso, para que dos peticiones juntas no pasen el mismo chequeo y rebasen el tope
-    try { presupuesto?.revisar(pedido.costoEstimadoUsd); } catch (e) { return noVerificado(`no cabe en el tope de gasto: ${cad(e?.message, 160)}`, { codigo: 'tope' }); }
-    for (const f of [imagen.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
+  if (!cargar && !(imagen?.data && imagen?.media_type)) return noVerificado('no hay imagen que revisar');
+  const turno = enCandado(() => conTope(async cerrado => {
+    let img = imagen, rfs = refs;
+    if (cargar) { try { const c = await cargar(); img = c?.imagen; rfs = c?.refs || []; } catch (e) { return noVerificado(`no pude preparar la imagen: ${cad(e?.message, 120)}`, { codigo: 'carga' }); } }
+    if (!img?.data || !img?.media_type) return noVerificado('no hay imagen que revisar', { codigo: 'carga' });
+    const listaRefs = (Array.isArray(rfs) ? rfs : []).filter(r => r?.data && r?.media_type).slice(0, MAX_REFS_VISION);
+    if (listaRefs.length !== pedido.nRefs) return noVerificado('las referencias que llegaron no son las del pedido');
+    try { presupuesto?.revisar(pedido.costoEstimadoUsd); }
+    catch (e) { return e?.code === 'tope' ? noVerificado(`no cabe en el tope de gasto: ${cad(e?.message, 160)}`, { codigo: 'tope' }) : noVerificado(`no pude comprobar el presupuesto, así que no se revisa: ${cad(e?.message, 120)}`, { codigo: 'interno' }); } // solo «no cabe» es 'tope'; un fallo del libro falla cerrado y no llama al modelo
+    for (const f of [img.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
     // anota lo gastado en el libro del Estudio; si el libro mismo falla, NO se traga: queda una línea `cobro-fallido` con el importe y el resultado lo dice
-    const anotar = usd => { try { presupuesto?.cobrar(usd); return true; } catch (e) { try { auditar({ kind: 'cobro-fallido', usd: Math.round(usd * 1e6) / 1e6, file: String(imagen.file || '').slice(0, 300), motivo: cad(e?.message, 160) }); } catch { /* ya no hay más que hacer: el resultado lleva cobroFallido */ } return false; } };
+    const anotar = usd => { try { presupuesto?.cobrar(usd); return true; } catch (e) { try { auditar({ kind: 'cobro-fallido', usd: Math.round(usd * 1e6) / 1e6, file: String(img.file || '').slice(0, 300), motivo: cad(e?.message, 160) }); } catch { /* ya no hay más que hacer: el resultado lleva cobroFallido */ } return false; } };
+    cerrado.enviado = true; cerrado.anotar = () => anotar(pedido.costoEstimadoUsd);
     let r;
-    try { r = await mirar({ system: pedido.system, user: pedido.user, imagenes: [imagen, ...listaRefs] }); }
+    try { r = await mirar({ system: pedido.system, user: pedido.user, imagenes: [img, ...listaRefs] }); }
     catch (e) {
-      if (e?.antesDeEnviar === true) return noVerificado(`el modelo de visión no llegó a recibir la imagen: ${cad(e?.message, 120)}`); // falló ANTES de conectar: no se cobró nada
+      if (cerrado.vencido) return noVerificado('vencido'); // el tope de tiempo ya contestó y anotó el estimado
+      if (e?.antesDeEnviar === true) { cerrado.enviado = false; return noVerificado(`el modelo de visión no llegó a recibir la imagen: ${cad(e?.message, 120)}`); } // falló ANTES de conectar: no se cobró nada
       const ok = anotar(pedido.costoEstimadoUsd); // falló DESPUÉS de enviar (o no se sabe): pudo cobrarse; se cuenta el estimado ante los topes diario y mensual
       return noVerificado(`el modelo de visión falló: ${cad(e?.message, 120)}`, { puedeHaberCobrado: true, costoUsd: pedido.costoEstimadoUsd, ...(ok ? {} : { cobroFallido: true }) });
     }
+    if (cerrado.vencido) return noVerificado('vencido'); // llegó tarde: ya se anotó el estimado, no se cobra dos veces
     const usd = Number.isFinite(Number(r?.usd)) && Number(r.usd) >= 0 ? Number(r.usd) : pedido.costoEstimadoUsd; // sin cifra real, se cuenta el estimado: nunca 0 inventado
     const cobrado = anotar(usd);
     const v = leerVeredicto(r?.text, { esperado: pedido.esperado });
     return { ...v, costoUsd: Math.round(usd * 1e6) / 1e6, modelo: cad(r?.modelId, 60), vision_version: VISION_VERSION, ...(cobrado ? {} : { cobroFallido: true }) };
-  });
+  }, tiempoMaxMs, pedido));
+  if (!turno) return noVerificado('hay demasiadas revisiones esperando; vuelve a intentarlo en un momento', { codigo: 'cola_llena' });
+  try { return await turno; } catch (e) { return noVerificado(`la revisión falló por dentro: ${cad(e?.message, 120)}`, { codigo: 'interno' }); }
 }
 
 /** Lo que se guarda en la ficha de la imagen: compacto y sin nada que no haya pasado el escudo. */

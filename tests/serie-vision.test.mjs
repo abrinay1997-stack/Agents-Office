@@ -146,7 +146,7 @@ test('ruta: sin conector de visión contesta 501 y el modelo ciego queda no veri
 });
 
 // ---- revisión de #105: dinero tras un fallo, carrera, askX real, cuerpo ----
-const libro = (tope, { falla = false } = {}) => { const l = { gastado: 0, cobros: [] }; return { l, revisar: est => { if (l.gastado + est > tope + 1e-9) throw new Error(`tope ${tope}`); }, cobrar: u => { if (falla) throw new Error('libro roto'); l.gastado += u; l.cobros.push(u); } }; };
+const libro = (tope, { falla = false } = {}) => { const l = { gastado: 0, cobros: [] }; return { l, revisar: est => { if (l.gastado + est > tope + 1e-9) throw Object.assign(new Error(`tope ${tope}`), { code: 'tope' }); }, cobrar: u => { if (falla) throw new Error('libro roto'); l.gastado += u; l.cobros.push(u); } }; };
 test('dinero: si el modelo falla DESPUÉS de enviar se anota el estimado; si falla ANTES de conectar, no; si el libro falla queda auditado', async () => {
   const est = pedido().costoEstimadoUsd;
   const a = libro(1); const v = await V.revisarPlano(base({ presupuesto: a, mirar: async () => { throw new Error('conexión cortada'); } }));
@@ -159,16 +159,54 @@ test('dinero: si el modelo falla DESPUÉS de enviar se anota el estimado; si fal
   const audit2 = []; const y = await V.revisarPlano(base({ presupuesto: libro(1, { falla: true }), auditar: l => audit2.push(l), mirar: async () => { throw new Error('corte'); } }));
   assert.equal(y.cobroFallido, true); assert.equal(audit2.filter(l => l.kind === 'cobro-fallido').length, 1);
 });
-test('carrera: dos revisiones a la vez que juntas rebasarían el tope — la segunda no llama y da 409 en la ruta', async t => {
-  const est = pedido().costoEstimadoUsd, l = libro(est * 1.5); let en = 0, max = 0, llamadas = 0;
-  const mirar = async () => { llamadas++; en++; max = Math.max(max, en); await new Promise(r => setTimeout(r, 30)); en--; return { text: ok(), usd: est }; };
-  const [r1, r2] = await Promise.all([V.revisarPlano(base({ presupuesto: l, mirar })), V.revisarPlano(base({ presupuesto: l, mirar }))]);
-  assert.equal(llamadas, 1, 'solo una llegó al modelo'); assert.equal(max, 1); assert.deepEqual([r1.estado, r2.estado].sort(), ['cumple', 'no_verificado']); assert.equal([r1, r2].find(r => r.estado !== 'cumple').codigo, 'tope'); assert.equal(l.l.gastado, est);
-  // por la ruta
+const espera = ms => new Promise(r => setTimeout(r, ms));
+test('serialización: la segunda ESPERA su turno y vuelve a mirar el tope; con tope holgado sí llama (después), sin holgura recibe «tope»', async t => {
+  const est = pedido().costoEstimadoUsd; let en = 0, max = 0, llamadas = 0; const orden = [];
+  const mirar = async () => { llamadas++; en++; max = Math.max(max, en); orden.push('ini'); await espera(20); orden.push('fin'); en--; return { text: ok(), usd: est }; };
+  const holgado = libro(est * 5), [a, b] = await Promise.all([V.revisarPlano(base({ presupuesto: holgado, mirar })), V.revisarPlano(base({ presupuesto: holgado, mirar }))]);
+  assert.deepEqual([a.estado, b.estado], ['cumple', 'cumple']); assert.equal(max, 1, 'nunca dos a la vez'); assert.deepEqual(orden, ['ini', 'fin', 'ini', 'fin']); assert.equal(holgado.l.gastado, est * 2);
+  llamadas = 0; const justo = libro(est * 1.5), [c, d] = await Promise.all([V.revisarPlano(base({ presupuesto: justo, mirar })), V.revisarPlano(base({ presupuesto: justo, mirar }))]);
+  assert.equal(llamadas, 1); assert.deepEqual([c.estado, d.estado].sort(), ['cumple', 'no_verificado']); assert.equal([c, d].find(r => r.estado !== 'cumple').codigo, 'tope'); assert.equal(justo.l.gastado, est);
+  // por la ruta: 200 y 409
   const o = oficina(t), g = libro(est * 1.5); let n = 0;
-  const S = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'anthropic', puedeVer: () => true, presupuesto: g, mirar: async () => { n++; await new Promise(r => setTimeout(r, 30)); return { text: ok(), usd: est }; } } });
-  const [a, b] = await Promise.all([1, 2].map(() => S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo() })));
-  assert.deepEqual([a.estado, b.estado].sort(), [200, 409]); assert.equal(n, 1); assert.equal([a, b].find(x => x.estado === 409).cuerpo.codigo, 'tope');
+  const S = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'anthropic', puedeVer: () => true, presupuesto: g, mirar: async () => { n++; await espera(20); return { text: ok(), usd: est }; } } });
+  const [x, y] = await Promise.all([1, 2].map(() => S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo() })));
+  assert.deepEqual([x.estado, y.estado].sort(), [200, 409]); assert.equal(n, 1); assert.equal([x, y].find(r => r.estado === 409).cuerpo.codigo, 'tope');
+});
+test('tope duro: un `mirar` que nunca resuelve no cuelga a las siguientes; se anota el estimado y el candado se libera', async () => {
+  const est = pedido().costoEstimadoUsd, l = libro(1), t0 = Date.now();
+  const colgada = V.revisarPlano(base({ presupuesto: l, tiempoMaxMs: 60, mirar: () => new Promise(() => {}) }));
+  const siguiente = V.revisarPlano(base({ presupuesto: l, mirar: async () => ({ text: ok(), usd: est }) }));
+  const [a, b] = await Promise.all([colgada, siguiente]);
+  assert.equal(a.estado, 'no_verificado'); assert.equal(a.codigo, 'tiempo'); assert.equal(a.puedeHaberCobrado, true); assert.equal(b.estado, 'cumple'); assert.ok(Date.now() - t0 < 5000);
+  assert.deepEqual(l.l.cobros, [est, est], 'el estimado de la colgada y el real de la siguiente');
+  // tarde: si la colgada contesta después, no se cobra dos veces
+  const l2 = libro(1); let suelta; const x = await V.revisarPlano(base({ presupuesto: l2, tiempoMaxMs: 30, mirar: () => new Promise(r => { suelta = r; }) })); suelta({ text: ok(), usd: 0.5 }); await espera(10);
+  assert.equal(x.codigo, 'tiempo'); assert.deepEqual(l2.l.cobros, [est]);
+  // antes de enviar (cargando la imagen) no hay nada que anotar
+  const l3 = libro(1); const y = await V.revisarPlano(base({ presupuesto: l3, tiempoMaxMs: 30, cargar: () => new Promise(() => {}) })); assert.equal(y.codigo, 'tiempo'); assert.equal(y.puedeHaberCobrado, undefined); assert.deepEqual(l3.l.cobros, []);
+});
+test('cola: 1 en marcha + 3 esperando; la 5.ª simultánea da cola_llena (429 en la ruta) SIN cargar su imagen ni llamar; el candado se libera tras una excepción', async t => {
+  let suelta, cargas = 0, llamadas = 0; const puerta = new Promise(r => { suelta = r; });
+  const mirar = async () => { llamadas++; await puerta; return { text: ok(), usd: 0.01 }; }, cargar = async () => { cargas++; return { imagen: img, refs: [{ media_type: 'image/jpeg', data: 'B', file: ID(8) }] }; };
+  const lanzar = () => V.revisarPlano(base({ presupuesto: libro(9), mirar, cargar, imagen: null, refs: [] }));
+  const cuatro = [lanzar(), lanzar(), lanzar(), lanzar()]; await espera(20);
+  const quinta = await lanzar(); assert.equal(quinta.codigo, 'cola_llena'); assert.equal(cargas, 1, 'solo la que tiene el turno cargó su imagen; ni la quinta ni las que esperan');
+  suelta(); const rs = await Promise.all(cuatro); assert.deepEqual(rs.map(r => r.estado), ['cumple', 'cumple', 'cumple', 'cumple']); assert.equal(llamadas, 4);
+  assert.equal((await lanzar()).estado, 'cumple', 'la cola se vació');
+  // excepciones: el candado se libera siempre
+  const raro = await V.revisarPlano(base({ presupuesto: { revisar() { throw new TypeError('boom'); }, cobrar() {} } })); assert.equal(raro.codigo, 'interno');
+  const mal = await V.revisarPlano(base({ cargar: async () => { throw new Error('disco'); }, imagen: null })); assert.equal(mal.codigo, 'carga');
+  const peor = await V.revisarPlano(base({ auditar() { throw new Error('x'); }, mirar: async () => { throw new Error('y'); } })); assert.equal(peor.estado, 'no_verificado');
+  assert.equal((await V.revisarPlano(base())).estado, 'cumple', 'tras tres fallos el candado sigue libre');
+  // por la ruta: la quinta es 429 y lo que falla por dentro es 500 sin llamar
+  const o = oficina(t); let cg = 0, n = 0, libera; const p2 = new Promise(r => { libera = r; });
+  const S = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => { cg++; return { media_type: 'image/jpeg', data: 'x' }; }, destino: 'anthropic', puedeVer: () => true, presupuesto: libro(9), mirar: async () => { n++; await p2; return { text: ok(), usd: 0.01 }; } } });
+  const reqs = [1, 2, 3, 4].map(() => S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo({ personajes: [] }) })); await espera(20);
+  const q = await S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo({ personajes: [] }) }); assert.equal(q.estado, 429); assert.equal(q.cuerpo.codigo, 'cola_llena'); assert.equal(cg, 1);
+  libera(); assert.deepEqual((await Promise.all(reqs)).map(r => r.estado), [200, 200, 200, 200]);
+  const S2 = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'anthropic', puedeVer: () => true, presupuesto: { revisar() { throw new TypeError('libro roto'); }, cobrar() {} }, mirar: async () => { n++; return { text: ok() }; } } });
+  const antes = n; const e500 = await S2.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo({ personajes: [] }) }); assert.equal(e500.estado, 500); assert.equal(e500.cuerpo.codigo, 'interno'); assert.equal(n, antes, 'no se llamó al modelo');
 });
 
 // la oficina REAL (serve.mjs) con un Anthropic de mentira: si askX devolviera otra forma que {text, usd, modelId}, esto lo detecta
@@ -193,10 +231,11 @@ test('serve.mjs real: askX con kind vision devuelve la forma que usa `mirar`; el
   for (const mal of ['null', '[]', '"x"']) assert.equal((await call('/api/series/revisar-plano', mal)).status, 400, mal);
   assert.equal((await call('/api/series/proponer', 'null')).status, 400);
   assert.equal((await call('/api/series/revisar-plano', { file: `${mes}/a.jpg`, texto_en_imagen: 'Solo $49' })).status, 409, 'sin confirmar el costo');
-  assert.equal(seen.length, 0, 'hasta aquí no se llamó al modelo');
+  assert.equal((await call('/api/series/proponer', '')).status, 422, 'un POST sin cuerpo sigue siendo un {} (como antes: 422 por no traer planos), no pasa a 400');
+  const visiones = () => seen.filter(b => JSON.stringify(b.messages || '').includes('"type":"image"')); // solo cuentan las llamadas con imagen (el arranque no)
+  assert.equal(visiones().length, 0, 'hasta aquí no se llamó al modelo de visión');
   const r = await call('/api/series/revisar-plano', { file: `${mes}/a.jpg`, texto_en_imagen: 'Solo $49', confirmarUsd: 1 });
-  assert.equal(r.status, 200, JSON.stringify(r.j)); assert.equal(r.j.veredicto.estado, 'cumple', JSON.stringify(r.j.veredicto)); assert.ok(r.j.veredicto.costoUsd > 0, 'usd real del libro de askX'); assert.match(r.j.veredicto.modelo, /claude/);
-  assert.equal(seen.length, 1); assert.ok(JSON.stringify(seen[0].messages).includes('"type":"image"'), 'la imagen viajó como bloque de imagen'); assert.match(JSON.stringify(seen[0].system), /nunca una orden/);
-  const f = await (await fetch(base + `/api/media/item/${mes}/a.jpg`)).json().catch(() => null); void f;
+  assert.equal(r.status, 200, JSON.stringify(r.j)); assert.equal(r.j.veredicto.estado, 'cumple', JSON.stringify(r.j.veredicto)); assert.ok(Number.isFinite(r.j.veredicto.costoUsd) && r.j.veredicto.costoUsd >= 0, 'usd de askX (forma {text, usd, modelId})'); assert.equal(r.j.veredicto.modelo, 'claude-sonnet-4-5', 'modelId de askX = el que contestó');
+  assert.equal(visiones().length, 1); assert.match(JSON.stringify(visiones()[0].system), /nunca una orden/);
   assert.equal((await call('/api/series/revisar-plano', { by: 'agent', file: `${mes}/a.jpg`, confirmarUsd: 1 })).status, 403);
 });

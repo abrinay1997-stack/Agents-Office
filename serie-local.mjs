@@ -48,14 +48,14 @@ export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = (
     const pedido = armarPedidoVision({ biblia: b, hojas: usadas, plano: { texto_en_imagen, descripcion }, nRefs: refIds.length });
     if (!pedido.ok) return err(pedido.codigo === 'sin_biblia' ? 409 : 422, pedido.motivo, { codigo: pedido.codigo });
     if (!(Number(confirmarUsd) >= pedido.costoEstimadoUsd)) return err(409, `Revisar este plano cuesta unos US$${pedido.costoEstimadoUsd.toFixed(3)} (estimado) y no confirmaste ese costo.`, { costoEstimadoUsd: pedido.costoEstimadoUsd, gasta: false });
-    let imagen, refs = [];
-    try { const c = await vision.copiaParaVer(M.resolve(id)); imagen = { media_type: c.media_type, data: c.data, file: id };
-      for (const r of refIds) { const q = await vision.copiaParaVer(M.resolve(r)); refs.push({ media_type: q.media_type, data: q.data, file: r }); } }
-    catch (e) { return err(422, `No pude preparar la imagen para revisarla: ${String(e.message).slice(0, 120)}`); }
+    const cargar = async () => { const c = await vision.copiaParaVer(M.resolve(id)), refs = []; // se llama DENTRO del turno de revisión: una petición en cola no carga su imagen
+      for (const r of refIds) { const q = await vision.copiaParaVer(M.resolve(r)); refs.push({ media_type: q.media_type, data: q.data, file: r }); }
+      return { imagen: { media_type: c.media_type, data: c.data, file: id }, refs }; };
     const carpetaDe = f => { const fid = f && f.folder; return fid ? (M.folders() || []).find(x => x.id === fid) || null : null; };
-    const v = await revisarPlano({ pedido, imagen, refs, ficha, carpeta: carpetaDe(ficha), refsFichas: refIds.map(r => { const f = M.item(r); return { ficha: f, carpeta: carpetaDe(f) }; }),
+    const v = await revisarPlano({ pedido, cargar, ficha, carpeta: carpetaDe(ficha), refsFichas: refIds.map(r => { const f = M.item(r); return { ficha: f, carpeta: carpetaDe(f) }; }),
       activo: true, puedeVer: vision.puedeVer ? vision.puedeVer() : false, motivoSinVer: vision.motivoSinVer, destino: vision.destino, por, presupuesto: vision.presupuesto, auditar: vision.auditar, mirar: vision.mirar });
-    if (v.codigo === 'tope') return err(409, v.motivo, { codigo: 'tope', gasta: false }); // otra revisión (o el día/mes del Estudio) ya llenó el tope: no se llamó a nada
+    const sinLlamar = { tope: 409, interno: 500, cola_llena: 429, carga: 422 }[v.codigo]; // no se llamó al modelo: el día/mes del Estudio no alcanza (409), falló el libro (500, falla cerrado), cola llena (429) o no se pudo preparar la imagen (422)
+    if (sinLlamar) return err(sinLlamar, v.motivo, { codigo: v.codigo, gasta: false });
     try { M.update(id, { qa_vision: fichaDeRevision(v, { biblia_version: b.version, ahora: Date.now() }) }); } catch { /* guardar la nota no es lo que importa */ }
     return { estado: 200, cuerpo: { veredicto: v, costoEstimadoUsd: pedido.costoEstimadoUsd, biblia_version: b.version, nota: v.estado === 'cumple' ? 'Cumple lo que se pudo comprobar. Aprobar sigue siendo tuyo.' : 'No está verificado como correcto: queda para tu revisión.' } };
   }
