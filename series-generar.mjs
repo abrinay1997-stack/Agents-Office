@@ -9,18 +9,13 @@
 //      `media.submit`, y marca el trabajo con `serie:{id,n,intento}`. Al terminar liquida lo real; un reinicio retoma desde los trabajos sin duplicar ni cobrar dos veces.
 // Un plano `skipped` jamás se genera. Pausa con motivo ante sin créditos/key, tope o cupo; un envío a un motor de pago que no se sabe cómo acabó queda «incierto» (puede haberse cobrado)
 // y pide la decisión del dueño. Apagar `dimitri.serieGenerar` detiene la bomba (lo que va en el aire solo se liquida).
-import { transicion, siguientePaso, emitirToken, verificarToken, consumirToken, hashEscaleta, claveIdempotencia, estimarSerie, costoPlano, CONFIG_SERIE, nuevoLibro, resumenLibro,
+import { transicion, emitirToken, verificarToken, consumirToken, hashEscaleta, claveIdempotencia, estimarSerie, costoPlano, CONFIG_SERIE, nuevoLibro, resumenLibro,
   reservar, liquidar, liberar, marcarIncierto, resolverIncierto, u2usd, usd2u, nuevaVersion } from './serie-core.mjs';
+import { MUESTRA, pagadoDe, AUTORIZACION_MS, esCarrusel, autorizacionDe, planificarPaso, cerrarSerie, decidirResolucion } from './series-bomba-core.mjs'; // las DECISIONES de la bomba son puras y se comparten con la nube
 import { precioSeguro, costoRevisionSeguro } from './serie-propuesta-core.mjs';
 import { vistaSerie } from './series.mjs';
 
-export const MUESTRA = 3; // planos de la muestra (el mismo 3 de serie-core.siguientePaso)
-const TRANSITORIAS = new Set(['espera', 'tiempo', 'red', 'servicio']); // clases de errores.mjs que merecen el reintento automático
-const PARA_PAUSAR = new Set(['key', 'saldo']); // sin crédito o sin key: no es culpa del plano, se pausa la serie entera
-const esCarrusel = s => /carrusel/i.test(s?.brief?.formato || ''); // el formato del brief, no el título
-const GRATIS = new Set(['prueba', 'prueba-video', 'local']); // falla cerrado: todo motor que no sea uno de estos (o que no se resuelva) cuenta como de PAGO
-const pagadoDe = engine => !GRATIS.has(engine);
-export const AUTORIZACION_MS = 6 * 3600e3; // una autorización caduca aunque no haya reinicio
+export { MUESTRA, AUTORIZACION_MS };
 const err = (estado, error, extra = {}) => ({ estado, cuerpo: { error, ...extra } });
 
 export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, existeRef = () => true, costoRevision = () => null, config = () => ({}), activo = () => false, ahora = () => Date.now(),
@@ -44,7 +39,6 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     }
     return u2usd(micro);
   };
-  const autorizacionDe = s => (s.autorizado ? { ok: true, serieId: s.id, hash: s.autorizado.hash, topeMax: s.autorizado.topeMax } : null);
 
   /** Lo que se mostraría y se gastaría AHORA para esta etapa (la muestra o todo lo que falta). Puro sobre el estado leído. */
   function calcular(s, modo) {
@@ -168,36 +162,18 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
       let pausa = null, devolverUso = 0, devolverDia = null;
       almacen.actualizar(s0.id, y => {
         const n = p0.n, pa = clave ? y.pasos[clave] : null; let libro = y.libro;
-        const liq = real => { const r = liquidar(libro, clave, real); if (r.ok) libro = r.libro; return r.ok && libro.lineas[clave].excedio; };
-        const lib = () => { const r = liberar(libro, clave); if (r.ok) libro = r.libro; };
-        const dudoso = () => { const r = marcarIncierto(libro, clave); if (r.ok) libro = r.libro; };
-        const pagado = pagadoDe(pa?.engine); // sin motor conocido = de pago
-        const volver = (est, mot) => planoA(y, n, q => ({ ...q, estado: est, motivo: mot || null }));
-        const reintento = () => { y.fallos[n] = (y.fallos[n] || 0) + 1; return y.fallos[n] <= conf().reintentosMax; };
-        if (!paso || !pa) { volver('previsto'); } // sin paso apuntado no se reservó nada
-        else if (!j && !pa.job) { lib(); pa.estado = 'liberado'; volver('previsto'); devolverUso = 1; devolverDia = pa.dia; } // se cayó ANTES de llamar al motor: nunca salió
-        else if (!j) {
-          if (pagado) { dudoso(); pa.estado = 'incierto'; volver('revisar', 'puede haberse cobrado: el trabajo ya no aparece en el Estudio'); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
-          else { lib(); pa.estado = 'liberado'; volver('previsto'); }
-        }
-        else if (j.state === 'done' && j.items?.length) {
-          // en pago, un «hecho» sin costo no borra el gasto: como mínimo se liquida lo estimado para generar
-          const real = pagado ? (j.cost > 0 ? j.cost : (pa.genUsd ?? 0)) : Math.max(0, +j.cost || 0), exc = liq(real);
-          pa.estado = 'liquidado'; pa.realUsd = real;
-          planoA(y, n, q => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: j.items[0], intento: pa.intento, costo_usd: real, prompt: q.prompt_exacto }), motivo: null }));
-          if (exc) pausa = `el plano ${n} costó más de lo reservado: revisa antes de seguir`;
-        } else { // fallido: la CAUSA estructurada que pone el Estudio (nunca el texto del error). En un motor de PAGO, todo lo que no sea claramente previo al cobro queda «incierto»
-          const causa = j.causa || '', clase = j.errorClass || '', aceptado = !!j.remote || j.aceptado === true; // `remote` o `aceptado` = el proveedor ya tomó el pedido: nunca es previo al cobro
-          const previo = (causa === 'previo' || causa === 'cancelado_en_cola') && !aceptado;
-          if (pagado && !previo) { dudoso(); pa.estado = 'incierto'; volver('revisar', `puede haberse cobrado (${causa || 'causa desconocida'}): decide si hubo cobro`); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
-          else {
-            lib(); pa.estado = 'liberado';
-            if (causa === 'cancelado' || causa === 'cancelado_en_cola' || causa === 'interrumpido' || y.cancelada) volver('previsto'); // gratis (o cancelado antes de salir): se repite sin contar como fallo
-            else if (PARA_PAUSAR.has(clase)) { volver('previsto'); pausa = j.error || 'sin saldo o sin key en el motor'; }
-            else if (TRANSITORIAS.has(clase) && reintento()) volver('previsto');
-            else { volver('revisar', j.error || 'falló'); pausa = `el plano ${n} falló: ${j.error || 'sin motivo'}`; }
-          }
-        }
+        const d = decidirResolucion({ n, hayPaso: !!(paso && pa), apuntoJob: !!pa?.job, job: j, pagado: pagadoDe(pa?.engine), /* sin motor conocido = de pago */ genUsd: pa?.genUsd, fallos: y.fallos[n] || 0, reintentosMax: conf().reintentosMax, cancelada: !!y.cancelada });
+        const aplicar = f => { const r = f(libro, clave); if (r.ok) libro = r.libro; return r; };
+        let exc = false;
+        if (d.libro === 'liquidar') { const r = aplicar((l, c) => liquidar(l, c, d.real)); exc = r.ok && libro.lineas[clave].excedio; }
+        else if (d.libro === 'liberar') aplicar(liberar);
+        else if (d.libro === 'incierto') aplicar(marcarIncierto);
+        if (d.pasoEstado && pa) pa.estado = d.pasoEstado;
+        if (d.libro === 'liquidar') { pa.realUsd = d.real; planoA(y, n, q => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: d.plano.archivo, intento: pa.intento, costo_usd: d.real, prompt: q.prompt_exacto }), motivo: null })); }
+        else planoA(y, n, q => ({ ...q, estado: d.plano.estado, motivo: d.plano.motivo }));
+        if (d.contarFallo) y.fallos[n] = (y.fallos[n] || 0) + 1;
+        if (d.devolverUso) { devolverUso = d.devolverUso; devolverDia = pa.dia; }
+        pausa = d.pausa || (exc ? d.pausaSiExcede : null);
         cambios++; return { ...y, libro };
       });
       if (devolverUso) almacen.sumarUso(devolverDia || hoy(), -devolverUso);
@@ -209,29 +185,15 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
   let enCurso = null, timer = null;
   async function avanzar() {
     if (candado && !candado.tener()) return; // otro proceso lleva la bomba de este data/
-    if (!activo()) { // apagar el flag PAUSA lo que corría (sin plano en el aire): al volver a encenderlo no se reanuda con una autorización vieja, hace falta otro clic
-      for (const x of almacen.todas()) if ((x.estado === 'muestra' || x.estado === 'corriendo') && !x.escaleta.some(p => p.estado === 'corriendo')) pausar(x.id, 'generar series se apagó (dimitri.serieGenerar): vuelve a pedir el clic para seguir');
-      return;
+    const a = planificarPaso(almacen.todas(), { activo: activo(), ahora: ahora(), autorizacionMs, concurrencia }); // la decisión es pura y compartida con la nube
+    switch (a.tipo) {
+      case 'pausar_todas': for (const id of a.ids) pausar(id, a.motivo); return;
+      case 'caducada': case 'pausar': return pausar(a.id, a.motivo);
+      case 'terminar': { let ok = false; almacen.actualizar(a.id, y => { const h = cerrarSerie(y, ahora()); ok = !!h; return h; }); if (ok) auditar({ kind: 'serie', accion: 'hecha', serie: a.id }); return; }
+      case 'muestra_lista': almacen.actualizar(a.id, y => ({ ...y, muestra_lista: true })); return void auditar({ kind: 'serie', accion: 'muestra_lista', serie: a.id });
+      case 'gasto': return iniciar(almacen.uno(a.id), a.paso);
+      default: return;
     }
-    if (enVuelo() >= concurrencia) return;
-    // una serie con la muestra lista espera TU decisión: no debe quitarle el turno a las demás
-    const s = almacen.todas().filter(x => x.estado === 'corriendo' || (x.estado === 'muestra' && !x.muestra_lista)).sort((a, b) => a.creada - b.creada)[0]; if (!s) return;
-    if (s.autorizado && ahora() - s.autorizado.en > autorizacionMs) { if (!s.escaleta.some(p => p.estado === 'corriendo')) pausar(s.id, 'la autorización caducó (pasaron más de 6 horas): vuelve a pedir el clic para seguir'); return; }
-    const sinPrevistos = !s.escaleta.some(p => p.estado === 'previsto');
-    if (sinPrevistos) { // no queda nada por generar: la serie termina (la muestra pasa por «corriendo» con la misma autorización)
-      if (s.escaleta.some(p => p.estado === 'corriendo')) return;
-      almacen.actualizar(s.id, y => {
-        let cur = y;
-        if (cur.estado === 'muestra') { const r = transicion(cur, 'corriendo', { autorizacion: autorizacionDe(y) }); if (!r.ok) return undefined; cur = r.serie; }
-        const h = transicion(cur, 'hecho');
-        return h.ok ? { ...h.serie, autorizado: null, token_reg: null, fin: ahora() } : undefined;
-      });
-      return void auditar({ kind: 'serie', accion: 'hecha', serie: s.id });
-    }
-    const paso = siguientePaso(s, { autorizacion: autorizacionDe(s) });
-    if (paso.tipo === 'gasto') return iniciar(s, paso);
-    if (paso.codigo === 'sin_autorizacion') return pausar(s.id, 'la escaleta cambió desde que autorizaste: revísala y vuelve a pedir el clic');
-    if (paso.codigo === 'muestra_lista' && !s.muestra_lista) { almacen.actualizar(s.id, y => ({ ...y, muestra_lista: true })); auditar({ kind: 'serie', accion: 'muestra_lista', serie: s.id }); }
   }
   async function tick() {
     if (enCurso) return enCurso;

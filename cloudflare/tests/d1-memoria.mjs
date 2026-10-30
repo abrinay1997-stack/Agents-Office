@@ -14,11 +14,16 @@ export function crearD1() {
   const db = new DatabaseSync(':memory:');
   db.exec('pragma foreign_keys = on');
   for (const f of readdirSync(MIG).filter((x) => x.endsWith('.sql')).sort()) db.exec(readFileSync(join(MIG, f), 'utf8'));
+  // Los dos límites de D1 que SQLite de Node no tiene (y que solo rompen en producción con «Error interno»): ≤ 100 parámetros por sentencia y ≤ 5 términos en una consulta compuesta.
+  const revisar = (sql, args) => {
+    if (args.length > 100) throw new Error(`D1: too many SQL variables (${args.length} > 100)`);
+    if ((sql.match(/\bunion\b/gi) || []).length + 1 > 5) throw new Error('D1: too many terms in compound SELECT');
+  };
   const sentencia = (sql, args = []) => ({
     bind: (...a) => sentencia(sql, a),
-    first: async () => db.prepare(sql).get(...args) ?? null,
-    all: async () => ({ results: db.prepare(sql).all(...args) }),
-    run: async () => { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes } }; },
+    first: async () => { revisar(sql, args); return db.prepare(sql).get(...args) ?? null; },
+    all: async () => { revisar(sql, args); return { results: db.prepare(sql).all(...args) }; },
+    run: async () => { revisar(sql, args); const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
   return { prepare: (sql) => sentencia(sql), batch: async (lista) => { const r = []; for (const x of lista) r.push(await x.run()); return r; }, _db: db };
 }
