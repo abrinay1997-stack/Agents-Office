@@ -45,11 +45,15 @@ const FAL_RUN = () => io.env().AO_FAL_RUN || 'https://fal.run', FAL_QUEUE = () =
 const META_BASE = () => (io.env().AO_META_BASE || 'https://api.meta.ai/v1').replace(/\/$/, '');
 /* ---------- talking to the engines ---------- */
 async function http(url, opts, what) {
-  const r = await fx(url, { ...opts, signal: AbortSignal.timeout(opts.timeout || 180000) });
+  let r;
+  try { r = await fx(url, { ...opts, signal: AbortSignal.timeout(opts.timeout || 180000) }); }
+  catch (e) { if (opts.method === 'POST' && [e?.code, e?.cause?.code, ...(e?.cause?.errors || []).map(x => x?.code)].some(c => c === 'ECONNREFUSED' || c === 'ENOTFOUND')) e.rechazo = true; throw e; } // sin conexión con el servicio: nunca salió
   const text = await r.text(); let j; try { j = JSON.parse(text); } catch { j = null; }
   if (!r.ok) {
     const d = j && (j.error?.message || (typeof j.error === 'string' && j.error) || (typeof j.detail === 'string' && j.detail) || (Array.isArray(j.detail) && j.detail.map(x => x.msg || x.message).filter(Boolean).join('; ')) || j.message);
-    throw new EngineError(`${what}: ${r.status} ${d || text.slice(0, 200)}`, r.status);
+    const er = new EngineError(`${what}: ${r.status} ${d || text.slice(0, 200)}`, r.status);
+    if (opts.method === 'POST' && r.status >= 400 && r.status < 500) er.rechazo = true; // señal POSITIVA de rechazo del propio POST (4xx): el servicio no lo aceptó
+    throw er;
   }
   return j;
 }
@@ -231,7 +235,7 @@ const RUN = {
     if (m.kind === 'image') { // image-01: the reference is ONE face (subject_reference), JPG or PNG
       const [ref] = (await io.inputFiles(job)).reference;
       if (ref && !['png', 'jpg', 'jpeg'].includes(ref.ext)) throw final(new Error('MiniMax Image-01 toma la cara de referencia en JPG o PNG (no WEBP): sube la foto en uno de esos formatos'));
-      const bufs = await mmx.image({ prompt: job.prompt, model: m.gid, aspectRatio: s.aspectRatio, n: job.n, promptOptimizer: !!s.promptOptimizer, subjectRef: ref ? asDataUri(ref) : null });
+      const bufs = await mmx.image({ prompt: job.prompt, model: m.gid, aspectRatio: s.aspectRatio, n: job.n, promptOptimizer: !!s.promptOptimizer, subjectRef: ref ? asDataUri(ref) : null, alAceptar: () => { job.aceptado = true; } });
       for (const b of bufs) await ctx.add(b, MAGIC.png(b) ? 'png' : MAGIC.webp(b) ? 'webp' : 'jpg');
       return;
     }
@@ -240,8 +244,8 @@ const RUN = {
         if (job.cancel) throw new Error('Cancelado por ti.');
         job.note = m.kind === 'music' ? 'componiendo' : 'grabando la voz'; await ctx.save();
         const r = m.kind === 'audio'
-          ? await mmx.tts({ text: job.prompt, model: m.gid, voiceId: s.voiceId, speed: s.speed, vol: s.vol, pitch: s.pitch, emotion: s.emotion || null, languageBoost: s.languageBoost, format: s.format })
-          : await mmx.music({ model: m.gid, instrumental: !!s.instrumental, format: s.format, ...(s.instrumental ? { prompt: [job.prompt, s.style].filter(Boolean).join('. ') } : { lyrics: job.prompt, prompt: s.style || '' }) });
+          ? await mmx.tts({ text: job.prompt, model: m.gid, voiceId: s.voiceId, speed: s.speed, vol: s.vol, pitch: s.pitch, emotion: s.emotion || null, languageBoost: s.languageBoost, format: s.format, alAceptar: () => { job.aceptado = true; } })
+          : await mmx.music({ model: m.gid, instrumental: !!s.instrumental, format: s.format, alAceptar: () => { job.aceptado = true; }, ...(s.instrumental ? { prompt: [job.prompt, s.style].filter(Boolean).join('. ') } : { lyrics: job.prompt, prompt: s.style || '' }) });
         if (!r.buf.length) throw new Error(`${m.name} devolvió un audio vacío`);
         await ctx.add(r.buf, AUDIO_EXT.includes(r.ext) ? r.ext : 'mp3', { ...(m.kind === 'music' ? { wanted: 'music' } : { voiceId: s.voiceId }), ...(r.seconds ? { seconds: r.seconds } : {}) });
       }

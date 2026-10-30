@@ -579,7 +579,8 @@ const cablesSeries = cablearMedia(media);
 const generadorSeries = crearGeneradorSeries({ almacen: almacenSeries, media, biblia, capsDe: cablesSeries.capsDe, precioPlano: cablesSeries.precioPlano, existeRef: cablesSeries.existeRef,
   costoRevision: () => (cfg.dimitri?.serieVision === true ? { qa: 0, vision: USD_REVISION_SERIE } : null), config: () => configDeAjustes(cfg.dimitri), activo: () => cfg.dimitri?.serieGenerar === true,
   nonce: () => randomBytes(16).toString('hex'), hoy: () => localDay(Date.now()), auditar: auditarSeries, candado: crearCandadoSeries({ archivo: path.join(DATA, 'series.lock') }) });
-setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)) }); // la poda de 400 trabajos del Estudio no se lleva los de una serie viva
+setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)),
+  liberado: m => almacenSeries.uno(m.id)?.pasos?.[`${m.id}:${m.n}:${m.intento}`]?.estado === 'liberado' }); // reintentar desde la tarjeta solo si la serie ya devolvió ese paso // la poda de 400 trabajos del Estudio no se lleva los de una serie viva
 const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image'), config: () => configDeAjustes(cfg.dimitri),
   almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries, generador: generadorSeries, alCancelar: sx => generadorSeries.alCancelar(sx),
   vision: { activo: () => cfg.dimitri?.serieVision === true, media, copiaParaVer, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`,
@@ -3092,7 +3093,7 @@ const server = http.createServer(async (req, res) => {
     const jm = url.pathname.match(/^\/api\/media\/jobs\/([a-z0-9]+)(?:\/(retry|cancel))?$/);
     if (jm) {
       if (req.method === 'GET' && !jm[2]) { const w = Math.min(110000, Math.max(0, +url.searchParams.get('wait') || 0)); const j = w ? await media.wait(jm[1], w) : media.job(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); }
-      if (req.method === 'POST' && jm[2] === 'retry') { try { const j = media.retry(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (req.method === 'POST' && jm[2] === 'retry') { try { const j = media.retry(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); } catch (e) { return json(res, e.status === 409 ? 409 : 400, { error: e.message }); } }
       if (req.method === 'POST' && jm[2] === 'cancel') { const j = media.cancel(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); }
       if (req.method === 'DELETE' && !jm[2]) return media.forget(jm[1]) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'ese trabajo sigue en marcha' });
     }

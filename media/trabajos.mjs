@@ -100,7 +100,9 @@ function submitLocal(req) {
   const tr = trail({ ...req, versionOf: req.versionOf ?? src }, { resolve });
   const prompt = String(req.prompt || '').replace(/[\x00-\x1f]/g, ' ').trim().slice(0, 300) || 'Edición en tu máquina';
   const j = { id: jid(), state: 'queued', kind: 'image', model: LOCAL, engine: LOCAL, prompt, n: 1, s: {}, media: { reference: [src] }, weight: 0, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: 0, source: src, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px, ...loteDe(req) };
-  JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
+  JOBS.push(j);
+  try { saveJobs(); } catch (e) { const i = JOBS.indexOf(j); if (i >= 0) JOBS.splice(i, 1); throw e; } // atómico, como submit()
+  setImmediate(pumpJobs);
   return pub(j);
 }
 /** Queue a generation. Checks everything up front (model, key, prompt, media, budget) so a bad request fails at once. */
@@ -158,7 +160,8 @@ async function runJob(j) {
     // `cancelado` = se canceló en marcha (puede cobrarse igual); cualquier otra = la clase del error. Quien no la reconoce en un motor de pago lo cuenta como «incierto».
     // `previo` es por la FASE, no por la clase del error: solo si el proveedor NUNCA aceptó el pedido (sin id remoto). Con id remoto el motor ya puede estar generando y cobrando: eso nunca es «previo».
     const aceptado = !!j.remote?.length || j.aceptado === true || e?.fase === 'descarga'; // con id remoto, con el POST aceptado o fallando al DESCARGAR el resultado, el servicio ya pudo cobrar
-    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && (['key', 'saldo', 'formato'].includes(ex.clase) || [e?.code, e?.cause?.code, ...(e?.cause?.errors || []).map(x => x?.code)].some(c => c === 'ECONNREFUSED' || c === 'ENOTFOUND')) ? 'previo' : ex.clase;
+    // `previo` solo por una señal POSITIVA de rechazo del propio POST (un 4xx, un código de rechazo del proveedor, o sin conexión con él) y sin que nada haya sido aceptado: nunca por el texto de un error ni por un fallo local (disco, almacén)
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && e?.rechazo === true ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
@@ -192,7 +195,10 @@ export function cancel(id) {
   }
   return pub(j);
 }
-export function retry(id) { const j = JOBS.find(x => x.id === id); if (!j) return null; return submit({ ...(j.engine === LOCAL ? { local: true, source: j.source } : {}), preset: j.preset, post: j.post, qa: j.qa, medir: j.medir, canal: j.canal, esEscena: j.esEscena, receta: j.receta, sku: j.sku, model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
+export function retry(id) {
+  const j = JOBS.find(x => x.id === id); if (!j) return null;
+  if (j.serie && !(typeof SERIES.liberado === 'function' && SERIES.liberado(j.serie))) throw Object.assign(new Error('es de una serie: decídelo desde la serie (reintentarlo aquí gastaría fuera de su libro y de su tope)'), { status: 409 });
+  return submit({ ...(j.engine === LOCAL ? { local: true, source: j.source } : {}), preset: j.preset, post: j.post, qa: j.qa, medir: j.medir, canal: j.canal, esEscena: j.esEscena, receta: j.receta, sku: j.sku, model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
 export function forget(id) { const i = JOBS.findIndex(x => x.id === id && (x.state === 'done' || x.state === 'failed')); if (i < 0) return false; JOBS.splice(i, 1); saveJobs(); return true; }
 export function markAttached(id) { const j = JOBS.find(x => x.id === id); if (j) { j.attached = true; saveJobs(); } }
 

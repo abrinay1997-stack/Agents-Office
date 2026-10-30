@@ -20,19 +20,21 @@ media.configure({}, BRAIN, DATA, { warm: false });
 const RUN_PRUEBA = RUN.prueba; // lo original, para devolverlo
 const modelo = media.models().find(m => m.kind === 'image' && m.engine === 'prueba' && m.on);
 const espera = ms => new Promise(r => setTimeout(r, ms));
-const falla = (msg, { status, remote = false, code } = {}) => { RUN.prueba = async (_m, job) => { if (remote) job.remote = [{ id: 'remoto-1' }]; throw Object.assign(new Error(msg), { status, code }); }; };
+const falla = (msg, { status, remote = false, code, rechazo = false } = {}) => { RUN.prueba = async (_m, job) => { if (remote) job.remote = [{ id: 'remoto-1' }]; throw Object.assign(new Error(msg), { status, code, ...(rechazo ? { rechazo: true } : {}) }); }; };
 const pedir = () => media.submit({ prompt: 'una tarjeta', model: modelo.id, kind: 'image', n: 1, by: 'dimitri' });
 const terminar = async id => { for (let i = 0; i < 100; i++) { const j = media.job(id); if (j && (j.state === 'done' || j.state === 'failed')) return j; await espera(50); } throw new Error('el trabajo no terminó'); };
 test.after(() => { RUN.prueba = RUN_PRUEBA; fs.rmSync(dir, { recursive: true, force: true }); });
 
 test('causa REAL: el Estudio la pone según la FASE: sin id remoto un 401/saldo/pedido rechazado/sin conexión es «previo»; CON id remoto (el proveedor ya aceptó) nunca lo es', async () => {
-  falla('Higgsfield: 401 unauthorized', { status: 401 }); let j = await terminar(pedir().id); assert.equal(j.state, 'failed'); assert.equal(j.causa, 'previo'); assert.equal(j.remote, 0);
-  falla('el servicio: 402 insufficient credits', { status: 402 }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
-  falla('x: 400 invalid argument', { status: 400 }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
-  falla('connect ECONNREFUSED', { code: 'ECONNREFUSED' }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
-  falla('fal: 403 forbidden: not enough credits', { status: 403, remote: true }); j = await terminar(pedir().id); assert.equal(j.state, 'failed'); assert.equal(j.remote, 1, 'el proveedor aceptó el pedido');
+  falla('Higgsfield: 401 unauthorized', { status: 401, rechazo: true }); let j = await terminar(pedir().id); assert.equal(j.state, 'failed'); assert.equal(j.causa, 'previo'); assert.equal(j.remote, 0);
+  falla('el servicio: 402 insufficient credits', { status: 402, rechazo: true }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
+  falla('x: 400 invalid argument', { status: 400, rechazo: true }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
+  falla('connect ECONNREFUSED', { code: 'ECONNREFUSED', rechazo: true }); j = await terminar(pedir().id); assert.equal(j.causa, 'previo');
+  falla('EACCES: permission denied al guardar el resultado', { status: 403 }); j = await terminar(pedir().id); assert.notEqual(j.causa, 'previo', 'un fallo local (disco) o un texto con «permission denied» NO es un rechazo del proveedor');
+  falla('el servicio: 503 unavailable', { status: 503 }); j = await terminar(pedir().id); assert.notEqual(j.causa, 'previo', 'un 5xx no es previo');
+  falla('fal: 403 forbidden: not enough credits', { status: 403, remote: true, rechazo: true }); j = await terminar(pedir().id); assert.equal(j.state, 'failed'); assert.equal(j.remote, 1, 'el proveedor aceptó el pedido');
   assert.notEqual(j.causa, 'previo', 'con id remoto un 403 al sondear NO es previo al cobro'); assert.equal(j.causa, 'key', 'queda con la clase del error');
-  falla('fal: 404 not found', { status: 404, remote: true }); j = await terminar(pedir().id); assert.notEqual(j.causa, 'previo');
+  falla('fal: 404 not found', { status: 404, remote: true, rechazo: true }); j = await terminar(pedir().id); assert.notEqual(j.causa, 'previo');
   falla('el servicio no respondió: timed out', {}); j = await terminar(pedir().id); assert.equal(j.causa, 'tiempo', 'un transitorio conserva su clase');
 });
 
@@ -40,8 +42,8 @@ test('causa REAL: cancelar en cola → cancelado_en_cola; cancelar en marcha →
   RUN.prueba = async () => { await espera(300); };
   const a = pedir(); const c = media.cancel(a.id); assert.equal(c.state, 'failed'); assert.equal(c.causa, 'cancelado_en_cola');
   RUN.prueba = async (_m, job) => { for (let i = 0; i < 100 && !job.cancel; i++) await espera(20); throw new Error('cancelado'); };
-  const b = pedir(); await espera(150); assert.equal(media.job(b.id).state, 'running'); media.cancel(b.id); const f = await terminar(b.id); assert.equal(f.causa, 'cancelado');
-  RUN.prueba = () => new Promise(() => {}); const d = pedir(); await espera(150); assert.equal(media.job(d.id).state, 'running');
+  const b = pedir(); await hasta(() => media.job(b.id).state === 'running'); media.cancel(b.id); const f = await terminar(b.id); assert.equal(f.causa, 'cancelado');
+  RUN.prueba = () => new Promise(() => {}); const d = pedir(); await hasta(() => media.job(d.id).state === 'running');
   loadJobs(); const e = media.job(d.id); assert.equal(e.state, 'failed'); assert.equal(e.causa, 'interrumpido', 'un trabajo en marcha sin id remoto que muere con la oficina');
 });
 
@@ -63,10 +65,10 @@ function generador(t, { pago, n = 3, modeloId = modelo.id }) {
 const hasta = async (fn, ms = 4000) => { const fin = Date.now() + ms; while (Date.now() < fin) { const v = fn(); if (v) return v; await espera(40); } throw new Error('no llegó'); };
 
 test('PAGO + id remoto + 403 al sondear: queda INCIERTO (no se libera ni se reintenta: seguiría generando y cobrando); sin id remoto + 401: se libera y se pausa sin culpar al plano', async t => {
-  falla('fal: 403 not enough credits', { status: 403, remote: true }); const a = generador(t, { pago: true });
+  falla('fal: 403 not enough credits', { status: 403, remote: true, rechazo: true }); const a = generador(t, { pago: true });
   await a.G.tick(); await hasta(() => a.trabajos().some(j => j.state === 'failed' && j.remote === 1)); await a.G.tick(); await a.G.tick();
   assert.equal(a.linea().estado, 'incierto'); assert.equal(a.serie().estado, 'pausado'); assert.equal(a.serie().escaleta[0].estado, 'revisar'); assert.equal(a.trabajos().length, 1, 'no se envió otro');
-  falla('Higgsfield: 401 unauthorized', { status: 401 }); const b = generador(t, { pago: true });
+  falla('Higgsfield: 401 unauthorized', { status: 401, rechazo: true }); const b = generador(t, { pago: true });
   await b.G.tick(); await hasta(() => b.trabajos().some(j => j.state === 'failed' && j.causa === 'previo')); await b.G.tick(); await b.G.tick();
   assert.equal(b.linea().estado, 'liberado'); assert.equal(b.serie().estado, 'pausado'); assert.equal(b.serie().escaleta[0].estado, 'previsto'); assert.match(b.serie().pausa_motivo, /key|válida|permiso/i);
 });
@@ -118,4 +120,14 @@ test('submit es ATÓMICO: si el disco falla al guardar, el trabajo no queda en l
   fs.mkdirSync(tmpJobs, { recursive: true }); // el temporal es una carpeta: escribir en él lanza
   try { assert.throws(() => media.submit({ prompt: 'x', model: modelo.id, kind: 'image', n: 1, by: 'dimitri', serie: { id: 'atomico', n: 1, intento: 1 } })); } finally { fs.rmSync(tmpJobs, { recursive: true, force: true }); }
   assert.equal(media.jobs().length, antes, 'el trabajo no quedó en memoria'); await espera(300); assert.equal(media.jobs().some(j => j.serie?.id === 'atomico'), false, 'ni corrió después');
+});
+
+test('retry desde la tarjeta de un trabajo de una SERIE se niega (409) salvo que la serie lo haya liberado; submit local es atómico como submit', async () => {
+  RUN.prueba = async () => { throw Object.assign(new Error('x: 400 no'), { status: 400, rechazo: true }); };
+  const j = await terminar(media.submit({ prompt: 'x', model: modelo.id, kind: 'image', n: 1, by: 'dimitri', serie: { id: 'de-serie', n: 1, intento: 1 } }).id); assert.equal(j.serie.id, 'de-serie');
+  assert.throws(() => media.retry(j.id), e => e.status === 409 && /es de una serie/.test(e.message)); assert.equal(media.jobs().filter(x => x.retryOf === j.id).length, 0, 'no se creó ningún trabajo');
+  const { setSeries } = await import('../media/trabajos.mjs'); setSeries({ liberado: m => m.id === 'de-serie' }); try { RUN.prueba = RUN_PRUEBA; const r = media.retry(j.id);
+    assert.ok(r && !r.serie, 'liberado por la serie: se reintenta y el nuevo ya no lleva su marca'); await terminar(r.id); } finally { setSeries({ liberado: undefined }); }
+  const sin = media.submit({ prompt: 'sin serie', model: modelo.id, kind: 'image', n: 1, by: 'you' }); await terminar(sin.id); assert.ok(media.retry(sin.id), 'un trabajo normal se reintenta como siempre');
+  assert.match(fs.readFileSync(new URL('../media/trabajos.mjs', import.meta.url), 'utf8').split('function submitLocal')[1].split('export function submit')[0], /try \{ saveJobs\(\); \} catch \(e\) \{[^}]*JOBS\.splice/, 'submitLocal saca el trabajo si saveJobs falla');
 });
