@@ -1,0 +1,88 @@
+// Series en la nube, N1 (carril K): el LIBRO del dinero de las series sobre D1. Es el espejo SQL de serie-topes-core.mjs (reservar → liquidar | liberar | incierto), con una diferencia que importa:
+// en local la reserva se comprueba y se escribe en un solo proceso síncrono; aquí puede haber dos Workers a la vez, así que la reserva es UNA sentencia `insert … select … where` con las tres
+// condiciones dentro (tope de la serie, tope del mes de carruseles, cupo del día). Si no entra, no se escribe nada. Todo en micro-USD enteros.
+// Límites de D1 que SQLite de Node no ve: ≤ 100 parámetros por sentencia (esta usa ~30), sin consultas compuestas (nada de `union`).
+// Aquí NO hay ninguna llamada a un motor: solo contabilidad. Quien reserva (la bomba, N3) reserva ANTES de pedir y liquida o libera DESPUÉS.
+const SUMA = `coalesce(sum(case estado when 'liquidado' then real_micro when 'liberado' then 0 else max_micro end), 0)`; // = el resumenLibro de serie-topes-core: liquidado real, liberado 0, lo demás su máximo
+const entero = (x) => Number.isSafeInteger(x) && x >= 0;
+const sano = (clave) => typeof clave === 'string' && clave.length > 0 && clave.length <= 100;
+
+/** Cuánto lleva una serie: { reservado, gastado, incierto, excedido }. Una sola consulta. */
+export async function resumenDeSerie(db, serieId) {
+  const r = await db.prepare(`select
+      coalesce(sum(case estado when 'reservado' then max_micro else 0 end), 0) as reservado,
+      coalesce(sum(case estado when 'liquidado' then real_micro else 0 end), 0) as gastado,
+      coalesce(sum(case estado when 'incierto' then max_micro else 0 end), 0) as incierto,
+      coalesce(max(excedio), 0) as excedido
+    from series_libro where serie_id = ?`).bind(serieId).first();
+  return { reservado: r.reservado, gastado: r.gastado, incierto: r.incierto, excedido: !!r.excedido };
+}
+/** Lo gastado, reservado o en duda de los carruseles de un mes, en todas las series. */
+export async function gastoDelMes(db, mes) { return (await db.prepare(`select ${SUMA} as m from series_libro where mes = ? and carrusel = 1`).bind(mes).first()).m; }
+/** El peso del Estudio que ya usaron las series ese día (lo liberado antes de salir no cuenta). */
+export async function usoDelDia(db, dia) { return (await db.prepare(`select coalesce(sum(peso), 0) as p from series_libro where dia = ? and not (estado = 'liberado' and salio = 0)`).bind(dia).first()).p; }
+export async function lineaDe(db, clave) { return (await db.prepare('select * from series_libro where clave = ?').bind(clave).first()) ?? null; }
+/** Los pasos en duda (de todas las series, o de una): lo que el dueño tiene que decidir. */
+export async function inciertos(db, serieId = null) {
+  const q = serieId ? db.prepare(`select clave, serie_id, n, intento, max_micro from series_libro where estado = 'incierto' and serie_id = ? order by at limit 100`).bind(serieId) : db.prepare(`select clave, serie_id, n, intento, max_micro from series_libro where estado = 'incierto' order by at limit 100`);
+  return (await q.all()).results;
+}
+
+/** Reservar ANTES de pedir al motor. Idempotente por clave (la misma clave es la misma reserva; una liberada no se reutiliza).
+ *  `d`: { clave, serieId, n, intento, maxMicro, topeSerieMicro, mes, dia, carrusel (bool), topeMesMicro (solo carruseles), peso, cupoDiaPeso (0 = sin tope), ahora }
+ *  → { ok: true, repetida? } | { ok: false, codigo: 'clave' | 'liberada' | 'tope_serie' | 'tope_mes' | 'cupo_dia', motivo } */
+export async function reservar(db, d) {
+  if (!sano(d?.clave) || !sano(d?.serieId)) return { ok: false, codigo: 'clave', motivo: 'falta la clave de idempotencia' };
+  const max = d.maxMicro, tope = d.topeSerieMicro, peso = d.peso ?? 1, carrusel = d.carrusel ? 1 : 0, topeMes = d.topeMesMicro ?? 0, cupo = d.cupoDiaPeso ?? 0;
+  if (![max, tope, peso, topeMes, cupo, d.n, d.intento].every(entero) || typeof d.mes !== 'string' || typeof d.dia !== 'string' || !Number.isFinite(d.ahora)) return { ok: false, codigo: 'clave', motivo: 'datos de reserva no válidos' };
+  const ya = await lineaDe(db, d.clave);
+  if (ya) return ya.estado === 'liberado' ? { ok: false, codigo: 'liberada', motivo: 'esa reserva ya se liberó; usa otro intento' } : { ok: true, repetida: true };
+  const r = await db.prepare(`insert or ignore into series_libro (clave, serie_id, n, intento, estado, max_micro, real_micro, excedio, mes, dia, carrusel, peso, salio, at)
+    select ?, ?, ?, ?, 'reservado', ?, 0, 0, ?, ?, ?, ?, 1, ?
+    where (select ${SUMA} from series_libro where serie_id = ?) + ? <= ?
+      and (? = 0 or (select ${SUMA} from series_libro where mes = ? and carrusel = 1) + ? <= ?)
+      and (? = 0 or (select coalesce(sum(peso), 0) from series_libro where dia = ? and not (estado = 'liberado' and salio = 0)) + ? <= ?)`)
+    .bind(d.clave, d.serieId, d.n, d.intento, max, d.mes, d.dia, carrusel, peso, d.ahora, d.serieId, max, tope, carrusel, d.mes, max, topeMes, cupo > 0 ? 1 : 0, d.dia, peso, cupo).run();
+  if ((r.meta?.changes ?? 0) === 1) return { ok: true };
+  const ahora = await lineaDe(db, d.clave); // otra petición la metió justo antes (misma clave): es la misma reserva
+  if (ahora) return ahora.estado === 'liberado' ? { ok: false, codigo: 'liberada', motivo: 'esa reserva ya se liberó; usa otro intento' } : { ok: true, repetida: true };
+  // no cupo: se dice cuál tope fue (solo para el mensaje; la decisión ya la tomó la sentencia)
+  const res = await resumenDeSerie(db, d.serieId), usado = res.reservado + res.gastado + res.incierto;
+  if (max > tope - usado) return { ok: false, codigo: 'tope_serie', motivo: `no cabe en el tope de la serie: quedan ${Math.max(0, tope - usado)} micro-USD y el paso puede costar hasta ${max}` };
+  if (carrusel && max > topeMes - await gastoDelMes(db, d.mes)) return { ok: false, codigo: 'tope_mes', motivo: 'no cabe en el tope del mes de carruseles' };
+  return { ok: false, codigo: 'cupo_dia', motivo: 'el cupo diario de series no alcanza; se reanuda al cambiar el día' };
+}
+
+const motivoDe = async (db, clave, codigoPorDefecto, motivo) => {
+  const l = await lineaDe(db, clave);
+  if (!l) return { ok: false, codigo: 'sin_reserva', motivo: 'no hay reserva para esa clave' };
+  return { ok: false, codigo: codigoPorDefecto, motivo, estado: l.estado };
+};
+/** Liquidar con el costo real. Un real mayor que lo reservado se anota (`excedio`) y NUNCA se oculta. Repetirlo no cambia nada. Solo desde «reservado» (un «incierto» se decide con `resolverIncierto`). */
+export async function liquidar(db, clave, realMicro) {
+  if (!sano(clave) || !entero(realMicro)) return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
+  const r = await db.prepare(`update series_libro set estado = 'liquidado', real_micro = ?, excedio = case when ? > max_micro then 1 else 0 end where clave = ? and estado = 'reservado'`).bind(realMicro, realMicro, clave).run();
+  if ((r.meta?.changes ?? 0) === 1) return { ok: true };
+  const l = await lineaDe(db, clave);
+  return l?.estado === 'liquidado' ? { ok: true, repetida: true } : motivoDe(db, clave, 'no_reservado', 'solo un paso reservado se liquida');
+}
+/** El paso no llegó a salir: devuelve la reserva. `nuncaSalio: true` solo con la certeza de que nada llegó al motor (entonces también se devuelve el cupo del día). */
+export async function liberar(db, clave, { nuncaSalio = false } = {}) {
+  if (!sano(clave)) return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
+  const r = await db.prepare(`update series_libro set estado = 'liberado', salio = ? where clave = ? and estado = 'reservado'`).bind(nuncaSalio ? 0 : 1, clave).run();
+  return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_reservado', 'solo se libera una reserva viva');
+}
+/** Un envío a un motor de pago sin respuesta: «puede haberse cobrado». Sigue contando y pide la decisión del dueño. */
+export async function marcarIncierto(db, clave) {
+  if (!sano(clave)) return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
+  const r = await db.prepare(`update series_libro set estado = 'incierto' where clave = ? and estado = 'reservado'`).bind(clave).run();
+  return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_reservado', 'solo un paso reservado puede quedar incierto');
+}
+/** Decisión del dueño sobre un paso incierto: ¿hubo cobro? Con cobro, se liquida con lo que dijo (o con el máximo si no dijo nada); sin cobro, se libera (el cupo del día sigue gastado: el envío salió). */
+export async function resolverIncierto(db, clave, huboCobro, realMicro = 0) {
+  if (!sano(clave) || !entero(realMicro) || typeof huboCobro !== 'boolean') return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
+  const r = huboCobro
+    ? await db.prepare(`update series_libro set estado = 'liquidado', real_micro = case when ? > 0 then ? else max_micro end, excedio = case when ? > max_micro then 1 else 0 end where clave = ? and estado = 'incierto'`).bind(realMicro, realMicro, realMicro, clave).run()
+    : await db.prepare(`update series_libro set estado = 'liberado' where clave = ? and estado = 'incierto'`).bind(clave).run();
+  return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_incierto', 'ese paso no está en duda');
+}
