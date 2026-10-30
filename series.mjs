@@ -16,63 +16,77 @@ const ID_OK = /^[\w-]{1,60}$/;
 /** El almacén en un archivo. `renombrar(tmp, archivo)` es el de fs-seguro.mjs (en Windows reintenta). Un archivo roto se aparta (nunca se pierde ni se pisa en silencio). */
 export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), azar = () => Math.random().toString(36).slice(2, 6) } = {}) {
   if (!archivo || typeof renombrar !== 'function') throw new Error('el almacén de series necesita archivo y renombrar');
-  let D = null;
+  let D = null, bloqueo = null; // bloqueo: no se pudo apartar un archivo roto; NO se escribe encima (falla cerrado)
+  const valida = s => !!s && typeof s === 'object' && !Array.isArray(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta);
+  const apartar = motivo => { try { fs.copyFileSync(archivo, `${archivo}.roto-${ahora()}`); } catch (e) { bloqueo = `${motivo}, y no se pudo apartar una copia (${e.code || e.message}): no se escribe encima de ${path.basename(archivo)}`; console.warn('series:', bloqueo); } };
   const cargar = () => {
     if (D) return D;
     let txt = null; try { txt = fs.readFileSync(archivo, 'utf8'); } catch { /* aún no existe */ }
     if (txt != null) {
-      try { const j = JSON.parse(txt); if (j && typeof j === 'object' && Array.isArray(j.series)) D = { v: 1, uso: j.uso && typeof j.uso === 'object' ? j.uso : { day: '', peso: 0 }, series: j.series }; else throw new Error('forma'); }
-      catch { try { fs.copyFileSync(archivo, `${archivo}.roto-${ahora()}`); } catch { /* ya */ } D = null; }
+      try {
+        const j = JSON.parse(txt); if (!j || typeof j !== 'object' || !Array.isArray(j.series)) throw new Error('forma');
+        const buenas = j.series.filter(valida); if (buenas.length !== j.series.length) apartar('el archivo de series traía elementos que no son series');
+        const u = j.uso && typeof j.uso === 'object' && typeof j.uso.day === 'string' && Number.isFinite(j.uso.peso) ? { day: j.uso.day, peso: j.uso.peso } : { day: '', peso: 0 };
+        D = { v: 1, uso: u, series: buenas };
+      } catch { apartar('el archivo de series está roto'); D = null; }
     }
     return (D ||= { v: 1, uso: { day: '', peso: 0 }, series: [] });
   };
-  const escribir = () => {
-    const d = cargar();
-    if (d.series.length > MAX_SERIES) { // se podan las terminadas más viejas; una viva nunca
-      const sobran = d.series.length - MAX_SERIES, viejas = d.series.filter(s => TERMINAL.has(s.estado)).sort((a, b) => (a.actualizada || 0) - (b.actualizada || 0)).slice(0, sobran).map(s => s.id);
-      d.series = d.series.filter(s => !viejas.includes(s.id));
+  /** Escribe `cand` (nada se asigna hasta que el disco lo tiene): si falla, la memoria sigue igual que el disco y el error se propaga. */
+  const escribir = cand => {
+    if (bloqueo) throw new Error(bloqueo);
+    let series = cand.series;
+    if (series.length > MAX_SERIES) { // se podan las terminadas más viejas; una viva nunca
+      const viejas = series.filter(s => TERMINAL.has(s.estado)).sort((a, b) => (a.actualizada || 0) - (b.actualizada || 0)).slice(0, series.length - MAX_SERIES).map(s => s.id);
+      series = series.filter(s => !viejas.includes(s.id));
     }
-    fs.mkdirSync(path.dirname(archivo), { recursive: true });
-    const tmp = archivo + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(d)); renombrar(tmp, archivo);
+    const out = { ...cand, series }, tmp = archivo + '.tmp';
+    fs.mkdirSync(path.dirname(archivo), { recursive: true }); fs.writeFileSync(tmp, JSON.stringify(out)); renombrar(tmp, archivo);
+    D = out;
   };
   const copia = s => (s ? structuredClone(s) : null);
   return {
     todas: () => cargar().series.map(copia),
-    estadoDe: id => cargar().series.find(s => s.id === id)?.estado || null, // barato (sin copiar): lo mira la poda de trabajos del Estudio
+    estadoDe: id => cargar().series.find(s => s.id === id)?.estado || null,
     uno: id => copia(cargar().series.find(s => s.id === id)),
     /** Guarda una serie NUEVA (la de armarPropuesta). Nunca pisa otra con el mismo id. */
     crear(serie, extra = {}) {
       const d = cargar(); let id = String(serie?.id || '');
       if (!ID_OK.test(id) || d.series.some(s => s.id === id)) id = `${ID_OK.test(id) ? id : 'serie'}-${azar()}`.slice(0, 60);
       const t = ahora(), s = { ...structuredClone(serie), id, estado: 'previsto', creada: t, actualizada: t, v: 1, escaleta_v: 1, intentos: {}, fallos: {}, pasos: {}, libro: null, autorizado: null, token_reg: null, ...extra };
-      s.hash = hashEscaleta(s); d.series.push(s); escribir(); return copia(s);
+      s.hash = hashEscaleta(s); escribir({ ...d, series: [...d.series, s] }); return copia(s);
     },
     /** Cambia una serie con una función SÍNCRONA (leer-modificar-escribir sin await entre medias: en un solo proceso es una comparación-e-intercambio). `fn(copia)` devuelve la copia
-     *  cambiada o lanza; si devuelve `undefined` no se escribe nada. Sube `v`, y `escaleta_v` si la escaleta cambió. */
+     *  cambiada o lanza; si devuelve `undefined` no se escribe nada. Sube `v`, y `escaleta_v` si la escaleta cambió. Si el disco falla, nada cambia en memoria y el error sale. */
     actualizar(id, fn) {
       const d = cargar(), i = d.series.findIndex(s => s.id === id); if (i < 0) return null;
       const antes = d.series[i], hecha = fn(structuredClone(antes)); if (hecha === undefined) return copia(antes);
       const s = { ...hecha, id: antes.id, creada: antes.creada, v: (antes.v || 1) + 1, actualizada: ahora() };
       const h = hashEscaleta(s); if (h !== antes.hash) s.escaleta_v = (antes.escaleta_v || 1) + 1; s.hash = h;
-      d.series[i] = s; escribir(); return copia(s);
+      const series = d.series.slice(); series[i] = s; escribir({ ...d, series }); return copia(s);
     },
     /** El cupo diario que usan las series (en unidades del Estudio): se reinicia solo al cambiar el día. */
     usoDe: day => { const u = cargar().uso; return u.day === day ? u.peso : 0; },
-    sumarUso(day, peso) { const d = cargar(); if (d.uso.day !== day) d.uso = { day, peso: 0 }; d.uso.peso = Math.max(0, d.uso.peso + peso); escribir(); return d.uso.peso; },
+    sumarUso(day, peso) { const d = cargar(), base = d.uso.day === day ? d.uso.peso : 0, uso = { day, peso: Math.max(0, base + peso) }; escribir({ ...d, uso }); return uso.peso; },
   };
 }
 
-/** Lo que se enseña de una serie: nunca el token ni lo que autoriza (solo si está autorizada), nunca el libro entero. */
+/** Lo que se enseña de una serie: LISTA BLANCA. Nunca el token ni lo que autoriza, ni el libro, ni el brief (objetivo, restricciones), ni los prompts completos ni los precios. */
+const corto = (v, n) => (v == null ? null : String(v).slice(0, n));
+const planoVista = p => ({ n: p.n, rol: p.rol, estado: p.estado, descripcion: corto(p.descripcion, 120), motivo: corto(p.motivo, 160), modelo: p.modelo || null, version: p.version || 0, clave: !!p.clave,
+  versiones: (p.versiones || []).map(v => ({ v: v.v, archivo: v.archivo || null, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) });
 export function vistaSerie(s) {
   if (!s) return null;
-  const { token_reg, autorizado, libro, pasos, intentos, fallos, ...resto } = s; // eslint-disable-line no-unused-vars
   const planos = s.escaleta || [], cuenta = e => planos.filter(p => p.estado === e).length;
-  const r = libro ? resumenLibro(libro) : null, mostrado = s.costo_mostrado_usd ?? null;
-  return { ...resto, etiqueta: ETIQUETA[s.estado] || s.estado, autorizada: !!autorizado && (s.estado === 'muestra' || s.estado === 'corriendo'),
+  const r = s.libro ? resumenLibro(s.libro) : null, mostrado = s.costo_mostrado_usd ?? null;
+  return { id: s.id, titulo: corto(s.titulo, 100), formato: corto(s.brief?.formato, 40), estado: s.estado, etiqueta: ETIQUETA[s.estado] || s.estado, creada: s.creada, actualizada: s.actualizada, v: s.v, hash: s.hash, escaleta_v: s.escaleta_v,
+    biblia_version: s.biblia_version ?? null, modo: s.autorizado?.modo || null, tope_usd: s.tope_usd, pausa_motivo: corto(s.pausa_motivo, 300), muestra_lista: !!s.muestra_lista, cancelada: !!s.cancelada, fin: s.fin || null,
+    autorizada: !!s.autorizado && (s.estado === 'muestra' || s.estado === 'corriendo'),
     progreso: { total: planos.length, listos: cuenta('listo'), revisar: cuenta('revisar'), previstos: cuenta('previsto'), corriendo: cuenta('corriendo'), omitidos: cuenta('skipped') },
     gasto: { mostradoUsd: mostrado, topeUsd: s.tope_usd, gastadoUsd: r ? u2usd(r.gastado) : 0, reservadoUsd: r ? u2usd(r.reservado) : 0, inciertoUsd: r ? u2usd(r.incierto) : 0,
       disponibleUsd: r ? u2usd(r.disponible) : s.tope_usd, excedido: r ? r.excedido : false, mayorQueLoMostrado: mostrado != null && r ? r.gastado > usd2u(mostrado) : false },
-    pasos_inciertos: Object.entries(pasos || {}).filter(([c]) => libro?.lineas?.[c]?.estado === 'incierto').map(([clave, x]) => ({ clave, n: x.n, intento: x.intento, maxUsd: u2usd(libro.lineas[clave].max) })) };
+    escaleta: planos.map(planoVista),
+    pasos_inciertos: Object.entries(s.pasos || {}).filter(([c]) => s.libro?.lineas?.[c]?.estado === 'incierto').map(([clave, x]) => ({ clave, n: x.n, intento: x.intento, maxUsd: u2usd(s.libro.lineas[clave].max) })) };
 }
 export const resumenSerie = s => {
   const v = vistaSerie(s);

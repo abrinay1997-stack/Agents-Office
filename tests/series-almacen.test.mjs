@@ -71,6 +71,39 @@ test('pausar y cancelar: solo desde donde corresponde, y la cancelación borra l
   for (const e of ['hecho', 'cancelado']) assert.equal(cancelarSerie({ ...base, estado: e }).ok, false);
 });
 
+test('la vista es una LISTA BLANCA: ni el brief, ni los prompts, ni los precios, ni el libro salen en el GET (centinela)', async t => {
+  const o = rutas(t);
+  const cu = cuerpo({ brief: { titulo: 'Sofá', objetivo: 'CENTINELA-OBJETIVO', restricciones: 'CENTINELA-RESTRICCION', publico: 'CENTINELA-PUBLICO' }, planos: [plano(1, { prompt: 'Un sofá CENTINELA-PROMPT en la sala', texto_en_imagen: 'CENTINELA-TEXTO' })], guardar: true });
+  assert.equal((await o.S.ruta('POST', '/api/series/proponer', { cuerpo: cu })).estado, 200);
+  o.A.actualizar('serie-r1', x => ({ ...x, libro: { tope: 1, lineas: {} }, intentos: { 1: 1 }, token_reg: { token: 'TOKEN-CENTINELA-X' }, autorizado: { token: 'TOKEN-CENTINELA-X', modo: 'muestra' }, precios: { 1: 0.123456 } })); // secrets-ok: centinela de prueba
+  const u = await o.S.ruta('GET', '/api/series/serie-r1'), l = await o.S.ruta('GET', '/api/series'), txt = JSON.stringify([u.cuerpo, l.cuerpo]);
+  assert.ok(!txt.includes('CENTINELA'), 'nada del brief, del prompt ni del token'); assert.ok(!txt.includes('0.123456'));
+  assert.deepEqual(Object.keys(u.cuerpo.serie.escaleta[0]).sort(), ['clave', 'descripcion', 'estado', 'modelo', 'motivo', 'n', 'rol', 'version', 'versiones'], 'cada plano: solo lo mínimo de la tarjeta');
+  assert.equal(u.cuerpo.serie.titulo, 'Sofá'); assert.equal(u.cuerpo.serie.modo, 'muestra'); assert.ok(!('brief' in u.cuerpo.serie) && !('libro' in u.cuerpo.serie) && !('precios' in u.cuerpo.serie));
+});
+
+test('si el disco falla al escribir, la memoria no diverge: se revierte y el error sale (crear, actualizar, cupo)', t => {
+  const f = path.join(tmp(t), 's.json'); let falla = false;
+  const A = crearAlmacen({ archivo: f, renombrar: (a, b) => { if (falla) throw new Error('disco lleno'); ren(a, b); } });
+  A.crear(propuesta().serie); A.sumarUso('2026-10-30', 2); const antes = JSON.stringify(A.todas()); falla = true;
+  assert.throws(() => A.crear(propuesta(2, 'otra').serie), /disco lleno/); assert.equal(A.todas().length, 1, 'crear fallido no deja la serie en memoria');
+  assert.throws(() => A.actualizar('serie-1', x => ({ ...x, estado: 'cancelado' })), /disco lleno/); assert.equal(A.uno('serie-1').estado, 'previsto'); assert.equal(JSON.stringify(A.todas()), antes);
+  assert.throws(() => A.sumarUso('2026-10-30', 5), /disco lleno/); assert.equal(A.usoDe('2026-10-30'), 2);
+  falla = false; assert.equal(A.actualizar('serie-1', x => ({ ...x, pausa_motivo: 'ok' })).v, 2, 'y al volver el disco, sigue funcionando desde el estado correcto');
+  assert.equal(crearAlmacen({ archivo: f, renombrar: ren }).uno('serie-1').pausa_motivo, 'ok');
+});
+
+test('cargar valida cada elemento (series:[null] no rompe; lo ajeno se aparta) y, si no se puede apartar el roto, NO se escribe encima', t => {
+  const d = tmp(t), f = path.join(d, 's.json'), buena = { ...propuesta().serie, estado: 'previsto' };
+  fs.writeFileSync(f, JSON.stringify({ v: 1, uso: 'raro', series: [null, 5, 'x', [], { id: '../mal', escaleta: [] }, { id: 'sin-escaleta' }, buena] }));
+  const A = crearAlmacen({ archivo: f, renombrar: ren, ahora: () => 9 }); assert.deepEqual(A.todas().map(s => s.id), ['serie-1'], 'solo el elemento válido'); assert.equal(A.usoDe('x'), 0);
+  assert.ok(fs.readdirSync(d).some(x => x.startsWith('s.json.roto-')), 'el original con los elementos raros queda apartado');
+  const g = path.join(d, 'g.json'); fs.writeFileSync(g, '{roto'); const orig = fs.copyFileSync;
+  const cp = fs.copyFileSync; fs.copyFileSync = () => { throw Object.assign(new Error('sin permiso'), { code: 'EACCES' }); };
+  let B2; try { B2 = crearAlmacen({ archivo: g, renombrar: ren }); assert.deepEqual(B2.todas(), []); } finally { fs.copyFileSync = cp; } void orig;
+  assert.throws(() => B2.crear(propuesta().serie), /no se escribe encima/); assert.equal(fs.readFileSync(g, 'utf8'), '{roto', 'el archivo roto sigue intacto');
+});
+
 // ---- las rutas ----
 function rutas(t, { guardar = true } = {}) {
   const d = tmp(t), BRAIN = path.join(d, 'brain'), DATA = path.join(d, 'data'); fs.mkdirSync(DATA, { recursive: true });
