@@ -245,10 +245,11 @@ export function urlAjenaEn(args, urlConector, extra = []) {
   const propio = hostOf(urlConector || '');
   if (!propio) return null;
   const estricto = permitidos.length > 0; // SEG-02: con una lista de dominios el guardián es más estricto bajo una clave de dirección; sin ella, el comportamiento de siempre
-  let muyHondo = false;
-  const textos = []; const visita = (v, d = 0, clave = '', heredada = false) => { if (d > 6) { if (estricto) muyHondo = true; return; } const cu = clavesUrl(clave) || (estricto && heredada); if (typeof v === 'string') textos.push({ t: v, claveUrl: cu }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave, cu)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k, cu); };
+  let muyHondo = false, noTexto = false;
+  const textos = []; const visita = (v, d = 0, clave = '', heredada = false) => { if (d > 6) { if (estricto) muyHondo = true; return; } const cu = clavesUrl(clave) || (estricto && heredada); if (typeof v === 'string') textos.push({ t: v, claveUrl: cu }); else if (estricto && cu && v !== null && v !== undefined && typeof v !== 'object') noTexto = true; /* número, booleano, bigint… bajo una clave de dirección (16909060 = 1.2.3.4): se bloquea */ else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave, cu)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k, cu); };
   visita(args);
   if (muyHondo) return '[demasiado profundo]';
+  if (noTexto) return '[valor no es texto]';
   const ajena = (token, conEsquema) => {
     const sinEsquema = token.replace(/^[a-z][a-z0-9+.-]{1,12}:\/\//i, '').replace(/^\/\//, '');
     const autoridad = sinEsquema.split(/[/?#]/)[0];
@@ -263,6 +264,7 @@ export function urlAjenaEn(args, urlConector, extra = []) {
     if (estricto && claveUrl) { // bajo una clave de dirección el valor SIEMPRE es una dirección: se limpia (tab/salto de línea que el parser de URL ignora, espacios de borde) y, si queda un espacio o un control, se bloquea
       const limpio = t.replace(/[\t\r\n]/g, '').trim(); if (!limpio) continue;
       if (limpio.length > 2048 || /[\s\x00-\x1f\x7f]/.test(limpio)) return '[valor no válido]';
+      if (/^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(limpio) && !/^https?:\/\/\S/i.test(limpio)) return '[esquema no permitido]'; // file:, ftp:, data:, javascript:, mailto:, «http:» sin «//», incluso con host vacío; «host:8080» es un puerto, no un esquema
       const r = ajena(limpio, /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(limpio)); if (r) return r; continue;
     }
     if (claveUrl && texto.trim() && !/\s/.test(texto.trim())) { const r = ajena(texto.trim(), /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(texto.trim())); if (r) return r; continue; }

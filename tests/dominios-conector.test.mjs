@@ -115,3 +115,20 @@ test('flag apagado o lista vacía = idéntico a main: los casos nuevos NO cambia
   for (const e of Object.values(esquemas)) assert.equal(S.ocultaPorUrlLibre(e, { activo: true, dominios: [] }), true);
   assert.equal(S.ocultaPorUrlLibre({ type: 'object', properties: { url: { type: 'string' } } }, { activo: false, dominios: LISTA }), true);
 });
+
+// ---- tercera revisión: valores no string y esquemas distintos de http/https (solo con lista) ----
+test('con lista, bajo una clave de dirección un valor NO texto se bloquea (16909060 = 1.2.3.4, booleanos, objetos y arreglos con números)', () => {
+  for (const a of [{ url: 16909060 }, { url: 1.5 }, { url: true }, { url: false }, { url: 10n }, { url: { n: 16909060 } }, { urls: [16909060] }, { urls: ['ok.com', 7] }, { link: { a: { b: false } } }, { urls: [{ a: 16909060 }] }])
+    assert.ok(S.urlAjenaEn(a, CONN, LISTA), JSON.stringify(a, (_, v) => typeof v === 'bigint' ? String(v) : v));
+  assert.equal(S.urlAjenaEn({ url: null }, CONN, LISTA), null, 'null = sin valor');
+  assert.equal(S.urlAjenaEn({ limit: 5, ok: true, url: 'ok.com' }, CONN, LISTA), null, 'números en claves que no son de dirección no molestan');
+});
+test('con lista, bajo una clave de dirección solo valen http/https: file:, ftp:, data:, javascript:, mailto:… se bloquean, incluso con host vacío', () => {
+  for (const v of ['file:///etc/passwd', 'FILE:///etc/passwd', 'file://ok.com/etc/passwd', 'ftp://ok.com/x', 'data:text/html,<b>x</b>', 'javascript:alert(1)', 'mailto:a@ok.com', 'gopher://ok.com/', 'ws://ok.com/x', 'http:ok.com', 'https:/ok.com', 'tel:+5075551234', 'view-source:https://ok.com']) assert.ok(S.urlAjenaEn({ url: v }, CONN, LISTA), v);
+  for (const v of ['http://ok.com/a', 'HTTPS://OK.COM/a', 'ok.com:8080/a', 'https://sub.ok.com:8443/a?x=1']) assert.equal(S.urlAjenaEn({ url: v }, CONN, LISTA), null, v);
+  assert.ok(S.urlAjenaEn({ url: 'evil.com:8080/a' }, CONN, LISTA), 'un puerto no esconde un host ajeno');
+});
+test('sin lista (o vacía) todo es idéntico al de antes también para números y esquemas', () => {
+  const casos = [{ url: 16909060 }, { url: true }, { urls: [7] }, { url: 'file:///etc/passwd' }, { url: 'javascript:alert(1)' }, { url: 'data:text/html,x' }, { url: 'ftp://mcp.conn.io/x' }, { url: 'mailto:a@b.com' }];
+  for (const a of casos) for (const v of [undefined, [], null]) assert.equal(S.urlAjenaEn(a, CONN, v), S.urlAjenaEn(a, CONN), JSON.stringify(a));
+});
