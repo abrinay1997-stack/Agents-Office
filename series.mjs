@@ -7,10 +7,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { serieValida, normalizarSerie } from './series-bomba-core.mjs';
-import { hashEscaleta, resumenLibro, nuevoLibro, u2usd, usd2u, TRANSICIONES } from './serie-core.mjs';
+import { hashEscaleta, nuevoLibro, TRANSICIONES } from './serie-core.mjs';
 
 export const MAX_SERIES = 200; // más viejas ya terminadas se podan al guardar
-export const ETIQUETA = { previsto: 'Prevista', espera_ok: 'Espera tu clic', muestra: 'Generando la muestra', corriendo: 'Generando', pausado: 'Pausada', hecho: 'Hecha', cancelado: 'Cancelada' };
 const TERMINAL = new Set(['hecho', 'cancelado']);
 const ID_OK = /^[\w-]{1,60}$/;
 
@@ -72,28 +71,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
   };
 }
 
-/** Lo que se enseña de una serie: LISTA BLANCA. Nunca el token ni lo que autoriza, ni el libro, ni el brief (objetivo, restricciones), ni los prompts completos ni los precios. */
-const corto = (v, n) => (v == null ? null : String(v).slice(0, n));
-const planoVista = p => ({ n: p.n, rol: p.rol, estado: p.estado, descripcion: corto(p.descripcion, 120), motivo: corto(p.motivo, 160), modelo: p.modelo || null, version: p.version || 0, clave: !!p.clave,
-  versiones: (p.versiones || []).map(v => ({ v: v.v, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) }); // sin `archivo`: su nombre lleva el prompt
-export function vistaSerie(s) {
-  if (!s) return null;
-  const planos = s.escaleta || [], cuenta = e => planos.filter(p => p.estado === e).length;
-  const r = s.libro ? resumenLibro(s.libro) : null, mostrado = s.costo_mostrado_usd ?? null;
-  return { id: s.id, titulo: corto(s.titulo, 100), formato: corto(s.brief?.formato, 40), estado: s.estado, etiqueta: ETIQUETA[s.estado] || s.estado, creada: s.creada, actualizada: s.actualizada, v: s.v, hash: s.hash, escaleta_v: s.escaleta_v,
-    biblia_version: s.biblia_version ?? null, modo: s.autorizado?.modo || null, tope_usd: s.tope_usd, pausa_motivo: corto(s.pausa_motivo, 300), muestra_lista: !!s.muestra_lista, cancelada: !!s.cancelada, fin: s.fin || null,
-    autorizada: !!s.autorizado && (s.estado === 'muestra' || s.estado === 'corriendo'),
-    progreso: { total: planos.length, listos: cuenta('listo'), revisar: cuenta('revisar'), previstos: cuenta('previsto'), corriendo: cuenta('corriendo'), omitidos: cuenta('skipped') },
-    gasto: { mostradoUsd: mostrado, topeUsd: s.tope_usd, gastadoUsd: r ? u2usd(r.gastado) : 0, reservadoUsd: r ? u2usd(r.reservado) : 0, inciertoUsd: r ? u2usd(r.incierto) : 0,
-      disponibleUsd: r ? u2usd(r.disponible) : s.tope_usd, excedido: r ? r.excedido : false, mayorQueLoMostrado: mostrado != null && r ? r.gastado > usd2u(mostrado) : false },
-    escaleta: planos.map(planoVista),
-    pasos_inciertos: Object.entries(s.pasos || {}).filter(([c]) => s.libro?.lineas?.[c]?.estado === 'incierto').map(([clave, x]) => ({ clave, n: x.n, intento: x.intento, maxUsd: u2usd(s.libro.lineas[clave].max) })) };
-}
-export const resumenSerie = s => {
-  const v = vistaSerie(s);
-  return { id: v.id, titulo: v.titulo, estado: v.estado, etiqueta: v.etiqueta, progreso: v.progreso, gasto: v.gasto, hash: v.hash, escaleta_v: v.escaleta_v, biblia_version: v.biblia_version,
-    creada: v.creada, actualizada: v.actualizada, pausa_motivo: v.pausa_motivo || null };
-};
+export { ETIQUETA, vistaSerie, resumenSerie } from './series-vista-core.mjs'; // la vista es pura y vive aparte (la nube la usa también)
 
 /** Pausar (reduce el gasto: no pide token) y cancelar. Puras sobre una copia: devuelven { ok, serie } o { ok:false, codigo, motivo }. */
 export function pausarSerie(s, motivo = 'pausada por el dueño') {

@@ -20,6 +20,7 @@ import * as conexiones from './conexiones.js';
 import * as notificaciones from './notificaciones.js';
 import * as chat from './chat.js';
 import * as notasPersonales from './notas-personales.js';
+import * as series from './series.js';
 import * as vinculoTelegram from './vinculo-telegram.js';
 export const MODULOS = [
   tareas,
@@ -44,5 +45,6 @@ export const MODULOS = [
   notificaciones, // N0: las notificaciones de cada persona (/api/notificaciones/*)
   vinculoTelegram, // N2: «Conectar mi Telegram» (/api/vinculo-telegram/*)
   notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
+  series, // Series en la nube (N2/N3): solo lectura y propuesta, detrás de dimitri.seriesNube (apagado); no genera ni gasta
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];

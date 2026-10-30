@@ -10,6 +10,7 @@ import { manejarNotas } from './notas.js';
 import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
+import { barrerHuerfanas } from './series/libro.js';
 import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 import { avisarCambio } from './vivo.js';
@@ -47,7 +48,7 @@ export async function correrReloj(env, ahoraMs = Date.now()) {
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
   await conciliarFlagSesion(env.DB).catch(() => {}); // SEG-05: apunta si el flag se apagó
   await env.DB.prepare('delete from sesiones_uso where token_hash not in (select token_hash from sessions)').run().catch(() => {}); // SEG-05: sin migración aplicada no hace nada
-  if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } try { await podarImagenesMeta(env.MEDIA, ahoraMs); } catch (e) { console.error('[cron] poda de imágenes de Meta:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
+  if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } try { await barrerHuerfanas(env.DB); } catch (e) { console.error('[cron] líneas huérfanas del libro de series:', e?.message ?? e); } try { await podarImagenesMeta(env.MEDIA, ahoraMs); } catch (e) { console.error('[cron] poda de imágenes de Meta:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
   for (const mod of ordenDelReloj(MODULOS)) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
 }

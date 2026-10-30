@@ -6,17 +6,19 @@ import { hashEscaleta } from '../../../../serie-core.mjs';
 import { serieValida, normalizarSerie, ID_SERIE_OK } from '../../../../series-bomba-core.mjs';
 
 export const REINTENTOS = 6;
-export const MAX_JSON = 1_000_000; // bytes de la serie; el límite de fila de D1 es 2 MB
+export const MAX_JSON = 1_000_000; // BYTES (UTF-8) de la serie, no caracteres: un acento o un emoji pesan más de uno; el límite de fila de D1 es 2 MB
 export const MAX_LISTA = 200;
 const copia = (s) => (s ? structuredClone(s) : null);
 const leerFila = (f) => { try { const s = JSON.parse(f.json); return serieValida(s) ? { ...normalizarSerie(s), v: f.version } : null; } catch { return null; } }; // una fila rota se salta: no puede hacer lanzar a la bomba
 
 export function crearAlmacenD1(db, { ahora = () => Date.now(), azar = () => Math.random().toString(36).slice(2, 6) } = {}) {
   if (!db) throw new Error('el almacén de series necesita la base');
-  const texto = (s) => { const j = JSON.stringify(s); if (j.length > MAX_JSON) throw new Error('la serie es demasiado grande para guardarla'); return j; };
+  const enc = new TextEncoder();
+  const texto = (s) => { const j = JSON.stringify(s); if (enc.encode(j).length > MAX_JSON) throw new Error('la serie es demasiado grande para guardarla'); return j; };
   const fila = (id) => db.prepare('select id, estado, version, json from series where id = ?').bind(id).first();
   return {
-    async todas() { return (await db.prepare('select id, estado, version, json from series order by creada limit ?').bind(MAX_LISTA).all()).results.map(leerFila).filter(Boolean); },
+    /** Las series vivas (muestra, corriendo, pausado) SIEMPRE primero, y luego las más nuevas: con más de MAX_LISTA series, la bomba y la lista nunca dejan fuera una que está generando. */
+    async todas() { return (await db.prepare(`select id, estado, version, json from series order by (case when estado in ('muestra','corriendo','pausado') then 0 else 1 end), creada desc limit ?`).bind(MAX_LISTA).all()).results.map(leerFila).filter(Boolean); },
     async estadoDe(id) { return (await db.prepare('select estado from series where id = ?').bind(String(id)).first())?.estado ?? null; },
     async uno(id) { const f = ID_SERIE_OK.test(String(id)) ? await fila(String(id)) : null; return f ? leerFila(f) : null; },
     /** Guarda una serie NUEVA. Nunca pisa otra con el mismo id (si existe, el id lleva un sufijo). */
@@ -25,7 +27,7 @@ export function crearAlmacenD1(db, { ahora = () => Date.now(), azar = () => Math
       if (!ID_SERIE_OK.test(id)) id = 'serie';
       const t = ahora();
       for (let i = 0; i < REINTENTOS; i++) {
-        const cand = i === 0 ? id : `${id}-${azar()}`.slice(0, 60);
+        const cand = i === 0 ? id : `${id.slice(0, 54)}-${azar()}${i > 1 ? i : ''}`; // ≤ 60: 54 + «-» + 4 del azar + el número del intento; cada vuelta prueba un candidato DISTINTO (un id largo recortado volvía a dar el mismo)
         const s = { ...structuredClone(serie), id: cand, estado: 'previsto', creada: t, actualizada: t, v: 1, escaleta_v: 1, intentos: {}, fallos: {}, pasos: {}, libro: null, autorizado: null, token_reg: null, ...extra };
         s.hash = hashEscaleta(s);
         const r = await db.prepare('insert or ignore into series (id, estado, version, json, creada, actualizada) values (?, ?, 1, ?, ?, ?)').bind(cand, s.estado, texto(s), t, t).run();

@@ -7,6 +7,7 @@ import { AMBITOS, MODOS, IDS_AMBITOS, POR_DEFECTO, CONSERVA, DIAS_RESPALDO, TOPE
 import { manifiesto, notasSemilla, grafoSemilla, equipoSemilla } from './semilla.js';
 import { leerDoc, guardarDoc, mutarDoc } from './almacen.js';
 import { avisar } from './avisos.js';
+import { hayCorriendo } from './series/libro.js';
 
 export { MODOS, AMBITOS, POR_DEFECTO, CONSERVA, DIAS_RESPALDO, validarPedido };
 export const DOC_RESPALDOS = 'restablecer.respaldos', DOC_PASO = 'restablecer.paso', PREFIJO_R2 = 'respaldos/', PREFIJO_DOC = 'restablecer.respaldo.';
@@ -167,8 +168,16 @@ export async function estado(env, db, ahora = Date.now()) {
 }
 
 /** Paso 1: valida, cuenta y deja la clave de un solo uso. → { pendiente } o { error, status } */
+/** Restablecer «Dimitri» (o restaurar un respaldo que lo trae) borra las series: con una GENERANDO (muestra o corriendo) se niega, con su motivo. → null o { error, status: 409 }. */
+async function guardiaSeries(db, ambitos) {
+  if (!Array.isArray(ambitos) || !ambitos.includes('dimitri')) return null;
+  const n = await hayCorriendo(db);
+  return n > 0 ? { error: `Hay ${n === 1 ? 'una serie generando' : n + ' series generando'}: pausa o cancela ${n === 1 ? 'esa serie' : 'esas series'} antes de restablecer a Dimitri (lo que lleva gastado no se borra del libro, pero la serie sí).`, status: 409 } : null;
+}
+
 export async function pedirRestablecer(env, db, pedido, { ahora = Date.now() } = {}) {
   const v = validarPedido(pedido); if (!v.ok) return { error: v.error, status: 400 };
+  const gen = await guardiaSeries(db, v.ambitos); if (gen) return gen; // una serie generando no se borra: se pausa primero
   const m = await manifiesto(env);
   if (v.modo === 'panaclaw' && !m) return { error: 'Esta instalación no trae la semilla de fábrica: «PanaClaw por defecto» no está disponible aquí.', status: 409 };
   const cuentas = await cuentasDe(db), paso = nuevoPaso(v, ahora);
@@ -180,6 +189,7 @@ export async function pedirRestablecer(env, db, pedido, { ahora = Date.now() } =
 export async function confirmarRestablecer(env, db, { token, escribio }, { quien = '', ahora = Date.now() } = {}) {
   const guardado = (await leerDoc(db, DOC_PASO, null)).valor;
   const motivo = verificarPaso(guardado, { token, escribio }, ahora); if (motivo) return { error: motivo, status: 409 };
+  const gen = await guardiaSeries(db, guardado.ambitos); if (gen) return gen; // ANTES de gastar la clave: se pausa la serie y se vuelve a confirmar con la misma
   // la clave es de UN solo uso: la quita quien llegue primero; el que llegue después no hace nada (y repetir la petición no restablece dos veces)
   const quitada = await db.prepare('delete from docs where clave = ? and json = ?').bind(DOC_PASO, JSON.stringify(guardado)).run();
   if (!quitada.meta?.changes) return { error: 'Esa confirmación ya se usó.', status: 409 };
@@ -217,6 +227,7 @@ export async function restaurarRespaldo(env, db, { id }, { quien = '', ahora = D
   if (!r) return { error: 'Ese respaldo ya no está.', status: 404 };
   if (r.vence < ahora) return { error: 'Ese respaldo ya venció.', status: 410 };
   const dump = await leerArchivoRespaldo(env, db, r); if (!dump) return { error: 'No encuentro el archivo de ese respaldo.', status: 404 };
+  const gen = await guardiaSeries(db, dump.ambitos); if (gen) return gen;
   const previo = await crearRespaldo(env, db, { modo: r.modo, ambitos: dump.ambitos, ahora, quien }); if (previo.error) return previo;
   try { await db.batch([...sentenciasDeQuitar(db, dump.ambitos), ...sentenciasDeVolver(db, dump)]); }
   catch (e) { console.error('[restablecer]', e?.message ?? e); return { error: 'No se pudo restaurar y no cambió nada. Inténtalo otra vez.', status: 500 }; }

@@ -179,3 +179,39 @@ test('restablecer: la serie se restablece con Dimitri y el libro del dinero se c
   assert.ok(CONSERVA_TABLAS.includes('series_libro'));
   assert.ok(!Object.values(DESTINOS).some((d) => (d.tablas || []).includes('series_libro')), 'el libro no está en ningún ámbito');
 });
+
+/* ---------- revisión independiente de N1: los cuatro menores ---------- */
+test('almacén.todas(): con MÁS de 200 series, las vivas van siempre primero y luego las más nuevas (nunca las 200 más viejas)', { skip: SALTAR }, async () => {
+  const d1 = crearD1(), ins = d1._db.prepare('insert into series (id, estado, version, json, creada, actualizada) values (?, ?, 1, ?, ?, ?)');
+  const j = (id, estado) => JSON.stringify({ id, estado, escaleta: [], intentos: {}, pasos: {}, fallos: {} });
+  for (let i = 1; i <= 230; i++) ins.run(`h${i}`, 'hecho', j(`h${i}`, 'hecho'), i, i); // 230 terminadas, de la más vieja (1) a la más nueva (230)
+  for (const [id, e, t] of [['viva-vieja', 'corriendo', 0], ['pausa-vieja', 'pausado', 0], ['muestra-vieja', 'muestra', 0]]) ins.run(id, e, j(id, e), t, t); // las tres vivas, más viejas que todas
+  ins.run('prevista-vieja', 'previsto', j('prevista-vieja', 'previsto'), 0, 0);
+  const lista = await crearAlmacenD1(d1).todas(), ids = lista.map((s) => s.id);
+  assert.equal(lista.length, 200);
+  assert.deepEqual(ids.slice(0, 3).sort(), ['muestra-vieja', 'pausa-vieja', 'viva-vieja'], 'las vivas, primero');
+  assert.equal(ids[3], 'h230', 'después, las más nuevas');
+  assert.ok(!ids.includes('prevista-vieja') && !ids.includes('h1'), 'lo viejo y sin generar queda fuera, no lo vivo');
+});
+test('libro.reservar: una clave que ya es de OTRA serie nunca se «repite» (falla cerrado, también en la carrera)', { skip: SALTAR }, async () => {
+  const d1 = crearD1();
+  assert.deepEqual(await L.reservar(d1, R({ clave: 'x:1:1', serieId: 'x' })), { ok: true });
+  const r = await L.reservar(d1, R({ clave: 'x:1:1', serieId: 'otra' })); assert.equal(r.ok, false); assert.equal(r.codigo, 'clave'); assert.match(r.motivo, /otra serie/);
+  assert.deepEqual(await L.reservar(d1, R({ clave: 'x:1:1', serieId: 'x' })), { ok: true, repetida: true }, 'la suya sí es idempotente');
+  assert.equal((await L.resumenDeSerie(d1, 'otra')).reservado, 0, 'a la otra serie no se le apuntó nada');
+  await L.liberar(d1, 'x:1:1'); assert.equal((await L.reservar(d1, R({ clave: 'x:1:1', serieId: 'otra' }))).codigo, 'clave', 'ni siquiera liberada');
+});
+test('almacén: el tope de la serie son BYTES UTF-8, no caracteres', { skip: SALTAR }, async () => {
+  const A = crearAlmacenD1(crearD1(), { ahora: () => T0 });
+  await assert.rejects(() => A.crear({ ...serie(), relleno: 'é'.repeat(600_000) }), /demasiado grande/); // 600 mil caracteres = 1,2 MB
+  const ok = await A.crear({ ...serie('cabe'), relleno: 'x'.repeat(900_000) }); assert.equal(ok.id, 'cabe'); // 900 mil bytes caben
+  await assert.rejects(() => A.crear({ ...serie('emoji'), relleno: '😀'.repeat(300_000) }), /demasiado grande/); // 2 unidades de JS y 4 bytes cada uno
+});
+test('almacén.crear: un id de 57 a 60 caracteres que ya existe recibe un id DISTINTO de ≤ 60, y varias veces seguidas', { skip: SALTAR }, async () => {
+  const A = crearAlmacenD1(crearD1(), { ahora: () => T0, azar: () => 'abcd' }), largo = 'a'.repeat(60);
+  const a = await A.crear(serie(largo)), b = await A.crear(serie(largo)), c = await A.crear(serie(largo)), d = await A.crear(serie('b'.repeat(57)));
+  const e = await A.crear(serie('b'.repeat(57)));
+  for (const s of [a, b, c, d, e]) assert.ok(s.id.length <= 60, s.id);
+  assert.equal(new Set([a.id, b.id, c.id, d.id, e.id]).size, 5, 'los cinco ids son distintos');
+  assert.equal(a.id, largo); assert.match(b.id, /^a{54}-abcd$/); assert.match(c.id, /^a{54}-abcd2$/);
+});
