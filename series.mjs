@@ -17,7 +17,8 @@ const ID_OK = /^[\w-]{1,60}$/;
 export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), azar = () => Math.random().toString(36).slice(2, 6) } = {}) {
   if (!archivo || typeof renombrar !== 'function') throw new Error('el almacén de series necesita archivo y renombrar');
   let D = null, bloqueo = null; // bloqueo: no se pudo apartar un archivo roto; NO se escribe encima (falla cerrado)
-  const valida = s => !!s && typeof s === 'object' && !Array.isArray(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta);
+  const plano = o => !!o && typeof o === 'object' && !Array.isArray(o), valida = s => plano(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta) && s.escaleta.every(plano) && typeof s.estado === 'string';
+  const normalizar = s => ({ ...s, intentos: plano(s.intentos) ? s.intentos : {}, pasos: plano(s.pasos) ? s.pasos : {}, fallos: plano(s.fallos) ? s.fallos : {}, libro: plano(s.libro) && plano(s.libro.lineas) ? s.libro : null, escaleta: s.escaleta.map(p => ({ ...p, versiones: Array.isArray(p.versiones) ? p.versiones : [], refs: Array.isArray(p.refs) ? p.refs : [] })) }); // una serie malformada no puede hacer lanzar a la bomba en cada tick
   const apartar = motivo => { try { fs.copyFileSync(archivo, `${archivo}.roto-${ahora()}`); } catch (e) { bloqueo = `${motivo}, y no se pudo apartar una copia (${e.code || e.message}): no se escribe encima de ${path.basename(archivo)}`; console.warn('series:', bloqueo); } };
   const cargar = () => {
     if (D) return D;
@@ -27,7 +28,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
         const j = JSON.parse(txt); if (!j || typeof j !== 'object' || !Array.isArray(j.series)) throw new Error('forma');
         const buenas = j.series.filter(valida); if (buenas.length !== j.series.length) apartar('el archivo de series traía elementos que no son series');
         const u = j.uso && typeof j.uso === 'object' && typeof j.uso.day === 'string' && Number.isFinite(j.uso.peso) ? { day: j.uso.day, peso: j.uso.peso } : { day: '', peso: 0 };
-        D = { v: 1, uso: u, series: buenas };
+        D = { v: 1, uso: u, series: buenas.map(normalizar) };
       } catch { apartar('el archivo de series está roto'); D = null; }
     }
     return (D ||= { v: 1, uso: { day: '', peso: 0 }, series: [] });
@@ -74,7 +75,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
 /** Lo que se enseña de una serie: LISTA BLANCA. Nunca el token ni lo que autoriza, ni el libro, ni el brief (objetivo, restricciones), ni los prompts completos ni los precios. */
 const corto = (v, n) => (v == null ? null : String(v).slice(0, n));
 const planoVista = p => ({ n: p.n, rol: p.rol, estado: p.estado, descripcion: corto(p.descripcion, 120), motivo: corto(p.motivo, 160), modelo: p.modelo || null, version: p.version || 0, clave: !!p.clave,
-  versiones: (p.versiones || []).map(v => ({ v: v.v, archivo: v.archivo || null, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) });
+  versiones: (p.versiones || []).map(v => ({ v: v.v, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) }); // sin `archivo`: su nombre lleva el prompt
 export function vistaSerie(s) {
   if (!s) return null;
   const planos = s.escaleta || [], cuenta = e => planos.filter(p => p.estado === e).length;

@@ -3061,7 +3061,7 @@ const server = http.createServer(async (req, res) => {
     if (/^\/api\/series(\/|$)/.test(url.pathname) && (req.method === 'GET' || req.method === 'POST')) {
       const b = req.method === 'GET' ? {} : await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024);
       if (!b || typeof b !== 'object' || Array.isArray(b)) return json(res, 400, { error: 'El cuerpo debe ser un objeto JSON.' });
-      if (req.method === 'POST' && /\/(generar|resolver|pausar|cancelar)$/.test(url.pathname)) { // defensa en profundidad: lo que gasta o libera dinero solo desde localhost y del mismo origen
+      if (req.method === 'POST' && (/\/(generar|resolver|pausar|cancelar)$/.test(url.pathname) || url.pathname === '/api/series/revisar-plano' || (url.pathname === '/api/series/proponer' && b.guardar === true))) { // defensa en profundidad: lo que gasta o libera dinero solo desde localhost y del mismo origen
         const o = origenSerie({ host: req.headers.host, origin: req.headers.origin }); if (!o.ok) return json(res, 403, { error: o.motivo });
       }
       const r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });

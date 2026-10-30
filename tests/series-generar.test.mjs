@@ -281,10 +281,10 @@ test('18b · la ruta: generar solo del dueño (agente 403, flag 409); la propues
 });
 
 // ---- la oficina REAL, solo con el motor gratis «prueba» ----
-async function oficina(t, d, port, flags = { series: true, serieGenerar: true }) {
+async function oficina(t, d, port, flags = { series: true, serieGenerar: true }, envExtra = {}) {
   fs.mkdirSync(path.join(d, 'brain'), { recursive: true }); fs.writeFileSync(path.join(d, 'office.config.local.json'), JSON.stringify({ dimitri: flags }));
   const env = { ...process.env, PORT: String(port), AO_DATA: path.join(d, 'data'), AO_BRAIN: path.join(d, 'brain'), AO_LOCAL_CONFIG: path.join(d, 'office.config.local.json'), ANTHROPIC_API_KEY: 'test-key-not-real', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9', CLAUDE_BIN: path.join(d, 'no-claude.exe'),
-    TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: '', GEMINI_API_KEY: '', HF_KEY: '', HF_API_KEY: '', FAL_KEY: '', OPENAI_API_KEY: '', XAI_API_KEY: '', META_API_KEY: '', MODEL_API_KEY: '', MINIMAX_API_KEY: '', VOYAGE_API_KEY: '' };
+    TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: '', GEMINI_API_KEY: '', HF_KEY: '', HF_API_KEY: '', FAL_KEY: '', OPENAI_API_KEY: '', XAI_API_KEY: '', META_API_KEY: '', MODEL_API_KEY: '', MINIMAX_API_KEY: '', VOYAGE_API_KEY: '', ...envExtra };
   const srv = spawn(process.execPath, ['serve.mjs'], { cwd: ROOT, env, stdio: 'ignore' }); t.after(() => srv.kill());
   const base = `http://127.0.0.1:${port}`; for (let i = 0; i < 160; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch { /* aún */ } await new Promise(r => setTimeout(r, 250)); }
   const call = async (p, b, method = b === undefined ? 'GET' : 'POST') => { const r = await fetch(base + p, { method, headers: { 'content-type': 'application/json' }, ...(b === undefined ? {} : { body: JSON.stringify(b) }) }); return { status: r.status, j: await r.json().catch(() => ({})) }; };
@@ -333,7 +333,7 @@ test('20 · serve.mjs real: con el flag apagado generar da 409; la oficina se ca
     f = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return s.estado === 'hecho' ? s : null; }, 60000);
   }
   assert.equal(f.estado, 'hecho'); assert.equal(f.progreso.listos, 12); assert.ok(f.escaleta.every(q => q.versiones.length === 1), 'cada plano tiene UNA sola versión tras el reinicio');
-  const archivos = f.escaleta.map(q => q.versiones[0].archivo); assert.equal(new Set(archivos).size, 12, 'doce imágenes distintas, ninguna repetida');
+  const hechos = (await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id && j.state === 'done').flatMap(j => j.items); assert.equal(new Set(hechos).size, 12, 'doce imágenes distintas, ninguna repetida'); assert.ok(!JSON.stringify(f).includes('.svg'), 'la vista no expone nombres de archivo');
 });
 
 test('21 · tras un reinicio se RECONCILIA pero NO se lanza nada nuevo: la serie pasa a pausada con motivo y pide un clic nuevo; y una autorización caduca a las 6 h aunque no haya reinicio (reloj inyectado)', async t => {
@@ -372,8 +372,8 @@ test('23 · el cupo de series devuelto usa el día en que se sumó; el texto del
 
 test('24 · serve.mjs real: Host o Origin ajenos dan 403 en lo que gasta o libera dinero; ni la API ni retry pueden escribir la marca `serie` de un trabajo', { timeout: 90000 }, async t => {
   const d = tmp(t), port = await puerto(), o = await oficina(t, d, port);
-  const llamar = (ruta, { host, origin } = {}) => new Promise(res => { const r = http.request({ host: '127.0.0.1', port, path: ruta, method: 'POST', headers: { 'content-type': 'application/json', ...(host ? { host } : {}), ...(origin ? { origin } : {}) } }, rs => { rs.resume();
-    rs.on('end', () => res(rs.statusCode)); }); r.end('{}'); });
+  const llamar = (ruta, { host, origin, cuerpo = '{}' } = {}) => new Promise(res => { const r = http.request({ host: '127.0.0.1', port, path: ruta, method: 'POST', headers: { 'content-type': 'application/json', ...(host ? { host } : {}), ...(origin ? { origin } : {}) } }, rs => { rs.resume();
+    rs.on('end', () => res(rs.statusCode)); }); r.end(cuerpo); });
   for (const ruta of ['/api/series/x/generar', '/api/series/x/resolver', '/api/series/x/pausar', '/api/series/x/cancelar']) {
     assert.equal(await llamar(ruta, { host: 'evil.example' }), 403, ruta + ' con Host ajeno'); assert.equal(await llamar(ruta, { origin: 'http://evil.example' }), 403, ruta + ' con Origin ajeno');
       assert.notEqual(await llamar(ruta), 403, ruta + ' desde localhost pasa a la lógica (404 si no existe)');
@@ -382,4 +382,40 @@ test('24 · serve.mjs real: Host o Origin ajenos dan 403 en lo que gasta o liber
   const j = await o.call('/api/media/jobs', { prompt: 'una tarjeta', model: modelo.id, serie: { id: 'ajena', n: 1, intento: 1 }, wait: 20000 }); assert.equal(j.status, 200); assert.equal(j.j.job.serie, undefined, 'la API no copia el campo serie');
   const r = await o.call(`/api/media/jobs/${j.j.job.id}/retry`, {}); assert.ok(r.status === 200 || r.status === 400); assert.equal(r.j.job?.serie, undefined);
   assert.equal((await o.call('/api/media/jobs')).j.jobs.some(x => x.serie), false);
+  for (const [ruta, cuerpo, sinGuardar] of [['/api/series/revisar-plano', '{}'], ['/api/series/proponer', '{"guardar":true}']]) {
+    for (const o2 of [{ host: 'evil.example' }, { origin: 'http://evil.example' }, { origin: 'null' }]) assert.equal(await llamar(ruta, { ...o2, cuerpo }), 403, `${ruta} ${JSON.stringify(o2)}`);
+    assert.notEqual(await llamar(ruta, { host: `[::1]:${port}`, cuerpo }), 403, ruta + ' con Host [::1] pasa'); assert.notEqual(await llamar(ruta, { cuerpo }), 403);
+  }
+
+});
+
+test('25 · motor de PAGO: un «hecho» sin costo no borra el gasto (se liquida lo estimado); resolver busca la clave con hasOwn; el aviso de pasos inciertos sale en la confirmación', async t => {
+  const o = montar(t, { n: 3 }); autorizar(o, 'todo'); await ticks(o); o.E.ok('j0', 0); await ticks(o);
+  assert.equal(vista(o).libro.lineas[`${o.id}:1:1`].real, 100000, 'pago con costo 0: como mínimo lo reservado para generar');
+  for (const costo of [NaN, -5]) { await ticks(o); const j = o.E.lista.find(x => x.state === 'queued'); o.E.ok(j.id, costo); await ticks(o); }
+  assert.ok(Object.values(vista(o).libro.lineas).every(l => l.estado === 'liquidado' && l.real >= 100000), 'ningún cost raro liquida a 0 en pago');
+  const g = montar(t, { n: 2, E: estudio({ motor: 'prueba' }) }); autorizar(g, 'todo'); await ticks(g); g.E.ok('j0', 0); await ticks(g); assert.equal(g.A.uno(g.id).libro.lineas[`${g.id}:1:1`].real, 0, 'gratis: 0');
+  const r = montar(t, { n: 2 }); autorizar(r, 'todo'); await ticks(r); r.E.lista.length = 0; await ticks(r);
+  for (const k of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) assert.equal(r.G.resolver({ id: r.id, clave: k, cobro: true, realUsd: 0.05 }).estado, 409, k);
+  assert.match(r.G.generar({ id: r.id, modo: 'todo' }).cuerpo.confirmar.texto, /OJO: hay 1 paso incierto/); assert.equal(r.G.generar({ id: r.id, modo: 'todo' }).cuerpo.confirmar.inciertos, 1);
+});
+
+test('26 · sin el candado ni reconcilia ni arranca: otra instancia no pausa ni toca series ajenas', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.ok('j0');
+  const B2 = crearGenerador({ almacen: o.otra(), media: o.E, biblia: { leer: () => aprobada }, capsDe: () => ({ maxRefs: 4 }), precioPlano: () => ({ generacion: 0.1 }), activo: () => true, nonce: () => 'z'.repeat(20), hoy: () => o.est.dia, candado: { tener: () => false } });
+  B2.alArrancar(); assert.equal(B2.reconciliar(), 0); assert.equal(o.otra().uno(o.id).estado, 'muestra' === o.otra().uno(o.id).estado ? 'muestra' : 'corriendo', 'no la pausó'); assert.equal(o.otra().uno(o.id).escaleta[0].estado, 'corriendo', 'ni liquidó su trabajo');
+});
+
+test('27 · motor de PAGO: aunque la causa diga «previo», si el trabajo tiene id remoto (el proveedor lo aceptó) NO se libera: queda incierto', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'sin saldo', 'saldo', 'previo'); o.E.job('j0').remote = 1; await ticks(o);
+  assert.equal(vista(o).libro.lineas[`${o.id}:1:1`].estado, 'incierto'); assert.equal(vista(o).escaleta[0].estado, 'revisar');
+  const p = montar(t, { n: 2 }); autorizar(p, 'todo'); await ticks(p); p.E.falla('j0', 'sin saldo', 'saldo', 'previo'); await ticks(p); assert.equal(p.A.uno(p.id).libro.lineas[`${p.id}:1:1`].estado, 'liberado', 'sin id remoto sí era previo');
+});
+
+test('24b · con AO_HOST (la puerta global de Host abierta) las rutas que gastan o escriben siguen exigiendo localhost: Host ajeno 403 en las 4, en revisar-plano y en proponer con guardar; proponer sin guardar no', { timeout: 90000 }, async t => {
+  const d = tmp(t), port = await puerto(); await oficina(t, d, port, { series: true, serieGenerar: true }, { AO_HOST: '127.0.0.1' });
+  const llamar = (ruta, host, cuerpo = '{}') => new Promise(res => { const r = http.request({ host: '127.0.0.1', port, path: ruta, method: 'POST', headers: { 'content-type': 'application/json', host } }, rs => { rs.resume(); rs.on('end', () => res(rs.statusCode)); }); r.end(cuerpo); });
+  for (const ruta of ['/api/series/x/generar', '/api/series/x/resolver', '/api/series/x/pausar', '/api/series/x/cancelar', '/api/series/revisar-plano']) assert.equal(await llamar(ruta, 'evil.example'), 403, ruta);
+  assert.equal(await llamar('/api/series/proponer', 'evil.example', '{"guardar":true}'), 403); assert.notEqual(await llamar('/api/series/proponer', 'evil.example'), 403, 'sin guardar no escribe: queda fuera');
+  assert.notEqual(await llamar('/api/series/revisar-plano', `127.0.0.1:${port}`), 403);
 });

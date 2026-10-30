@@ -56,18 +56,18 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     const disponible = Math.min(libro.tope, usd2u(tope)) - r.reservado - r.gastado - r.incierto, b = media.budget();
     return { hash: hashEscaleta(s), etapa, costoUsd: est.maximoUsd, maximo: est.maximo, topeUsd: tope, topeMesUsd: esCarrusel(s) ? conf().topeMesCarruselesUsd : null, estudio: { dailyBudget: b.dailyBudget, monthlyBudget: b.monthlyBudget, limit: b.limit },
       cabe: est.maximo <= disponible && (!esCarrusel(s) || est.maximo <= usd2u(conf().topeMesCarruselesUsd) - usd2u(gastoMes(mesClave()))), disponibleUsd: u2usd(Math.max(0, disponible)),
-      reintentos: conf().reintentosMax };
+      reintentos: conf().reintentosMax, inciertos: almacen.todas().reduce((n, x) => n + Object.values(x.libro?.lineas || {}).filter(l => l.estado === 'incierto').length, 0) };
   }
   const textoConfirmar = (s, c) => {
     const n = c.etapa.length, r = c.reintentos, s2 = r === 1 ? '' : 's';
-    return `Generar ${n} plano${n === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}; incluye hasta ${r} reintento${s2} por plano en los motores gratis: en uno de pago un fallo dudoso no se repite solo, se pausa).`;
+    return `Generar ${n} plano${n === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}; incluye hasta ${r} reintento${s2} por plano en los motores gratis: en uno de pago un fallo dudoso no se repite solo, se pausa).${c.inciertos ? ` OJO: hay ${c.inciertos} paso${c.inciertos === 1 ? '' : 's'} incierto${c.inciertos === 1 ? '' : 's'} que pudo${c.inciertos === 1 ? '' : 'ieron'} cobrarse y el tope diario y mensual del Estudio no lo ve: decídelo(s) antes.` : ''}`;
   };
   function emitir(s, c, modo) {
     const reg = { ...emitirToken({ serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoMostrado: c.costoUsd, ahora: ahora(), nonce: nonce(), ttlMs }), modo, topeMesUsd: c.topeMesUsd, estudio: c.estudio };
     let aviso = null;
     const x = almacen.actualizar(s.id, y => { y.token_reg = reg; if (y.estado === 'previsto') { const t = transicion(y, 'espera_ok'); if (!t.ok) { aviso = t.motivo; return undefined; } return t.serie; } return y; });
     if (aviso || !x) return null;
-    return { token: reg.token, serieId: s.id, hash: c.hash, costoMostradoUsd: c.costoUsd, topeUsd: c.topeUsd, modo, planos: c.etapa.length, vence: reg.vence, texto: textoConfirmar(s, c) };
+    return { token: reg.token, serieId: s.id, hash: c.hash, costoMostradoUsd: c.costoUsd, topeUsd: c.topeUsd, modo, planos: c.etapa.length, inciertos: c.inciertos, vence: reg.vence, texto: textoConfirmar(s, c) };
   }
 
   /** El clic del dueño. SÍNCRONA de principio a fin: dos a la vez no pueden pasar los dos con el mismo token. */
@@ -153,6 +153,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
 
   /** Lo que estaba en el aire: se resuelve a partir de los TRABAJOS del Estudio, sin enviar nada nuevo. Idempotente: se puede llamar cuantas veces haga falta. */
   function reconciliar() {
+    if (candado && !candado.tener()) return 0; // otro proceso lleva la bomba (y las cuentas) de este data/
     let cambios = 0;
     for (const s0 of almacen.todas()) for (const p0 of s0.escaleta) {
       if (p0.estado !== 'corriendo') continue;
@@ -177,11 +178,11 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
           else { lib(); pa.estado = 'liberado'; volver('previsto'); }
         }
         else if (j.state === 'done' && j.items?.length) {
-          const real = Math.max(0, +j.cost || 0), exc = liq(real); pa.estado = 'liquidado'; pa.realUsd = real;
+          const real = pagado ? (j.cost > 0 ? j.cost : (pa.genUsd ?? 0)) : Math.max(0, +j.cost || 0), exc = liq(real); // en pago, un «hecho» sin costo no borra el gasto: como mínimo se liquida lo estimado pa.estado = 'liquidado'; pa.realUsd = real;
           planoA(y, n, q => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: j.items[0], intento: pa.intento, costo_usd: real, prompt: q.prompt_exacto }), motivo: null }));
           if (exc) pausa = `el plano ${n} costó más de lo reservado: revisa antes de seguir`;
         } else { // fallido: la CAUSA estructurada que pone el Estudio (nunca el texto del error). En un motor de PAGO, todo lo que no sea claramente previo al cobro queda «incierto»
-          const causa = j.causa || '', previo = causa === 'previo' || causa === 'cancelado_en_cola', clase = j.errorClass || '';
+          const causa = j.causa || '', previo = (causa === 'previo' && !j.remote) || causa === 'cancelado_en_cola', clase = j.errorClass || ''; // `remote` = el proveedor aceptó el pedido: nunca es previo al cobro
           if (pagado && !previo) { dudoso(); pa.estado = 'incierto'; volver('revisar', `puede haberse cobrado (${causa || 'causa desconocida'}): decide si hubo cobro`); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
           else {
             lib(); pa.estado = 'liberado';
@@ -233,6 +234,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
   }
   /** Al arrancar la oficina: RECONCILIA (adopta y liquida lo que estaba en el aire) pero NO lanza planos nuevos: toda serie que estaba generando pasa a «pausada» y el dueño da un clic nuevo (token nuevo). */
   function alArrancar() {
+    if (candado && !candado.tener()) return;
     reconciliar();
     for (const x of almacen.todas()) if (x.estado === 'muestra' || x.estado === 'corriendo') pausar(x.id, 'la oficina se reinició: vuelve a pedir el clic para seguir (lo que estaba en el aire se revisó sin enviar nada nuevo)');
   }
@@ -246,7 +248,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
   function resolver({ id, clave, cobro, realUsd = 0, por = 'dueno' } = {}) {
     if (por !== 'dueno') return err(403, 'Decidir si hubo un cobro es del dueño.');
     if (typeof cobro !== 'boolean') return err(422, 'Di si hubo cobro (true o false).');
-    const serie0 = almacen.uno(typeof id === 'string' ? id : ''), linea = serie0?.libro?.lineas?.[String(clave || '')];
+    const serie0 = almacen.uno(typeof id === 'string' ? id : ''), linea = serie0?.libro?.lineas && Object.hasOwn(serie0.libro.lineas, String(clave || '')) ? serie0.libro.lineas[String(clave)] : null;
     if (cobro && realUsd !== undefined && realUsd !== 0) { // lo que el dueño dice que se cobró: número finito, no negativo y no más de lo reservado para ese paso
       if (typeof realUsd !== 'number' || !Number.isFinite(realUsd) || realUsd < 0) return err(422, 'El cobro real debe ser un número finito, 0 o más.');
       if (linea && usd2u(realUsd) > linea.max) return err(422, `El cobro real (US$${realUsd}) pasa de lo reservado para ese paso (US$${u2usd(linea.max)}).`);

@@ -154,7 +154,9 @@ async function runJob(j) {
     if (j.items.length) { j.state = 'done'; j.warning = why; } else { j.state = 'failed'; j.error = why; j.errorClass = ex.clase; if (ex.detalle) j.errorRaw = ex.detalle.slice(0, 400); }
     // 11.5: la CAUSA va estructurada para quien lleva cuentas (series): `previo` = se sabe que falló ANTES de cobrar (llave, saldo, pedido rechazado, sin conexión);
     // `cancelado` = se canceló en marcha (puede cobrarse igual); cualquier otra = la clase del error. Quien no la reconoce en un motor de pago lo cuenta como «incierto».
-    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : (['key', 'saldo', 'formato'].includes(ex.clase) || ['ECONNREFUSED', 'ENOTFOUND'].includes(e?.code || e?.cause?.code)) ? 'previo' : ex.clase;
+    // `previo` es por la FASE, no por la clase del error: solo si el proveedor NUNCA aceptó el pedido (sin id remoto). Con id remoto el motor ya puede estar generando y cobrando: eso nunca es «previo».
+    const aceptado = !!j.remote?.length;
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && (['key', 'saldo', 'formato'].includes(ex.clase) || ['ECONNREFUSED', 'ENOTFOUND'].includes(e?.code || e?.cause?.code)) ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
