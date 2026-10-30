@@ -14,3 +14,16 @@
 ## VAN-03 · pendiente
 - Correr el banco también en el despliegue (hoy corre dentro de `npm test` y de `check`, que ya corre en CI).
 - Casos de imagen y PDF (el texto escrito dentro de una imagen no pasa por `injectionIn`: es un límite conocido de `ver_imagen`).
+
+## `dominiosPermitidos` por conector (SEG-02, pendiente) — solo DISEÑO, no construido
+
+Por qué no se hizo en este PR: toca una migración de D1, `lib/conectores.js`, `modulos/conectores.js`, el guardián, el chat de agentes, las consultas de Dimitri y la pantalla de Ajustes (escritorio y móvil): es más grande que un PR de pruebas y comparte archivos con otros carriles.
+
+Diseño propuesto:
+1. **Datos:** migración nueva (el siguiente número libre) `alter table conectores_extra add column dominios_permitidos text` (JSON, lista de hosts o `*.dominio`; vacío = como hoy). Ver `cloudflare/migraciones/0090_conectores_extra.sql`. Los conectores de secreto (`MCP_…`) no están en esa tabla: se declaran en `ajustes` o quedan sin lista (documentar).
+2. **Flag apagado por defecto:** `seguridad.dominiosPorConector` (ajuste del dueño). Apagado, nada cambia. Encendido, el guardián recibe `ctx.dominios = { servidor: [hosts] }`.
+3. **Guardián:** en `crearGuardian.antes`, junto a `urlAjenaEn`. Hoy «propia» = host del conector o subdominio. Con lista: propia = host del conector, sus subdominios **o** un host de la lista (`hostMatch` ya existe en `safety.mjs`; exportar una variante `urlAjenaEn(args, urlConector, extra = [])`). El motivo sigue siendo fijo (no repite la dirección). `code: 'url-ajena'` igual.
+4. **Qué habilita:** un conector que SÍ lee webs (p. ej. «busca https://ejemplo.com») podrá ofrecerse en el chat con agentes y en Dimitri aunque su esquema pida una URL, **solo** si su lista no está vacía: `esquemaConUrlLibre` deja de ocultar la herramienta y el guardián obliga a que cada dirección caiga en la lista. Sin lista, todo sigue igual (se oculta).
+5. **UI mínima:** en Ajustes → Conectores, campo «Dominios que puede consultar» (uno por línea) en el editor de un conector, solo administradores; validar (sin esquema, sin rutas, sin `*` solo, ≤ 20, no IPs privadas ni `localhost`). `public/nube-conectores.js` y `src/movil/vistas/conectores.js`.
+6. **Pruebas:** casos del banco (`tests/fixtures/banco-ataques.mjs`) con y sin lista: host de la lista pasa, `lista.com.evil.test` no, homoglifos y `@` siguen ajenos, lista vacía = comportamiento actual; test de que el token no sale y de que un administrador es el único que edita.
+7. **Riesgo:** una lista amplia reabre la exfiltración por la dirección (un dominio que el atacante controla dentro de un dominio permitido, p. ej. un servicio de subidas). Documentarlo en la pantalla: lista corta, solo dominios propios de confianza.
