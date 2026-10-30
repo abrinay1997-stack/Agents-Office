@@ -18,9 +18,16 @@
     if (!c.tokenPuesto) return { k: 'aut', icono: '!', txt: 'Necesita su token', que: c.secreto ? `Guarda el secreto ${c.secreto} en GitHub y vuelve a desplegar, o pon el token aquí.` : 'Ábrelo con «Editar» y pon su token.' };
     return { k: 'ok', icono: '✓', txt: 'Listo', que: '' };
   }
+  // Un conector sin logo en el registro (el que añadió el usuario) prueba el favicon de su propio dominio por el mismo origen (/api/icono-conector); si no hay, se queda con su monograma.
+  const sinLogo = (c) => !c.plantilla || c.plantilla === 'otro';
+  const hostDe = (u) => { try { return new URL(/^https?:/.test(u) ? u : `https://${u}`).hostname; } catch { return ''; } };
+  const afinarIconos = (raiz) => raiz.querySelectorAll('img[data-fav]').forEach((img) => {
+    const h = img.dataset.fav; img.removeAttribute('data-fav'); if (!h) return;
+    const probe = new Image(); probe.onload = () => { img.src = probe.src; }; probe.src = `/api/icono-conector?host=${encodeURIComponent(h)}`; // si falla, no pasa nada: queda el monograma
+  });
   const tarjeta = (c) => {
     const e = estado(c), n = c.herramientas_lectura.length, m = c.herramientas_envio.length;
-    return `<li class="cn-card ${e.k}" data-n="${esc(c.nombre)}"><div class="cn-top"><img class="cn-ic" src="${esc(c.iconUri)}" alt="" width="40" height="40"><div class="cn-quien"><b>${esc(nombreDe(c))}</b><small>${esc(c.url.replace(/^https:\/\//, ''))}</small></div>
+    return `<li class="cn-card ${e.k}" data-n="${esc(c.nombre)}"><div class="cn-top"><img class="cn-ic" src="${esc(c.iconUri)}" alt="" width="40" height="40"${sinLogo(c) ? ` data-fav="${esc(hostDe(c.url))}"` : ''}><div class="cn-quien"><b>${esc(nombreDe(c))}</b><small>${esc(c.url.replace(/^https:\/\//, ''))}</small></div>
       <span class="cn-st ${e.k}"><i aria-hidden="true">${e.icono}</i> ${esc(e.txt)}</span></div>
       ${e.que ? `<p class="cn-que">${esc(e.que)}</p>` : ''}
       <p class="cn-meta">${c.departamentos.length ? c.departamentos.map((d) => esc((DEPTS.find((x) => x[0] === d) || [, d])[1])).join(', ') : '<span class="cn-vacio">Ningún departamento todavía</span>'} · ${n} de lectura${m ? ` · ${m} de envío (solo con tu OK)` : ''} · ${c.auth_tipo === 'ninguna' ? 'sin autenticación' : c.auth_tipo === 'cabecera' ? `cabecera ${esc(c.cabecera)}` : 'Bearer'}${c.tokenGuardado ? ' · token ••• guardado cifrado' : c.secreto ? ' · token en un secreto del Worker' : ''}</p>
@@ -91,10 +98,10 @@
   async function pintar(pane) {
     pane.dataset.nube = 'nube-conectores';
     try { await cargar(); } catch (e) { pane.innerHTML = `<p class="nb-msg mal" role="alert">${esc(e.message)}</p>`; return; }
-    pane.innerHTML = pantalla();
+    pane.innerHTML = pantalla(); afinarIconos(pane);
     if (pane._cn) return; pane._cn = true;
     const msg = (t, mal) => { const e = pane.querySelector('.cn-barra .nb-msg'); if (e) { e.textContent = t || ''; e.classList.toggle('mal', !!mal); } };
-    const repintar = () => { pane.innerHTML = pantalla(); };
+    const repintar = () => { pane.innerHTML = pantalla(); afinarIconos(pane); };
     const aviso = (id, t, mal) => { const e = pane.querySelector(id); if (e) { e.textContent = t || ''; e.classList.toggle('mal', !!mal); } };
     pane.addEventListener('change', (e) => {
       if (!FORM || FORM.paso === 'elegir') return;

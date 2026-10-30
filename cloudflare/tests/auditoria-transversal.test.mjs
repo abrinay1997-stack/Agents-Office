@@ -225,7 +225,7 @@ test('SECRETOS: todo env.X que leen los módulos COMPARTIDOS que importa el Work
   const decl = JSON.parse(readFileSync(join(RAIZ, 'secretos.json'), 'utf8')); const declarados = new Set([...decl.obligatorios, ...decl.opcionales]);
   const wr = readFileSync(join(RAIZ, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''); const vars = new Set(Object.keys(JSON.parse(wr).vars));
   // Bindings de Cloudflare, ganchos de pruebas (siempre funciones: un secreto es un texto), y desvíos de servidor que NO se pueden poner desde los secretos (solo con una variable en wrangler.jsonc, o sea con acceso al despliegue).
-  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
+  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'FETCH_ICONO_CONECTOR', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
   const vistos = new Set(), cola = [resolve(RAIZ, 'worker/index.js')], faltan = {};
   while (cola.length) {
     const f = cola.pop(); if (vistos.has(f)) continue; vistos.add(f); let s; try { s = readFileSync(f, 'utf8'); } catch { continue; }
