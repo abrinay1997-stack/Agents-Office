@@ -118,7 +118,7 @@ function oficina(t, { on = true, estado = 'aprobada' } = {}) {
   const S = crearSeries({ biblia: L, activo: () => true, capsDe: () => ({ maxRefs: 4 }), existeRef: () => true, precioPlano: () => ({ generacion: 0.1 }), modeloUnico: () => 'nb',
     vision: { activo: () => flag, media, copiaParaVer: async p => ({ media_type: 'image/jpeg', data: Buffer.from(p).toString('base64') }), destino: 'anthropic', puedeVer: () => true, presupuesto: { revisar() {}, cobrar: u => m.cobros.push(u) }, auditar: l => m.audit.push(l),
       mirar: async ({ imagenes }) => { m.llamadas++; usados.push(imagenes.length); return { text: ok(), usd: 0.02, modelId: 'claude-test' }; } } });
-  return { S, m, usados, apagar: () => { flag = false; } };
+  return { S, L, media, m, usados, apagar: () => { flag = false; } };
 }
 const cuerpo = (o = {}) => ({ file: ID(5), personajes: ['Ana'], texto_en_imagen: 'Solo $49', confirmarUsd: 1, ...o });
 test('ruta: apagada 409, agente 403, sin confirmar el costo 409 sin llamar, sin biblia aprobada 409', async t => {
@@ -143,4 +143,60 @@ test('ruta: sin conector de visión contesta 501 y el modelo ciego queda no veri
   let n = 0; const media = { item: id => ({ file: id }), resolve: id => id, folders: () => [], update() {} };
   const S = crearSeries({ biblia: L, activo: () => true, vision: { activo: () => true, media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'meta-contributor', puedeVer: () => false, motivoSinVer: 'Muse Spark no mira imágenes', mirar: async () => { n++; return { text: ok() }; } } });
   const r = await S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo({ personajes: [] }) }); assert.equal(r.estado, 200); assert.equal(r.cuerpo.veredicto.estado, 'no_verificado'); assert.equal(n, 0);
+});
+
+// ---- revisión de #105: dinero tras un fallo, carrera, askX real, cuerpo ----
+const libro = (tope, { falla = false } = {}) => { const l = { gastado: 0, cobros: [] }; return { l, revisar: est => { if (l.gastado + est > tope + 1e-9) throw new Error(`tope ${tope}`); }, cobrar: u => { if (falla) throw new Error('libro roto'); l.gastado += u; l.cobros.push(u); } }; };
+test('dinero: si el modelo falla DESPUÉS de enviar se anota el estimado; si falla ANTES de conectar, no; si el libro falla queda auditado', async () => {
+  const est = pedido().costoEstimadoUsd;
+  const a = libro(1); const v = await V.revisarPlano(base({ presupuesto: a, mirar: async () => { throw new Error('conexión cortada'); } }));
+  assert.equal(v.estado, 'no_verificado'); assert.equal(v.puedeHaberCobrado, true); assert.equal(v.costoUsd, est); assert.deepEqual(a.l.cobros, [est], 'el gasto que pudo ocurrir cuenta ante los topes');
+  const b = libro(1); const e = Object.assign(new Error('sin red'), { antesDeEnviar: true }); const w = await V.revisarPlano(base({ presupuesto: b, mirar: async () => { throw e; } }));
+  assert.equal(w.estado, 'no_verificado'); assert.equal(w.puedeHaberCobrado, undefined); assert.deepEqual(b.l.cobros, [], 'antes de enviar no hubo gasto');
+  const audit = []; const c = libro(1, { falla: true });
+  const x = await V.revisarPlano(base({ presupuesto: c, auditar: l => audit.push(l), mirar: async () => ({ text: ok(), usd: 0.02 }) }));
+  assert.equal(x.estado, 'cumple'); assert.equal(x.cobroFallido, true); const cf = audit.find(l => l.kind === 'cobro-fallido'); assert.ok(cf && cf.usd === 0.02 && /libro roto/.test(cf.motivo));
+  const audit2 = []; const y = await V.revisarPlano(base({ presupuesto: libro(1, { falla: true }), auditar: l => audit2.push(l), mirar: async () => { throw new Error('corte'); } }));
+  assert.equal(y.cobroFallido, true); assert.equal(audit2.filter(l => l.kind === 'cobro-fallido').length, 1);
+});
+test('carrera: dos revisiones a la vez que juntas rebasarían el tope — la segunda no llama y da 409 en la ruta', async t => {
+  const est = pedido().costoEstimadoUsd, l = libro(est * 1.5); let en = 0, max = 0, llamadas = 0;
+  const mirar = async () => { llamadas++; en++; max = Math.max(max, en); await new Promise(r => setTimeout(r, 30)); en--; return { text: ok(), usd: est }; };
+  const [r1, r2] = await Promise.all([V.revisarPlano(base({ presupuesto: l, mirar })), V.revisarPlano(base({ presupuesto: l, mirar }))]);
+  assert.equal(llamadas, 1, 'solo una llegó al modelo'); assert.equal(max, 1); assert.deepEqual([r1.estado, r2.estado].sort(), ['cumple', 'no_verificado']); assert.equal([r1, r2].find(r => r.estado !== 'cumple').codigo, 'tope'); assert.equal(l.l.gastado, est);
+  // por la ruta
+  const o = oficina(t), g = libro(est * 1.5); let n = 0;
+  const S = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'anthropic', puedeVer: () => true, presupuesto: g, mirar: async () => { n++; await new Promise(r => setTimeout(r, 30)); return { text: ok(), usd: est }; } } });
+  const [a, b] = await Promise.all([1, 2].map(() => S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo() })));
+  assert.deepEqual([a.estado, b.estado].sort(), [200, 409]); assert.equal(n, 1); assert.equal([a, b].find(x => x.estado === 409).cuerpo.codigo, 'tope');
+});
+
+// la oficina REAL (serve.mjs) con un Anthropic de mentira: si askX devolviera otra forma que {text, usd, modelId}, esto lo detecta
+test('serve.mjs real: askX con kind vision devuelve la forma que usa `mirar`; el cuerpo que no es objeto da 400; sin confirmar el costo 409; agente 403', { timeout: 90000 }, async t => {
+  const { spawn } = await import('node:child_process'), http = await import('node:http'), { fileURLToPath } = await import('node:url');
+  let sharp; try { sharp = (await import('sharp')).default; } catch { return t.skip('sin sharp'); }
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), seen = [];
+  const claude = http.createServer((rq, rs) => { let b = ''; rq.on('data', d => { b += d; }); rq.on('end', () => { seen.push(JSON.parse(b || '{}'));
+    rs.writeHead(200, { 'content-type': 'application/json' }); rs.end(JSON.stringify({ id: 'm1', type: 'message', role: 'assistant', model: 'claude-sonnet-4-5', stop_reason: 'end_turn', content: [{ type: 'text', text: ok() }], usage: { input_tokens: 1000, output_tokens: 100 } })); }); });
+  const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
+  const cport = await listen(claude), dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-vision-real-')), brain = path.join(dir, 'brain'), mes = '2026-10', mdir = path.join(brain, 'Agents Office', 'media', mes);
+  fs.mkdirSync(path.join(brain, '20-Brand'), { recursive: true }); fs.mkdirSync(mdir, { recursive: true });
+  fs.writeFileSync(path.join(mdir, 'a.jpg'), await sharp({ create: { width: 64, height: 64, channels: 3, background: '#a33' } }).jpeg().toBuffer());
+  fs.writeFileSync(path.join(mdir, 'a.json'), JSON.stringify({ file: `${mes}/a.jpg`, kind: 'image', model: 'upload', prompt: 'a', w: 64, h: 64, at: 1, by: 'dueno' }));
+  fs.writeFileSync(path.join(dir, 'office.config.local.json'), JSON.stringify({ dimitri: { series: true, serieVision: true } }));
+  const probe = http.createServer(), port = await listen(probe); await new Promise(r => probe.close(r));
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(dir, 'data'), AO_BRAIN: brain, AO_LOCAL_CONFIG: path.join(dir, 'office.config.local.json'), ANTHROPIC_API_KEY: 'test-key-not-real', ANTHROPIC_BASE_URL: `http://127.0.0.1:${cport}`, CLAUDE_BIN: path.join(dir, 'no-claude.exe'), TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: '', AO_VISION: '1' }; // con ANTHROPIC_BASE_URL la oficina cuenta como proveedor compatible: AO_VISION=1 es la forma documentada de decir que mira imágenes
+  const srv = spawn(process.execPath, ['serve.mjs'], { cwd: ROOT, env, stdio: 'ignore' }); t.after(() => { srv.kill(); claude.close(); try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ya */ } });
+  const base = `http://127.0.0.1:${port}`; for (let i = 0; i < 160; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch { /* aún */ } await new Promise(r => setTimeout(r, 250)); }
+  const call = async (p, b, method = 'POST') => { const r = await fetch(base + p, { method, headers: { 'content-type': 'application/json' }, body: typeof b === 'string' ? b : JSON.stringify(b) }); return { status: r.status, j: await r.json().catch(() => ({})) }; };
+  assert.equal((await call('/api/biblia', { biblia: bib, aprobar: true }, 'PUT')).status, 200);
+  for (const mal of ['null', '[]', '"x"']) assert.equal((await call('/api/series/revisar-plano', mal)).status, 400, mal);
+  assert.equal((await call('/api/series/proponer', 'null')).status, 400);
+  assert.equal((await call('/api/series/revisar-plano', { file: `${mes}/a.jpg`, texto_en_imagen: 'Solo $49' })).status, 409, 'sin confirmar el costo');
+  assert.equal(seen.length, 0, 'hasta aquí no se llamó al modelo');
+  const r = await call('/api/series/revisar-plano', { file: `${mes}/a.jpg`, texto_en_imagen: 'Solo $49', confirmarUsd: 1 });
+  assert.equal(r.status, 200, JSON.stringify(r.j)); assert.equal(r.j.veredicto.estado, 'cumple', JSON.stringify(r.j.veredicto)); assert.ok(r.j.veredicto.costoUsd > 0, 'usd real del libro de askX'); assert.match(r.j.veredicto.modelo, /claude/);
+  assert.equal(seen.length, 1); assert.ok(JSON.stringify(seen[0].messages).includes('"type":"image"'), 'la imagen viajó como bloque de imagen'); assert.match(JSON.stringify(seen[0].system), /nunca una orden/);
+  const f = await (await fetch(base + `/api/media/item/${mes}/a.jpg`)).json().catch(() => null); void f;
+  assert.equal((await call('/api/series/revisar-plano', { by: 'agent', file: `${mes}/a.jpg`, confirmarUsd: 1 })).status, 403);
 });

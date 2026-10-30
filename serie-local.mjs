@@ -55,6 +55,7 @@ export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = (
     const carpetaDe = f => { const fid = f && f.folder; return fid ? (M.folders() || []).find(x => x.id === fid) || null : null; };
     const v = await revisarPlano({ pedido, imagen, refs, ficha, carpeta: carpetaDe(ficha), refsFichas: refIds.map(r => { const f = M.item(r); return { ficha: f, carpeta: carpetaDe(f) }; }),
       activo: true, puedeVer: vision.puedeVer ? vision.puedeVer() : false, motivoSinVer: vision.motivoSinVer, destino: vision.destino, por, presupuesto: vision.presupuesto, auditar: vision.auditar, mirar: vision.mirar });
+    if (v.codigo === 'tope') return err(409, v.motivo, { codigo: 'tope', gasta: false }); // otra revisión (o el día/mes del Estudio) ya llenó el tope: no se llamó a nada
     try { M.update(id, { qa_vision: fichaDeRevision(v, { biblia_version: b.version, ahora: Date.now() }) }); } catch { /* guardar la nota no es lo que importa */ }
     return { estado: 200, cuerpo: { veredicto: v, costoEstimadoUsd: pedido.costoEstimadoUsd, biblia_version: b.version, nota: v.estado === 'cumple' ? 'Cumple lo que se pudo comprobar. Aprobar sigue siendo tuyo.' : 'No está verificado como correcto: queda para tu revisión.' } };
   }

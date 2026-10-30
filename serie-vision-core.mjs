@@ -74,6 +74,8 @@ export function armarPedidoVision({ biblia, hojas = [], plano = {}, nRefs = 0 } 
 
 const noVerificado = (motivo, extra = {}) => ({ estado: 'no_verificado', cumple: null, problemas: [], confianza: 0, motivo: cad(motivo, 240), revision_humana: true, aprueba: false, ...extra });
 export { noVerificado };
+let candado = Promise.resolve();
+const enCandado = f => { const p = candado.then(f, f); candado = p.catch(() => {}); return p; };
 
 const CLAVES = new Set(['cumple', 'problemas', 'confianza', 'texto_leido']);
 const CLAVES_PROBLEMA = new Set(['tipo', 'detalle', 'evidencia']);
@@ -132,15 +134,23 @@ export async function revisarPlano({ pedido, imagen, refs = [], ficha = {}, carp
   if (!imagen?.data || !imagen?.media_type) return noVerificado('no hay imagen que revisar');
   const listaRefs = (Array.isArray(refs) ? refs : []).filter(r => r?.data && r?.media_type).slice(0, MAX_REFS_VISION);
   if (listaRefs.length !== pedido.nRefs) return noVerificado('las referencias que llegaron no son las del pedido');
-  try { presupuesto?.revisar(pedido.costoEstimadoUsd); } catch (e) { return noVerificado(`no cabe en el tope de gasto: ${cad(e?.message, 160)}`); }
-  for (const f of [imagen.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
-  let r;
-  try { r = await mirar({ system: pedido.system, user: pedido.user, imagenes: [imagen, ...listaRefs] }); }
-  catch (e) { return noVerificado(`el modelo de visión falló: ${cad(e?.message, 120)}`, { puedeHaberCobrado: true }); } // un envío sin respuesta pudo cobrarse: se dice
-  const usd = Number.isFinite(Number(r?.usd)) && Number(r.usd) >= 0 ? Number(r.usd) : pedido.costoEstimadoUsd; // sin cifra real, se cuenta el estimado: nunca 0 inventado
-  try { presupuesto?.cobrar(usd); } catch { /* el cobro ya ocurrió: solo se anota abajo */ }
-  const v = leerVeredicto(r?.text, { esperado: pedido.esperado });
-  return { ...v, costoUsd: Math.round(usd * 1e6) / 1e6, modelo: cad(r?.modelId, 60), vision_version: VISION_VERSION };
+  return enCandado(async () => { // de revisar el tope a cobrar: UNA revisión a la vez en este proceso, para que dos peticiones juntas no pasen el mismo chequeo y rebasen el tope
+    try { presupuesto?.revisar(pedido.costoEstimadoUsd); } catch (e) { return noVerificado(`no cabe en el tope de gasto: ${cad(e?.message, 160)}`, { codigo: 'tope' }); }
+    for (const f of [imagen.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
+    // anota lo gastado en el libro del Estudio; si el libro mismo falla, NO se traga: queda una línea `cobro-fallido` con el importe y el resultado lo dice
+    const anotar = usd => { try { presupuesto?.cobrar(usd); return true; } catch (e) { try { auditar({ kind: 'cobro-fallido', usd: Math.round(usd * 1e6) / 1e6, file: String(imagen.file || '').slice(0, 300), motivo: cad(e?.message, 160) }); } catch { /* ya no hay más que hacer: el resultado lleva cobroFallido */ } return false; } };
+    let r;
+    try { r = await mirar({ system: pedido.system, user: pedido.user, imagenes: [imagen, ...listaRefs] }); }
+    catch (e) {
+      if (e?.antesDeEnviar === true) return noVerificado(`el modelo de visión no llegó a recibir la imagen: ${cad(e?.message, 120)}`); // falló ANTES de conectar: no se cobró nada
+      const ok = anotar(pedido.costoEstimadoUsd); // falló DESPUÉS de enviar (o no se sabe): pudo cobrarse; se cuenta el estimado ante los topes diario y mensual
+      return noVerificado(`el modelo de visión falló: ${cad(e?.message, 120)}`, { puedeHaberCobrado: true, costoUsd: pedido.costoEstimadoUsd, ...(ok ? {} : { cobroFallido: true }) });
+    }
+    const usd = Number.isFinite(Number(r?.usd)) && Number(r.usd) >= 0 ? Number(r.usd) : pedido.costoEstimadoUsd; // sin cifra real, se cuenta el estimado: nunca 0 inventado
+    const cobrado = anotar(usd);
+    const v = leerVeredicto(r?.text, { esperado: pedido.esperado });
+    return { ...v, costoUsd: Math.round(usd * 1e6) / 1e6, modelo: cad(r?.modelId, 60), vision_version: VISION_VERSION, ...(cobrado ? {} : { cobroFallido: true }) };
+  });
 }
 
 /** Lo que se guarda en la ficha de la imagen: compacto y sin nada que no haya pasado el escudo. */

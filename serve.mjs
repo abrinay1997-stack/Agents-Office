@@ -3042,7 +3042,9 @@ const server = http.createServer(async (req, res) => {
       if (r) return json(res, r.estado, r.cuerpo);
     }
     if (req.method === 'POST' && (url.pathname === '/api/series/proponer' || url.pathname === '/api/series/revisar-plano')) { // 29 oct 2026 (11.3): PROPONER una serie (no gasta) · 30 oct (11.4): revisar un plano ya generado por visión (flag, dueño y costo confirmado). Generarla es otro paso con el clic del dueño
-      const b = await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024), r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
+      const b = await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024);
+      if (!b || typeof b !== 'object' || Array.isArray(b)) return json(res, 400, { error: 'El cuerpo debe ser un objeto JSON.' });
+      const r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);
     }
     if (url.pathname === '/api/media/describir') { // 29 oct 2026 (11.1): GET = lo descrito y el costo de lo que falta (no gasta) · POST = describir con visión (solo el dueño, con el costo confirmado; apagado por defecto)
