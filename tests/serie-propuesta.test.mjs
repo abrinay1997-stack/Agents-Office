@@ -123,7 +123,7 @@ test('I5 los planos se renumeran: un n repetido o raro no colisiona en la clave 
 test('M1 como mucho 40 planos', () => {
   const r = arma(Array.from({ length: 41 }, (_, i) => plano(i + 1))); assert.equal(r.codigo, 'larga'); assert.ok(arma(Array.from({ length: 40 }, (_, i) => plano(i + 1))).ok);
 });
-test('M3 el enganche de serve.mjs solo atiende POST /api/series/proponer, con cuerpo acotado', () => {
+test('M3 el enganche de serve.mjs solo atiende POST /api/series/proponer y /revisar-plano (11.4), con cuerpo acotado', () => {
   const s = fs.readFileSync(new URL('../serve.mjs', import.meta.url), 'utf8'), i = s.indexOf("url.pathname === '/api/series/proponer'");
-  assert.ok(i > 0); assert.match(s.slice(i - 40, i + 400), /req\.method === 'POST'[\s\S]*body\(req, 128 \* 1024\)/); assert.ok(!s.includes("startsWith('/api/series/')"));
+  assert.ok(i > 0); assert.match(s.slice(i - 40, i + 600), /req\.method === 'POST'[\s\S]*body\(req, url\.pathname === '\/api\/series\/proponer' \? 128 \* 1024 : 16 \* 1024\)/); assert.ok(!s.includes("startsWith('/api/series/')"));
 });
