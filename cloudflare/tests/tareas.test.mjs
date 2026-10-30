@@ -262,7 +262,7 @@ test('el reloj: lo programado pasa a la cola en su minuto, los avisos de fecha l
   await TAREAS.cadaMinuto(o.env);
   const n = (await cargarTareas(o.d1))[0]; assert.deepEqual([n.state, n.late, n.due], ['next', true, n.dueAt]);
   // fecha límite: la víspera, una sola vez
-  const l = (await o.api('POST', '/api/tareas/mias', { title: 'Declaración', limite: dia(Date.now() + 864e5) })).j.tarea;
+  const l = (await o.api('POST', '/api/tareas/mias', { title: 'Declaración', limite: dia(Date.now() + 864e5, 'America/Panama') })).j.tarea;
   const C = { nombreAgente: id => id };
   for (let i = 0; i < 2; i++) await conSesion(o.d1, async s => { TAREAS.avisarLimites(s, C, Date.now()); });
   const av = o.d1._db.prepare("select json from filas where coleccion = 'avisos'").all().map(x => JSON.parse(x.json)).filter(a => a.kind === 'limite');
