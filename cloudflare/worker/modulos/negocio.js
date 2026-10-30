@@ -14,7 +14,7 @@ import * as documents from '../../../documents-core.mjs';
 import * as knowledge from '../../../knowledge.mjs';
 import { leerCfg } from '../lib/ajustes.js';
 import { leerKpis, registrarKpi, cambiarKpi, panelNegocio, leerCifras, guardarCifras, leerPorConfirmar, resolverPorConfirmar, leerVoz, guardarVoz } from '../lib/negocio.js';
-import { tokenValido, tokenDe, tasaPublica, leerConTope } from '../lib/publica.js';
+import { origenToken, tokenEnQueryPermitido, contarTokenQuery, conAvisoDeprecacion, tasaPublica, leerConTope } from '../lib/publica.js';
 import { guardarNotas } from '../lib/cerebro.js';
 import { leerDoc, guardarDoc } from '../lib/almacen.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
@@ -28,12 +28,22 @@ const MAX_KPI_BYTES = 16 * 1024, MAX_KPI_POR_MINUTO = 60;
 const MAX_DOC_BASE64 = 22 * 1024 * 1024; // lo que pesa en JSON un archivo de 15 MB
 
 /* ---------- el webhook de un indicador (público, con su propio secreto) ---------- */
-export async function publica({ req, env, db, url, ruta }) {
+export async function publica(ctx) {
+  const aviso = { query: false };
+  const res = await publicaInterna(ctx, aviso);
+  return aviso.query ? conAvisoDeprecacion(res) : res;
+}
+async function publicaInterna({ req, env, db, url, ruta }, aviso) {
   const m = /^\/api\/kpi\/([a-z][a-z0-9_]{1,40})$/.exec(ruta);
   if (!m) return null;
   if (req.method !== 'POST') return json({ error: 'POST' }, 405);
   // 1) el secreto, antes de nada: sin él no se abre el cuerpo ni se toca D1
-  if (!tokenValido(tokenDe(req, url), env.AO_HOOK_TOKEN)) return json({ error: 'token incorrecto o falta AO_HOOK_TOKEN' }, 401);
+  const via = origenToken(req, url, env.AO_HOOK_TOKEN);
+  if (via === null) return json({ error: 'token incorrecto o falta AO_HOOK_TOKEN' }, 401);
+  if (via === 'query') { // el secreto en la dirección: solo con `hooks.tokenEnQuery` (encendido por defecto); se cuenta y la respuesta avisa
+    if (!(await tokenEnQueryPermitido(db))) return json({ error: 'el token en la dirección (?token=) ya no se acepta: mándalo en la cabecera X-Office-Token o Authorization: Bearer' }, 401);
+    aviso.query = true; await contarTokenQuery(db, 'kpi');
+  }
   // 2) un tope por minuto
   if (!(await tasaPublica(db, 'kpi', MAX_KPI_POR_MINUTO)).ok) return json({ error: `demasiadas peticiones por minuto (${MAX_KPI_POR_MINUTO})` }, 429);
   // 3) el cuerpo, con tope
