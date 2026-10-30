@@ -13,10 +13,11 @@ export const u2usd = u => +(u / 1e6).toFixed(6);
 const pos = x => Math.max(0, usd2u(x));
 const cfg = c => ({ ...CONFIG_SERIE, ...(c || {}) });
 
-// Costo de un plano en micro-USD. Máximo = lo peor que el proveedor puede cobrar: (generación + QA) por cada intento, más edición y visión una vez.
+// Costo de un plano en micro-USD. Máximo = lo peor que el proveedor puede cobrar: (generación + QA + VISIÓN) por cada intento (cada intento se revisa), más la
+// edición con su propia revisión de visión (11.4: lo mostrado incluye la visión), y la descripción una vez.
 export function costoPlano(p, { reintentos = 0 } = {}) {
-  const veces = 1 + Math.max(0, reintentos | 0);
-  return (pos(p?.generacion) + pos(p?.qa)) * veces + pos(p?.edicion) + pos(p?.vision) + pos(p?.descripcion);
+  const veces = 1 + Math.max(0, reintentos | 0), vision = pos(p?.vision), edicion = pos(p?.edicion);
+  return (pos(p?.generacion) + pos(p?.qa) + vision) * veces + edicion + (edicion > 0 ? vision : 0) + pos(p?.descripcion);
 }
 export const costoMaximoPlano = (p, c) => costoPlano(p, { reintentos: cfg(c).reintentosMax });
 export function estimarSerie(precios, c) { // precios: un objeto por plano {generacion, edicion, vision, qa, descripcion} (USD)
