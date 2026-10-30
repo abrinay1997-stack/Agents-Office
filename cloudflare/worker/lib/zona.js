@@ -12,6 +12,7 @@
 // Qué cambia: new Date('AAAA-MM-DDTHH:MM[:SS]') o 'AAAA-MM-DD HH:MM' (sin zona), new Date(y, m, d, h, mi…), Date.parse de esos mismos textos, los get*/set* «locales»
 // y toLocale*String (en la zona). Qué NO cambia: Date.now(), getTime(), toISOString(), los getUTC*, new Date(ms), 'AAAA-MM-DD' (UTC, como en JS) y las fechas con zona
 // explícita (…Z, …+05:00). `Date()` llamado como función y `x instanceof Date` siguen funcionando (el global es un Proxy de la clase).
+import { fijarZona } from '../../../tareas/etiqueta-dia.mjs'; // `dia(ms)` de tareas/ sin zona usa la de esa pieza: tiene que ser la de la oficina, no UTC
 const Real = globalThis.Date;
 export const ZONA_POR_DEFECTO = 'America/Panama';
 export { Real as DateReal };
@@ -109,6 +110,7 @@ export const zonaActual = () => ESTADO.zona;
 export function instalarZona(zona = ZONA_POR_DEFECTO) {
   if (!zonaValida(zona)) zona = ZONA_POR_DEFECTO; // una zona que no existe no tumba nada
   ESTADO.zona = zona;
+  fijarZona(zona); // sin esto, `dia(Date.now())` daba la fecha UTC (un día adelante de 19:00 a 24:00 en Panamá) mientras el resto leía la hora de la oficina
   if (ESTADO.instalada || globalThis.Date.__zonaOficina) return zona;
   globalThis.Date = comoGlobal(crearDateDeZona(() => ESTADO.zona));
   ESTADO.instalada = true;
