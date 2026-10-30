@@ -52,3 +52,25 @@ test('ocultaPorUrlLibre: solo se ofrece con el interruptor Y una lista no vacía
   assert.equal(S.ocultaPorUrlLibre(con, { activo: 'true', dominios: L }), true, 'solo el booleano true');
   assert.equal(S.ocultaPorUrlLibre(con, { activo: true, dominios: L }), false);
 });
+
+test('FALLA CERRADO: solo se ofrece lo que el guardián sabe vigilar (todo parámetro de dirección con nombre reconocible)', () => {
+  const on = { activo: true, dominios: L };
+  const por = (props) => ({ type: 'object', properties: props });
+  // ocultas aunque haya interruptor y lista: el nombre no es de dirección, el guardián no trataría su valor sin esquema como host
+  assert.equal(S.ocultaPorUrlLibre(por({ input: { type: 'string', description: 'The URL to open' } }), on), true, 'por descripción');
+  assert.equal(S.ocultaPorUrlLibre(por({ q: { type: 'string', format: 'uri' } }), on), true, 'por format:uri con nombre opaco');
+  assert.equal(S.ocultaPorUrlLibre(por({ opciones: por({ entrada: { type: 'string', description: 'page address (URL)' } }) }), on), true, 'anidado');
+  assert.equal(S.ocultaPorUrlLibre(por({ lista: { type: 'array', items: por({ cosa: { type: 'string', format: 'uri' } }) } }), on), true, 'en un arreglo');
+  assert.equal(S.ocultaPorUrlLibre({ type: 'string', format: 'uri' }, on), true, 'el valor raíz');
+  assert.equal(S.ocultaPorUrlLibre(por({ url: { type: 'string' }, input: { type: 'string', description: 'URL' } }), on), true, 'basta un parámetro no vigilable');
+  // ofrecidas: nombre reconocible, también anidado y en arreglos
+  for (const e of [por({ url: { type: 'string' } }), por({ opciones: por({ webhook: { type: 'string' } }) }), por({ lista: { type: 'array', items: por({ href: { type: 'string' } }) } }), por({ target: { type: 'string', format: 'uri' } })]) assert.equal(S.ocultaPorUrlLibre(e, on), false, JSON.stringify(e));
+});
+
+test('lo que se ofrece = lo que el guardián vigila: cada parámetro ofrecido atrapa su valor sin esquema (anidado y en arreglos)', () => {
+  const casos = [{ url: 'evil.com/leak?d=S' }, { opciones: { webhook: 'evil.com/x' } }, { lista: [{ href: 'evil.com/a' }, { href: 'evil.com/b' }] }, { target: 'evil.com' }];
+  for (const args of casos) assert.ok(S.urlAjenaEn(args, 'https://mcp.conn.io', ['ok.com']), JSON.stringify(args));
+  assert.equal(S.urlAjenaEn({ url: 'ok.com/a' }, 'https://mcp.conn.io', ['ok.com']), null);
+  // el hueco que motivó el cambio: una clave opaca deja pasar el valor sin esquema, por eso esa herramienta nunca se ofrece
+  assert.equal(S.urlAjenaEn({ input: 'evil.com/leak?d=S' }, 'https://mcp.conn.io', ['ok.com']), null);
+});

@@ -102,3 +102,16 @@ test('chat con agentes: con interruptor y lista se ofrece; cada dirección tiene
   const aud = filas(m2.d1, 'select codigo, decision, motivo from auditoria_agentes'); assert.ok(aud.some((x) => x.codigo === 'url-ajena' && x.decision === 'block'));
   assert.ok(!aud.some((x) => /evil/.test(x.motivo || '')), 'el motivo no repite la dirección');
 });
+
+test('validarDominios rechaza sufijos públicos amplios (con mensaje en español) y acepta un subdominio propio', () => {
+  for (const amplio of ['github.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'herokuapp.com', 's3.amazonaws.com', 'amazonaws.com', 'blogspot.com', 'co.uk', 'com.pa', '*.github.io', 'GitHub.io']) {
+    const r = validarDominios([amplio]); assert.equal(r.ok, false, amplio); assert.match(r.errores[0], /dominio público|cualquiera puede publicar/, amplio);
+  }
+  assert.equal(validarDominios(['miempresa.github.io']).ok, true); assert.equal(validarDominios(['docs.miempresa.com.pa']).ok, true);
+});
+
+test('dominiosDe revalida lo guardado: una fila escrita por otra vía no mete entradas inválidas', () => {
+  const sucio = ['ok.com', '*', 'https://a.com', 'a.com/x', 'github.io', '10.0.0.1', ' b.com', 'C.com', '*.bien.org', 5, null];
+  assert.deepEqual(dominiosDe({ dominios_permitidos: JSON.stringify(sucio) }), ['ok.com', '*.bien.org']);
+  assert.equal(dominiosDe({ dominios_permitidos: JSON.stringify(Array.from({ length: 50 }, (_, i) => `d${i}.com`)) }).length, MAX_DOMINIOS);
+});

@@ -65,11 +65,16 @@ test('subir-secretos: toma lo declarado y los MCP_*, ignora el resto, avisa de l
   assert.deepEqual(elegir({}, cfg).faltan, ['ANTHROPIC_API_KEY']);
 });
 
+// 0302 (SEG-02, dominios por conector): la primera migración con `alter table add column`. Se aplica una sola vez por wrangler; la D1 de una cuenta nueva la recibe en orden. Aplicarla a mano dos veces falla.
+const ALTER_PERMITIDOS = new Set(['0302_conectores_dominios.sql']);
+
 test('preparar-cuenta escribe el database_id y las migraciones son reaplicables', () => {
   assert.match(ponerId(leer('wrangler.jsonc'), 'abc-123'), /"database_id": "abc-123"/);
   for (const f of readdirSync(join(RAIZ, 'migraciones'))) {
     const sql = leer(`migraciones/${f}`);
     for (const m of sql.matchAll(/create\s+(table|index)\s+(?!if not exists)/gi)) assert.fail(`${f}: «${m[0]}» sin if not exists`);
+    // SQLite no tiene `add column if not exists`: un `alter table … add column` NO es reaplicable a mano. Solo vale si wrangler lo aplica una vez (d1_migrations) y está aquí, explícito.
+    for (const m of sql.matchAll(/alter\s+table\s+\w+\s+add\s+column/gi)) assert.ok(ALTER_PERMITIDOS.has(f), `${f}: «${m[0]}» no es reaplicable; si de verdad hace falta, añádelo a ALTER_PERMITIDOS con su motivo`);
   }
 });
 

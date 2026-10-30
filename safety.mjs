@@ -215,8 +215,15 @@ export function parametrosUrl(schema, hondo = 0, ruta = '') {
   return out;
 }
 export const esquemaConUrlLibre = schema => parametrosUrl(schema).length > 0;
-/** SEG-02: ¿se oculta una herramienta con parámetro de dirección? Sí, salvo que el dueño encendiera `safety.dominiosPorConector` Y el conector tenga una lista no vacía (entonces el guardián obliga a que cada dirección caiga en ella). */
-export const ocultaPorUrlLibre = (schema, { activo = false, dominios = [] } = {}) => esquemaConUrlLibre(schema) && !(activo === true && Array.isArray(dominios) && dominios.length > 0);
+/** SEG-02: ¿se oculta una herramienta con parámetro de dirección? Sí, salvo que el dueño encendiera `safety.dominiosPorConector` Y el conector tenga una lista no vacía.
+ *  Aun así, FALLA CERRADO: solo se ofrece si TODOS sus parámetros de dirección son reconocibles por el guardián (`urlAjenaEn` solo trata como host un valor sin esquema cuando la clave pasa `clavesUrl`).
+ *  Un parámetro marcado por `format: uri` o por su descripción pero con un nombre que no parece de dirección («input», «q») se sigue ocultando: el guardián no lo vigilaría. */
+export const ocultaPorUrlLibre = (schema, { activo = false, dominios = [] } = {}) => {
+  const ps = parametrosUrl(schema);
+  if (!ps.length) return false;
+  if (!(activo === true && Array.isArray(dominios) && dominios.length > 0)) return true;
+  return ps.some(p => { const ult = String(p.nombre).split('.').pop(); return !clavesUrl(ult); });
+};
 /** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
  *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
  *  una barra de ancho completo— cuenta como ajeno. → el host (o un trozo) ajeno, o null. */
