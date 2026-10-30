@@ -82,10 +82,10 @@ test('3 · el token: inválido (no quema el bueno), sin pedirlo antes, ya usado 
   assert.equal(confirmar(p, v.cuerpo.confirmar).estado, 200, 'y con el nuevo sí');
 });
 
-test('3b · un token usado no sirve otra vez aunque la serie vuelva a estar pausada y sin nada en el aire', async t => {
+test('3b · un token ya gastado no sirve otra vez aunque la serie vuelva a estar pausada y sin nada en el aire', async t => {
   const o = montar(t); const c = pedir(o); assert.equal(confirmar(o, c).estado, 200); await ticks(o); o.est.activo = false; o.E.ok('j0'); await ticks(o); o.est.activo = true; // el plano 1 queda liquidado y no arranca otro
   o.A.actualizar(o.id, y => ({ ...y, estado: 'pausado', autorizado: null, pausa_motivo: 'x' }));
-  const re = confirmar(o, c); assert.equal(re.estado, 409); assert.equal(re.cuerpo.codigo, 'usado', 'ese token ya se usó'); assert.equal(re.cuerpo.confirmar, undefined); assert.equal(o.E.enviados.length, 1);
+  const re = confirmar(o, c); assert.equal(re.estado, 409); assert.equal(re.cuerpo.codigo, 'token', 'pausar borró el token: ese ya no existe y no recibe uno nuevo'); assert.equal(re.cuerpo.confirmar, undefined); assert.equal(o.E.enviados.length, 1);
 });
 
 test('4 · si cambia el hash, el costo, un tope o el modo entre la cifra y el clic: 409 con la cifra nueva y otro token; nunca gasta por la vieja', async t => {
@@ -211,11 +211,12 @@ test('15 · cancelar: lo que va en el aire se pide cancelar al Estudio, se liqui
   assert.equal(p.A.uno(p.id).libro.lineas[`${p.id}:1:1`].estado, 'liquidado', 'si el trabajo SÍ terminó, se liquida lo real'); assert.equal(p.E.enviados.length, 1); assert.equal(p.G.generar({ id: p.id }).estado, 409);
 });
 
-test('16 · apagar el flag detiene la bomba (lo del aire solo se liquida); cambiar la escaleta tras autorizar pausa; un plano sin modelo o sin referencia no se envía', async t => {
+test('16 · apagar el flag PAUSA la serie (lo del aire solo se liquida) y volver a encenderlo no la reanuda sola; cambiar la escaleta tras autorizar pausa; un plano sin modelo o sin referencia no se envía', async t => {
   const o = montar(t, { n: 3 }); autorizar(o, 'todo'); await ticks(o); o.est.activo = false; await terminarUno(o); await ticks(o, 3);
-  assert.equal(o.E.enviados.length, 1); assert.equal(vista(o).escaleta[0].estado, 'listo', 'lo del aire se liquidó'); assert.equal(vista(o).estado, 'corriendo');
-  o.est.activo = true; o.A.actualizar(o.id, y => { y.escaleta[1].prompt_exacto += ' cambiado a escondidas'; return y; }); await ticks(o, 2);
-  assert.equal(vista(o).estado, 'pausado'); assert.match(vista(o).pausa_motivo, /escaleta cambió/); assert.equal(o.E.enviados.length, 1, 'la autorización era de OTRA escaleta');
+  assert.equal(o.E.enviados.length, 1); assert.equal(vista(o).escaleta[0].estado, 'listo', 'lo del aire se liquidó'); assert.equal(vista(o).estado, 'pausado'); assert.match(vista(o).pausa_motivo, /se apagó/); assert.equal(vista(o).autorizado, null);
+  o.est.activo = true; await ticks(o, 3); assert.equal(o.E.enviados.length, 1, 'encender el flag no reanuda con la autorización vieja: hace falta otro clic');
+  const e = montar(t, { n: 3 }); autorizar(e, 'todo'); e.A.actualizar(e.id, y => { y.escaleta[1].prompt_exacto += ' cambiado a escondidas'; return y; }); await ticks(e, 2);
+  assert.equal(vista(e).estado, 'pausado'); assert.match(vista(e).pausa_motivo, /escaleta cambió/); assert.equal(e.E.enviados.length, 0, 'la autorización era de OTRA escaleta');
   const p = montar(t, { n: 2, extra: { capsDe: () => null } }); autorizar(p, 'todo'); await ticks(p); assert.equal(p.E.enviados.length, 0); assert.equal(p.A.uno(p.id).escaleta[0].estado, 'revisar'); assert.equal(p.A.uno(p.id).estado, 'pausado');
   const q = montar(t, { n: 2, extra: { existeRef: () => false }, planos: [plano(1, { refs: ['2026-10/perdida.png'] }), plano(2)] }); autorizar(q, 'todo'); await ticks(q); assert.equal(q.E.enviados.length, 0); assert.match(q.A.uno(q.id).escaleta[0].motivo || '', /ya no está en la galería/);
 });

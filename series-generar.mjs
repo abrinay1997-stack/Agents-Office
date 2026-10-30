@@ -193,7 +193,11 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
 
   let enCurso = null, timer = null;
   async function avanzar() {
-    if (!activo() || enVuelo() >= concurrencia) return;
+    if (!activo()) { // apagar el flag PAUSA lo que corría (sin plano en el aire): al volver a encenderlo no se reanuda con una autorización vieja, hace falta otro clic
+      for (const x of almacen.todas()) if ((x.estado === 'muestra' || x.estado === 'corriendo') && !x.escaleta.some(p => p.estado === 'corriendo')) pausar(x.id, 'generar series se apagó (dimitri.serieGenerar): vuelve a pedir el clic para seguir');
+      return;
+    }
+    if (enVuelo() >= concurrencia) return;
     // una serie con la muestra lista espera TU decisión: no debe quitarle el turno a las demás
     const s = almacen.todas().filter(x => x.estado === 'corriendo' || (x.estado === 'muestra' && !x.muestra_lista)).sort((a, b) => a.creada - b.creada)[0]; if (!s) return;
     const sinPrevistos = !s.escaleta.some(p => p.estado === 'previsto');
