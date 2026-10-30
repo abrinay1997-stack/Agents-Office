@@ -333,7 +333,8 @@ test('20 · serve.mjs real: con el flag apagado generar da 409; la oficina se ca
     f = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return s.estado === 'hecho' ? s : null; }, 60000);
   }
   assert.equal(f.estado, 'hecho'); assert.equal(f.progreso.listos, 12); assert.ok(f.escaleta.every(q => q.versiones.length === 1), 'cada plano tiene UNA sola versión tras el reinicio');
-  const hechos = (await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id && j.state === 'done').flatMap(j => j.items); assert.equal(new Set(hechos).size, 12, 'doce imágenes distintas, ninguna repetida'); assert.ok(!JSON.stringify(f).includes('.svg'), 'la vista no expone nombres de archivo');
+  const jobs = (await o.call('/api/media/jobs')).j.jobs, hechos = jobs.filter(j => j.serie?.id === id && j.state === 'done').flatMap(j => j.items);
+  assert.equal(new Set(hechos).size, 12, 'doce imágenes distintas, ninguna repetida'); assert.ok(!JSON.stringify(f).includes('.svg'), 'la vista no expone nombres de archivo');
 });
 
 test('21 · tras un reinicio se RECONCILIA pero NO se lanza nada nuevo: la serie pasa a pausada con motivo y pide un clic nuevo; y una autorización caduca a las 6 h aunque no haya reinicio (reloj inyectado)', async t => {

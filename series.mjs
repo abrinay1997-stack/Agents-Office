@@ -18,7 +18,8 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
   if (!archivo || typeof renombrar !== 'function') throw new Error('el almacén de series necesita archivo y renombrar');
   let D = null, bloqueo = null; // bloqueo: no se pudo apartar un archivo roto; NO se escribe encima (falla cerrado)
   const plano = o => !!o && typeof o === 'object' && !Array.isArray(o), valida = s => plano(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta) && s.escaleta.every(plano) && typeof s.estado === 'string';
-  const normalizar = s => ({ ...s, intentos: plano(s.intentos) ? s.intentos : {}, pasos: plano(s.pasos) ? s.pasos : {}, fallos: plano(s.fallos) ? s.fallos : {}, libro: plano(s.libro) && plano(s.libro.lineas) ? s.libro : null, escaleta: s.escaleta.map(p => ({ ...p, versiones: Array.isArray(p.versiones) ? p.versiones : [], refs: Array.isArray(p.refs) ? p.refs : [] })) }); // una serie malformada no puede hacer lanzar a la bomba en cada tick
+  const normalizar = s => ({ ...s, intentos: plano(s.intentos) ? s.intentos : {}, pasos: plano(s.pasos) ? s.pasos : {}, fallos: plano(s.fallos) ? s.fallos : {}, libro: plano(s.libro) && plano(s.libro.lineas) ? s.libro : null,
+    escaleta: s.escaleta.map(p => ({ ...p, versiones: Array.isArray(p.versiones) ? p.versiones : [], refs: Array.isArray(p.refs) ? p.refs : [] })) }); // una serie malformada no puede hacer lanzar a la bomba en cada tick
   const apartar = motivo => { try { fs.copyFileSync(archivo, `${archivo}.roto-${ahora()}`); } catch (e) { bloqueo = `${motivo}, y no se pudo apartar una copia (${e.code || e.message}): no se escribe encima de ${path.basename(archivo)}`; console.warn('series:', bloqueo); } };
   const cargar = () => {
     if (D) return D;

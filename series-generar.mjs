@@ -60,7 +60,9 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
   }
   const textoConfirmar = (s, c) => {
     const n = c.etapa.length, r = c.reintentos, s2 = r === 1 ? '' : 's';
-    return `Generar ${n} plano${n === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}; incluye hasta ${r} reintento${s2} por plano en los motores gratis: en uno de pago un fallo dudoso no se repite solo, se pausa).${c.inciertos ? ` OJO: hay ${c.inciertos} paso${c.inciertos === 1 ? '' : 's'} incierto${c.inciertos === 1 ? '' : 's'} que pudo${c.inciertos === 1 ? '' : 'ieron'} cobrarse y el tope diario y mensual del Estudio no lo ve: decídelo(s) antes.` : ''}`;
+    const base = `Generar ${n} plano${n === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}; incluye hasta ${r} reintento${s2} por plano en los motores gratis: en uno de pago un fallo dudoso no se repite solo, se pausa).`;
+    const k = c.inciertos, pl = k === 1 ? '' : 's';
+    return base + (k ? ` OJO: hay ${k} paso${pl} incierto${pl} que pudo${k === 1 ? '' : 'ieron'} cobrarse y el tope diario y mensual del Estudio no lo ve: decídelo${pl === '' ? '' : 's'} antes.` : '');
   };
   function emitir(s, c, modo) {
     const reg = { ...emitirToken({ serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoMostrado: c.costoUsd, ahora: ahora(), nonce: nonce(), ttlMs }), modo, topeMesUsd: c.topeMesUsd, estudio: c.estudio };

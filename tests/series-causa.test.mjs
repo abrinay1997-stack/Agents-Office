@@ -53,7 +53,8 @@ function generador(t, { pago, n = 3 }) {
   const ID = `serie-c${++uid}`;
   const A = crearAlmacen({ archivo: path.join(fs.mkdtempSync(path.join(dir, 's-')), 's.json'), renombrar: fs.renameSync }), est = { t: 1e6, k: 0 };
   const M = { submit: media.submit, job: media.job, jobs: media.jobs, cancel: media.cancel, checkBudget: media.checkBudget, budget: media.budget, models: () => media.models().map(m => ({ ...m, engine: pago ? 'pagado' : m.engine })) };
-  const G = crearGenerador({ almacen: A, media: M, biblia: { leer: () => aprobada }, capsDe: () => ({ maxRefs: 4 }), precioPlano: () => ({ generacion: 0.1, ...(pago ? {} : {}) }), activo: () => true, ahora: () => est.t, nonce: () => 'n'.repeat(15) + (++est.k), hoy: () => '2026-10-30', intervalo: 10 });
+  const G = crearGenerador({ almacen: A, media: M, biblia: { leer: () => aprobada }, capsDe: () => ({ maxRefs: 4 }), precioPlano: () => ({ generacion: 0.1 }), activo: () => true,
+    ahora: () => est.t, nonce: () => 'n'.repeat(15) + (++est.k), hoy: () => '2026-10-30', intervalo: 10 });
   const p = P.armarPropuesta({ brief: { titulo: 'S' }, planos: Array.from({ length: n }, (_, i) => plano(i + 1)), biblia: aprobada, hojas: [], ctx: { id: ID, capsDe: () => ({ maxRefs: 4 }), existeRef: () => true, precioPlano: () => ({ generacion: 0.1 }), modeloUnico: modelo.id } });
   A.crear(p.serie); const c = G.generar({ id: ID, modo: 'todo' }).cuerpo.confirmar; assert.equal(G.generar({ id: ID, modo: 'todo', confirmacion: c.token, costoMostradoUsd: c.costoMostradoUsd }).estado, 200);
   return { G, A, ID, linea: () => Object.values(A.uno(ID).libro.lineas)[0], serie: () => A.uno(ID), trabajos: () => media.jobs().filter(j => j.serie?.id === ID) };
