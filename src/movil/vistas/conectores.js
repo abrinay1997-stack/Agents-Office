@@ -90,7 +90,7 @@ export function registrar(shell) {
       async function anadir(editar) {
         let plantillas = [];
         try { const j = await ctx.api('/api/conectores/plantillas'); plantillas = j.plantillas || []; if (j.cifrado !== undefined) cifrado = !!j.cifrado; } catch (e) { ctx.toast('No se pudo abrir: ' + e.message); return; }
-        const F = editar ? { paso: 'datos', existente: true, nombre: editar.nombre, plantilla: editar.plantilla || 'otro', etiqueta: editar.etiqueta || '', url: '', urlVisible: editar.url, auth: editar.auth_tipo, cabecera: editar.cabecera || '', donde: editar.secreto ? 'secreto' : cifrado ? 'aqui' : 'secreto', secreto: editar.secreto || '', token: '', tokenGuardado: editar.tokenGuardado, departamentos: [...(editar.departamentos || [])], tools: [...editar.herramientas_lectura.map(n => ({ name: n, tipo: 'lectura' })), ...editar.herramientas_envio.map(n => ({ name: n, tipo: 'envio' }))], marcadas: new Set([...editar.herramientas_lectura, ...editar.herramientas_envio]) } : { paso: 'elegir' };
+        const F = editar ? { paso: 'datos', existente: true, nombre: editar.nombre, plantilla: editar.plantilla || 'otro', etiqueta: editar.etiqueta || '', url: '', urlVisible: editar.url, auth: editar.auth_tipo, cabecera: editar.cabecera || '', donde: editar.secreto ? 'secreto' : cifrado ? 'aqui' : 'secreto', secreto: editar.secreto || '', token: '', tokenGuardado: editar.tokenGuardado, departamentos: [...(editar.departamentos || [])], dominios: (editar.dominios_permitidos || []).join('\n'), tools: [...editar.herramientas_lectura.map(n => ({ name: n, tipo: 'lectura' })), ...editar.herramientas_envio.map(n => ({ name: n, tipo: 'envio' }))], marcadas: new Set([...editar.herramientas_lectura, ...editar.herramientas_envio]) } : { paso: 'elegir' };
         const hj = ctx.hoja({ titulo: editar ? 'Editar conector' : 'Añadir conector', lleno: true, clase: 'mv-cx-form', cuerpo: '<div id="mvCxF"></div>', acciones: [{ texto: 'Probar conexión', alTocar: (hh, b) => probarForm(b) }, { texto: 'Guardar conector', tipo: 'primario', alTocar: (hh, b) => guardarForm(hh, b) }] });
         const cu = hj.cuerpo.querySelector('#mvCxF'), [bProbar, bGuardar] = hj.acciones();
         const plant = () => plantillas.find(p => p.id === F.plantilla) || plantillas.at(-1) || { id: 'otro', nombre: 'Otro', auth: 'bearer', pista: '' };
@@ -109,6 +109,7 @@ export function registrar(shell) {
               <div class="mv-cm" id="cxAqui"${F.donde === 'aqui' ? '' : ' hidden'}><label class="mv-lab" for="cxToken">Token</label><input id="cxToken" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="${ed && F.tokenGuardado ? '••• guardado (escribe uno nuevo para cambiarlo)' : 'Pégalo aquí'}"></div>
               <div class="mv-cm" id="cxSec"${F.donde === 'secreto' ? '' : ' hidden'}><label class="mv-lab" for="cxSecN">Nombre del secreto</label><input id="cxSecN" maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="MCP_${esc(slugConector(F.etiqueta || p.nombre).toUpperCase().replace(/-/g, '_').slice(0, 20))}_TOKEN" value="${esc(F.secreto)}"></div></div>
             <fieldset class="mv-cm mv-checks"><legend class="mv-lab">Departamentos que lo usan</legend><div class="mv-chk-g">${Object.entries(DEPT).map(([k, t]) => `<label class="mv-chk"><input type="checkbox" name="cxDep" value="${k}"${F.departamentos.includes(k) ? ' checked' : ''}><span>${t}</span></label>`).join('')}</div></fieldset>
+            <div class="mv-cm"><label class="mv-lab" for="cxDominios">Dominios que puede consultar</label><textarea id="cxDominios" rows="3" maxlength="900" autocapitalize="none" spellcheck="false" placeholder="ejemplo.com">${esc(F.dominios || '')}</textarea><small>Uno por línea (ejemplo.com o *.ejemplo.com). Vacío = ninguno. Solo cuenta si el dueño enciende «Dominios por conector» en Ajustes → Seguridad. Lista corta y solo dominios propios de confianza: un dominio que deja subir o publicar texto sirve para sacar datos por la dirección.</small></div>
             <p class="mv-aviso" id="cxMsg" role="status" aria-live="polite" hidden></p><div id="cxTools">${herr()}</div>`;
         }
         const herr = () => {
@@ -121,7 +122,7 @@ export function registrar(shell) {
           const q = s => cu.querySelector(s);
           F.etiqueta = q('#cxEt')?.value ?? F.etiqueta; if (q('#cxUrl')) F.url = q('#cxUrl').value.trim();
           F.auth = cu.querySelector('input[name=cxAuth]:checked')?.value || F.auth; F.cabecera = q('#cxCabN')?.value || ''; F.donde = cu.querySelector('input[name=cxDonde]:checked')?.value || F.donde;
-          F.secreto = q('#cxSecN')?.value.trim() || ''; F.token = q('#cxToken')?.value || ''; F.departamentos = [...cu.querySelectorAll('input[name=cxDep]:checked')].map(x => x.value);
+          F.secreto = q('#cxSecN')?.value.trim() || ''; F.token = q('#cxToken')?.value || ''; F.departamentos = [...cu.querySelectorAll('input[name=cxDep]:checked')].map(x => x.value); F.dominios = q('#cxDominios')?.value ?? F.dominios ?? '';
         };
         const decir = (t, mal) => { const m = cu.querySelector('#cxMsg'); if (m) { m.hidden = !t; m.textContent = t || ''; m.className = 'mv-aviso' + (mal ? ' malo' : ''); if (t) m.scrollIntoView({ block: 'nearest' }); } };
         async function probarForm(b) {
@@ -135,7 +136,7 @@ export function registrar(shell) {
           leer();
           if (!F.existente) F.nombre = slugConector(F.etiqueta || plant().nombre || 'conector', (ext || []).map(c => c.nombre));
           if (!F.tools && !F.confirmoSin) { F.confirmoSin = true; decir('Mejor toca «Probar conexión» primero para elegir qué herramientas se permiten. Si prefieres guardarlo sin herramientas, toca «Guardar conector» otra vez.', true); return; }
-          const body = { nombre: F.nombre, etiqueta: F.etiqueta || undefined, plantilla: F.plantilla === 'otro' ? undefined : F.plantilla, auth_tipo: F.auth, cabecera: F.auth === 'cabecera' ? F.cabecera : undefined, departamentos: F.departamentos };
+          const body = { nombre: F.nombre, etiqueta: F.etiqueta || undefined, plantilla: F.plantilla === 'otro' ? undefined : F.plantilla, auth_tipo: F.auth, cabecera: F.auth === 'cabecera' ? F.cabecera : undefined, departamentos: F.departamentos, dominios_permitidos: String(F.dominios || '').split('\n').map(x => x.trim()).filter(Boolean) };
           if (F.url) body.url = F.url;
           if (F.auth !== 'ninguna') { if (F.donde === 'secreto' && F.secreto) body.secreto = F.secreto; else if (F.token) body.token = F.token; }
           const t = F.tools || []; body.herramientas_lectura = t.filter(h => h.tipo === 'lectura' && F.marcadas.has(h.name)).map(h => h.name); body.herramientas_envio = t.filter(h => h.tipo === 'envio' && F.marcadas.has(h.name)).map(h => h.name);

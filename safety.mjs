@@ -16,7 +16,7 @@
 //   toolKinds      { "*test_connection": "read" }   the owner's word on what a tool is (read · write · cost), over the name rule (MCP-01)
 
 export const WRITE_MODES = ['aprobar', 'pedido', 'nunca'];
-export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true, toolKinds: {} };
+export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true, toolKinds: {}, dominiosPorConector: false };
 
 export function normalize(s = {}) {
   const o = { ...DEFAULTS, ...s, limits: { ...DEFAULTS.limits, ...(s.limits || {}) } };
@@ -24,6 +24,7 @@ export function normalize(s = {}) {
   o.departments = Object.fromEntries(Object.entries(o.departments || {}).filter(([, v]) => WRITE_MODES.includes(v)));
   for (const k of ['browserSites', 'browserBlock', 'safeTools']) o[k] = Array.isArray(o[k]) ? o[k].map(String).filter(Boolean) : DEFAULTS[k];
   o.toolKinds = o.toolKinds && typeof o.toolKinds === 'object' && !Array.isArray(o.toolKinds) ? Object.fromEntries(Object.entries(o.toolKinds).filter(([, v]) => KINDS.includes(v))) : {};
+  o.dominiosPorConector = o.dominiosPorConector === true; // SEG-02: solo el booleano true lo enciende (apagado por defecto)
   return o;
 }
 /** Problems in plain words, for `npm run check`. */
@@ -214,25 +215,58 @@ export function parametrosUrl(schema, hondo = 0, ruta = '') {
   return out;
 }
 export const esquemaConUrlLibre = schema => parametrosUrl(schema).length > 0;
+/** SEG-02: ¿se oculta una herramienta con parámetro de dirección? Sí, salvo que el dueño encendiera `safety.dominiosPorConector` Y el conector tenga una lista no vacía.
+ *  Aun así, FALLA CERRADO: solo se ofrece si TODOS sus parámetros de dirección son reconocibles por el guardián (`urlAjenaEn` solo trata como host un valor sin esquema cuando la clave pasa `clavesUrl`).
+ *  Un parámetro marcado por `format: uri` o por su descripción pero con un nombre que no parece de dirección («input», «q») se sigue ocultando: el guardián no lo vigilaría. */
+export const ocultaPorUrlLibre = (schema, { activo = false, dominios = [] } = {}) => {
+  const ps = parametrosUrl(schema);
+  if (!ps.length) return false;
+  if (!(activo === true && Array.isArray(dominios) && dominios.length > 0)) return true;
+  // Con interruptor y lista, la regla es ESTRUCTURAL y falla cerrado: se ofrece solo si TODO parámetro de dirección es de primer nivel, de tipo string (o arreglo de strings), con nombre que `clavesUrl` reconoce y sin
+  // nada raro (anyOf/oneOf/allOf/$ref/additionalProperties/patternProperties/properties/enum de tipos). Un parámetro anidado, un objeto, un mapa o un valor raíz se oculta como siempre.
+  if (!schema || typeof schema !== 'object' || (schema.type && schema.type !== 'object')) return true;
+  for (const k of ['anyOf', 'oneOf', 'allOf', '$ref', 'patternProperties']) if (schema[k] !== undefined) return true;
+  const props = schema.properties && typeof schema.properties === 'object' ? schema.properties : {};
+  const RARO = ['anyOf', 'oneOf', 'allOf', '$ref', 'additionalProperties', 'patternProperties', 'properties', 'not', 'if', 'then', 'else', 'prefixItems'];
+  const soloString = x => x && typeof x === 'object' && x.type === 'string' && !RARO.some(k => x[k] !== undefined);
+  return ps.some(p => {
+    const n = String(p.nombre); if (n.includes('.') || n === '(valor)' || !clavesUrl(n)) return true;
+    const def = props[n]; if (!def || typeof def !== 'object') return true;
+    if (soloString(def)) return false;
+    if (def.type === 'array' && soloString(def.items) && !RARO.some(k => def[k] !== undefined && k !== 'items')) return false;
+    return true;
+  });
+};
 /** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
  *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
  *  una barra de ancho completo— cuenta como ajeno. → el host (o un trozo) ajeno, o null. */
-export function urlAjenaEn(args, urlConector) {
+export function urlAjenaEn(args, urlConector, extra = []) {
+  const permitidos = Array.isArray(extra) ? extra.filter(x => typeof x === 'string' && x.trim()) : []; // SEG-02: dominios que el dueño dejó consultar a ESTE conector (la lista vacía = el comportamiento de siempre)
   const propio = hostOf(urlConector || '');
   if (!propio) return null;
-  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: clavesUrl(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
+  const estricto = permitidos.length > 0; // SEG-02: con una lista de dominios el guardián es más estricto bajo una clave de dirección; sin ella, el comportamiento de siempre
+  let muyHondo = false, noTexto = false;
+  const textos = []; const visita = (v, d = 0, clave = '', heredada = false) => { if (d > 6) { if (estricto) muyHondo = true; return; } const cu = clavesUrl(clave) || (estricto && heredada); if (typeof v === 'string') textos.push({ t: v, claveUrl: cu }); else if (estricto && cu && v !== null && v !== undefined && typeof v !== 'object') noTexto = true; /* número, booleano, bigint… bajo una clave de dirección (16909060 = 1.2.3.4): se bloquea */ else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave, cu)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k, cu); };
   visita(args);
+  if (muyHondo) return '[demasiado profundo]';
+  if (noTexto) return '[valor no es texto]';
   const ajena = (token, conEsquema) => {
     const sinEsquema = token.replace(/^[a-z][a-z0-9+.-]{1,12}:\/\//i, '').replace(/^\/\//, '');
     const autoridad = sinEsquema.split(/[/?#]/)[0];
     if (/[^\x21-\x7e]|[\\@]/.test(autoridad)) return autoridad.slice(0, 60) || token.slice(0, 40); // no ASCII, controles, espacios, «@» o «\\» en el host
     const h = hostOf(conEsquema ? token : 'https://' + sinEsquema);
     if (!h) return autoridad.slice(0, 60);
-    return h === propio || h.endsWith('.' + propio) ? null : h;
+    return h === propio || h.endsWith('.' + propio) || permitidos.some(p => hostMatch(h, p)) ? null : h;
   };
   for (const { t, claveUrl } of textos) {
     const texto = t.slice(0, 20000);
     if (/(?:[a-z][a-z0-9+.-]{1,12}:)?\/\/\[/i.test(texto)) return '[IPv6]'; // una dirección IPv6 literal nunca es el conector
+    if (estricto && claveUrl) { // bajo una clave de dirección el valor SIEMPRE es una dirección: se limpia (tab/salto de línea que el parser de URL ignora, espacios de borde) y, si queda un espacio o un control, se bloquea
+      const limpio = t.replace(/[\t\r\n]/g, '').trim(); if (!limpio) continue;
+      if (limpio.length > 2048 || /[\s\x00-\x1f\x7f]/.test(limpio)) return '[valor no válido]';
+      if (/^[a-z][a-z0-9+.-]*:(?!\d+(?:[/?#]|$))/i.test(limpio) && !/^https?:\/\/\S/i.test(limpio)) return '[esquema no permitido]'; // file:, ftp:, data:, javascript:, mailto:, «http:» sin «//», incluso con host vacío; «host:8080» es un puerto, no un esquema
+      const r = ajena(limpio, /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(limpio)); if (r) return r; continue;
+    }
     if (claveUrl && texto.trim() && !/\s/.test(texto.trim())) { const r = ajena(texto.trim(), /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(texto.trim())); if (r) return r; continue; }
     for (const m of texto.matchAll(/[^\s\x00-\x1f"'<>()[\]{},;]+/g)) {
       let tok = m[0].replace(/[.:!?]+$/, ''); const e = tok.search(/[a-z][a-z0-9+.-]{1,12}:\/\//i); if (e > 0) tok = tok.slice(e); // «xhttps://…» y similares

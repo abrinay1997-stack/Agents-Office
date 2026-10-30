@@ -15,6 +15,7 @@ import * as restablecer from './restablecer.js';
 import * as modelos from './modelos.js';
 import * as conectores from './conectores.js';
 import * as imagenMeta from './imagen-meta.js';
+import * as iconoConector from './icono-conector.js';
 import * as chatAgente from './chat-agente.js';
 import * as conexiones from './conexiones.js';
 import * as notificaciones from './notificaciones.js';
@@ -39,6 +40,7 @@ export const MODULOS = [
   conectores, // Ajustes → Conectores: añadir, probar, token cifrado, plantillas
   modelos, // Ajustes → Modelos: catálogo, asignación por función, probar y comparar
   imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)
+  iconoConector, // /api/icono-conector: el favicon de un conector del usuario por el mismo origen (CSP)
   chatAgente, // POST /api/chat: hablar con un agente (un turno, solo herramientas de lectura)
   conexiones, // /api/brain/actualizar: el botón «Actualizar conexiones» del Cerebro (solo administradores)
   chat, // C0: el chat interno del equipo (/api/chat/*, sin pantalla todavía)

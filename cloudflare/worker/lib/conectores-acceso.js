@@ -2,7 +2,7 @@
 // propiedad NO enumerable (`_token`): si alguien copia la fila con `{...fila}`, la guarda con JSON.stringify o la imprime, el token no va con ella.
 import { descifrar } from './cifrado.js';
 
-const SQL = `select c.*, x.auth_tipo, x.cabecera, x.token_cifrado, x.plantilla, x.etiqueta from conectores c left join conectores_extra x on x.nombre = c.nombre`;
+const SQL = `select c.*, x.auth_tipo, x.cabecera, x.token_cifrado, x.plantilla, x.etiqueta, x.dominios_permitidos from conectores c left join conectores_extra x on x.nombre = c.nombre`;
 
 export async function conAcceso(fila, env) {
   const f = { ...fila };
