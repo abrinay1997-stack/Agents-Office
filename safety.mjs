@@ -185,6 +185,8 @@ export function injectionIn(text) {
   const crudo = String(text || '').slice(0, 200000);
   const a = normalizarParaDeteccion(crudo), b = sinTildes(a);
   const formas = a === crudo ? [crudo, b] : [crudo, a, b];
+  // VAN-03: un conector que devuelve JSON como TEXTO deja los saltos escapados («\\n», «\\t»): la «n» se pega a la palabra siguiente y \b no casa. También se prueba con esas secuencias como espacio.
+  if (/\\[nrt]/.test(crudo)) { const e = crudo.replace(/\\[nrt]/g, ' '), ea = normalizarParaDeteccion(e); formas.push(e, ea, sinTildes(ea)); }
   for (const s of formas) for (const [re, why] of INJECTION) if (re.test(s)) return why;
   return null;
 }
