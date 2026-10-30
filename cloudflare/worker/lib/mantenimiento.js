@@ -8,10 +8,12 @@
 //   · las notas del Cerebro mandadas a la papelera (`notas_papelera`): 30 días
 //   · las notas personales (`notas_personales`): 30 días DESPUÉS de vencer (su estado cae por cascada)
 //   · los mensajes del chat interno (`chat_mensajes`): 365 días (canales y miembros no crecen sin las personas)
+//   · las series de imágenes terminadas (`series`, hecho o cancelado): 180 días; una viva nunca
+//   · el libro del dinero de las series (`series_libro`): lo ya cerrado (liquidado o liberado) 400 días; lo reservado o incierto NUNCA (es dinero que puede estar en el aire)
 //   · las notificaciones por persona (`notificaciones`): leídas 60 días, sin leer 180 días
 // Cada tabla se poda por tandas (`LOTE`) y como mucho `TANDAS` por tabla y por día: una poda atrasada se pone al día en los días siguientes, sin gastar de golpe la CPU del reloj.
 export const LOTE = 2000, TANDAS = 5;
-export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90 });
+export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90, series: 180, series_libro: 400 });
 export const NOTIFICACIONES_SIN_LEER_DIAS = 180;
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -31,6 +33,8 @@ export async function podar(db, ahoraMs = Date.now()) {
     ['notas_papelera', 'delete from notas_papelera where id in (select id from notas_papelera where borrada < ? limit ?)', ahoraMs - R.notas_papelera * DIA_MS],
     ['chat_mensajes', 'delete from chat_mensajes where id in (select id from chat_mensajes where creado_at < ? limit ?)', ahoraMs - R.chat_mensajes * DIA_MS],
     ['estudio_lotes', `delete from estudio_lotes where id in (select id from estudio_lotes where (estado in ('hecho','cancelado') or estado = 'hoja') and at < ? limit ?)`, ahoraMs - R.estudio_lotes * DIA_MS],
+    ['series', `delete from series where id in (select id from series where estado in ('hecho','cancelado') and actualizada < ? limit ?)`, ahoraMs - R.series * DIA_MS],
+    ['series_libro', `delete from series_libro where clave in (select clave from series_libro where estado in ('liquidado','liberado') and at < ? limit ?)`, ahoraMs - R.series_libro * DIA_MS],
     ['notificaciones', 'delete from notificaciones where id in (select id from notificaciones where (leida_at is not null and leida_at < ?) or creada_at < ? limit ?)', [ahoraMs - R.notificaciones * DIA_MS, ahoraMs - NOTIFICACIONES_SIN_LEER_DIAS * DIA_MS]],
     ['notas_personales', 'delete from notas_personales where id in (select id from notas_personales where vence_at < ? limit ?)', ahoraMs - R.notas_personales * DIA_MS],
   ];

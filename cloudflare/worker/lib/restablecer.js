@@ -21,7 +21,7 @@ export const DESTINOS = {
   cifras: { docs: ['cifras', 'cifras.porconfirmar'] },
   kpis: { docs: ['kpis', 'kpi.lineas'] },
   tareas: { filas: ['tareas', 'tareas-archivo'], tablas: ['tarea_bitacora', 'corridas', 'ejecuciones'], docs: ['tareas.proyectos', 'tareas.etiquetas', 'enrutador.correcciones'], prefijosDocs: ['feedback.', 'ejemplos.'] },
-  dimitri: { filas: ['subgerente', 'subgerente-hilo'], prefijosFilas: ['subgerente:', 'subgerente-arch:'], docs: ['subgerente.archivo', 'dimitri.semanal'], prefijosDocs: ['subgerente.archivo:'] }, // desde el 27 oct 2026 cada cuenta tiene su sala (`subgerente:<cuenta>`) y su historial (`subgerente.archivo:<cuenta>`)
+  dimitri: { tablas: ['series'], filas: ['subgerente', 'subgerente-hilo'], prefijosFilas: ['subgerente:', 'subgerente-arch:'], docs: ['subgerente.archivo', 'dimitri.semanal'], prefijosDocs: ['subgerente.archivo:'] }, // desde el 27 oct 2026 cada cuenta tiene su sala (`subgerente:<cuenta>`) y su historial (`subgerente.archivo:<cuenta>`)
   estudio: { tablas: ['estudio_archivos', 'estudio_trabajos', 'estudio_lotes'], filas: ['estudio-fichas'], docs: ['estudio.rev', 'estudio.carpetas', 'estudio.carpetas-borradas'] },
   contenido: { tablas: ['contenido_piezas', 'contenido_cola', 'contenido_candado', 'contenido_papelera'], docs: ['contenido.simulacro', 'contenido.meta.agenda'], filas: ['contenido-piezas', 'contenido-cola', 'contenido-docs'] }, // las filas `contenido-*` son el paso de la migración (lib/contenido/migracion.js): de ahí pasan a las tablas
 };
@@ -30,6 +30,7 @@ export const CONSERVA_TABLAS = ['users', 'sessions', 'sesiones_uso', 'conectores
   'notas_personales', 'notas_estado', 'presencia_cuenta', 'cuenta_telegram', // N1: lo que las personas se dejan entre sí y su última visita no son de la oficina: un restablecimiento no lo toca
   'chat_canales', 'chat_miembros', 'chat_mensajes', // C0: lo que las personas se escriben no es de la oficina: un restablecimiento no lo toca
   'notificaciones', // N0: lo leído y no leído de cada persona no es de la oficina: un restablecimiento no lo toca
+  'series_libro', // series (N1): el libro del dinero es contabilidad: un restablecimiento no lo toca (lo reservado o en duda sigue contando contra los topes)
   'notas_vectores']; // los vectores de significado son datos derivados que se reconocen por el hash del texto: no entran al respaldo (pesan mucho) y se podan solos al indexar
 export const CONSERVA_DOCS = ['config', 'notificaciones.config', 'chat.config', 'notas.config', 'ajustes', 'config-local', 'config.contenido', 'estudio.config', 'estudio.uso', 'estudio.voces', 'triggers', 'telegram.estado', 'tareas.config', 'notices', 'meta.freno', 'bandeja.abierta', 'contenido.meta.cuentas', 'contenido.meta.freno', 'contenido.metricool.subidas', 'contenido.mejores-horas', 'contenido.redes', 'contenido.modo', 'arranque.estado', 'sesion.estado', 'dimitri-ia-estado', DOC_RESPALDOS, DOC_PASO];
 export const CONSERVA_PREFIJOS_DOCS = ['fs:', 'anuncios.', 'meta.', 'bandeja.', 'restablecer.', 'telegram.', 'config.', 'presencia.'];
