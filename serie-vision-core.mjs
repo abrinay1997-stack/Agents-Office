@@ -86,13 +86,13 @@ function enCandado(f) {
   return p.finally(() => { activas--; });
 }
 /** Corre `f(estado)` con un tope de tiempo: al vencer devuelve un no_verificado y, si ya se había enviado, anota el estimado como «pudo cobrarse». */
-async function conTope(f, ms, pedido) {
-  const estado = { vencido: false, enviado: false, anotar: null }; let timer;
-  const vence = new Promise(res => { timer = setTimeout(() => res('vencio'), Math.max(1, ms)); });
+async function conTope(f, ms, pedido, estado) {
+  let timer; // `vencido` se pone DENTRO del callback del temporizador, antes de resolver: así no hay ventana de microtareas en la que `f` termine y cobre además del estimado
+  const vence = new Promise(res => { timer = setTimeout(() => { estado.vencido = true; res('vencio'); }, Math.max(1, ms)); });
   try {
     const r = await Promise.race([f(estado), vence]);
     if (r !== 'vencio') return r;
-    estado.vencido = true; const ok = estado.enviado && estado.anotar ? estado.anotar() : true;
+    const ok = estado.enviado && estado.anotar ? estado.anotar() : true;
     return noVerificado('el modelo de visión no contestó a tiempo', { codigo: 'tiempo', ...(estado.enviado ? { puedeHaberCobrado: true, costoUsd: pedido.costoEstimadoUsd, ...(ok ? {} : { cobroFallido: true }) } : {}) });
   } finally { clearTimeout(timer); }
 }
@@ -155,17 +155,20 @@ export async function revisarPlano({ pedido, imagen = null, refs = [], cargar = 
   for (const rf of refsFichas) { const p = puedeEnviar({ ficha: rf.ficha, carpeta: rf.carpeta, destino }); if (!p.ok) return noVerificado(`una referencia no puede salir: ${p.motivo}`); }
   if (typeof mirar !== 'function') return noVerificado('no hay un modelo de visión conectado');
   if (!cargar && !(imagen?.data && imagen?.media_type)) return noVerificado('no hay imagen que revisar');
+  const estado = { vencido: false, enviado: false, anotado: false, anotar: null }; // vive FUERA del turno: el catch final también lo necesita
   const turno = enCandado(() => conTope(async cerrado => {
     let img = imagen, rfs = refs;
     if (cargar) { try { const c = await cargar(); img = c?.imagen; rfs = c?.refs || []; } catch (e) { return noVerificado(`no pude preparar la imagen: ${cad(e?.message, 120)}`, { codigo: 'carga' }); } }
+    if (cerrado.vencido) return noVerificado('vencido'); // la carga tardó más que el tope: este turno ya no existe, no se audita ni se envía nada (rompería la serialización)
     if (!img?.data || !img?.media_type) return noVerificado('no hay imagen que revisar', { codigo: 'carga' });
     const listaRefs = (Array.isArray(rfs) ? rfs : []).filter(r => r?.data && r?.media_type).slice(0, MAX_REFS_VISION);
     if (listaRefs.length !== pedido.nRefs) return noVerificado('las referencias que llegaron no son las del pedido');
     try { presupuesto?.revisar(pedido.costoEstimadoUsd); }
     catch (e) { return e?.code === 'tope' ? noVerificado(`no cabe en el tope de gasto: ${cad(e?.message, 160)}`, { codigo: 'tope' }) : noVerificado(`no pude comprobar el presupuesto, así que no se revisa: ${cad(e?.message, 120)}`, { codigo: 'interno' }); } // solo «no cabe» es 'tope'; un fallo del libro falla cerrado y no llama al modelo
-    for (const f of [img.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
     // anota lo gastado en el libro del Estudio; si el libro mismo falla, NO se traga: queda una línea `cobro-fallido` con el importe y el resultado lo dice
-    const anotar = usd => { try { presupuesto?.cobrar(usd); return true; } catch (e) { try { auditar({ kind: 'cobro-fallido', usd: Math.round(usd * 1e6) / 1e6, file: String(img.file || '').slice(0, 300), motivo: cad(e?.message, 160) }); } catch { /* ya no hay más que hacer: el resultado lleva cobroFallido */ } return false; } };
+    const anotar = usd => { cerrado.anotado = true; try { presupuesto?.cobrar(usd); return true; } catch (e) { try { auditar({ kind: 'cobro-fallido', usd: Math.round(usd * 1e6) / 1e6, file: String(img.file || '').slice(0, 300), motivo: cad(e?.message, 160) }); } catch { /* ya no hay más que hacer: el resultado lleva cobroFallido */ } return false; } };
+    if (cerrado.vencido) return noVerificado('vencido'); // última comprobación ANTES de enviar (y de auditar el envío)
+    for (const f of [img.file, ...listaRefs.map(r => r.file)].filter(Boolean)) { try { auditar(lineaAuditoria(f, destino, por)); } catch { /* auditar no puede tumbar la revisión */ } }
     cerrado.enviado = true; cerrado.anotar = () => anotar(pedido.costoEstimadoUsd);
     let r;
     try { r = await mirar({ system: pedido.system, user: pedido.user, imagenes: [img, ...listaRefs] }); }
@@ -180,9 +183,14 @@ export async function revisarPlano({ pedido, imagen = null, refs = [], cargar = 
     const cobrado = anotar(usd);
     const v = leerVeredicto(r?.text, { esperado: pedido.esperado });
     return { ...v, costoUsd: Math.round(usd * 1e6) / 1e6, modelo: cad(r?.modelId, 60), vision_version: VISION_VERSION, ...(cobrado ? {} : { cobroFallido: true }) };
-  }, tiempoMaxMs, pedido));
+  }, tiempoMaxMs, pedido, estado));
   if (!turno) return noVerificado('hay demasiadas revisiones esperando; vuelve a intentarlo en un momento', { codigo: 'cola_llena' });
-  try { return await turno; } catch (e) { return noVerificado(`la revisión falló por dentro: ${cad(e?.message, 120)}`, { codigo: 'interno' }); }
+  try { return await turno; }
+  catch (e) { // una excepción inesperada: si ya se había enviado, pudo cobrarse y NO se afirma lo contrario; se anota el estimado (si no se había anotado ya)
+    if (!estado.enviado) return noVerificado(`la revisión falló por dentro: ${cad(e?.message, 120)}`, { codigo: 'interno' });
+    const ok = estado.anotado ? true : (estado.anotar ? estado.anotar() : true);
+    return noVerificado(`la revisión falló por dentro después de enviar la imagen: ${cad(e?.message, 120)}`, { codigo: 'interno', puedeHaberCobrado: true, costoUsd: pedido.costoEstimadoUsd, ...(ok ? {} : { cobroFallido: true }) });
+  }
 }
 
 /** Lo que se guarda en la ficha de la imagen: compacto y sin nada que no haya pasado el escudo. */

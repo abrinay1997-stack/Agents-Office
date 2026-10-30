@@ -55,7 +55,7 @@ export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = (
     const v = await revisarPlano({ pedido, cargar, ficha, carpeta: carpetaDe(ficha), refsFichas: refIds.map(r => { const f = M.item(r); return { ficha: f, carpeta: carpetaDe(f) }; }),
       activo: true, puedeVer: vision.puedeVer ? vision.puedeVer() : false, motivoSinVer: vision.motivoSinVer, destino: vision.destino, por, presupuesto: vision.presupuesto, auditar: vision.auditar, mirar: vision.mirar });
     const sinLlamar = { tope: 409, interno: 500, cola_llena: 429, carga: 422 }[v.codigo]; // no se llamó al modelo: el día/mes del Estudio no alcanza (409), falló el libro (500, falla cerrado), cola llena (429) o no se pudo preparar la imagen (422)
-    if (sinLlamar) return err(sinLlamar, v.motivo, { codigo: v.codigo, gasta: false });
+    if (sinLlamar) return err(sinLlamar, v.motivo, { codigo: v.codigo, gasta: !!v.puedeHaberCobrado, ...(v.puedeHaberCobrado ? { puedeHaberCobrado: true, costoUsd: v.costoUsd } : {}) }); // «gasta:false» solo si de verdad no se envió nada
     try { M.update(id, { qa_vision: fichaDeRevision(v, { biblia_version: b.version, ahora: Date.now() }) }); } catch { /* guardar la nota no es lo que importa */ }
     return { estado: 200, cuerpo: { veredicto: v, costoEstimadoUsd: pedido.costoEstimadoUsd, biblia_version: b.version, nota: v.estado === 'cumple' ? 'Cumple lo que se pudo comprobar. Aprobar sigue siendo tuyo.' : 'No está verificado como correcto: queda para tu revisión.' } };
   }

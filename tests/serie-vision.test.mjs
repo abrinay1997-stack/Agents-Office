@@ -186,6 +186,30 @@ test('tope duro: un `mirar` que nunca resuelve no cuelga a las siguientes; se an
   // antes de enviar (cargando la imagen) no hay nada que anotar
   const l3 = libro(1); const y = await V.revisarPlano(base({ presupuesto: l3, tiempoMaxMs: 30, cargar: () => new Promise(() => {}) })); assert.equal(y.codigo, 'tiempo'); assert.equal(y.puedeHaberCobrado, undefined); assert.deepEqual(l3.l.cobros, []);
 });
+test('una carga que llega TARDE (después del tope) no llama a `mirar`, no audita envío y no cobra; la siguiente revisión corre normal', async () => {
+  const est = pedido().costoEstimadoUsd, l = libro(1), auditoria1 = [], auditoria2 = []; let m1 = 0, m2 = 0, suelta;
+  const r1 = await V.revisarPlano(base({ presupuesto: l, tiempoMaxMs: 30, auditar: x => auditoria1.push(x), mirar: async () => { m1++; return { text: ok(), usd: 0.5 }; }, imagen: null, refs: [], cargar: () => new Promise(r => { suelta = () => r({ imagen: img, refs: [{ media_type: 'image/jpeg', data: 'B', file: ID(8) }] }); }) }));
+  assert.equal(r1.codigo, 'tiempo'); assert.equal(r1.puedeHaberCobrado, undefined);
+  const r2 = await V.revisarPlano(base({ presupuesto: l, auditar: x => auditoria2.push(x), mirar: async () => { m2++; return { text: ok(), usd: est }; } })); assert.equal(r2.estado, 'cumple');
+  suelta(); await espera(30); // ahora la primera carga por fin resuelve
+  assert.equal(m1, 0, 'la revisión vencida no llamó al modelo'); assert.deepEqual(auditoria1, [], 'ni auditó un envío fuera de turno'); assert.equal(m2, 1); assert.deepEqual(l.l.cobros, [est], 'solo cobró la siguiente');
+  assert.equal(auditoria2.filter(x => x.kind === 'envio-tercero').length, 2);
+});
+test('el temporizador marca «vencido» antes de resolver: si el modelo contesta justo al vencer, el estimado se cobra UNA sola vez', async () => {
+  const l = libro(1); const r = await V.revisarPlano(base({ presupuesto: l, tiempoMaxMs: 20, mirar: () => new Promise(res => setTimeout(() => res({ text: ok(), usd: 0.5 }), 20)) }));
+  await espera(40); assert.ok(['tiempo', 'cumple'].includes(r.codigo ?? r.estado)); assert.equal(l.l.cobros.length, 1, 'nunca dos cobros por la misma revisión');
+  const src = fs.readFileSync(new URL('../serie-vision-core.mjs', import.meta.url), 'utf8'); assert.match(src, /setTimeout\(\(\) => \{ estado\.vencido = true; res\('vencio'\)/);
+});
+test('una excepción DESPUÉS de enviar no afirma «no gastó»: anota el estimado y dice puedeHaberCobrado (también por la ruta)', async t => {
+  const est = pedido().costoEstimadoUsd, l = libro(1);
+  const v = await V.revisarPlano(base({ presupuesto: l, mirar: async () => ({ text: ok(), get usd() { throw new Error('tras enviar'); } }) }));
+  assert.equal(v.codigo, 'interno'); assert.equal(v.puedeHaberCobrado, true); assert.equal(v.costoUsd, est); assert.deepEqual(l.l.cobros, [est]);
+  const l2 = libro(1); const w = await V.revisarPlano(base({ presupuesto: l2, mirar: async () => ({ get text() { throw new Error('leyendo'); }, usd: 0.02 }) })); // ya se había cobrado lo real: no se vuelve a cobrar
+  assert.equal(w.puedeHaberCobrado, true); assert.deepEqual(l2.l.cobros, [0.02]);
+  const o = oficina(t), g = libro(1); const S = crearSeries({ biblia: o.L, activo: () => true, vision: { activo: () => true, media: o.media, copiaParaVer: async () => ({ media_type: 'image/jpeg', data: 'x' }), destino: 'anthropic', puedeVer: () => true, presupuesto: g, mirar: async () => ({ text: ok(), get usd() { throw new Error('x'); } }) } });
+  const r = await S.ruta('POST', '/api/series/revisar-plano', { cuerpo: cuerpo({ personajes: [] }) }); assert.equal(r.estado, 500); assert.equal(r.cuerpo.gasta, true); assert.equal(r.cuerpo.puedeHaberCobrado, true); assert.deepEqual(g.l.cobros, [V.costoRevisionUsd(0)], 'sin personajes no hay referencias: estimado de una imagen sola');
+  const antes = await V.revisarPlano(base({ presupuesto: { revisar() { throw new TypeError('libro'); }, cobrar() {} } })); assert.equal(antes.codigo, 'interno'); assert.equal(antes.puedeHaberCobrado, undefined, 'antes de enviar sí es «no gastó»');
+});
 test('cola: 1 en marcha + 3 esperando; la 5.ª simultánea da cola_llena (429 en la ruta) SIN cargar su imagen ni llamar; el candado se libera tras una excepción', async t => {
   let suelta, cargas = 0, llamadas = 0; const puerta = new Promise(r => { suelta = r; });
   const mirar = async () => { llamadas++; await puerta; return { text: ok(), usd: 0.01 }; }, cargar = async () => { cargas++; return { imagen: img, refs: [{ media_type: 'image/jpeg', data: 'B', file: ID(8) }] }; };
