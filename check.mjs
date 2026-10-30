@@ -437,6 +437,13 @@ else {
     try { browser = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] }); }
     catch { browser = await chromium.launch({ channel: 'chrome', args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] }); }
     const page = await browser.newPage({ viewport: { width: 1512, height: 900 } });
+    // 30 oct 2026: el smoke de la demo dependía del día real. El último viernes de un mes de 5 filas (30 oct) la rejilla del mes solo
+    // enseña las ejecuciones FUTURAS de las rutinas (desde «ahora») y quedaban 2 en vez de ≥ 3; ese paso fallaba sin cerrar el
+    // calendario y arrastraba a los tres siguientes (teclas 1/2/B ignoradas). Se fija el punto de partida de `Date` en la página
+    // (miércoles 14 oct 2026, mediodía, hora local de la máquina) y el tiempo sigue corriendo a su ritmo: solo se desplaza el reloj,
+    // los temporizadores y las esperas no cambian (page.clock.install falsea también los temporizadores y volvía frágiles otros pasos).
+    const partida = new Date(2026, 9, 14, 12, 0, 0).getTime() - Date.now();
+    await page.addInitScript(desfase => { const D = Date; window.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(D.now() + desfase); } static now() { return D.now() + desfase; } }; }, partida);
     const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('console', m => { if (m.type() === 'error') errors.push(m.text().slice(0, 120)); });
     await page.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await page.waitForTimeout(3000);
     await step('smoke: loads without page errors', async () => { if (errors.length) throw new Error(errors[0]); });
