@@ -46,7 +46,7 @@ export function loadJobs() {
   for (const j of JOBS) if (j.state === 'running') { // the office restarted mid-run: a queue engine is asked again, the others are marked
     changed = true;
     if (j.remote?.length) { j.state = 'queued'; j.resumed = (j.resumed || 0) + 1; }
-    else Object.assign(j, { state: 'failed', error: 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.', doneAt: Date.now() });
+    else Object.assign(j, { state: 'failed', error: 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.', causa: 'interrumpido', doneAt: Date.now() });
   }
   if (changed) saveJobs();
   running = 0; setImmediate(pumpJobs);
@@ -62,6 +62,16 @@ const LOTE_ALS = new AsyncLocalStorage();
 export const enLote = (info, fn) => LOTE_ALS.run(info, fn);
 /** El lote del pedido en curso ({ id, fila, sku }) o null: para quien construye el pedido por su cuenta. */
 export const loteActual = () => LOTE_ALS.getStore() || null;
+/* Fase 11.5 (carril K): un trabajo de una SERIE de imágenes lleva `serie:{id,n,intento}` (como `lote:{id,fila}`): así un reinicio lo reconoce sin duplicar. Solo lo pone series-generar.mjs
+   al llamar a submit(): mediaReq (la API y los MCP) no copia ese campo, así que nadie de fuera puede marcar (ni falsificar) un trabajo de serie. */
+let SERIES = {};
+export function setSeries(h = {}) { SERIES = { ...SERIES, ...h }; }
+const serieVivo = j => { if (!j.serie || typeof SERIES.vivo !== 'function') return false; try { return !!SERIES.vivo(j.serie.id); } catch { return false; } };
+const SERIE_ID = /^[\w-]{1,60}$/;
+function serieDe(req) {
+  const x = req.serie; if (!x || typeof x !== 'object') return {};
+  return SERIE_ID.test(String(x.id)) && Number.isInteger(x.n) && x.n >= 1 && Number.isInteger(x.intento) && x.intento >= 1 ? { serie: { id: String(x.id), n: x.n, intento: x.intento } } : {};
+}
 const LOTE_RE = /^L[a-z0-9]{4,30}$/;
 function loteDe(req) {
   const l = req.lote && typeof req.lote === 'object' ? req.lote : LOTE_ALS.getStore();
@@ -72,7 +82,7 @@ function loteDe(req) {
 function saveJobs() {
   if (!jobsFile) return;
   const cut = Date.now() - 7 * 864e5; // finished jobs are kept a week (the files themselves live in the gallery)
-  const vivos = new Set(JOBS.filter(loteVivo)), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
+  const vivos = new Set(JOBS.filter(j => loteVivo(j) || serieVivo(j))), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
   JOBS = JOBS.filter(j => vivos.has(j) || otros.has(j));
   fs.mkdirSync(path.dirname(jobsFile), { recursive: true });
   const tmp = jobsFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(JOBS, null, 1)); renombrar(tmp, jobsFile);
@@ -90,14 +100,18 @@ function submitLocal(req) {
   const tr = trail({ ...req, versionOf: req.versionOf ?? src }, { resolve });
   const prompt = String(req.prompt || '').replace(/[\x00-\x1f]/g, ' ').trim().slice(0, 300) || 'Edición en tu máquina';
   const j = { id: jid(), state: 'queued', kind: 'image', model: LOCAL, engine: LOCAL, prompt, n: 1, s: {}, media: { reference: [src] }, weight: 0, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: 0, source: src, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px, ...loteDe(req) };
-  JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
+  JOBS.push(j);
+  try { saveJobs(); } catch (e) { const i = JOBS.indexOf(j); if (i >= 0) JOBS.splice(i, 1); throw e; } // atómico, como submit()
+  setImmediate(pumpJobs);
   return pub(j);
 }
 /** Queue a generation. Checks everything up front (model, key, prompt, media, budget) so a bad request fails at once. */
 export function submit(req = {}) {
   if (req.local === true) return submitLocal(req); // banco de presets (F1): sin IA
-  const j = armarTrabajo(req, { cfg: S.cfg, resolve, folderOf, budget, extra: loteDe });
-  JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
+  const j = armarTrabajo(req, { cfg: S.cfg, resolve, folderOf, budget, extra: r => ({ ...loteDe(r), ...serieDe(r) }) });
+  JOBS.push(j);
+  try { saveJobs(); } catch (e) { const i = JOBS.indexOf(j); if (i >= 0) JOBS.splice(i, 1); throw e; } // atómico: si el disco falla, el trabajo NO queda en la cola (correría en el próximo pump sin que quien lo pidió lo sepa)
+  setImmediate(pumpJobs);
   return pub(j);
 }
 function pumpJobs() {
@@ -142,6 +156,12 @@ async function runJob(j) {
     const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado', detalle: '' } : explicar(e.message, e.status); // IMG-04: the words, the class and the original apart
     const why = ex.texto;
     if (j.items.length) { j.state = 'done'; j.warning = why; } else { j.state = 'failed'; j.error = why; j.errorClass = ex.clase; if (ex.detalle) j.errorRaw = ex.detalle.slice(0, 400); }
+    // 11.5: la CAUSA va estructurada para quien lleva cuentas (series): `previo` = se sabe que falló ANTES de cobrar (llave, saldo, pedido rechazado, sin conexión);
+    // `cancelado` = se canceló en marcha (puede cobrarse igual); cualquier otra = la clase del error. Quien no la reconoce en un motor de pago lo cuenta como «incierto».
+    // `previo` es por la FASE, no por la clase del error: solo si el proveedor NUNCA aceptó el pedido (sin id remoto). Con id remoto el motor ya puede estar generando y cobrando: eso nunca es «previo».
+    const aceptado = !!j.remote?.length || j.aceptado === true || e?.fase === 'descarga'; // con id remoto, con el POST aceptado o fallando al DESCARGAR el resultado, el servicio ya pudo cobrar
+    // `previo` solo por una señal POSITIVA de rechazo del propio POST (un 4xx, un código de rechazo del proveedor, o sin conexión con él) y sin que nada haya sido aceptado: nunca por el texto de un error ni por un fallo local (disco, almacén)
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && e?.rechazo === true ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
@@ -166,7 +186,7 @@ export function wait(id, ms = 15 * 60e3) {
 }
 export function cancel(id) {
   const j = JOBS.find(x => x.id === id); if (!j) return null;
-  if (j.state === 'queued') { Object.assign(j, { state: 'failed', error: 'Cancelado por ti.', doneAt: Date.now() }); saveJobs(); const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id); return out; }
+  if (j.state === 'queued') { Object.assign(j, { state: 'failed', error: 'Cancelado por ti.', causa: 'cancelado_en_cola', doneAt: Date.now() }); saveJobs(); const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id); return out; }
   if (j.state === 'running') {
     j.cancel = true; saveJobs();
     if (j.engine === 'minimax') { for (const rq of j.remote || []) if (!rq.done) mmx.cancelVideo(rq.id).catch(() => {}); return pub(j); } // V4.10
@@ -175,7 +195,10 @@ export function cancel(id) {
   }
   return pub(j);
 }
-export function retry(id) { const j = JOBS.find(x => x.id === id); if (!j) return null; return submit({ ...(j.engine === LOCAL ? { local: true, source: j.source } : {}), preset: j.preset, post: j.post, qa: j.qa, medir: j.medir, canal: j.canal, esEscena: j.esEscena, receta: j.receta, sku: j.sku, model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
+export function retry(id) {
+  const j = JOBS.find(x => x.id === id); if (!j) return null;
+  if (j.serie) throw Object.assign(new Error('es de una serie: la serie lo regenera con su propia reserva; pulsa Generar en la serie (reintentarlo aquí gastaría fuera de su libro, de su tope y de su hash)'), { status: 409 }); // liberado o no: solo la bomba de la serie regenera un plano, con otro intento
+  return submit({ ...(j.engine === LOCAL ? { local: true, source: j.source } : {}), preset: j.preset, post: j.post, qa: j.qa, medir: j.medir, canal: j.canal, esEscena: j.esEscena, receta: j.receta, sku: j.sku, model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
 export function forget(id) { const i = JOBS.findIndex(x => x.id === id && (x.state === 'done' || x.state === 'failed')); if (i < 0) return false; JOBS.splice(i, 1); saveJobs(); return true; }
 export function markAttached(id) { const j = JOBS.find(x => x.id === id); if (j) { j.attached = true; saveJobs(); } }
 

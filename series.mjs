@@ -17,7 +17,9 @@ const ID_OK = /^[\w-]{1,60}$/;
 export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), azar = () => Math.random().toString(36).slice(2, 6) } = {}) {
   if (!archivo || typeof renombrar !== 'function') throw new Error('el almacén de series necesita archivo y renombrar');
   let D = null, bloqueo = null; // bloqueo: no se pudo apartar un archivo roto; NO se escribe encima (falla cerrado)
-  const valida = s => !!s && typeof s === 'object' && !Array.isArray(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta);
+  const plano = o => !!o && typeof o === 'object' && !Array.isArray(o), valida = s => plano(s) && typeof s.id === 'string' && ID_OK.test(s.id) && Array.isArray(s.escaleta) && s.escaleta.every(plano) && typeof s.estado === 'string';
+  const normalizar = s => ({ ...s, intentos: plano(s.intentos) ? s.intentos : {}, pasos: plano(s.pasos) ? s.pasos : {}, fallos: plano(s.fallos) ? s.fallos : {}, libro: plano(s.libro) && plano(s.libro.lineas) ? s.libro : null,
+    escaleta: s.escaleta.map(p => ({ ...p, versiones: Array.isArray(p.versiones) ? p.versiones : [], refs: Array.isArray(p.refs) ? p.refs : [] })) }); // una serie malformada no puede hacer lanzar a la bomba en cada tick
   const apartar = motivo => { try { fs.copyFileSync(archivo, `${archivo}.roto-${ahora()}`); } catch (e) { bloqueo = `${motivo}, y no se pudo apartar una copia (${e.code || e.message}): no se escribe encima de ${path.basename(archivo)}`; console.warn('series:', bloqueo); } };
   const cargar = () => {
     if (D) return D;
@@ -27,7 +29,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
         const j = JSON.parse(txt); if (!j || typeof j !== 'object' || !Array.isArray(j.series)) throw new Error('forma');
         const buenas = j.series.filter(valida); if (buenas.length !== j.series.length) apartar('el archivo de series traía elementos que no son series');
         const u = j.uso && typeof j.uso === 'object' && typeof j.uso.day === 'string' && Number.isFinite(j.uso.peso) ? { day: j.uso.day, peso: j.uso.peso } : { day: '', peso: 0 };
-        D = { v: 1, uso: u, series: buenas };
+        D = { v: 1, uso: u, series: buenas.map(normalizar) };
       } catch { apartar('el archivo de series está roto'); D = null; }
     }
     return (D ||= { v: 1, uso: { day: '', peso: 0 }, series: [] });
@@ -74,7 +76,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
 /** Lo que se enseña de una serie: LISTA BLANCA. Nunca el token ni lo que autoriza, ni el libro, ni el brief (objetivo, restricciones), ni los prompts completos ni los precios. */
 const corto = (v, n) => (v == null ? null : String(v).slice(0, n));
 const planoVista = p => ({ n: p.n, rol: p.rol, estado: p.estado, descripcion: corto(p.descripcion, 120), motivo: corto(p.motivo, 160), modelo: p.modelo || null, version: p.version || 0, clave: !!p.clave,
-  versiones: (p.versiones || []).map(v => ({ v: v.v, archivo: v.archivo || null, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) });
+  versiones: (p.versiones || []).map(v => ({ v: v.v, intento: v.intento, costo_usd: v.costo_usd ?? 0 })) }); // sin `archivo`: su nombre lleva el prompt
 export function vistaSerie(s) {
   if (!s) return null;
   const planos = s.escaleta || [], cuenta = e => planos.filter(p => p.estado === e).length;
@@ -104,3 +106,29 @@ export function cancelarSerie(s) {
   return { ok: true, serie: { ...s, estado: 'cancelado', pausa_motivo: null, autorizado: null, token_reg: null, cancelada: true } }; // la autorización muere con ella: lo que siga en el aire solo se liquida
 }
 export { nuevoLibro };
+
+/** Defensa en profundidad para las rutas que gastan o liberan dinero (generar, resolver, pausar, cancelar), además de `by`/`agent` del cuerpo (que decide quien llama):
+ *  el Host debe ser localhost, 127.0.0.1 o [::1] (anti DNS-rebinding) y el Origin, si viene, el MISMO origen (anti-CSRF desde una página de fuera). Pura. */
+export function origenPermitido({ host, origin } = {}) {
+  const h = String(host || '').toLowerCase(), m = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/.exec(h);
+  if (!m) return { ok: false, motivo: 'esta acción solo se hace desde la propia computadora (localhost)' };
+  if (origin == null || origin === '') return { ok: true };
+  let o; try { o = new URL(String(origin)); } catch { return { ok: false, motivo: 'Origin no válido' }; }
+  return o.host.toLowerCase() === h && (o.protocol === 'http:' || o.protocol === 'https:') ? { ok: true } : { ok: false, motivo: 'la petición viene de otro origen' };
+}
+
+/** Candado simple de la bomba (no del almacén): un solo proceso por data/ da pasos de gasto. `tener()` lo adquiere o lo renueva; falla si otro proceso VIVO lo tiene (latido reciente).
+ *  Dos procesos sobre el mismo data/ siguen sin ser un caso soportado para escribir series (el almacén no se coordina entre procesos): esto solo evita que los dos GASTEN. */
+export function crearCandado({ archivo, pid = process.pid, ahora = () => Date.now(), vivo = p => { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } }, vidaMs = 30000 } = {}) {
+  let mio = false;
+  const leer = () => { try { const j = JSON.parse(fs.readFileSync(archivo, 'utf8')); return j && Number.isInteger(j.pid) && Number.isFinite(j.t) ? j : null; } catch { return null; } };
+  const escribir = () => { try { fs.mkdirSync(path.dirname(archivo), { recursive: true }); fs.writeFileSync(archivo, JSON.stringify({ pid, t: ahora() })); return true; } catch { return false; } };
+  return {
+    tener() {
+      const c = leer();
+      if (c && c.pid !== pid && ahora() - c.t < vidaMs && vivo(c.pid)) { mio = false; return false; }
+      mio = escribir(); return mio;
+    },
+    liberar() { const c = leer(); if (mio && c?.pid === pid) { try { fs.unlinkSync(archivo); } catch { /* ya */ } } mio = false; },
+  };
+}
