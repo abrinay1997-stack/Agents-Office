@@ -66,6 +66,7 @@ import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vi
 import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } from './ver-imagen-core.mjs'; // 28 oct 2026: ver_imagen
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { crearSeries, cablearMedia, configDeAjustes } from './serie-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
+import { crearAlmacen as crearAlmacenSeries } from './series.mjs'; // 11.5
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -567,7 +568,10 @@ const biblia = crearBiblia({ BRAIN, DATA, renombrar, ask: (sy, u, o) => askX(sy,
   presupuesto: { revisar: est => media.checkBudget(est), cobrar: u => media.charge(u) },
   imagenes: () => media.list({ limit: 600 }).filter(f => (f.fav || (Array.isArray(f.used) && f.used.length)) && f.desc).slice(0, 12),
   notas: () => [...vaultIndex().entries()].filter(([n]) => /brand|marca|voice|contexto|guideline|visual/i.test(n)).slice(0, 6).map(([nombre, texto]) => ({ nombre, texto: String(texto) })) }); // 11.2
+const almacenSeries = crearAlmacenSeries({ archivo: path.join(DATA, 'series.json'), renombrar }); // 11.5 (PR A): la serie persistida (data/series.json, no viaja por GitHub)
+const auditarSeries = l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} };
 const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image'), config: () => configDeAjustes(cfg.dimitri),
+  almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries,
   vision: { activo: () => cfg.dimitri?.serieVision === true, media, copiaParaVer, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`,
     presupuesto: { revisar: est => { try { media.checkBudget(est); } catch (e) { if (/^presupuesto del (día|mes)/.test(String(e?.message))) e.code = 'tope'; throw e; } }, cobrar: u => media.charge(u) }, auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, // solo «no cabe» es un tope; cualquier otro fallo del libro falla cerrado
     mirar: async ({ system, user, imagenes }) => { try { return await askX(system, user, { images: imagenes.map(({ media_type, data }) => ({ media_type, data })), kind: 'vision', maxTokens: 1200, timeout: 120000, tools: false }); }
@@ -3042,8 +3046,10 @@ const server = http.createServer(async (req, res) => {
       const b = req.method === 'GET' ? {} : await body(req), r = await biblia.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);
     }
-    if (req.method === 'POST' && (url.pathname === '/api/series/proponer' || url.pathname === '/api/series/revisar-plano')) { // 29 oct 2026 (11.3): PROPONER una serie (no gasta) · 30 oct (11.4): revisar un plano ya generado por visión (flag, dueño y costo confirmado). Generarla es otro paso con el clic del dueño
-      const b = await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024);
+    // 29 oct 2026 (11.3): PROPONER una serie (no gasta) · 30 oct (11.4): revisar un plano ya generado (flag, dueño y costo confirmado)
+    // 11.5: leer, guardar, pausar y cancelar. Generarla es otro paso con el clic del dueño
+    if (/^\/api\/series(\/|$)/.test(url.pathname) && (req.method === 'GET' || req.method === 'POST')) {
+      const b = req.method === 'GET' ? {} : await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024);
       if (!b || typeof b !== 'object' || Array.isArray(b)) return json(res, 400, { error: 'El cuerpo debe ser un objeto JSON.' });
       const r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);

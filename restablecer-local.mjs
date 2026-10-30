@@ -26,7 +26,7 @@ export const RUTAS = {
   contenido: [{ base: 'brain', rel: `${AO}/contenido` }, { base: 'data', rel: 'contenido/cola.json' }, { base: 'data', rel: 'contenido/simulacro.json' }, { base: 'data', rel: 'contenido/meta-agenda.json' }],
 };
 /** Lo que nunca se mueve. El test de la oficina local lo compara con lo que de verdad hay en data/. */
-export const CONSERVA_DATA = ['costs.jsonl', 'audit', 'backups', 'notices.json', 'triggers.json', 'anuncios', 'media-usage.json', 'minimax-voices.json', 'respaldos', 'contenido/bandeja.json', 'version-anterior.txt', 'salida-meta', 'usage.json', 'telegram.json', 'cuentas'];
+export const CONSERVA_DATA = ['costs.jsonl', 'audit', 'backups', 'notices.json', 'triggers.json', 'anuncios', 'media-usage.json', 'series.json', 'minimax-voices.json', 'respaldos', 'contenido/bandeja.json', 'version-anterior.txt', 'salida-meta', 'usage.json', 'telegram.json', 'cuentas'];
 
 const existe = (p) => { try { fs.lstatSync(p); return true; } catch { return false; } };
 const SKIP_NOTAS = new Set([AO]);
