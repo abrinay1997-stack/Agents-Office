@@ -127,8 +127,7 @@ test('retry de un trabajo de una SERIE se niega SIEMPRE (409): ni liberado ni na
   const j = await terminar(media.submit({ prompt: 'x', model: modelo.id, kind: 'image', n: 1, by: 'dimitri', serie: { id: 'de-serie', n: 1, intento: 1 } }).id); assert.equal(j.serie.id, 'de-serie');
   const antes = media.jobs().length;
   assert.throws(() => media.retry(j.id), e => e.status === 409 && /la serie lo regenera con su propia reserva/.test(e.message)); assert.equal(media.jobs().length, antes, 'no se creó ningún trabajo');
-  const { setSeries } = await import('../media/trabajos.mjs'); setSeries({ liberado: () => true, vivo: () => false });
-  try { assert.throws(() => media.retry(j.id), e => e.status === 409, 'aunque la serie «lo haya liberado» (ya no hay hook que valga)'); assert.equal(media.jobs().length, antes); } finally { setSeries({ liberado: undefined }); }
+  assert.throws(() => media.retry(j.id), e => e.status === 409, 'segundo intento: sigue siendo 409 (ya no hay ningún hook que lo permita)'); assert.equal(media.jobs().length, antes);
   RUN.prueba = RUN_PRUEBA; const sin = media.submit({ prompt: 'sin serie', model: modelo.id, kind: 'image', n: 1, by: 'you' }); await terminar(sin.id); assert.ok(media.retry(sin.id), 'un trabajo normal se reintenta como siempre');
   const fuente = fs.readFileSync(new URL('../media/trabajos.mjs', import.meta.url), 'utf8');
   assert.match(fuente.split('function submitLocal')[1].split('export function submit')[0], /try \{ saveJobs\(\); \} catch \(e\) \{[^}]*JOBS\.splice/, 'submitLocal saca el trabajo si saveJobs falla'); assert.doesNotMatch(fuente, /SERIES\.liberado/);

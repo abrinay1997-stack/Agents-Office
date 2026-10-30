@@ -24,6 +24,7 @@ function contestar(host, ruta) {
   if (modo === 'rechaza-1008') return [200, { base_resp: { status_code: 1008, status_msg: 'sin saldo' } }];
   if (modo === 'servidor-500') return [500, { error: 'boom' }];
   if (modo === 'modera-400') return [400, { error: { message: 'Your request was rejected by the content moderation system' } }];
+  if (modo === 'tipo-400') return [400, { error: { message: 'invalid content type: expected application/json' } }];
   if (modo === 'espera-429') return [429, { error: { message: 'rate limit' } }];
   if (modo === 'plano-400') return [400, { error: { message: 'invalid parameter: size' } }];
   const ok = { base_resp: { status_code: 0 } };
@@ -93,4 +94,10 @@ test('el MCP del Estudio no devuelve jamás el trabajo entero: ni JSON.stringify
   const mcp = fs.readFileSync(new URL('../estudio-mcp.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(mcp, /JSON\.stringify\(\s*(j|job|r|out)\s*[,)]/, 'nada de volcar el trabajo (ni la respuesta de la oficina) como JSON'); assert.doesNotMatch(mcp, /\.\.\.\s*(j|job)\b/, 'nada de esparcir el trabajo');
   assert.doesNotMatch(mcp, /text:\s*(j|job)\s*[,}]|content:\s*(j|job)\s*[,}]/, 'ninguna respuesta al agente es el trabajo tal cual'); assert.match(mcp, /function answer\(j, prompt\)/, 'las respuestas pasan por answer(), que elige sus campos');
+});
+
+test('DOCUMENTADO: un 400 «invalid content type» (nada de moderación) queda INCIERTO en pago por el regex ancho `content`: el lado seguro (se pregunta al dueño en vez de regenerar)', async () => {
+  // El filtro de moderación busca la palabra `content` en cualquier parte del cuerpo; un error de formato que la contenga también cae del lado incierto. Es a propósito: un falso «incierto» cuesta
+  // una decisión del dueño; un falso «previo» costaría un segundo cobro.
+  modo = 'tipo-400'; const j = await lanzar('grok-image', 'image'); assert.equal(j.state, 'failed'); assert.notEqual(j.causa, 'previo');
 });
