@@ -12,7 +12,7 @@
 // Qué cambia: new Date('AAAA-MM-DDTHH:MM[:SS]') o 'AAAA-MM-DD HH:MM' (sin zona), new Date(y, m, d, h, mi…), Date.parse de esos mismos textos, los get*/set* «locales»
 // y toLocale*String (en la zona). Qué NO cambia: Date.now(), getTime(), toISOString(), los getUTC*, new Date(ms), 'AAAA-MM-DD' (UTC, como en JS) y las fechas con zona
 // explícita (…Z, …+05:00). `Date()` llamado como función y `x instanceof Date` siguen funcionando (el global es un Proxy de la clase).
-import { fijarZona as fijarZonaDia, zonaActual as zonaDiaActual } from '../../../tareas/etiqueta-dia.mjs';
+import { fijarZona, zonaActual as zonaDiaActual } from '../../../tareas/etiqueta-dia.mjs'; // `dia(ms)` de tareas/ sin zona usa la de esa pieza: tiene que ser la de la oficina, no UTC
 const Real = globalThis.Date;
 export const ZONA_POR_DEFECTO = 'America/Panama';
 export { Real as DateReal };
@@ -110,24 +110,24 @@ export const zonaActual = () => ESTADO.zona;
 export function instalarZona(zona = ZONA_POR_DEFECTO) {
   if (!zonaValida(zona)) zona = ZONA_POR_DEFECTO; // una zona que no existe no tumba nada
   ESTADO.zona = zona;
-  fijarZonaDia(zona); // «AAAA-MM-DD» de las reglas puras (tareas/etiqueta-dia.mjs) en la MISMA zona que los get*() de Date: sin esto usaban UTC (entre las 19:00 y las 24:00 de Panamá, el día de mañana)
+  fijarZona(zona); // sin esto, `dia(Date.now())` daba la fecha UTC (un día adelante de 19:00 a 24:00 en Panamá) mientras el resto leía la hora de la oficina
   if (ESTADO.instalada || globalThis.Date.__zonaOficina) return zona;
   globalThis.Date = comoGlobal(crearDateDeZona(() => ESTADO.zona));
   ESTADO.instalada = true;
   return zona;
 }
 /** Para las pruebas: vuelve a dejar el Date de siempre. */
-export function quitarZona() { if (ESTADO.instalada) { globalThis.Date = Real; ESTADO.instalada = false; } fijarZonaDia(undefined); }
+export function quitarZona() { if (ESTADO.instalada) { globalThis.Date = Real; ESTADO.instalada = false; } fijarZona(undefined); }
 
 /* ---- el parche acotado ---- */
 let profundidad = 0, previo = null, previaDia;
 /** Ejecuta `fn` con el reloj de la oficina como `Date` global. Se puede anidar y repetir en paralelo: lo de antes vuelve cuando sale el último. */
 export async function conZona(zona, fn) {
   const valida = zonaValida(zona) ? zona : ZONA_POR_DEFECTO;
-  if (profundidad === 0) { previo = globalThis.Date; previaDia = zonaDiaActual(); if (!previo.__zonaOficina) { globalThis.Date = comoGlobal(crearDateDeZona(valida)); fijarZonaDia(valida); } }
+  if (profundidad === 0) { previo = globalThis.Date; previaDia = zonaDiaActual(); if (!previo.__zonaOficina) { globalThis.Date = comoGlobal(crearDateDeZona(valida)); fijarZona(valida); } }
   profundidad++;
   try { return await fn(); }
-  finally { profundidad--; if (profundidad === 0) { globalThis.Date = previo; previo = null; fijarZonaDia(previaDia); } }
+  finally { profundidad--; if (profundidad === 0) { globalThis.Date = previo; previo = null; fijarZona(previaDia); } }
 }
 
 /** { nombre, utc: 'UTC−05:00' } ahora mismo: lo que Contenido enseña junto a las horas. */
