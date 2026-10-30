@@ -67,7 +67,7 @@ function fail(what, httpStatus, code, msg) {
   // status stays 0 when the words are already ours: media.friendly() would wrap a 401 in its own sentence a second time
   return new MinimaxError(`${what}: ${words}`, { status: known || httpStatus === 401 || httpStatus === 429 ? 0 : httpStatus, code, final: FINAL_CODES.has(+code) || httpStatus === 401 || httpStatus === 400 || httpStatus === 404 });
 }
-const CODIGOS_RECHAZO = new Set([1002, 1004, 1008, 1026, 1039, 1041, 2013, 2037, 2038, 2039, 2042, 2045, 2048, 2049, 2056, 20132, 2153]); // el propio MiniMax dijo que NO (no cobra)
+const CODIGOS_RECHAZO = new Set([1004, 1008, 1039, 2013, 2037, 2038, 2039, 2042, 2048, 2049, 2056, 20132, 2153]); // el propio MiniMax dijo que NO (no cobra)
 const SIN_CONEXION = e => [e?.code, e?.cause?.code, ...(e?.cause?.errors || []).map(x => x?.code)].some(c => c === 'ECONNREFUSED' || c === 'ENOTFOUND');
 async function call(method, path, { body, form, what, timeout = 180000, raw = false, alAceptar = null } = {}) {
   if (!KEY()) throw new MinimaxError(`${what}: MiniMax no tiene key; guárdala con  ${MINIMAX.how}  y reinicia la oficina`, { final: true });
@@ -80,7 +80,7 @@ async function call(method, path, { body, form, what, timeout = 180000, raw = fa
   const br = j && j.base_resp;
   if (!r.ok || (br && +br.status_code !== 0)) {
     const er = fail(what, r.status, br ? +br.status_code : 0, (br && br.status_msg) || j?.error?.message || j?.message || text.slice(0, 200));
-    if (method === 'POST' && ((r.status >= 400 && r.status < 500) || (br && CODIGOS_RECHAZO.has(+br.status_code)))) er.rechazo = true; // señal POSITIVA de rechazo del propio POST
+    if (method === 'POST' && ([400, 401, 402, 403, 404, 422].includes(r.status) || (br && CODIGOS_RECHAZO.has(+br.status_code))) && !/moderation|safety|policy|content|sensitive/i.test(text)) er.rechazo = true; // señal POSITIVA de rechazo del propio POST
     throw er;
   }
   if (alAceptar && method === 'POST') alAceptar(); // MiniMax aceptó el pedido: desde aquí puede haber cobrado

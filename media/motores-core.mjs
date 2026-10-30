@@ -44,6 +44,7 @@ const HF_BASE = () => (io.env().HF_API_BASE_URL || 'https://api.higgsfield.ai').
 const FAL_RUN = () => io.env().AO_FAL_RUN || 'https://fal.run', FAL_QUEUE = () => io.env().AO_FAL_QUEUE || 'https://queue.fal.run', GEMINI_BASE = () => io.env().AO_GEMINI_BASE || 'https://generativelanguage.googleapis.com';
 const META_BASE = () => (io.env().AO_META_BASE || 'https://api.meta.ai/v1').replace(/\/$/, '');
 /* ---------- talking to the engines ---------- */
+const RECHAZO_LIMPIO = new Set([400, 401, 402, 403, 404, 422]), MODERACION = /moderation|safety|policy|content|nsfw|blocked|flagged/i;
 async function http(url, opts, what) {
   let r;
   try { r = await fx(url, { ...opts, signal: AbortSignal.timeout(opts.timeout || 180000) }); }
@@ -52,7 +53,7 @@ async function http(url, opts, what) {
   if (!r.ok) {
     const d = j && (j.error?.message || (typeof j.error === 'string' && j.error) || (typeof j.detail === 'string' && j.detail) || (Array.isArray(j.detail) && j.detail.map(x => x.msg || x.message).filter(Boolean).join('; ')) || j.message);
     const er = new EngineError(`${what}: ${r.status} ${d || text.slice(0, 200)}`, r.status);
-    if (opts.method === 'POST' && r.status >= 400 && r.status < 500) er.rechazo = true; // señal POSITIVA de rechazo del propio POST (4xx): el servicio no lo aceptó
+    if (opts.method === 'POST' && RECHAZO_LIMPIO.has(r.status) && !MODERACION.test(text)) er.rechazo = true; // señal POSITIVA de rechazo del propio POST: 400/401/402/403/404/422 sin moderación (un 408/409/429 o un rechazo por moderación pudo facturar el intento)
     throw er;
   }
   return j;

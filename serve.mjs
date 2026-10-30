@@ -579,8 +579,7 @@ const cablesSeries = cablearMedia(media);
 const generadorSeries = crearGeneradorSeries({ almacen: almacenSeries, media, biblia, capsDe: cablesSeries.capsDe, precioPlano: cablesSeries.precioPlano, existeRef: cablesSeries.existeRef,
   costoRevision: () => (cfg.dimitri?.serieVision === true ? { qa: 0, vision: USD_REVISION_SERIE } : null), config: () => configDeAjustes(cfg.dimitri), activo: () => cfg.dimitri?.serieGenerar === true,
   nonce: () => randomBytes(16).toString('hex'), hoy: () => localDay(Date.now()), auditar: auditarSeries, candado: crearCandadoSeries({ archivo: path.join(DATA, 'series.lock') }) });
-setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)),
-  liberado: m => almacenSeries.uno(m.id)?.pasos?.[`${m.id}:${m.n}:${m.intento}`]?.estado === 'liberado' }); // reintentar desde la tarjeta solo si la serie ya devolvió ese paso // la poda de 400 trabajos del Estudio no se lleva los de una serie viva
+setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)) });
 const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image'), config: () => configDeAjustes(cfg.dimitri),
   almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries, generador: generadorSeries, alCancelar: sx => generadorSeries.alCancelar(sx),
   vision: { activo: () => cfg.dimitri?.serieVision === true, media, copiaParaVer, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`,

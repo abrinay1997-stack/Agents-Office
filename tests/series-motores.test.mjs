@@ -23,6 +23,9 @@ function contestar(host, ruta) {
   if (modo === 'rechaza-codigo') return [200, { base_resp: { status_code: ruta.includes('1004') ? 1004 : 1008, status_msg: 'rechazado' } }];
   if (modo === 'rechaza-1008') return [200, { base_resp: { status_code: 1008, status_msg: 'sin saldo' } }];
   if (modo === 'servidor-500') return [500, { error: 'boom' }];
+  if (modo === 'modera-400') return [400, { error: { message: 'Your request was rejected by the content moderation system' } }];
+  if (modo === 'espera-429') return [429, { error: { message: 'rate limit' } }];
+  if (modo === 'plano-400') return [400, { error: { message: 'invalid parameter: size' } }];
   const ok = { base_resp: { status_code: 0 } };
   switch (host) { // aceptado: el servicio contesta bien y de ahí en adelante falla algo (una descarga 403 o una forma que no sirve)
     case 'api.x.ai': return [200, { data: [{}] }];
@@ -76,4 +79,18 @@ test('un fallo LOCAL tras la respuesta cobrada (disco/almacén: EACCES, EINVAL) 
 test('los campos internos de un trabajo (aceptado, causa, serie) no llegan a los agentes: el MCP del Estudio nunca los lee ni los repite', () => {
   const mcp = fs.readFileSync(new URL('../estudio-mcp.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(mcp, /\.aceptado|\.causa\b|\.serie\b|\bserie:/, 'estudio-mcp.mjs arma sus respuestas con campos elegidos, nunca con el trabajo entero');
+});
+
+for (const [nombre, id, kind] of MOTORES) {
+  test(`${nombre}: 400 con «moderation» y 429 son INCIERTOS en pago (pudieron facturar el intento); un 400 de parámetros sí es previo`, async () => {
+    modo = 'modera-400'; let j = await lanzar(id, kind); assert.equal(j.state, 'failed'); assert.notEqual(j.causa, 'previo', 'moderación: el intento pudo facturarse');
+    modo = 'espera-429'; j = await lanzar(id, kind); assert.notEqual(j.causa, 'previo', '429');
+    modo = 'plano-400'; j = await lanzar(id, kind); assert.equal(j.causa, 'previo', 'un 400 de parámetros sin palabras de moderación: rechazo limpio'); assert.equal(j.aceptado, undefined);
+  });
+}
+
+test('el MCP del Estudio no devuelve jamás el trabajo entero: ni JSON.stringify(job), ni ...job, ni lo reenvía tal cual', () => {
+  const mcp = fs.readFileSync(new URL('../estudio-mcp.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(mcp, /JSON\.stringify\(\s*(j|job|r|out)\s*[,)]/, 'nada de volcar el trabajo (ni la respuesta de la oficina) como JSON'); assert.doesNotMatch(mcp, /\.\.\.\s*(j|job)\b/, 'nada de esparcir el trabajo');
+  assert.doesNotMatch(mcp, /text:\s*(j|job)\s*[,}]|content:\s*(j|job)\s*[,}]/, 'ninguna respuesta al agente es el trabajo tal cual'); assert.match(mcp, /function answer\(j, prompt\)/, 'las respuestas pasan por answer(), que elige sus campos');
 });

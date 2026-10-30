@@ -197,7 +197,7 @@ export function cancel(id) {
 }
 export function retry(id) {
   const j = JOBS.find(x => x.id === id); if (!j) return null;
-  if (j.serie && !(typeof SERIES.liberado === 'function' && SERIES.liberado(j.serie))) throw Object.assign(new Error('es de una serie: decídelo desde la serie (reintentarlo aquí gastaría fuera de su libro y de su tope)'), { status: 409 });
+  if (j.serie) throw Object.assign(new Error('es de una serie: la serie lo regenera con su propia reserva; pulsa Generar en la serie (reintentarlo aquí gastaría fuera de su libro, de su tope y de su hash)'), { status: 409 }); // liberado o no: solo la bomba de la serie regenera un plano, con otro intento
   return submit({ ...(j.engine === LOCAL ? { local: true, source: j.source } : {}), preset: j.preset, post: j.post, qa: j.qa, medir: j.medir, canal: j.canal, esEscena: j.esEscena, receta: j.receta, sku: j.sku, model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
 export function forget(id) { const i = JOBS.findIndex(x => x.id === id && (x.state === 'done' || x.state === 'failed')); if (i < 0) return false; JOBS.splice(i, 1); saveJobs(); return true; }
 export function markAttached(id) { const j = JOBS.find(x => x.id === id); if (j) { j.attached = true; saveJobs(); } }

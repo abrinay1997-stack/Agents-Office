@@ -305,6 +305,9 @@ test('19 · serve.mjs real (motor gratis «prueba»): token, agente 403, dos cli
   assert.deepEqual([x.status, y.status].sort(), [200, 409], JSON.stringify([x.j, y.j]));
   const m = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return s.muestra_lista ? s : null; }); assert.equal(m.progreso.listos, 3); assert.equal(m.estado, 'muestra');
   const jobs = (await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id); assert.equal(jobs.length, 3); assert.deepEqual(jobs.map(j => j.serie.n).sort(), [1, 2, 3]); assert.ok(jobs.every(j => j.by === 'dimitri' && j.serie.intento === 1));
+  const rt = await o.call(`/api/media/jobs/${jobs[0].id}/retry`, {}); assert.equal(rt.status, 409, 'retry de un trabajo de serie llega como 409 (no 500)'); assert.match(rt.j.error, /es de una serie/);
+  assert.equal((await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id).length, 3, 'y no envió nada');
+  const suelto = await o.call('/api/media/jobs', { prompt: 'una tarjeta suelta', model: modelo.id, wait: 20000 }); assert.equal(suelto.status, 200); assert.equal((await o.call(`/api/media/jobs/${suelto.j.job.id}/retry`, {})).status, 200, 'uno normal se reintenta como siempre');
   assert.equal((await o.call(`/api/series/${id}/generar`, { modo: 'muestra' })).status, 409, 'la muestra no se repite');
   const c2 = (await o.call(`/api/series/${id}/generar`, { modo: 'todo' })).j.confirmar; assert.equal(c2.planos, 2);
   assert.equal((await o.call(`/api/series/${id}/generar`, { confirmacion: c2.token, costoMostradoUsd: 0, modo: 'todo' })).status, 200);
