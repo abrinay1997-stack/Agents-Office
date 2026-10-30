@@ -192,16 +192,16 @@ Medido: `dist/command-centre-v2.html` = **2.303.817 B** (tope 2.306.867; margen 
 
 Las 9 redes + WhatsApp/Messenger ya usan logos reales de Simple Icons en **un** registro (`src/redes-iconos.js:10-24`), compartido por escritorio y móvil. Los **conectores** tienen tres sistemas: (1) escritorio: 24 teselas WebP de 160 px en base64 (`src/mcplogos.js`, 160 KB, dentro de un cuadro blanco, sin variante oscura); (2) desconocidos: monograma en canvas (`src/connectors.js:15-31`); (3) nube y móvil: pictogramas propios sobre placa de color (`cloudflare/worker/lib/iconos-conectores.js:1-5` decide **explícitamente** «no se copia ningún logotipo de nadie»).
 
-- **ICO-01 · Alta.** Tres sistemas inconsistentes: el mismo Gmail es logo real en la barra de escritorio y un sobre rojo en nube/móvil.
-- **ICO-02 · Alta.** La decisión de no usar logos reales contradice lo que pide el dueño: se revoca y se anota en `CLAUDE.md`. Faltan en todas partes: Zapier, n8n, Make, GitHub, HubSpot, Airtable, Cloudflare, Linear, Asana.
-- **ICO-03 · Media.** No hay test de cobertura (cada red, plantilla y conector debe tener ícono).
-- **ICO-04 · Media.** 154 KB de WebP en la página, sin escala ni modo oscuro.
-- **ICO-05/06 · Media/Baja.** `alt=""` donde el nombre no está al lado; monogramas con fórmulas distintas.
-- **ICO-07 · Media.** Falta Telegram y cualquier red nueva cae a un globo genérico sin aviso.
-- **ICO-08 · Baja.** LinkedIn se queda en `simple-icons@9.0.0` (versiones nuevas la retiraron a petición de la marca): revisar su guía de uso.
-- **ICO-09 · Media.** Tamaños distintos por contexto (14-18 px); por debajo de 16 px Instagram, Threads y TikTok pierden detalle. **Posible causa de «se achican»**: `contenido.css:271` baja `.pz-nb` a 14 px en columnas estrechas (el auditor no encontró regla que encoja `.pv-net`; la causa principal es CON-06).
-- **ICO-10 · Media.** Objetivos táctiles bajo 44 px: `.pv-tabs [role=tab]` (30 px), `.md-cont` (28 px).
-- **ICO-11 · Baja.** Sin test de contraste para Instagram (degradado) y Pinterest sobre fondo oscuro.
+- ✅ **ICO-01 · Alta.** Tres sistemas inconsistentes: el mismo Gmail es logo real en la barra de escritorio y un sobre rojo en nube/móvil.
+- ✅ **ICO-02 · Alta.** La decisión de no usar logos reales contradice lo que pide el dueño: se revoca y se anota en `CLAUDE.md`. Faltan en todas partes: Zapier, n8n, Make, GitHub, HubSpot, Airtable, Cloudflare, Linear, Asana.
+- ✅ **ICO-03 · Media.** No hay test de cobertura (cada red, plantilla y conector debe tener ícono).
+- ✅ **ICO-04 · Media.** 154 KB de WebP en la página, sin escala ni modo oscuro.
+- ✅ **ICO-05/06 · Media/Baja.** `alt=""` donde el nombre no está al lado; monogramas con fórmulas distintas.
+- ✅ **ICO-07 · Media.** Falta Telegram y cualquier red nueva cae a un globo genérico sin aviso.
+- ✅ **ICO-08 · Baja.** LinkedIn se queda en `simple-icons@9.0.0` (versiones nuevas la retiraron a petición de la marca): revisar su guía de uso.
+- ✅ **ICO-09 · Media.** Tamaños distintos por contexto (14-18 px); por debajo de 16 px Instagram, Threads y TikTok pierden detalle. **Posible causa de «se achican»**: `contenido.css:271` baja `.pz-nb` a 14 px en columnas estrechas (el auditor no encontró regla que encoja `.pv-net`; la causa principal es CON-06).
+- ✅ **ICO-10 · Media.** Objetivos táctiles bajo 44 px: `.pv-tabs [role=tab]` (30 px), `.md-cont` (28 px).
+- ✅ **ICO-11 · Baja.** Sin test de contraste para Instagram (degradado) y Pinterest sobre fondo oscuro.
 
 ### 1.6 Seguridad y UX/UI (SEG, UX)
 
