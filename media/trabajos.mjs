@@ -62,6 +62,16 @@ const LOTE_ALS = new AsyncLocalStorage();
 export const enLote = (info, fn) => LOTE_ALS.run(info, fn);
 /** El lote del pedido en curso ({ id, fila, sku }) o null: para quien construye el pedido por su cuenta. */
 export const loteActual = () => LOTE_ALS.getStore() || null;
+/* Fase 11.5 (carril K): un trabajo de una SERIE de imágenes lleva `serie:{id,n,intento}` (como `lote:{id,fila}`): así un reinicio lo reconoce sin duplicar. Solo lo pone series-generar.mjs
+   al llamar a submit(): mediaReq (la API y los MCP) no copia ese campo, así que nadie de fuera puede marcar (ni falsificar) un trabajo de serie. */
+let SERIES = {};
+export function setSeries(h = {}) { SERIES = { ...SERIES, ...h }; }
+const serieVivo = j => { if (!j.serie || typeof SERIES.vivo !== 'function') return false; try { return !!SERIES.vivo(j.serie.id); } catch { return false; } };
+const SERIE_ID = /^[\w-]{1,60}$/;
+function serieDe(req) {
+  const x = req.serie; if (!x || typeof x !== 'object') return {};
+  return SERIE_ID.test(String(x.id)) && Number.isInteger(x.n) && x.n >= 1 && Number.isInteger(x.intento) && x.intento >= 1 ? { serie: { id: String(x.id), n: x.n, intento: x.intento } } : {};
+}
 const LOTE_RE = /^L[a-z0-9]{4,30}$/;
 function loteDe(req) {
   const l = req.lote && typeof req.lote === 'object' ? req.lote : LOTE_ALS.getStore();
@@ -72,7 +82,7 @@ function loteDe(req) {
 function saveJobs() {
   if (!jobsFile) return;
   const cut = Date.now() - 7 * 864e5; // finished jobs are kept a week (the files themselves live in the gallery)
-  const vivos = new Set(JOBS.filter(loteVivo)), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
+  const vivos = new Set(JOBS.filter(j => loteVivo(j) || serieVivo(j))), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
   JOBS = JOBS.filter(j => vivos.has(j) || otros.has(j));
   fs.mkdirSync(path.dirname(jobsFile), { recursive: true });
   const tmp = jobsFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(JOBS, null, 1)); renombrar(tmp, jobsFile);
@@ -96,7 +106,7 @@ function submitLocal(req) {
 /** Queue a generation. Checks everything up front (model, key, prompt, media, budget) so a bad request fails at once. */
 export function submit(req = {}) {
   if (req.local === true) return submitLocal(req); // banco de presets (F1): sin IA
-  const j = armarTrabajo(req, { cfg: S.cfg, resolve, folderOf, budget, extra: loteDe });
+  const j = armarTrabajo(req, { cfg: S.cfg, resolve, folderOf, budget, extra: r => ({ ...loteDe(r), ...serieDe(r) }) });
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }

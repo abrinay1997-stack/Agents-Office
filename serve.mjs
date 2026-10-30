@@ -67,6 +67,10 @@ import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } fro
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { crearSeries, cablearMedia, configDeAjustes } from './serie-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearAlmacen as crearAlmacenSeries } from './series.mjs'; // 11.5
+import { crearGenerador as crearGeneradorSeries } from './series-generar.mjs'; // 11.5 PR B: GENERAR SERIE (gasta: token + hash + topes)
+import { setSeries as setSeriesEstudio } from './media/trabajos.mjs';
+import { USD_POR_REVISION as USD_REVISION_SERIE } from './serie-vision-core.mjs';
+import { randomBytes } from 'node:crypto';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
@@ -570,8 +574,13 @@ const biblia = crearBiblia({ BRAIN, DATA, renombrar, ask: (sy, u, o) => askX(sy,
   notas: () => [...vaultIndex().entries()].filter(([n]) => /brand|marca|voice|contexto|guideline|visual/i.test(n)).slice(0, 6).map(([nombre, texto]) => ({ nombre, texto: String(texto) })) }); // 11.2
 const almacenSeries = crearAlmacenSeries({ archivo: path.join(DATA, 'series.json'), renombrar }); // 11.5 (PR A): la serie persistida (data/series.json, no viaja por GitHub)
 const auditarSeries = l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} };
+const cablesSeries = cablearMedia(media);
+const generadorSeries = crearGeneradorSeries({ almacen: almacenSeries, media, biblia, capsDe: cablesSeries.capsDe, precioPlano: cablesSeries.precioPlano, existeRef: cablesSeries.existeRef,
+  costoRevision: () => (cfg.dimitri?.serieVision === true ? { qa: 0, vision: USD_REVISION_SERIE } : null), config: () => configDeAjustes(cfg.dimitri), activo: () => cfg.dimitri?.serieGenerar === true,
+  nonce: () => randomBytes(16).toString('hex'), hoy: () => localDay(Date.now()), auditar: auditarSeries });
+setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)) }); // la poda de 400 trabajos del Estudio no se lleva los de una serie viva
 const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image'), config: () => configDeAjustes(cfg.dimitri),
-  almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries,
+  almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries, generador: generadorSeries, alCancelar: sx => generadorSeries.alCancelar(sx),
   vision: { activo: () => cfg.dimitri?.serieVision === true, media, copiaParaVer, destino: destinoDeProveedor(PROVIDER), puedeVer: () => PUEDE_VER, motivoSinVer: `el modelo que usa esta oficina (${PROVIDER.name}) no mira imágenes (si el tuyo sí, pon AO_VISION=1)`,
     presupuesto: { revisar: est => { try { media.checkBudget(est); } catch (e) { if (/^presupuesto del (día|mes)/.test(String(e?.message))) e.code = 'tope'; throw e; } }, cobrar: u => media.charge(u) }, auditar: l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), ...l }) + '\n'); } catch {} }, // solo «no cabe» es un tope; cualquier otro fallo del libro falla cerrado
     mirar: async ({ system, user, imagenes }) => { try { return await askX(system, user, { images: imagenes.map(({ media_type, data }) => ({ media_type, data })), kind: 'vision', maxTokens: 1200, timeout: 120000, tools: false }); }
@@ -3239,6 +3248,7 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  routines: ${rl.length} loaded${rl.some(r => r.paused) ? ' (' + rl.filter(r => r.paused).length + ' paused)' : ''}${nx ? ' · next ' + untilText(nx.nextAt) + ' ' + nx.title.toUpperCase() + ' (' + nx.agent + ')' : ''} · ${rlist.path}`);
   setInterval(tickRoutines, 20000); tickRoutines();
   setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
+  generadorSeries.iniciar(); // 11.5 PR B: la bomba de las series (solo da pasos con `dimitri.serieGenerar` y una serie autorizada; retoma lo que un reinicio dejó en el aire)
   lotes.iniciar(); { const vivos = lotes.lista().filter(l => !['hecho', 'cancelado', 'previsto'].includes(l.estado)); if (vivos.length) console.log(`  lotes: ${vivos.length} sin terminar (${vivos.map(l => `«${l.nombre}» ${l.estado}`).join(', ')}) — retomados sin duplicar`); } // F2: el reloj de los lotes
   { const on = media.engines().filter(p => p.on && p.id !== 'prueba'), n = media.models().filter(m => m.on && m.engine !== 'prueba').length, act = media.jobs({ active: true }).length;
     console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') + ` (${n} models)` : 'no key yet (only the free «prueba» engines) — setx HF_KEY / GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${(b => b.left == null ? 'no daily cap' : `${b.left}/${b.limit} left today`)(media.budget())}${act ? ` · ${act} job${act > 1 ? 's' : ''} in progress` : ''}`); }

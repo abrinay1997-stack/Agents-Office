@@ -1,7 +1,8 @@
 // Agents Office (29 oct 2026) — Fase 11.3 (carril K), oficina local: la ruta que PROPONE una serie. Todo inyectado, sin red.
 //   POST /api/series/proponer  { brief, planos }  → la propuesta (serie-propuesta-core.armarPropuesta). NO gasta, NO genera, NO guarda.
 //   POST /api/series/revisar-plano { file, personajes?, texto_en_imagen?, confirmarUsd } → revisión por visión de un plano YA generado (11.4). Flag `dimitri.serieVision` (apagado); solo el dueño; sin confirmar el costo no llama a nada.
-// Apagada con `dimitri.series` (por defecto). 11.5 PR A: guardar la propuesta (`guardar:true`, flag `dimitri.serieGenerar`), GET /api/series[/<id>] (solo lectura), POST /api/series/<id>/pausar|cancelar (solo bajan el gasto). GENERAR SERIE es el PR B.
+// Apagada con `dimitri.series` (por defecto). 11.5 PR A: guardar la propuesta (`guardar:true`, flag `dimitri.serieGenerar`), GET /api/series[/<id>] (solo lectura), POST /api/series/<id>/pausar|cancelar (solo bajan el gasto).
+// 11.5 PR B: POST /api/series/<id>/generar (token de un solo uso + hash + topes) y /resolver, delegados en series-generar.mjs.
 import { armarPropuesta, resumenPropuesta, preciosDeCifras } from './serie-propuesta-core.mjs';
 import { armarPedidoVision, revisarPlano, fichaDeRevision, USD_POR_REVISION, MAX_REFS_VISION } from './serie-vision-core.mjs';
 import { tipoDe } from './ver-imagen-core.mjs';
@@ -24,7 +25,7 @@ export function configDeAjustes(d) {
   return Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined));
 }
 export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = () => ({}), activo = () => false, id = () => 'serie-' + Date.now().toString(36), config = null, modeloUnico = () => null, vision = null,
-  almacen = null, generarActivo = () => false, auditar = () => {}, alCancelar = () => {} }) {
+  almacen = null, generarActivo = () => false, auditar = () => {}, alCancelar = () => {}, generador = null }) {
   const conf = () => (typeof config === 'function' ? config() : config) || null;
   // 11.4: `vision` = { activo(), media, copiaParaVer, mirar, auditar, destino, puedeVer(), motivoSinVer, presupuesto } — todo inyectado; sin él la ruta contesta 501
   const costoRevision = () => (vision?.activo?.() ? { qa: 0, vision: USD_POR_REVISION } : null); // la QA determinista es gratis; la visión se cuenta por intento
@@ -86,6 +87,14 @@ export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = (
   }
   async function ruta(metodo, pathname, { cuerpo = {}, agente = false } = {}) {
     if (metodo === 'GET' && (pathname === '/api/series' || /^\/api\/series\/[\w-]{1,60}$/.test(pathname))) return leer(pathname);
+    // 11.5 PR B: GENERAR SERIE y decidir un paso en duda. Aquí solo se delega: el token, los topes y la bomba viven en series-generar.mjs (que verifica `por` otra vez)
+    const gen = /^\/api\/series\/([\w-]{1,60})\/(generar|resolver)$/.exec(pathname);
+    if (gen && metodo === 'POST') {
+      if (!generador) return err(404, 'Esta oficina no genera series.');
+      const por = agente ? 'agente' : 'dueno', txt = v => (typeof v === 'string' ? v : undefined);
+      return gen[2] === 'generar' ? generador.generar({ id: gen[1], confirmacion: txt(cuerpo.confirmacion), costoMostradoUsd: cuerpo.costoMostradoUsd, modo: txt(cuerpo.modo) || 'muestra', por })
+        : generador.resolver({ id: gen[1], clave: txt(cuerpo.clave), cobro: cuerpo.cobro, realUsd: cuerpo.realUsd, por });
+    }
     const acc = /^\/api\/series\/([\w-]{1,60})\/(pausar|cancelar)$/.exec(pathname); if (acc && metodo === 'POST') return accionBaja(acc[1], acc[2], agente ? 'agente' : 'dueno');
     if (pathname === '/api/series/revisar-plano' && metodo === 'POST') return revisar({ file: cuerpo.file, personajes: cuerpo.personajes, texto_en_imagen: cuerpo.texto_en_imagen, descripcion: cuerpo.descripcion, confirmarUsd: cuerpo.confirmarUsd, por: agente ? 'agente' : 'dueno' });
     if (pathname === '/api/series/proponer' && metodo === 'POST') return proponer({ brief: cuerpo.brief, planos: cuerpo.planos, por: agente ? 'agente' : 'dueno', guardar: cuerpo.guardar === true });

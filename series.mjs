@@ -38,6 +38,7 @@ export function crearAlmacen({ archivo, renombrar, ahora = () => Date.now(), aza
   const copia = s => (s ? structuredClone(s) : null);
   return {
     todas: () => cargar().series.map(copia),
+    estadoDe: id => cargar().series.find(s => s.id === id)?.estado || null, // barato (sin copiar): lo mira la poda de trabajos del Estudio
     uno: id => copia(cargar().series.find(s => s.id === id)),
     /** Guarda una serie NUEVA (la de armarPropuesta). Nunca pisa otra con el mismo id. */
     crear(serie, extra = {}) {
