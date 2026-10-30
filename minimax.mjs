@@ -82,9 +82,11 @@ async function call(method, path, { body, form, what, timeout = 180000, raw = fa
 const hexBuf = h => Buffer.from(String(h || ''), 'hex');
 /** Downloads a result URL (a video's expires: fetch it at once). */
 export async function fetchBuf(url) {
-  const r = await fetch(url, { signal: AbortSignal.timeout(300000) });
-  if (!r.ok) throw new MinimaxError('no pude descargar el resultado de MiniMax: ' + r.status, { status: r.status });
-  return { buf: Buffer.from(await r.arrayBuffer()), mime: r.headers.get('content-type') || '' };
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(300000) });
+    if (!r.ok) throw new MinimaxError('no pude descargar el resultado de MiniMax: ' + r.status, { status: r.status });
+    return { buf: Buffer.from(await r.arrayBuffer()), mime: r.headers.get('content-type') || '' };
+  } catch (e) { e.fase = 'descarga'; throw e; } // MiniMax ya generó (y cobró): nunca «previo al cobro»
 }
 
 /* ======================= IMAGE — image-01 ======================= */

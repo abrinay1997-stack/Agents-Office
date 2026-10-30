@@ -65,7 +65,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     return base + (k ? ` OJO: hay ${k} paso${pl} incierto${pl} que pudo${k === 1 ? '' : 'ieron'} cobrarse y el tope diario y mensual del Estudio no lo ve: decídelo${pl === '' ? '' : 's'} antes.` : '');
   };
   function emitir(s, c, modo) {
-    const reg = { ...emitirToken({ serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoMostrado: c.costoUsd, ahora: ahora(), nonce: nonce(), ttlMs }), modo, topeMesUsd: c.topeMesUsd, estudio: c.estudio };
+    const reg = { ...emitirToken({ serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoMostrado: c.costoUsd, ahora: ahora(), nonce: nonce(), ttlMs }), modo, topeMesUsd: c.topeMesUsd, estudio: c.estudio, inciertos: c.inciertos };
     let aviso = null;
     const x = almacen.actualizar(s.id, y => { y.token_reg = reg; if (y.estado === 'previsto') { const t = transicion(y, 'espera_ok'); if (!t.ok) { aviso = t.motivo; return undefined; } return t.serie; } return y; });
     if (aviso || !x) return null;
@@ -93,8 +93,9 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     let v = verificarToken(reg, { token: String(confirmacion), serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoActual: c.costoUsd }, ahora());
     if (v.ok && reg.modo !== modo) v = { ok: false, codigo: 'modo', motivo: 'el modo no es el que se mostró' };
     if (v.ok && (reg.topeMesUsd !== c.topeMesUsd || JSON.stringify(reg.estudio) !== JSON.stringify(c.estudio))) v = { ok: false, codigo: 'tope', motivo: 'los topes del Estudio o del mes no son los que se mostraron' };
+    if (v.ok && reg.inciertos !== c.inciertos) v = { ok: false, codigo: 'incierto', motivo: 'cambió el número de pasos inciertos que se mostró' };
     if (v.ok && Number(costoMostradoUsd) !== reg.costoMostrado) v = { ok: false, codigo: 'costo', motivo: 'la cifra que confirmas no es la que se mostró' };
-    if (!v.ok) return ['hash', 'tope', 'costo', 'vencido', 'modo'].includes(v.codigo) ? nuevo(v.codigo, `${v.motivo}. Ahora costaría hasta US$${c.costoUsd} (tope US$${c.topeUsd}); hace falta otro clic sobre esa cifra.`) : err(409, v.motivo, { codigo: v.codigo, gasta: false });
+    if (!v.ok) return ['hash', 'tope', 'costo', 'vencido', 'modo', 'incierto'].includes(v.codigo) ? nuevo(v.codigo, `${v.motivo}. Ahora costaría hasta US$${c.costoUsd} (tope US$${c.topeUsd}); hace falta otro clic sobre esa cifra.`) : err(409, v.motivo, { codigo: v.codigo, gasta: false });
     // todo o nada, en UNA escritura: consumir el token, autorizar y pasar de estado
     let falla = null;
     const g = almacen.actualizar(s.id, y => {
@@ -126,7 +127,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     const b = precioSeguro(precioPlano(p.modelo, p.ajustes)); if (!b) return pausar(id, `no hay un precio fiable para el plano ${n}`);
     const rev = reservaRev(), precio = rev ? { ...b, qa: (b.qa ?? 0) + rev.qa, vision: (b.vision ?? 0) + rev.vision } : b;
     const maxUsd = u2usd(costoPlano(precio)), genUsd = u2usd(costoPlano({ generacion: b.generacion }));
-    try { media.checkBudget(genUsd); } catch (e) { return pausar(id, String(e?.message || e)); } // día o mes del Estudio (Ajustes → Estudio): nada se reserva ni se envía
+    try { media.checkBudget(maxUsd); } catch (e) { return pausar(id, String(e?.message || e)); } // día o mes del Estudio (Ajustes → Estudio): nada se reserva ni se envía
     const dia0 = hoy(), dia = { limit: media.budget().limit, usadoSeries: almacen.usoDe(dia0), config: conf() }, mes = esCarrusel(s) ? { topeUsd: conf().topeMesCarruselesUsd, gastadoUsd: gastoMes(mesClave()) } : undefined;
     let sin = null, clave = null;
     const r = almacen.actualizar(id, y => {
@@ -180,11 +181,14 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
           else { lib(); pa.estado = 'liberado'; volver('previsto'); }
         }
         else if (j.state === 'done' && j.items?.length) {
-          const real = pagado ? (j.cost > 0 ? j.cost : (pa.genUsd ?? 0)) : Math.max(0, +j.cost || 0), exc = liq(real); // en pago, un «hecho» sin costo no borra el gasto: como mínimo se liquida lo estimado pa.estado = 'liquidado'; pa.realUsd = real;
+          // en pago, un «hecho» sin costo no borra el gasto: como mínimo se liquida lo estimado para generar
+          const real = pagado ? (j.cost > 0 ? j.cost : (pa.genUsd ?? 0)) : Math.max(0, +j.cost || 0), exc = liq(real);
+          pa.estado = 'liquidado'; pa.realUsd = real;
           planoA(y, n, q => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: j.items[0], intento: pa.intento, costo_usd: real, prompt: q.prompt_exacto }), motivo: null }));
           if (exc) pausa = `el plano ${n} costó más de lo reservado: revisa antes de seguir`;
         } else { // fallido: la CAUSA estructurada que pone el Estudio (nunca el texto del error). En un motor de PAGO, todo lo que no sea claramente previo al cobro queda «incierto»
-          const causa = j.causa || '', previo = (causa === 'previo' && !j.remote) || causa === 'cancelado_en_cola', clase = j.errorClass || ''; // `remote` = el proveedor aceptó el pedido: nunca es previo al cobro
+          const causa = j.causa || '', clase = j.errorClass || '', aceptado = !!j.remote || j.aceptado === true; // `remote` o `aceptado` = el proveedor ya tomó el pedido: nunca es previo al cobro
+          const previo = (causa === 'previo' || causa === 'cancelado_en_cola') && !aceptado;
           if (pagado && !previo) { dudoso(); pa.estado = 'incierto'; volver('revisar', `puede haberse cobrado (${causa || 'causa desconocida'}): decide si hubo cobro`); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
           else {
             lib(); pa.estado = 'liberado';

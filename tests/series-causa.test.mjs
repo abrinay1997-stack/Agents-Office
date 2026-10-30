@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import * as media from '../media.mjs';
 import { RUN } from '../media/motores.mjs';
 import { loadJobs } from '../media/trabajos.mjs';
@@ -49,13 +50,13 @@ const bib = B.normalizarBiblia({ paleta: [{ rol: 'primario', hex: '#1a2b3c' }], 
 const aprobada = { existe: true, version: 1, estado: 'aprobada', biblia: bib };
 const plano = n => ({ n, rol: 'desarrollo', descripcion: `plano ${n}`, prompt: `Un sofá gris en la sala, toma ${n}` });
 let uid = 0;
-function generador(t, { pago, n = 3 }) {
+function generador(t, { pago, n = 3, modeloId = modelo.id }) {
   const ID = `serie-c${++uid}`;
   const A = crearAlmacen({ archivo: path.join(fs.mkdtempSync(path.join(dir, 's-')), 's.json'), renombrar: fs.renameSync }), est = { t: 1e6, k: 0 };
   const M = { submit: media.submit, job: media.job, jobs: media.jobs, cancel: media.cancel, checkBudget: media.checkBudget, budget: media.budget, models: () => media.models().map(m => ({ ...m, engine: pago ? 'pagado' : m.engine })) };
   const G = crearGenerador({ almacen: A, media: M, biblia: { leer: () => aprobada }, capsDe: () => ({ maxRefs: 4 }), precioPlano: () => ({ generacion: 0.1 }), activo: () => true,
     ahora: () => est.t, nonce: () => 'n'.repeat(15) + (++est.k), hoy: () => '2026-10-30', intervalo: 10 });
-  const p = P.armarPropuesta({ brief: { titulo: 'S' }, planos: Array.from({ length: n }, (_, i) => plano(i + 1)), biblia: aprobada, hojas: [], ctx: { id: ID, capsDe: () => ({ maxRefs: 4 }), existeRef: () => true, precioPlano: () => ({ generacion: 0.1 }), modeloUnico: modelo.id } });
+  const p = P.armarPropuesta({ brief: { titulo: 'S' }, planos: Array.from({ length: n }, (_, i) => plano(i + 1)), biblia: aprobada, hojas: [], ctx: { id: ID, capsDe: () => ({ maxRefs: 4 }), existeRef: () => true, precioPlano: () => ({ generacion: 0.1 }), modeloUnico: modeloId } });
   A.crear(p.serie); const c = G.generar({ id: ID, modo: 'todo' }).cuerpo.confirmar; assert.equal(G.generar({ id: ID, modo: 'todo', confirmacion: c.token, costoMostradoUsd: c.costoMostradoUsd }).estado, 200);
   return { G, A, ID, linea: () => Object.values(A.uno(ID).libro.lineas)[0], serie: () => A.uno(ID), trabajos: () => media.jobs().filter(j => j.serie?.id === ID) };
 }
@@ -75,4 +76,46 @@ test('GRATIS con el Estudio real: un trabajo interrumpido por un reinicio se REI
   await g.G.tick(); await hasta(() => g.trabajos().some(j => j.state === 'running')); loadJobs(); await g.G.tick(); await g.G.tick();
   assert.equal(g.serie().escaleta[0].estado, 'corriendo', 'reintentó el mismo plano'); assert.notEqual(g.serie().escaleta[0].estado, 'revisar'); assert.equal(Object.values(g.serie().libro.lineas).filter(l => l.estado === 'liberado').length, 1);
   assert.deepEqual(g.trabajos().map(j => j.serie.intento).sort(), [1, 2]);
+});
+
+// ---- motores SÍNCRONOS de imagen (aquí con el de Meta contra un servicio local de mentira): el POST se acepta y el servicio cobra; después falla la DESCARGA ----
+let modoMeta = 'descarga-403'; const peticiones = [];
+const servicio = http.createServer((rq, rs) => {
+  peticiones.push(`${rq.method} ${rq.url}`); rq.resume();
+  rq.on('end', () => {
+    if (rq.url.startsWith('/dl')) { rs.writeHead(403); return rs.end('firma vencida'); }
+    if (modoMeta === 'auth') { rs.writeHead(401, { 'content-type': 'application/json' }); return rs.end(JSON.stringify({ error: { message: 'invalid api key' } })); }
+    rs.writeHead(200, { 'content-type': 'application/json' }); rs.end(JSON.stringify({ data: [{ url: `http://127.0.0.1:${servicio.address().port}/dl/x.png` }] }));
+  });
+});
+await new Promise(r => servicio.listen(0, '127.0.0.1', r)); test.after(() => servicio.close());
+const conMeta = async (modo, fn) => { modoMeta = modo; RUN.prueba = RUN_PRUEBA; process.env.META_API_KEY = 'no-es-una-key';
+  process.env.AO_META_BASE = `http://127.0.0.1:${servicio.address().port}`; try { return await fn(); } finally { delete process.env.META_API_KEY; delete process.env.AO_META_BASE; } };
+
+test('SÍNCRONO real: el POST se acepta y falla la descarga (403): `aceptado`, causa que NO es previo y, en pago, queda INCIERTO (no se regenera ni se paga dos veces); sin conexión o con 401 al POST: previo y se libera', async t => {
+  await conMeta('descarga-403', async () => {
+    const j = await terminar(media.submit({ prompt: 'una tarjeta', model: 'muse-image', kind: 'image', n: 1, by: 'dimitri' }).id);
+    assert.equal(j.state, 'failed'); assert.equal(j.aceptado, true, 'el servicio aceptó el pedido'); assert.notEqual(j.causa, 'previo'); assert.equal(j.remote, 0, 'sin id remoto: por eso hacía falta el marcador');
+    const a = generador(t, { pago: true, modeloId: 'muse-image' }); await a.G.tick(); await hasta(() => a.trabajos().some(x => x.state === 'failed')); await a.G.tick(); await a.G.tick();
+    assert.equal(a.linea().estado, 'incierto'); assert.equal(a.serie().estado, 'pausado'); assert.equal(a.trabajos().length, 1, 'no se envió otro: no hay segundo cobro');
+    assert.equal(peticiones.filter(x => x.startsWith('POST')).length, 2, 'un POST por trabajo, nada repetido');
+  });
+  await conMeta('auth', async () => {
+    const j = await terminar(media.submit({ prompt: 'una tarjeta', model: 'muse-image', kind: 'image', n: 1, by: 'dimitri' }).id); assert.equal(j.aceptado, undefined); assert.equal(j.causa, 'previo');
+    const b = generador(t, { pago: true, modeloId: 'muse-image' }); await b.G.tick(); await hasta(() => b.trabajos().some(x => x.state === 'failed')); await b.G.tick(); await b.G.tick();
+    assert.equal(b.linea().estado, 'liberado'); assert.equal(b.serie().escaleta[0].estado, 'previsto');
+  });
+  await conMeta('x', async () => {
+    const cerrado = await new Promise(r => { const x = http.createServer(); x.listen(0, '127.0.0.1', () => { const pt = x.address().port; x.close(() => r(pt)); }); });
+      process.env.AO_META_BASE = `http://127.0.0.1:${cerrado}`;
+      const j = await terminar(media.submit({ prompt: 'una tarjeta', model: 'muse-image', kind: 'image', n: 1, by: 'dimitri' }).id);
+    assert.equal(j.aceptado, undefined); assert.equal(j.causa, 'previo', 'sin conexión con el servicio: nunca salió');
+  });
+});
+
+test('submit es ATÓMICO: si el disco falla al guardar, el trabajo no queda en la cola ni correrá después', async () => {
+  RUN.prueba = RUN_PRUEBA; const antes = media.jobs().length, tmpJobs = path.join(DATA, 'media-jobs.json.tmp');
+  fs.mkdirSync(tmpJobs, { recursive: true }); // el temporal es una carpeta: escribir en él lanza
+  try { assert.throws(() => media.submit({ prompt: 'x', model: modelo.id, kind: 'image', n: 1, by: 'dimitri', serie: { id: 'atomico', n: 1, intento: 1 } })); } finally { fs.rmSync(tmpJobs, { recursive: true, force: true }); }
+  assert.equal(media.jobs().length, antes, 'el trabajo no quedó en memoria'); await espera(300); assert.equal(media.jobs().some(j => j.serie?.id === 'atomico'), false, 'ni corrió después');
 });

@@ -420,3 +420,19 @@ test('24b · con AO_HOST (la puerta global de Host abierta) las rutas que gastan
   assert.equal(await llamar('/api/series/proponer', 'evil.example', '{"guardar":true}'), 403); assert.notEqual(await llamar('/api/series/proponer', 'evil.example'), 403, 'sin guardar no escribe: queda fuera');
   assert.notEqual(await llamar('/api/series/revisar-plano', `127.0.0.1:${port}`), 403);
 });
+
+test('28 · segunda guarda del generador con un Estudio falso: causa previo o cancelado_en_cola con id remoto o con el pedido ya aceptado → INCIERTO; sin ninguno de los dos → se libera', async t => {
+  for (const [causa, extra, esperado] of [['previo', { remote: 1 }, 'incierto'], ['previo', { aceptado: true }, 'incierto'], ['cancelado_en_cola', { remote: 1 }, 'incierto'], ['cancelado_en_cola', { aceptado: true }, 'incierto'], ['cancelado_en_cola', {}, 'liberado'], ['previo', {}, 'liberado']]) {
+    const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'x', 'saldo', causa); Object.assign(o.E.job('j0'), extra); await ticks(o);
+    assert.equal(vista(o).libro.lineas[`${o.id}:1:1`].estado, esperado, `${causa} ${JSON.stringify(extra)}`);
+  }
+});
+
+test('29 · I1: al liquidar quedan fijados el estado y el real del paso (no solo el libro); el token cubre el número de pasos inciertos; el tope del Estudio se mira con lo reservado COMPLETO (con visión)', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.ok('j0', 0.08); await ticks(o); const pa = vista(o).pasos[`${o.id}:1:1`];
+  assert.equal(pa.estado, 'liquidado'); assert.equal(pa.realUsd, 0.08);
+  const p = montar(t, { n: 2 }); const c = pedir(p, 'todo'); const otra = p.A.crear({ ...vista(p), id: 'otra-serie' }); p.A.actualizar(otra.id, y => ({ ...y, libro: { tope: 1e7, lineas: { 'otra-serie:1:1': { estado: 'incierto', max: 100000 } } } }));
+  const r = confirmar(p, c); assert.equal(r.estado, 409); assert.equal(r.cuerpo.codigo, 'incierto'); assert.equal(r.cuerpo.confirmar.inciertos, 1); assert.equal(p.E.enviados.length, 0);
+  const q = montar(t, { n: 2, extra: { costoRevision: () => ({ qa: 0, vision: 0.1 }) } }); autorizar(q, 'todo'); q.E.tope = 0.15; await ticks(q);
+  assert.equal(q.A.uno(q.id).estado, 'pausado'); assert.match(q.A.uno(q.id).pausa_motivo, /presupuesto del día/); assert.equal(q.E.enviados.length, 0, 'generar (0,10) cabe en 0,15 pero generar + visión (0,20) no');
+});

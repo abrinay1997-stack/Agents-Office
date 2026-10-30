@@ -107,7 +107,9 @@ function submitLocal(req) {
 export function submit(req = {}) {
   if (req.local === true) return submitLocal(req); // banco de presets (F1): sin IA
   const j = armarTrabajo(req, { cfg: S.cfg, resolve, folderOf, budget, extra: r => ({ ...loteDe(r), ...serieDe(r) }) });
-  JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
+  JOBS.push(j);
+  try { saveJobs(); } catch (e) { const i = JOBS.indexOf(j); if (i >= 0) JOBS.splice(i, 1); throw e; } // atómico: si el disco falla, el trabajo NO queda en la cola (correría en el próximo pump sin que quien lo pidió lo sepa)
+  setImmediate(pumpJobs);
   return pub(j);
 }
 function pumpJobs() {
@@ -155,8 +157,8 @@ async function runJob(j) {
     // 11.5: la CAUSA va estructurada para quien lleva cuentas (series): `previo` = se sabe que falló ANTES de cobrar (llave, saldo, pedido rechazado, sin conexión);
     // `cancelado` = se canceló en marcha (puede cobrarse igual); cualquier otra = la clase del error. Quien no la reconoce en un motor de pago lo cuenta como «incierto».
     // `previo` es por la FASE, no por la clase del error: solo si el proveedor NUNCA aceptó el pedido (sin id remoto). Con id remoto el motor ya puede estar generando y cobrando: eso nunca es «previo».
-    const aceptado = !!j.remote?.length;
-    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && (['key', 'saldo', 'formato'].includes(ex.clase) || ['ECONNREFUSED', 'ENOTFOUND'].includes(e?.code || e?.cause?.code)) ? 'previo' : ex.clase;
+    const aceptado = !!j.remote?.length || j.aceptado === true || e?.fase === 'descarga'; // con id remoto, con el POST aceptado o fallando al DESCARGAR el resultado, el servicio ya pudo cobrar
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && (['key', 'saldo', 'formato'].includes(ex.clase) || [e?.code, e?.cause?.code, ...(e?.cause?.errors || []).map(x => x?.code)].some(c => c === 'ECONNREFUSED' || c === 'ENOTFOUND')) ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;

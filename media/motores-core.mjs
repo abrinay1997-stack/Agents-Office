@@ -67,6 +67,7 @@ const fromUrl = async url => {
     // en la nube, con el trabajo ya pagado en el servicio (tiene su id remoto), un corte al descargar NO lo da por perdido: se reintenta en el próximo paso
     const pasajero = !e.final && (!e.status || e.status >= 500 || e.status === 429 || e.status === 408);
     if (io.paso && pasajero && ACTUAL?.remote?.length && (ACTUAL.descargas = (ACTUAL.descargas || 0) + 1) <= 6) throw new Pendiente(30000);
+    e.fase = 'descarga'; // el servicio YA generó (y cobró): quien lleve cuentas no puede darlo por «previo al cobro»
     throw e;
   }
 };
@@ -161,6 +162,7 @@ const RUN = {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': secret('gemini') },
         body: JSON.stringify({ contents: [{ parts: [{ text: job.prompt }, ...refs] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: job.s.aspectRatio, ...(job.s.imageSize ? { imageSize: job.s.imageSize } : {}) } } }),
       }, m.name);
+      job.aceptado = true; // el servicio aceptó el pedido (y puede cobrarlo): desde aquí un fallo ya no es «previo»
       const parts = (j.candidates || []).flatMap(c => c.content?.parts || []).filter(p => p.inlineData || p.inline_data);
       if (!parts.length) throw new Error('Nano Banana no devolvió imagen' + (j.promptFeedback?.blockReason ? ` (bloqueado: ${j.promptFeedback.blockReason})` : (j.candidates?.[0]?.finishReason ? ` (${j.candidates[0].finishReason})` : '')));
       for (const p of parts) { const d = p.inlineData || p.inline_data; await ctx.add(Buffer.from(d.data, 'base64'), extOf(d.mimeType || d.mime_type)); }
@@ -168,6 +170,7 @@ const RUN = {
   },
   async grok(m, job, ctx) {
     const j = await http('https://api.x.ai/v1/images/generations', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${secret('grok')}` }, body: JSON.stringify({ model: S.cfg.models.grok, prompt: job.prompt, n: job.n, response_format: 'b64_json' }) }, 'Grok');
+    job.aceptado = true;
     for (const d of j.data || []) await ctx.add(Buffer.from(d.b64_json, 'base64'), 'jpg');
   },
   async openai(m, job, ctx) { // with references: /images/edits (multipart); without: /images/generations
@@ -179,6 +182,7 @@ const RUN = {
       for (const f of refs) fd.append('image[]', new Blob([f.data], { type: f.mime }), String(f.p).split(/[\\/]/).pop());
       j = await http('https://api.openai.com/v1/images/edits', { method: 'POST', headers: auth, body: fd, timeout: 300000 }, 'OpenAI');
     } else j = await http('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ model: S.cfg.models.openai, prompt: job.prompt, n: job.n, size, quality: job.s.quality }), timeout: 300000 }, 'OpenAI');
+    job.aceptado = true;
     for (const d of j.data || []) { if (d.b64_json) await ctx.add(Buffer.from(d.b64_json, 'base64'), 'png'); else { const r = await fromUrl(d.url); await ctx.add(r.buf, extOf(r.mime, d.url)); } }
   },
   async meta(m, job, ctx) { // Muse Image (OpenAI-compatible): no references → /images/generations; with them → /images/edits with Meta's own JSON body (images: [{ image_url }]), no multipart
@@ -189,6 +193,7 @@ const RUN = {
     const j = refs.length
       ? await http(`${META_BASE()}/images/edits`, { method: 'POST', headers: auth, body: JSON.stringify({ ...base, images: refs.map(f => ({ image_url: asDataUri(f) })) }), timeout: 300000 }, 'Meta')
       : await http(`${META_BASE()}/images/generations`, { method: 'POST', headers: auth, body: JSON.stringify(base), timeout: 300000 }, 'Meta');
+    job.aceptado = true;
     const out = j.output_format || fmt, ext = out === 'jpeg' ? 'jpg' : out;
     if (!(j.data || []).length) throw new Error('Muse Image no devolvió imagen');
     for (const d of j.data) { if (d.b64_json) await ctx.add(Buffer.from(d.b64_json, 'base64'), ext); else if (d.url) { const r = await fromUrl(d.url); await ctx.add(r.buf, extOf(r.mime, d.url, ext)); } }
@@ -199,6 +204,7 @@ const RUN = {
     if (m.kind === 'image') {
       const { path: p, body } = m.fal({ prompt: job.prompt, n: job.n, s: job.s, m: urls });
       const j = await http(`${FAL_RUN()}/${p}`, { method: 'POST', headers: auth, body: JSON.stringify(body), timeout: 300000 }, 'fal.ai');
+      job.aceptado = true;
       for (const im of j.images || []) { const r = await fromUrl(im.url); await ctx.add(r.buf, extOf(im.content_type || r.mime, im.url)); }
       return;
     }
