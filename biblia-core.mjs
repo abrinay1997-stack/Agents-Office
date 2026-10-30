@@ -17,7 +17,7 @@ export const MAX_LINEA = 900;
 export const ROLES_COLOR = ['primario', 'secundario', 'acento', 'fondo', 'texto', 'neutro'];
 const ID_RE = /^\d{4}-\d{2}\/[^\\<>:"|?*\x00-\x1f]{1,200}$/;
 const cadena = (s, n) => String(s ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
-const idsValidos = (l, n = 24) => [...new Set((Array.isArray(l) ? l : []).map(x => String(x ?? '').replace(/\\/g, '/')).filter(x => ID_RE.test(x) && !x.includes('..')))].slice(0, n);
+export const idsValidos = (l, n = 24) => [...new Set((Array.isArray(l) ? l : []).map(x => String(x ?? '').replace(/\\/g, '/')).filter(x => ID_RE.test(x) && !x.includes('..')))].slice(0, n);
 const sinTildes = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /** Lo que llega (de la IA, de la página, de un archivo editado a mano) → una biblia con la forma de siempre, truncada y sin basura. */
