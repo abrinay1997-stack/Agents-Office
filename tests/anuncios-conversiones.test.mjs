@@ -176,7 +176,15 @@ test('la interfaz: «Medir» dice apagada o encendida en palabras; la conversaci
 const listen = srv => new Promise(r => srv.listen(0, '127.0.0.1', () => r(srv.address().port)));
 const esperar = async (fn, { max = 30000, cada = 200, que = 'algo' } = {}) => { const t0 = Date.now(); for (;;) { const r = await fn(); if (r) return r; if (Date.now() - t0 > max) throw new Error(`no llegó a tiempo: ${que}`); await new Promise(x => setTimeout(x, cada)); } };
 
+// «hoy» de la cola es el día LOCAL de la máquina (mismoDia): si el test cruza la medianoche entre el primer envío y la lectura de Estado, «enviados hoy» baja a 1.
+// Antes de empezar se espera (como mucho ~20 s) a que falten al menos 20 s para la medianoche local; no cambia lo que se afirma.
+async function sinCruzarMedianoche(margenS = 20) {
+  const resto = () => { const n = new Date(), f = new Date(n); f.setHours(24, 0, 0, 0); return (f - n) / 1000; };
+  for (let i = 0; i < 2 * margenS + 4 && resto() < margenS; i++) await new Promise(r => setTimeout(r, 500));
+}
+
 test('serve.mjs: solo el dueño manda (un agente 403), el webhook pide su clave, nada personal sale, y Estado dice «Conversiones»', { timeout: 120000 }, async t => {
+  await sinCruzarMedianoche();
   const g = crearMetaStand(), graph = await g.escuchar();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-conv-srv-')), brain = path.join(dir, 'brain'), local = path.join(dir, 'office.config.local.json');
   fs.mkdirSync(brain, { recursive: true });
