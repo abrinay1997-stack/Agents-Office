@@ -104,3 +104,29 @@ export function cancelarSerie(s) {
   return { ok: true, serie: { ...s, estado: 'cancelado', pausa_motivo: null, autorizado: null, token_reg: null, cancelada: true } }; // la autorización muere con ella: lo que siga en el aire solo se liquida
 }
 export { nuevoLibro };
+
+/** Defensa en profundidad para las rutas que gastan o liberan dinero (generar, resolver, pausar, cancelar), además de `by`/`agent` del cuerpo (que decide quien llama):
+ *  el Host debe ser localhost, 127.0.0.1 o [::1] (anti DNS-rebinding) y el Origin, si viene, el MISMO origen (anti-CSRF desde una página de fuera). Pura. */
+export function origenPermitido({ host, origin } = {}) {
+  const h = String(host || '').toLowerCase(), m = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/.exec(h);
+  if (!m) return { ok: false, motivo: 'esta acción solo se hace desde la propia computadora (localhost)' };
+  if (origin == null || origin === '') return { ok: true };
+  let o; try { o = new URL(String(origin)); } catch { return { ok: false, motivo: 'Origin no válido' }; }
+  return o.host.toLowerCase() === h && (o.protocol === 'http:' || o.protocol === 'https:') ? { ok: true } : { ok: false, motivo: 'la petición viene de otro origen' };
+}
+
+/** Candado simple de la bomba (no del almacén): un solo proceso por data/ da pasos de gasto. `tener()` lo adquiere o lo renueva; falla si otro proceso VIVO lo tiene (latido reciente).
+ *  Dos procesos sobre el mismo data/ siguen sin ser un caso soportado para escribir series (el almacén no se coordina entre procesos): esto solo evita que los dos GASTEN. */
+export function crearCandado({ archivo, pid = process.pid, ahora = () => Date.now(), vivo = p => { try { process.kill(p, 0); return true; } catch (e) { return e.code === 'EPERM'; } }, vidaMs = 30000 } = {}) {
+  let mio = false;
+  const leer = () => { try { const j = JSON.parse(fs.readFileSync(archivo, 'utf8')); return j && Number.isInteger(j.pid) && Number.isFinite(j.t) ? j : null; } catch { return null; } };
+  const escribir = () => { try { fs.mkdirSync(path.dirname(archivo), { recursive: true }); fs.writeFileSync(archivo, JSON.stringify({ pid, t: ahora() })); return true; } catch { return false; } };
+  return {
+    tener() {
+      const c = leer();
+      if (c && c.pid !== pid && ahora() - c.t < vidaMs && vivo(c.pid)) { mio = false; return false; }
+      mio = escribir(); return mio;
+    },
+    liberar() { const c = leer(); if (mio && c?.pid === pid) { try { fs.unlinkSync(archivo); } catch { /* ya */ } } mio = false; },
+  };
+}

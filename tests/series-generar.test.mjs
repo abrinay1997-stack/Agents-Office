@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as B from '../biblia-core.mjs';
 import * as P from '../serie-propuesta-core.mjs';
-import { crearAlmacen, vistaSerie } from '../series.mjs';
+import { crearAlmacen, vistaSerie, origenPermitido, crearCandado } from '../series.mjs';
 import { crearGenerador } from '../series-generar.mjs';
 import { crearSeries } from '../serie-local.mjs';
 
@@ -31,7 +31,7 @@ function estudio(o = {}) {
     submit(req) { if (E.rechazar) throw new Error(E.rechazar); const j = { id: 'j' + E.lista.length, state: 'queued', serie: req.serie, items: [], cost: 0, engine: E.motor, kind: 'image', error: null }; E.lista.push(j); E.enviados.push(req); return j; },
     job: id => E.lista.find(j => j.id === id) || null, jobs: () => E.lista, cancel(id) { E.cancelas.push(id); },
     ok(id, cost = 0.08) { Object.assign(E.job(id), { state: 'done', items: ['2026-10/x' + id + '.png'], cost }); },
-    falla(id, error, errorClass = 'otro') { Object.assign(E.job(id), { state: 'failed', error, errorClass }); },
+    falla(id, error, errorClass = 'otro', causa = errorClass) { Object.assign(E.job(id), { state: 'failed', error, errorClass, causa }); },
     ...o };
   return E;
 }
@@ -149,10 +149,12 @@ test('9 · el presupuesto del Estudio (día/mes) y el cupo diario de series cort
   const q = montar(t, { n: 2 }); q.E.limit = 4; q.A.sumarUso('2026-10-29', 3); autorizar(q, 'todo'); await ticks(q); assert.equal(q.E.enviados.length, 1, 'el cupo de ayer no cuenta hoy: se reinicia solo');
 });
 
-test('10 · el mes de carruseles: un tope de mes que no alcanza corta antes de enviar', async t => {
-  const o = montar(t, { n: 2, config: { topeMesCarruselesUsd: 0.05 } }); o.A.actualizar(o.id, y => ({ ...y, brief: { ...y.brief, formato: 'carrusel' } }));
-  const c = pedir(o, 'todo'); assert.equal(c.costoMostradoUsd, 0.4); confirmar(o, c); await ticks(o);
-  assert.equal(vista(o).estado, 'pausado'); assert.match(vista(o).pausa_motivo, /tope del mes/); assert.equal(o.E.enviados.length, 0);
+test('10 · el mes de carruseles: si el máximo no cabe en lo que queda del mes, ni siquiera hay token; y lo ya gastado del mes cuenta', async t => {
+  const o = montar(t, { n: 2, config: { topeMesCarruselesUsd: 0.3 } }); o.A.actualizar(o.id, y => ({ ...y, brief: { ...y.brief, formato: 'carrusel' } }));
+  const r = o.G.generar({ id: o.id, modo: 'todo' }); assert.equal(r.estado, 409); assert.equal(r.cuerpo.codigo, 'tope', 'cabe en la serie (US$0,40 de 10) pero no en el mes (US$0,30)'); assert.equal(o.E.enviados.length, 0);
+  const p = montar(t, { n: 2, config: { topeMesCarruselesUsd: 0.5 } }); p.A.actualizar(p.id, y => ({ ...y, brief: { ...y.brief, formato: 'carrusel' } })); autorizar(p, 'todo'); await ticks(p); assert.equal(p.E.enviados.length, 1, 'cabe: sale');
+  const q = montar(t, { n: 2, config: { topeMesCarruselesUsd: 0.5 }, planos: [plano(1), plano(2)] }); q.A.actualizar(q.id, y => ({ ...y, brief: { ...y.brief, formato: 'post' } }));
+    q.est.config.topeMesCarruselesUsd = 0.01; assert.equal(q.G.generar({ id: q.id, modo: 'todo' }).estado, 200, 'un post no cuenta en el tope de carruseles (el formato real, no el título)');
 });
 
 test('11 · reinicio a mitad: sigue en el aire → no duplica; se cayó entre enviar y apuntar → se adopta por su marca; se cayó antes de enviar → se devuelve la reserva y se reintenta con otra clave', async t => {
@@ -172,27 +174,33 @@ test('11 · reinicio a mitad: sigue en el aire → no duplica; se cayó entre en
   assert.equal(o.E.enviados.filter(r => r.serie.n === 2).length, 1, 'el plano 2 se envió una sola vez de verdad'); assert.equal(o.E.enviados.at(-1).serie.intento, 2);
 });
 
-test('12 · un trabajo de PAGO que se pierde o muere con la oficina queda «incierto» (puede haberse cobrado), sigue contando y pide tu decisión; uno gratis solo se repite', async t => {
-  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.'); await ticks(o);
+test('12 · motor de PAGO: lo que se pierde, muere con la oficina, se cancela en marcha o falla de forma dudosa queda «incierto» (sigue contando) y lo decide el dueño; el gratis solo se repite', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'x', 'otro', 'interrumpido'); await ticks(o);
   let s = vista(o); const clave = `${o.id}:1:1`; assert.equal(s.libro.lineas[clave].estado, 'incierto'); assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /puede haberse cobrado/); assert.equal(s.escaleta[0].estado, 'revisar');
   const v = vistaSerie(s); assert.equal(v.gasto.inciertoUsd, 0.1, 'sigue contando contra el tope'); assert.equal(v.pasos_inciertos[0].clave, clave);
   assert.equal(o.G.resolver({ id: o.id, clave, cobro: false }).estado, 200); s = vista(o); assert.equal(s.libro.lineas[clave].estado, 'liberado'); assert.equal(s.escaleta[0].estado, 'previsto'); assert.equal(o.G.resolver({ id: o.id, clave, cobro: false }).estado, 409, 'ya no está en duda');
-  const g = montar(t, { n: 2, E: estudio({ motor: 'prueba' }) }); autorizar(g, 'todo'); await ticks(g); g.E.falla('j0', 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.'); await ticks(g, 2);
+  const g = montar(t, { n: 2, E: estudio({ motor: 'prueba' }) }); autorizar(g, 'todo'); await ticks(g); g.E.falla('j0', 'x', 'otro', 'interrumpido'); await ticks(g, 2);
   assert.equal(g.A.uno(g.id).libro.lineas[`${g.id}:1:1`].estado, 'liberado'); assert.equal(g.E.enviados.length, 2, 'gratis: se repite sin drama'); assert.equal(g.A.uno(g.id).estado, 'corriendo');
   const h = montar(t, { n: 2 }); autorizar(h, 'todo'); await ticks(h); h.E.lista.length = 0; await ticks(h); // el trabajo desapareció del Estudio con un motor de pago: no se sabe
   assert.equal(h.A.uno(h.id).libro.lineas[`${h.id}:1:1`].estado, 'incierto'); assert.equal(h.E.enviados.length, 1);
   const w = montar(t, { n: 2 }); autorizar(w, 'todo'); await ticks(w); w.E.lista.length = 0; await ticks(w); assert.equal(w.G.resolver({ id: w.id, clave: `${w.id}:1:1`, cobro: true, realUsd: 0.07 }).estado, 200);
   assert.equal(w.A.uno(w.id).libro.lineas[`${w.id}:1:1`].estado, 'liquidado'); assert.equal(w.A.uno(w.id).escaleta[0].estado, 'revisar', 'si hubo cobro no hay archivo: queda para revisar');
+  const x = montar(t, { n: 2, E: estudio({ models: () => [] }) }); autorizar(x, 'todo'); await ticks(x); assert.equal(x.A.uno(x.id).pasos[`${x.id}:1:1`].engine, null); x.E.falla('j0', 'x', 'tiempo', 'tiempo'); await ticks(x);
+  assert.equal(x.A.uno(x.id).libro.lineas[`${x.id}:1:1`].estado, 'incierto', 'un motor que no se resuelve cuenta como de PAGO (falla cerrado)');
+  const u = montar(t, { n: 2 }); autorizar(u, 'todo'); await ticks(u); u.E.falla('j0', 'algo nuevo que nadie previó'); u.E.job('j0').causa = undefined; await ticks(u); assert.equal(u.A.uno(u.id).libro.lineas[`${u.id}:1:1`].estado, 'incierto', 'sin causa estructurada: dudoso');
 });
 
-test('13 · fallos: transitorio → UN reintento con clave nueva; luego revisar y pausa; sin saldo/key → pausa sin culpar al plano; contenido → revisar', async t => {
-  const o = montar(t, { n: 3 }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'el servicio no respondió a tiempo', 'tiempo'); await ticks(o, 2);
+test('13 · fallos: gratis → UN reintento con clave nueva y luego revisar; pago + transitorio → incierto; pago + claramente previo (sin saldo/key/pedido rechazado) → se libera y se pausa; contenido en pago → incierto', async t => {
+  const o = montar(t, { n: 3, E: estudio({ motor: 'prueba' }) }); autorizar(o, 'todo'); await ticks(o); o.E.falla('j0', 'el servicio no respondió a tiempo', 'tiempo'); await ticks(o, 2);
   assert.equal(o.E.enviados.length, 2); assert.equal(o.E.enviados[1].serie.intento, 2); assert.equal(vista(o).libro.lineas[`${o.id}:1:1`].estado, 'liberado'); assert.equal(vista(o).estado, 'corriendo');
   o.E.falla('j1', 'el servicio no respondió a tiempo', 'tiempo'); await ticks(o, 2); let s = vista(o); assert.equal(s.escaleta[0].estado, 'revisar'); assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /plano 1/); assert.equal(o.E.enviados.length, 2);
-  const p = montar(t, { n: 3 }); autorizar(p, 'todo'); await ticks(p); p.E.falla('j0', 'sin saldo o créditos en el servicio', 'saldo'); await ticks(p, 2); s = p.A.uno(p.id);
-  assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /sin saldo/); assert.equal(s.escaleta[0].estado, 'previsto', 'no es culpa del plano'); assert.equal(s.fallos[1] || 0, 0); assert.equal(p.E.enviados.length, 1);
+  const t1 = montar(t, { n: 3 }); autorizar(t1, 'todo'); await ticks(t1); t1.E.falla('j0', 'el servicio no respondió a tiempo', 'tiempo'); await ticks(t1, 2);
+  assert.equal(t1.A.uno(t1.id).libro.lineas[`${t1.id}:1:1`].estado, 'incierto', 'pago + transitorio: pudo cobrarse'); assert.equal(t1.E.enviados.length, 1, 'no se repite solo'); assert.equal(t1.A.uno(t1.id).estado, 'pausado');
+  const p = montar(t, { n: 3 }); autorizar(p, 'todo'); await ticks(p); p.E.falla('j0', 'sin saldo o créditos en el servicio', 'saldo', 'previo'); await ticks(p, 2); s = p.A.uno(p.id);
+  assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /sin saldo/); assert.equal(s.escaleta[0].estado, 'previsto', 'no es culpa del plano'); assert.equal(s.fallos[1] || 0, 0); assert.equal(p.E.enviados.length, 1); assert.equal(s.libro.lineas[`${p.id}:1:1`].estado, 'liberado');
+  const f = montar(t, { n: 3 }); autorizar(f, 'todo'); await ticks(f); f.E.falla('j0', 'no aceptó el pedido', 'formato', 'previo'); await ticks(f, 2); assert.equal(f.A.uno(f.id).libro.lineas[`${f.id}:1:1`].estado, 'liberado'); assert.equal(f.A.uno(f.id).escaleta[0].estado, 'revisar');
   const q = montar(t, { n: 3 }); autorizar(q, 'todo'); await ticks(q); q.E.falla('j0', 'bloqueado por su filtro de contenido', 'contenido'); await ticks(q, 2);
-  assert.equal(q.A.uno(q.id).escaleta[0].estado, 'revisar'); assert.equal(q.A.uno(q.id).estado, 'pausado'); assert.equal(q.E.enviados.length, 1);
+    assert.equal(q.A.uno(q.id).libro.lineas[`${q.id}:1:1`].estado, 'incierto', 'el filtro pudo saltar después de generar'); assert.equal(q.E.enviados.length, 1);
 });
 
 test('14 · el Estudio rechaza el envío ANTES de salir: se devuelve la reserva y el cupo y se pausa con el motivo; un costo real mayor que lo reservado pausa y se anota', async t => {
@@ -202,13 +210,19 @@ test('14 · el Estudio rechaza el envío ANTES de salir: se devuelve la reserva 
   assert.equal(vistaSerie(x).gasto.excedido, true);
 });
 
-test('15 · cancelar: lo que va en el aire se pide cancelar al Estudio, se liquida solo lo real, no sale nada nuevo y la autorización muere', async t => {
+test('15 · cancelar: lo en el aire se pide cancelar al Estudio; en un motor de pago ya en marcha es «incierto» (puede cobrarse igual), en cola se libera, gratis se libera; si terminó se liquida lo real; nada nuevo sale', async t => {
   const o = montar(t, { n: 3 }); autorizar(o, 'todo'); await ticks(o);
   o.A.actualizar(o.id, y => ({ ...y, estado: 'cancelado', cancelada: true, autorizado: null, token_reg: null })); o.G.alCancelar(o.A.uno(o.id));
-  assert.deepEqual(o.E.cancelas, ['j0']); o.E.falla('j0', 'Cancelado por ti.'); await ticks(o, 3);
-  const s = vista(o); assert.equal(s.libro.lineas[`${o.id}:1:1`].estado, 'liberado', 'lo reservado y no gastado se libera'); assert.equal(o.E.enviados.length, 1, 'nada nuevo'); assert.equal(s.estado, 'cancelado');
+  assert.deepEqual(o.E.cancelas, ['j0']); o.E.falla('j0', 'Cancelado por ti.', 'cancelado'); await ticks(o, 3);
+  const s = vista(o); assert.equal(s.libro.lineas[`${o.id}:1:1`].estado, 'incierto', 'cancelar un trabajo de pago ya en marcha pudo cobrarse'); assert.equal(o.E.enviados.length, 1, 'nada nuevo'); assert.equal(s.estado, 'cancelado');
+  const c = montar(t, { n: 3 }); autorizar(c, 'todo'); await ticks(c); c.A.actualizar(c.id, y => ({ ...y, estado: 'cancelado', cancelada: true, autorizado: null })); c.E.falla('j0', 'Cancelado por ti.', 'cancelado', 'cancelado_en_cola'); await ticks(c, 2);
+  assert.equal(c.A.uno(c.id).libro.lineas[`${c.id}:1:1`].estado, 'liberado', 'cancelado antes de salir: se libera');
+  const g = montar(t, { n: 3, E: estudio({ motor: 'prueba' }) }); autorizar(g, 'todo'); await ticks(g); g.A.actualizar(g.id, y => ({ ...y, estado: 'cancelado', cancelada: true, autorizado: null })); g.E.falla('j0', 'Cancelado por ti.', 'cancelado'); await ticks(g, 2);
+  assert.equal(g.A.uno(g.id).libro.lineas[`${g.id}:1:1`].estado, 'liberado', 'gratis: se libera');
   const p = montar(t, { n: 3 }); autorizar(p, 'todo'); await ticks(p); p.A.actualizar(p.id, y => ({ ...y, estado: 'cancelado', cancelada: true, autorizado: null })); p.E.ok('j0', 0.06); await ticks(p, 3);
   assert.equal(p.A.uno(p.id).libro.lineas[`${p.id}:1:1`].estado, 'liquidado', 'si el trabajo SÍ terminó, se liquida lo real'); assert.equal(p.E.enviados.length, 1); assert.equal(p.G.generar({ id: p.id }).estado, 409);
+  const r = montar(t, { n: 3 }); autorizar(r, 'todo'); await ticks(r); r.E.lista.length = 0; r.A.actualizar(r.id, y => { y.pasos[`${r.id}:1:1`].job = null; return { ...y, estado: 'cancelado', cancelada: true, autorizado: null }; }); await ticks(r, 2);
+  assert.equal(r.A.uno(r.id).libro.lineas[`${r.id}:1:1`].estado, 'liberado', 'una reserva que nunca salió se libera al cancelar'); assert.equal(r.E.enviados.length, 1);
 });
 
 test('16 · apagar el flag PAUSA la serie (lo del aire solo se liquida) y volver a encenderlo no la reanuda sola; cambiar la escaleta tras autorizar pausa; un plano sin modelo o sin referencia no se envía', async t => {
@@ -235,6 +249,22 @@ test('18 · DINERO: ni agentes, ni Dimitri, ni los MCP, ni las ops de la oficina
   const gen = leer('series-generar.mjs'); assert.equal((gen.match(/media\.submit\(/g) || []).length, 1, 'un único sitio envía al Estudio'); assert.match(gen, /por !== 'dueno'\) return err\(403/);
   const s = leer('serve.mjs'); assert.equal((s.match(/crearGeneradorSeries\(/g) || []).length, 1, 'serve.mjs lo crea una vez'); assert.doesNotMatch(s, /by: 'dimitri'[^\n]{0,200}series\.generar|generador\.generar\([^)]*por: 'dimitri'/);
 });
+
+test('18c · DINERO: ningún otro módulo (telegram, disparadores, rutinas, cola, MCP…) llama al generador ni a /api/series, y nadie que no sea el dueño puede escribir dimitri.serieGenerar', () => {
+  const raiz = ['telegram.mjs', 'triggers.mjs', 'routines.mjs', 'settings.mjs', 'serve.mjs'], carpetas = ['.', 'oficina', 'contenido', 'tareas', 'anuncios', 'media', 'cloudflare/worker'];
+  const permitido = new Set(['serve.mjs', 'serie-local.mjs', 'series.mjs', 'series-generar.mjs', 'serie-core.mjs', 'serie-topes-core.mjs', 'serie-propuesta-core.mjs', 'serie-vision-core.mjs', 'serie-deriva-core.mjs', 'biblia-core.mjs', 'media/trabajos.mjs']);
+  const baja = d => d.startsWith('cloudflare') || ['oficina', 'contenido', 'tareas', 'anuncios', 'media'].includes(d);
+  const walk = d => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap(e => {
+    if (e.isDirectory()) return baja(d) ? walk(path.join(d, e.name)) : [];
+    return /\.m?js$/.test(e.name) ? [path.join(d, e.name).replace(/^\.\//, '')] : [];
+  });
+  const todos = [...new Set(carpetas.flatMap(walk))].filter(f => !permitido.has(f) && !f.startsWith('tests/'));
+  for (const f of todos) assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /series-generar|serie_generar|crearGeneradorSeries|\/api\/series|serieGenerar/, f);
+  assert.ok(raiz.every(f => fs.existsSync(path.join(ROOT, f))) && todos.includes('telegram.mjs') && todos.includes('triggers.mjs'), 'la lista revisó telegram y los disparadores');
+  const ajustes = fs.readFileSync(path.join(ROOT, 'settings.mjs'), 'utf8'); assert.doesNotMatch(ajustes, /serieGenerar|['"`]dimitri\./, 'Ajustes (la API de settings) no puede escribir el flag');
+  const src = fs.readFileSync(path.join(ROOT, 'serve.mjs'), 'utf8'); assert.doesNotMatch(src, /serieGenerar\s*=[^=]|serieGenerar\s*:\s*(true|false|b\.|body)/, 'serve.mjs solo LEE el flag, nunca lo escribe'); assert.ok((src.match(/\.serieGenerar === true/g) || []).length >= 2);
+});
+
 
 test('18b · la ruta: generar solo del dueño (agente 403, flag 409); la propuesta no puede gastar; la lectura no suelta el token', async t => {
   const d = tmp(t), A = crearAlmacen({ archivo: path.join(d, 's.json'), renombrar: ren }), E = estudio(); let activo = true;
@@ -295,7 +325,61 @@ test('20 · serve.mjs real: con el flag apagado generar da 409; la oficina se ca
   const c = (await o.call(`/api/series/${id}/generar`, { modo: 'todo' })).j.confirmar; assert.equal((await o.call(`/api/series/${id}/generar`, { confirmacion: c.token, costoMostradoUsd: 0, modo: 'todo' })).status, 200);
   await hasta(async () => ((await o.call('/api/series/' + id)).j.serie.progreso.listos >= 1)); await o.parar(); // se cae sin despedirse
   o = await oficina(t, d, port, { series: true, serieGenerar: true });
-  const f = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return ['hecho', 'pausado'].includes(s.estado) ? s : null; }, 60000);
-  assert.equal(f.estado, 'hecho', JSON.stringify({ e: f.estado, m: f.pausa_motivo })); assert.equal(f.progreso.listos, 12); assert.ok(f.escaleta.every(q => q.versiones.length === 1), 'cada plano tiene UNA sola versión tras el reinicio');
+  let f = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return ['hecho', 'pausado'].includes(s.estado) ? s : null; }, 60000);
+  if (f.estado === 'pausado') { // tras un reinicio NO se retoma sola: pausa con motivo y pide un clic nuevo
+    assert.match(f.pausa_motivo, /reinició/); assert.equal(f.autorizada, false); const antes = (await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id).length; await new Promise(r => setTimeout(r, 3500));
+    assert.equal((await o.call('/api/media/jobs')).j.jobs.filter(j => j.serie?.id === id).length, antes, 'no lanzó planos nuevos por su cuenta');
+    const c2 = await hasta(async () => { const g = await o.call(`/api/series/${id}/generar`, { modo: 'todo' }); return g.status === 200 ? g.j.confirmar : null; }); assert.equal((await o.call(`/api/series/${id}/generar`, { confirmacion: c2.token, costoMostradoUsd: 0, modo: 'todo' })).status, 200);
+    f = await hasta(async () => { const s = (await o.call('/api/series/' + id)).j.serie; return s.estado === 'hecho' ? s : null; }, 60000);
+  }
+  assert.equal(f.estado, 'hecho'); assert.equal(f.progreso.listos, 12); assert.ok(f.escaleta.every(q => q.versiones.length === 1), 'cada plano tiene UNA sola versión tras el reinicio');
   const archivos = f.escaleta.map(q => q.versiones[0].archivo); assert.equal(new Set(archivos).size, 12, 'doce imágenes distintas, ninguna repetida');
+});
+
+test('21 · tras un reinicio se RECONCILIA pero NO se lanza nada nuevo: la serie pasa a pausada con motivo y pide un clic nuevo; y una autorización caduca a las 6 h aunque no haya reinicio (reloj inyectado)', async t => {
+  const o = montar(t, { n: 3 }); autorizar(o, 'todo'); await ticks(o); assert.equal(o.E.enviados.length, 1);
+  const A2 = o.otra(), G2 = crearGenerador({ almacen: A2, media: o.E, biblia: { leer: () => aprobada }, capsDe: () => ({ maxRefs: 4 }), precioPlano: () => ({ generacion: 0.1 }), config: () => o.est.config,
+    activo: () => true, ahora: () => o.est.t, nonce: () => 'y'.repeat(20), hoy: () => o.est.dia, intervalo: 10 });
+  o.E.ok('j0'); G2.alArrancar(); let s = A2.uno(o.id);
+  assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /reinició/); assert.equal(s.autorizado, null); assert.equal(s.escaleta[0].estado, 'listo', 'lo que estaba en el aire se liquidó'); assert.equal(s.libro.lineas[`${o.id}:1:1`].estado, 'liquidado');
+  await G2.tick(); await G2.tick(); assert.equal(o.E.enviados.length, 1, 'ningún plano nuevo sin un clic nuevo');
+  const c = G2.generar({ id: o.id, modo: 'todo' }).cuerpo.confirmar; assert.ok(c.token && c.costoMostradoUsd > 0, 'hace falta un token nuevo');
+  const p = montar(t, { n: 3 }); autorizar(p, 'todo'); p.est.t += 6 * 3600e3 + 1; await ticks(p, 2);
+  assert.equal(p.A.uno(p.id).estado, 'pausado'); assert.match(p.A.uno(p.id).pausa_motivo, /caducó/); assert.equal(p.E.enviados.length, 0, 'caducada: no envía');
+  const q = montar(t, { n: 3 }); autorizar(q, 'todo'); q.est.t += 6 * 3600e3 - 1000; await ticks(q); assert.equal(q.E.enviados.length, 1, 'antes de las 6 h sigue valiendo');
+});
+
+test('22 · resolver: solo el dueño, solo sobre un paso incierto, y el cobro real debe ser un número finito ≥ 0 y no pasar de lo reservado', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); o.E.lista.length = 0; await ticks(o); const clave = `${o.id}:1:1`;
+  for (const mal of [NaN, -1, Infinity, '0.05', {}, 5]) assert.equal(o.G.resolver({ id: o.id, clave, cobro: true, realUsd: mal }).estado, 422, String(mal));
+  assert.equal(vista(o).libro.lineas[clave].estado, 'incierto', 'ninguno de los inválidos tocó nada'); assert.equal(o.G.resolver({ id: o.id, clave: 'otra', cobro: true }).estado, 409);
+  assert.equal(o.G.resolver({ id: o.id, clave, cobro: 'si' }).estado, 422); assert.equal(o.G.resolver({ id: o.id, clave, cobro: true, realUsd: 0.1 }).estado, 200); assert.equal(vista(o).libro.lineas[clave].real, 100000);
+  assert.equal((await import('../serie-topes-core.mjs')).resolverIncierto({ tope: 9, lineas: { x: { estado: 'incierto', max: 100 } } }, 'x', true, NaN).libro.lineas.x.real, 100, 'NaN o negativo caen al máximo reservado, nunca a un número raro');
+});
+
+test('23 · el cupo de series devuelto usa el día en que se sumó; el texto del clic dice los reintentos; origen y candado', async t => {
+  const o = montar(t, { n: 2 }); autorizar(o, 'todo'); await ticks(o); assert.equal(o.A.usoDe('2026-10-30'), 1); o.est.dia = '2026-10-31'; o.A.actualizar(o.id, y => { y.pasos[`${o.id}:1:1`].job = null; return y; }); o.E.lista.length = 0; await ticks(o);
+  assert.equal(o.A.usoDe('2026-10-30'), 0, 'se devolvió en el día de origen'); assert.equal(o.A.usoDe('2026-10-31'), 1, 'y el nuevo intento cuenta en el día de hoy (sin quedar en negativo)');
+  const p = montar(t, { n: 2 }); assert.match(p.G.generar({ id: p.id }).cuerpo.confirmar.texto, /incluye hasta 1 reintento por plano/);
+  const casos = [['127.0.0.1:4520', undefined, true], ['localhost:4520', 'http://localhost:4520', true], ['[::1]:4520', undefined, true], ['evil.com', undefined, false], ['127.0.0.1.evil.com:80', undefined, false],
+    ['127.0.0.1:4520', 'http://evil.com', false], ['127.0.0.1:4520', 'http://127.0.0.1:9999', false], ['127.0.0.1:4520', 'no es url', false], [undefined, undefined, false]];
+  for (const [h, org, ok] of casos) assert.equal(origenPermitido({ host: h, origin: org }).ok, ok, `${h} ${org}`);
+  const f = path.join(tmp(t), 'l.lock'); let ahora = 1000, viva = true; const c1 = crearCandado({ archivo: f, pid: 11, ahora: () => ahora, vivo: () => viva }), c2 = crearCandado({ archivo: f, pid: 22, ahora: () => ahora, vivo: () => viva });
+  assert.equal(c1.tener(), true); assert.equal(c2.tener(), false, 'otro proceso vivo con latido reciente'); ahora += 10000; assert.equal(c1.tener(), true); ahora += 31000; assert.equal(c2.tener(), true, 'latido viejo: toma el relevo'); assert.equal(c1.tener(), false);
+  viva = false; assert.equal(c1.tener(), true, 'el dueño murió: se puede tomar'); c1.liberar(); assert.equal(fs.existsSync(f), false);
+  const g = montar(t, { n: 2, extra: { candado: { tener: () => false } } }); autorizar(g, 'todo'); await ticks(g, 2); assert.equal(g.E.enviados.length, 0, 'sin el candado la bomba no da pasos de gasto');
+});
+
+test('24 · serve.mjs real: Host o Origin ajenos dan 403 en lo que gasta o libera dinero; ni la API ni retry pueden escribir la marca `serie` de un trabajo', { timeout: 90000 }, async t => {
+  const d = tmp(t), port = await puerto(), o = await oficina(t, d, port);
+  const llamar = (ruta, { host, origin } = {}) => new Promise(res => { const r = http.request({ host: '127.0.0.1', port, path: ruta, method: 'POST', headers: { 'content-type': 'application/json', ...(host ? { host } : {}), ...(origin ? { origin } : {}) } }, rs => { rs.resume();
+    rs.on('end', () => res(rs.statusCode)); }); r.end('{}'); });
+  for (const ruta of ['/api/series/x/generar', '/api/series/x/resolver', '/api/series/x/pausar', '/api/series/x/cancelar']) {
+    assert.equal(await llamar(ruta, { host: 'evil.example' }), 403, ruta + ' con Host ajeno'); assert.equal(await llamar(ruta, { origin: 'http://evil.example' }), 403, ruta + ' con Origin ajeno');
+      assert.notEqual(await llamar(ruta), 403, ruta + ' desde localhost pasa a la lógica (404 si no existe)');
+  }
+  const modelo = (await o.call('/api/media/models')).j.models.find(m => m.kind === 'image' && m.engine === 'prueba' && m.on);
+  const j = await o.call('/api/media/jobs', { prompt: 'una tarjeta', model: modelo.id, serie: { id: 'ajena', n: 1, intento: 1 }, wait: 20000 }); assert.equal(j.status, 200); assert.equal(j.j.job.serie, undefined, 'la API no copia el campo serie');
+  const r = await o.call(`/api/media/jobs/${j.j.job.id}/retry`, {}); assert.ok(r.status === 200 || r.status === 400); assert.equal(r.j.job?.serie, undefined);
+  assert.equal((await o.call('/api/media/jobs')).j.jobs.some(x => x.serie), false);
 });

@@ -46,7 +46,7 @@ export function loadJobs() {
   for (const j of JOBS) if (j.state === 'running') { // the office restarted mid-run: a queue engine is asked again, the others are marked
     changed = true;
     if (j.remote?.length) { j.state = 'queued'; j.resumed = (j.resumed || 0) + 1; }
-    else Object.assign(j, { state: 'failed', error: 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.', doneAt: Date.now() });
+    else Object.assign(j, { state: 'failed', error: 'se interrumpió: la oficina se reinició mientras generaba. Reintenta.', causa: 'interrumpido', doneAt: Date.now() });
   }
   if (changed) saveJobs();
   running = 0; setImmediate(pumpJobs);
@@ -152,6 +152,9 @@ async function runJob(j) {
     const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado', detalle: '' } : explicar(e.message, e.status); // IMG-04: the words, the class and the original apart
     const why = ex.texto;
     if (j.items.length) { j.state = 'done'; j.warning = why; } else { j.state = 'failed'; j.error = why; j.errorClass = ex.clase; if (ex.detalle) j.errorRaw = ex.detalle.slice(0, 400); }
+    // 11.5: la CAUSA va estructurada para quien lleva cuentas (series): `previo` = se sabe que falló ANTES de cobrar (llave, saldo, pedido rechazado, sin conexión);
+    // `cancelado` = se canceló en marcha (puede cobrarse igual); cualquier otra = la clase del error. Quien no la reconoce en un motor de pago lo cuenta como «incierto».
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : (['key', 'saldo', 'formato'].includes(ex.clase) || ['ECONNREFUSED', 'ENOTFOUND'].includes(e?.code || e?.cause?.code)) ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
@@ -176,7 +179,7 @@ export function wait(id, ms = 15 * 60e3) {
 }
 export function cancel(id) {
   const j = JOBS.find(x => x.id === id); if (!j) return null;
-  if (j.state === 'queued') { Object.assign(j, { state: 'failed', error: 'Cancelado por ti.', doneAt: Date.now() }); saveJobs(); const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id); return out; }
+  if (j.state === 'queued') { Object.assign(j, { state: 'failed', error: 'Cancelado por ti.', causa: 'cancelado_en_cola', doneAt: Date.now() }); saveJobs(); const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id); return out; }
   if (j.state === 'running') {
     j.cancel = true; saveJobs();
     if (j.engine === 'minimax') { for (const rq of j.remote || []) if (!rq.done) mmx.cancelVideo(rq.id).catch(() => {}); return pub(j); } // V4.10

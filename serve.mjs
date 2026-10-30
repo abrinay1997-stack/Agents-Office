@@ -67,6 +67,7 @@ import { copiaParaVer } from './media/vision.mjs'; import { motivoSinMirar } fro
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs'; import { crearDescripcionLocal } from './describir-local.mjs'; import { crearBiblia } from './biblia-local.mjs'; import { crearSeries, cablearMedia, configDeAjustes } from './serie-local.mjs'; import { destinoDeProveedor } from './media/privacidad-core.mjs'; // 29 oct 2026: 11.1
 import { crearAlmacen as crearAlmacenSeries } from './series.mjs'; // 11.5
+import { origenPermitido as origenSerie, crearCandado as crearCandadoSeries } from './series.mjs';
 import { crearGenerador as crearGeneradorSeries } from './series-generar.mjs'; // 11.5 PR B: GENERAR SERIE (gasta: token + hash + topes)
 import { setSeries as setSeriesEstudio } from './media/trabajos.mjs';
 import { USD_POR_REVISION as USD_REVISION_SERIE } from './serie-vision-core.mjs';
@@ -577,7 +578,7 @@ const auditarSeries = l => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.
 const cablesSeries = cablearMedia(media);
 const generadorSeries = crearGeneradorSeries({ almacen: almacenSeries, media, biblia, capsDe: cablesSeries.capsDe, precioPlano: cablesSeries.precioPlano, existeRef: cablesSeries.existeRef,
   costoRevision: () => (cfg.dimitri?.serieVision === true ? { qa: 0, vision: USD_REVISION_SERIE } : null), config: () => configDeAjustes(cfg.dimitri), activo: () => cfg.dimitri?.serieGenerar === true,
-  nonce: () => randomBytes(16).toString('hex'), hoy: () => localDay(Date.now()), auditar: auditarSeries });
+  nonce: () => randomBytes(16).toString('hex'), hoy: () => localDay(Date.now()), auditar: auditarSeries, candado: crearCandadoSeries({ archivo: path.join(DATA, 'series.lock') }) });
 setSeriesEstudio({ vivo: id => ['muestra', 'corriendo', 'pausado'].includes(almacenSeries.estadoDe(id)) }); // la poda de 400 trabajos del Estudio no se lleva los de una serie viva
 const series = crearSeries({ biblia, activo: () => cfg.dimitri?.series === true, cifras: () => loadCifras(), ...cablearMedia(media), modeloUnico: () => media.defaultModel('image'), config: () => configDeAjustes(cfg.dimitri),
   almacen: almacenSeries, generarActivo: () => cfg.dimitri?.serieGenerar === true, auditar: auditarSeries, generador: generadorSeries, alCancelar: sx => generadorSeries.alCancelar(sx),
@@ -3060,6 +3061,9 @@ const server = http.createServer(async (req, res) => {
     if (/^\/api\/series(\/|$)/.test(url.pathname) && (req.method === 'GET' || req.method === 'POST')) {
       const b = req.method === 'GET' ? {} : await body(req, url.pathname === '/api/series/proponer' ? 128 * 1024 : 16 * 1024);
       if (!b || typeof b !== 'object' || Array.isArray(b)) return json(res, 400, { error: 'El cuerpo debe ser un objeto JSON.' });
+      if (req.method === 'POST' && /\/(generar|resolver|pausar|cancelar)$/.test(url.pathname)) { // defensa en profundidad: lo que gasta o libera dinero solo desde localhost y del mismo origen
+        const o = origenSerie({ host: req.headers.host, origin: req.headers.origin }); if (!o.ok) return json(res, 403, { error: o.motivo });
+      }
       const r = await series.ruta(req.method, url.pathname, { cuerpo: b, agente: b.by === 'agent' || !!b.agent });
       if (r) return json(res, r.estado, r.cuerpo);
     }

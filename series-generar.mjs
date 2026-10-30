@@ -17,11 +17,14 @@ import { vistaSerie } from './series.mjs';
 export const MUESTRA = 3; // planos de la muestra (el mismo 3 de serie-core.siguientePaso)
 const TRANSITORIAS = new Set(['espera', 'tiempo', 'red', 'servicio']); // clases de errores.mjs que merecen el reintento automático
 const PARA_PAUSAR = new Set(['key', 'saldo']); // sin crédito o sin key: no es culpa del plano, se pausa la serie entera
-const esCarrusel = s => /carrusel/i.test(`${s?.brief?.formato || ''} ${s?.titulo || ''}`);
+const esCarrusel = s => /carrusel/i.test(s?.brief?.formato || ''); // el formato del brief, no el título
+const GRATIS = new Set(['prueba', 'prueba-video', 'local']); // falla cerrado: todo motor que no sea uno de estos (o que no se resuelva) cuenta como de PAGO
+const pagadoDe = engine => !GRATIS.has(engine);
+export const AUTORIZACION_MS = 6 * 3600e3; // una autorización caduca aunque no haya reinicio
 const err = (estado, error, extra = {}) => ({ estado, cuerpo: { error, ...extra } });
 
 export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, existeRef = () => true, costoRevision = () => null, config = () => ({}), activo = () => false, ahora = () => Date.now(),
-  nonce, hoy, auditar = () => {}, concurrencia = 1, intervalo = 1500, ttlMs = 120000 } = {}) {
+  nonce, hoy, auditar = () => {}, concurrencia = 1, intervalo = 1500, ttlMs = 120000, autorizacionMs = AUTORIZACION_MS, candado = null } = {}) {
   if (!almacen || !media || !biblia || !capsDe || !precioPlano || typeof nonce !== 'function' || typeof hoy !== 'function') throw new Error('el generador de series necesita almacén, Estudio, biblia, capsDe, precioPlano, nonce y hoy');
   const conf = () => ({ ...CONFIG_SERIE, ...(config() || {}) });
   const topeDe = s => Math.min(s.tope_usd ?? conf().topeSerieUsd, conf().topeSerieUsd); // bajar el tope en Ajustes aplica; subirlo no abre lo ya propuesto
@@ -52,9 +55,13 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     const est = estimarSerie(precios, conf()), tope = topeDe(s), libro = s.libro || nuevoLibro(tope), r = resumenLibro(libro);
     const disponible = Math.min(libro.tope, usd2u(tope)) - r.reservado - r.gastado - r.incierto, b = media.budget();
     return { hash: hashEscaleta(s), etapa, costoUsd: est.maximoUsd, maximo: est.maximo, topeUsd: tope, topeMesUsd: esCarrusel(s) ? conf().topeMesCarruselesUsd : null, estudio: { dailyBudget: b.dailyBudget, monthlyBudget: b.monthlyBudget, limit: b.limit },
-      cabe: est.maximo <= disponible, disponibleUsd: u2usd(Math.max(0, disponible)) };
+      cabe: est.maximo <= disponible && (!esCarrusel(s) || est.maximo <= usd2u(conf().topeMesCarruselesUsd) - usd2u(gastoMes(mesClave()))), disponibleUsd: u2usd(Math.max(0, disponible)),
+      reintentos: conf().reintentosMax };
   }
-  const textoConfirmar = (s, c) => `Generar ${c.etapa.length} plano${c.etapa.length === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}).`;
+  const textoConfirmar = (s, c) => {
+    const n = c.etapa.length, r = c.reintentos, s2 = r === 1 ? '' : 's';
+    return `Generar ${n} plano${n === 1 ? '' : 's'} de «${s.titulo}»: gasta hasta US$${c.costoUsd} (tope de la serie US$${c.topeUsd}; incluye hasta ${r} reintento${s2} por plano en los motores gratis: en uno de pago un fallo dudoso no se repite solo, se pausa).`;
+  };
   function emitir(s, c, modo) {
     const reg = { ...emitirToken({ serieId: s.id, hash: c.hash, topeMax: c.topeUsd, costoMostrado: c.costoUsd, ahora: ahora(), nonce: nonce(), ttlMs }), modo, topeMesUsd: c.topeMesUsd, estudio: c.estudio };
     let aviso = null;
@@ -118,18 +125,18 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     const rev = reservaRev(), precio = rev ? { ...b, qa: (b.qa ?? 0) + rev.qa, vision: (b.vision ?? 0) + rev.vision } : b;
     const maxUsd = u2usd(costoPlano(precio)), genUsd = u2usd(costoPlano({ generacion: b.generacion }));
     try { media.checkBudget(genUsd); } catch (e) { return pausar(id, String(e?.message || e)); } // día o mes del Estudio (Ajustes → Estudio): nada se reserva ni se envía
-    const dia = { limit: media.budget().limit, usadoSeries: almacen.usoDe(hoy()), config: conf() }, mes = esCarrusel(s) ? { topeUsd: conf().topeMesCarruselesUsd, gastadoUsd: gastoMes(mesClave()) } : undefined;
+    const dia0 = hoy(), dia = { limit: media.budget().limit, usadoSeries: almacen.usoDe(dia0), config: conf() }, mes = esCarrusel(s) ? { topeUsd: conf().topeMesCarruselesUsd, gastadoUsd: gastoMes(mesClave()) } : undefined;
     let sin = null, clave = null;
     const r = almacen.actualizar(id, y => {
       if (!autorizacionDe(y) || !['muestra', 'corriendo'].includes(y.estado)) { sin = { motivo: 'la serie ya no está autorizada' }; return undefined; }
       const intento = (y.intentos[n] || 0) + 1; clave = claveIdempotencia(id, n, intento); // contador MONÓTONO: una clave liberada nunca se reutiliza
       const libro = { ...(y.libro || nuevoLibro(topeDe(y))) }; libro.tope = Math.min(libro.tope, usd2u(topeDe(y)));
       const rs = reservar(libro, clave, maxUsd, { mes, dia, kind: 'image', n: 1 }); if (!rs.ok) { sin = { motivo: rs.motivo }; return undefined; }
-      y.libro = rs.libro; y.intentos[n] = intento; y.pasos[clave] = { n, intento, estado: 'reservado', maxUsd, genUsd, mes: mesClave(), envio: ahora(), job: null, engine: media.models?.().find(m => m.id === p.modelo)?.engine || null, modelo: p.modelo };
+      y.libro = rs.libro; y.intentos[n] = intento; y.pasos[clave] = { n, intento, estado: 'reservado', maxUsd, genUsd, mes: mesClave(), dia: dia0, envio: ahora(), job: null, engine: media.models?.().find(m => m.id === p.modelo)?.engine || null, modelo: p.modelo };
       return planoA(y, n, q => ({ ...q, estado: 'corriendo', intento_actual: intento }));
     });
     if (!r || sin) return pausar(id, sin?.motivo || 'no se pudo reservar');
-    almacen.sumarUso(hoy(), 1);
+    almacen.sumarUso(dia0, 1);
     // el paso YA está apuntado en disco (reserva + clave): ahora sí se llama al motor
     let j = null, rechazo = null;
     try {
@@ -138,7 +145,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     } catch (e) { rechazo = e; }
     if (rechazo) { // el Estudio lo rechazó ANTES de enviar nada: se sabe seguro, se devuelve la reserva y el plano vuelve a la fila
       almacen.actualizar(id, y => { const l = liberar(y.libro, clave); if (l.ok) y.libro = l.libro; if (y.pasos[clave]) y.pasos[clave].estado = 'liberado'; return planoA(y, n, q => ({ ...q, estado: 'previsto' })); });
-      almacen.sumarUso(hoy(), -1); return pausar(id, `el Estudio no aceptó el plano ${n}: ${String(rechazo.message || rechazo)}`);
+      almacen.sumarUso(dia0, -1); return pausar(id, `el Estudio no aceptó el plano ${n}: ${String(rechazo.message || rechazo)}`);
     }
     almacen.actualizar(id, y => { if (y.pasos[clave]) { y.pasos[clave].job = j.id; y.pasos[clave].estado = 'enviado'; } return y; });
     auditar({ kind: 'serie', accion: 'envio', serie: id, n, intento: clave.split(':').pop(), job: j.id, maxUsd });
@@ -154,17 +161,17 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
       if (paso) j = paso.job ? media.job(paso.job) : (media.jobs?.() || []).find(x => x.serie?.id === s0.id && x.serie?.n === p0.n && x.serie?.intento === paso.intento) || null;
       if (paso && j && !paso.job) almacen.actualizar(s0.id, y => { y.pasos[clave].job = j.id; y.pasos[clave].estado = 'enviado'; return y; }); // se cayó entre enviar y apuntar el trabajo: se adopta por su marca
       if (j && (j.state === 'queued' || j.state === 'running')) continue;
-      let pausa = null, devolverUso = 0;
+      let pausa = null, devolverUso = 0, devolverDia = null;
       almacen.actualizar(s0.id, y => {
         const n = p0.n, pa = clave ? y.pasos[clave] : null; let libro = y.libro;
         const liq = real => { const r = liquidar(libro, clave, real); if (r.ok) libro = r.libro; return r.ok && libro.lineas[clave].excedio; };
         const lib = () => { const r = liberar(libro, clave); if (r.ok) libro = r.libro; };
         const dudoso = () => { const r = marcarIncierto(libro, clave); if (r.ok) libro = r.libro; };
-        const pagado = pa?.engine && pa.engine !== 'prueba' && pa.engine !== 'local';
+        const pagado = pagadoDe(pa?.engine); // sin motor conocido = de pago
         const volver = (est, mot) => planoA(y, n, q => ({ ...q, estado: est, motivo: mot || null }));
         const reintento = () => { y.fallos[n] = (y.fallos[n] || 0) + 1; return y.fallos[n] <= conf().reintentosMax; };
         if (!paso || !pa) { volver('previsto'); } // sin paso apuntado no se reservó nada
-        else if (!j && !pa.job) { lib(); pa.estado = 'liberado'; volver('previsto'); devolverUso = 1; } // se cayó ANTES de llamar al motor: nunca salió
+        else if (!j && !pa.job) { lib(); pa.estado = 'liberado'; volver('previsto'); devolverUso = 1; devolverDia = pa.dia; } // se cayó ANTES de llamar al motor: nunca salió
         else if (!j) {
           if (pagado) { dudoso(); pa.estado = 'incierto'; volver('revisar', 'puede haberse cobrado: el trabajo ya no aparece en el Estudio'); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
           else { lib(); pa.estado = 'liberado'; volver('previsto'); }
@@ -173,19 +180,20 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
           const real = Math.max(0, +j.cost || 0), exc = liq(real); pa.estado = 'liquidado'; pa.realUsd = real;
           planoA(y, n, q => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: j.items[0], intento: pa.intento, costo_usd: real, prompt: q.prompt_exacto }), motivo: null }));
           if (exc) pausa = `el plano ${n} costó más de lo reservado: revisa antes de seguir`;
-        } else { // fallido (o «hecho» sin nada): lo gastado en el Estudio ya lo cuenta él; aquí se devuelve la reserva o se marca la duda
-          const cancelado = /cancelado por ti/i.test(j.error || '') || y.cancelada, interrumpido = /se interrumpi/i.test(j.error || '');
-          if (cancelado) { lib(); pa.estado = 'liberado'; volver('previsto'); }
-          else if (interrumpido && pagado) { dudoso(); pa.estado = 'incierto'; volver('revisar', 'puede haberse cobrado: la oficina se reinició mientras generaba'); pausa = `el plano ${n} puede haberse cobrado (la oficina se reinició mientras generaba): decide si hubo cobro`; }
-          else if (interrumpido) { lib(); pa.estado = 'liberado'; volver('previsto'); } // gratis: se repite sin contar como fallo
-          else { lib(); pa.estado = 'liberado'; const clase = j.errorClass || '';
-            if (PARA_PAUSAR.has(clase)) { volver('previsto'); pausa = j.error || 'sin saldo o sin key en el motor'; }
+        } else { // fallido: la CAUSA estructurada que pone el Estudio (nunca el texto del error). En un motor de PAGO, todo lo que no sea claramente previo al cobro queda «incierto»
+          const causa = j.causa || '', previo = causa === 'previo' || causa === 'cancelado_en_cola', clase = j.errorClass || '';
+          if (pagado && !previo) { dudoso(); pa.estado = 'incierto'; volver('revisar', `puede haberse cobrado (${causa || 'causa desconocida'}): decide si hubo cobro`); pausa = `el plano ${n} puede haberse cobrado y no se sabe cómo acabó: decide si hubo cobro`; }
+          else {
+            lib(); pa.estado = 'liberado';
+            if (causa === 'cancelado' || causa === 'cancelado_en_cola' || causa === 'interrumpido' || y.cancelada) volver('previsto'); // gratis (o cancelado antes de salir): se repite sin contar como fallo
+            else if (PARA_PAUSAR.has(clase)) { volver('previsto'); pausa = j.error || 'sin saldo o sin key en el motor'; }
             else if (TRANSITORIAS.has(clase) && reintento()) volver('previsto');
-            else { volver('revisar', j.error || 'falló'); pausa = `el plano ${n} falló: ${j.error || 'sin motivo'}`; } }
+            else { volver('revisar', j.error || 'falló'); pausa = `el plano ${n} falló: ${j.error || 'sin motivo'}`; }
+          }
         }
         cambios++; return { ...y, libro };
       });
-      if (devolverUso) almacen.sumarUso(hoy(), -devolverUso);
+      if (devolverUso) almacen.sumarUso(devolverDia || hoy(), -devolverUso);
       if (pausa) pausar(s0.id, pausa);
     }
     return cambios;
@@ -193,6 +201,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
 
   let enCurso = null, timer = null;
   async function avanzar() {
+    if (candado && !candado.tener()) return; // otro proceso lleva la bomba de este data/
     if (!activo()) { // apagar el flag PAUSA lo que corría (sin plano en el aire): al volver a encenderlo no se reanuda con una autorización vieja, hace falta otro clic
       for (const x of almacen.todas()) if ((x.estado === 'muestra' || x.estado === 'corriendo') && !x.escaleta.some(p => p.estado === 'corriendo')) pausar(x.id, 'generar series se apagó (dimitri.serieGenerar): vuelve a pedir el clic para seguir');
       return;
@@ -200,6 +209,7 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     if (enVuelo() >= concurrencia) return;
     // una serie con la muestra lista espera TU decisión: no debe quitarle el turno a las demás
     const s = almacen.todas().filter(x => x.estado === 'corriendo' || (x.estado === 'muestra' && !x.muestra_lista)).sort((a, b) => a.creada - b.creada)[0]; if (!s) return;
+    if (s.autorizado && ahora() - s.autorizado.en > autorizacionMs) { if (!s.escaleta.some(p => p.estado === 'corriendo')) pausar(s.id, 'la autorización caducó (pasaron más de 6 horas): vuelve a pedir el clic para seguir'); return; }
     const sinPrevistos = !s.escaleta.some(p => p.estado === 'previsto');
     if (sinPrevistos) { // no queda nada por generar: la serie termina (la muestra pasa por «corriendo» con la misma autorización)
       if (s.escaleta.some(p => p.estado === 'corriendo')) return;
@@ -221,7 +231,12 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     enCurso = (async () => { try { reconciliar(); await avanzar(); } finally { enCurso = null; } })();
     return enCurso;
   }
-  const iniciarBomba = () => { reconciliar(); if (!timer) { timer = setInterval(() => tick().catch(e => console.warn('serie tick:', e.message)), intervalo); timer.unref?.(); } setImmediate(() => tick().catch(() => {})); };
+  /** Al arrancar la oficina: RECONCILIA (adopta y liquida lo que estaba en el aire) pero NO lanza planos nuevos: toda serie que estaba generando pasa a «pausada» y el dueño da un clic nuevo (token nuevo). */
+  function alArrancar() {
+    reconciliar();
+    for (const x of almacen.todas()) if (x.estado === 'muestra' || x.estado === 'corriendo') pausar(x.id, 'la oficina se reinició: vuelve a pedir el clic para seguir (lo que estaba en el aire se revisó sin enviar nada nuevo)');
+  }
+  const iniciarBomba = () => { alArrancar(); if (!timer) { timer = setInterval(() => tick().catch(e => console.warn('serie tick:', e.message)), intervalo); timer.unref?.(); } setImmediate(() => tick().catch(() => {})); };
   const pararBomba = () => { if (timer) clearInterval(timer); timer = null; };
 
   /** Cancelar: lo que va en el aire se pide cancelar al Estudio y se liquida solo (lo no enviado nunca se reservó). */
@@ -231,6 +246,11 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
   function resolver({ id, clave, cobro, realUsd = 0, por = 'dueno' } = {}) {
     if (por !== 'dueno') return err(403, 'Decidir si hubo un cobro es del dueño.');
     if (typeof cobro !== 'boolean') return err(422, 'Di si hubo cobro (true o false).');
+    const serie0 = almacen.uno(typeof id === 'string' ? id : ''), linea = serie0?.libro?.lineas?.[String(clave || '')];
+    if (cobro && realUsd !== undefined && realUsd !== 0) { // lo que el dueño dice que se cobró: número finito, no negativo y no más de lo reservado para ese paso
+      if (typeof realUsd !== 'number' || !Number.isFinite(realUsd) || realUsd < 0) return err(422, 'El cobro real debe ser un número finito, 0 o más.');
+      if (linea && usd2u(realUsd) > linea.max) return err(422, `El cobro real (US$${realUsd}) pasa de lo reservado para ese paso (US$${u2usd(linea.max)}).`);
+    }
     let fallo = null;
     const x = almacen.actualizar(typeof id === 'string' ? id : '', y => { const r = resolverIncierto(y.libro || nuevoLibro(1), String(clave || ''), cobro, realUsd); if (!r.ok) { fallo = r; return undefined; }
       y.libro = r.libro; const pa = y.pasos[clave]; if (pa) { pa.estado = cobro ? 'liquidado' : 'liberado'; } const n = pa?.n; return n ? planoA(y, n, q => (q.estado === 'revisar' && !cobro ? { ...q, estado: 'previsto', motivo: null } : q)) : y; });
@@ -238,5 +258,5 @@ export function crearGenerador({ almacen, media, biblia, capsDe, precioPlano, ex
     auditar({ kind: 'serie', accion: 'resolver', serie: id, clave, cobro });
     return { estado: 200, cuerpo: { serie: vistaSerie(x) } };
   }
-  return { generar, resolver, tick, reconciliar, iniciar: iniciarBomba, parar: pararBomba, alCancelar, calcular };
+  return { generar, resolver, tick, reconciliar, alArrancar, iniciar: iniciarBomba, parar: pararBomba, alCancelar, calcular };
 }
