@@ -222,7 +222,20 @@ export const ocultaPorUrlLibre = (schema, { activo = false, dominios = [] } = {}
   const ps = parametrosUrl(schema);
   if (!ps.length) return false;
   if (!(activo === true && Array.isArray(dominios) && dominios.length > 0)) return true;
-  return ps.some(p => { const ult = String(p.nombre).split('.').pop(); return !clavesUrl(ult); });
+  // Con interruptor y lista, la regla es ESTRUCTURAL y falla cerrado: se ofrece solo si TODO parámetro de dirección es de primer nivel, de tipo string (o arreglo de strings), con nombre que `clavesUrl` reconoce y sin
+  // nada raro (anyOf/oneOf/allOf/$ref/additionalProperties/patternProperties/properties/enum de tipos). Un parámetro anidado, un objeto, un mapa o un valor raíz se oculta como siempre.
+  if (!schema || typeof schema !== 'object' || (schema.type && schema.type !== 'object')) return true;
+  for (const k of ['anyOf', 'oneOf', 'allOf', '$ref', 'patternProperties']) if (schema[k] !== undefined) return true;
+  const props = schema.properties && typeof schema.properties === 'object' ? schema.properties : {};
+  const RARO = ['anyOf', 'oneOf', 'allOf', '$ref', 'additionalProperties', 'patternProperties', 'properties', 'not', 'if', 'then', 'else', 'prefixItems'];
+  const soloString = x => x && typeof x === 'object' && x.type === 'string' && !RARO.some(k => x[k] !== undefined);
+  return ps.some(p => {
+    const n = String(p.nombre); if (n.includes('.') || n === '(valor)' || !clavesUrl(n)) return true;
+    const def = props[n]; if (!def || typeof def !== 'object') return true;
+    if (soloString(def)) return false;
+    if (def.type === 'array' && soloString(def.items) && !RARO.some(k => def[k] !== undefined && k !== 'items')) return false;
+    return true;
+  });
 };
 /** El destino se decide sobre el texto CRUDO, nunca sobre el normalizado (la normalización es para detectar órdenes: «gооd.com» con o cirílica NORMALIZADA sería «good.com»).
  *  Una dirección es propia si su host (ASCII, ya en punycode por el parser) es el del conector o un subdominio suyo. Todo lo raro en la parte del host —no ASCII, «@», «\\», controles,
@@ -231,8 +244,11 @@ export function urlAjenaEn(args, urlConector, extra = []) {
   const permitidos = Array.isArray(extra) ? extra.filter(x => typeof x === 'string' && x.trim()) : []; // SEG-02: dominios que el dueño dejó consultar a ESTE conector (la lista vacía = el comportamiento de siempre)
   const propio = hostOf(urlConector || '');
   if (!propio) return null;
-  const textos = []; const visita = (v, d = 0, clave = '') => { if (d > 6) return; if (typeof v === 'string') textos.push({ t: v, claveUrl: clavesUrl(clave) }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k); };
+  const estricto = permitidos.length > 0; // SEG-02: con una lista de dominios el guardián es más estricto bajo una clave de dirección; sin ella, el comportamiento de siempre
+  let muyHondo = false;
+  const textos = []; const visita = (v, d = 0, clave = '', heredada = false) => { if (d > 6) { if (estricto) muyHondo = true; return; } const cu = clavesUrl(clave) || (estricto && heredada); if (typeof v === 'string') textos.push({ t: v, claveUrl: cu }); else if (Array.isArray(v)) v.forEach(x => visita(x, d + 1, clave, cu)); else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) visita(x, d + 1, k, cu); };
   visita(args);
+  if (muyHondo) return '[demasiado profundo]';
   const ajena = (token, conEsquema) => {
     const sinEsquema = token.replace(/^[a-z][a-z0-9+.-]{1,12}:\/\//i, '').replace(/^\/\//, '');
     const autoridad = sinEsquema.split(/[/?#]/)[0];
@@ -244,6 +260,11 @@ export function urlAjenaEn(args, urlConector, extra = []) {
   for (const { t, claveUrl } of textos) {
     const texto = t.slice(0, 20000);
     if (/(?:[a-z][a-z0-9+.-]{1,12}:)?\/\/\[/i.test(texto)) return '[IPv6]'; // una dirección IPv6 literal nunca es el conector
+    if (estricto && claveUrl) { // bajo una clave de dirección el valor SIEMPRE es una dirección: se limpia (tab/salto de línea que el parser de URL ignora, espacios de borde) y, si queda un espacio o un control, se bloquea
+      const limpio = t.replace(/[\t\r\n]/g, '').trim(); if (!limpio) continue;
+      if (limpio.length > 2048 || /[\s\x00-\x1f\x7f]/.test(limpio)) return '[valor no válido]';
+      const r = ajena(limpio, /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(limpio)); if (r) return r; continue;
+    }
     if (claveUrl && texto.trim() && !/\s/.test(texto.trim())) { const r = ajena(texto.trim(), /^[a-z][a-z0-9+.-]{1,12}:\/\//i.test(texto.trim())); if (r) return r; continue; }
     for (const m of texto.matchAll(/[^\s\x00-\x1f"'<>()[\]{},;]+/g)) {
       let tok = m[0].replace(/[.:!?]+$/, ''); const e = tok.search(/[a-z][a-z0-9+.-]{1,12}:\/\//i); if (e > 0) tok = tok.slice(e); // «xhttps://…» y similares

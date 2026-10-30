@@ -104,7 +104,7 @@ test('chat con agentes: con interruptor y lista se ofrece; cada dirección tiene
 });
 
 test('validarDominios rechaza sufijos públicos amplios (con mensaje en español) y acepta un subdominio propio', () => {
-  for (const amplio of ['github.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'herokuapp.com', 's3.amazonaws.com', 'amazonaws.com', 'blogspot.com', 'co.uk', 'com.pa', '*.github.io', 'GitHub.io']) {
+  for (const amplio of ['github.io', 'vercel.app', 'netlify.app', 'pages.dev', 'workers.dev', 'herokuapp.com', 's3.amazonaws.com', 'amazonaws.com', 'blogspot.com', 'co.uk', 'com.pa', '*.github.io', 'GitHub.io', 'gitlab.io', 'r2.dev', 'supabase.co', 'duckdns.org', 'firebaseio.com', 'web.app', 'appspot.com', 'onrender.com', 'fly.dev', 'ngrok.io', 'ac.uk', 'gov.uk', 'com.mx', 'com.co', 'com.ar']) {
     const r = validarDominios([amplio]); assert.equal(r.ok, false, amplio); assert.match(r.errores[0], /dominio público|cualquiera puede publicar/, amplio);
   }
   assert.equal(validarDominios(['miempresa.github.io']).ok, true); assert.equal(validarDominios(['docs.miempresa.com.pa']).ok, true);

@@ -16,7 +16,8 @@ test('lista vacía, ausente o rota = el comportamiento de siempre (todo el banco
 });
 
 test('un host de la lista pasa (y sus subdominios); el del conector sigue pasando', () => {
-  for (const u of ['https://docs.partner.com/a', 'https://a.docs.partner.com/b', 'https://x.cdn.example.org/i.png', 'https://cdn.example.org/i.png', 'https://mcp.good.com/x', 'ver docs.partner.com/a? https://docs.partner.com/z']) assert.equal(aj(u), null, u);
+  for (const u of ['https://docs.partner.com/a', 'https://a.docs.partner.com/b', 'https://x.cdn.example.org/i.png', 'https://cdn.example.org/i.png', 'https://mcp.good.com/x']) assert.equal(aj(u), null, u);
+  assert.equal(S.urlAjenaEn({ q: 'ver docs.partner.com/a? https://docs.partner.com/z' }, CON, L), null, 'texto libre bajo una clave que no es de dirección');
 });
 
 test('lo que se parece a un host de la lista NO pasa', () => {
@@ -64,7 +65,12 @@ test('FALLA CERRADO: solo se ofrece lo que el guardián sabe vigilar (todo pará
   assert.equal(S.ocultaPorUrlLibre({ type: 'string', format: 'uri' }, on), true, 'el valor raíz');
   assert.equal(S.ocultaPorUrlLibre(por({ url: { type: 'string' }, input: { type: 'string', description: 'URL' } }), on), true, 'basta un parámetro no vigilable');
   // ofrecidas: nombre reconocible, también anidado y en arreglos
-  for (const e of [por({ url: { type: 'string' } }), por({ opciones: por({ webhook: { type: 'string' } }) }), por({ lista: { type: 'array', items: por({ href: { type: 'string' } }) } }), por({ target: { type: 'string', format: 'uri' } })]) assert.equal(S.ocultaPorUrlLibre(e, on), false, JSON.stringify(e));
+  for (const e of [por({ url: { type: 'string' } }), por({ urls: { type: 'array', items: { type: 'string' } } }), por({ target: { type: 'string', format: 'uri' } })]) assert.equal(S.ocultaPorUrlLibre(e, on), false, JSON.stringify(e));
+  // anidado, objeto, mapa, arreglo de objetos, anyOf/oneOf/$ref: SIEMPRE oculto
+  for (const e of [por({ opciones: por({ webhook: { type: 'string' } }) }), por({ lista: { type: 'array', items: por({ href: { type: 'string' } }) } }),
+    por({ url: { type: 'object', properties: { x: { type: 'string' } } } }), por({ links: { type: 'object', additionalProperties: { type: 'string' } } }), por({ urls: { type: 'array', items: por({ a: { type: 'string' } }) } }),
+    por({ link: { anyOf: [{ type: 'string' }, { type: 'object', additionalProperties: { type: 'string' } }] } }), por({ url: { oneOf: [{ type: 'string' }] } }), por({ url: { $ref: '#/$defs/u' } }), por({ url: { type: ['string', 'null'] } }), por({ url: { description: 'URL' } }),
+    { anyOf: [por({ url: { type: 'string' } })] }, { type: 'object', properties: { url: { type: 'string' } }, patternProperties: { '^x': { type: 'string' } } }]) assert.equal(S.ocultaPorUrlLibre(e, on), true, JSON.stringify(e));
 });
 
 test('lo que se ofrece = lo que el guardián vigila: cada parámetro ofrecido atrapa su valor sin esquema (anidado y en arreglos)', () => {
@@ -73,4 +79,39 @@ test('lo que se ofrece = lo que el guardián vigila: cada parámetro ofrecido at
   assert.equal(S.urlAjenaEn({ url: 'ok.com/a' }, 'https://mcp.conn.io', ['ok.com']), null);
   // el hueco que motivó el cambio: una clave opaca deja pasar el valor sin esquema, por eso esa herramienta nunca se ofrece
   assert.equal(S.urlAjenaEn({ input: 'evil.com/leak?d=S' }, 'https://mcp.conn.io', ['ok.com']), null);
+});
+
+// ---- las reproducciones de la segunda revisión, EXACTAS: o la herramienta queda oculta o la llamada se bloquea ----
+const LISTA = ['ok.com'], CONN = 'https://mcp.conn.io';
+const esquemas = {
+  'url objeto': { type: 'object', properties: { url: { type: 'object', properties: { x: { type: 'string' } } } } },
+  'links mapa': { type: 'object', properties: { links: { type: 'object', additionalProperties: { type: 'string' } } } },
+  'urls arreglo de objetos': { type: 'object', properties: { urls: { type: 'array', items: { type: 'object', properties: { a: { type: 'string' } } } } } },
+  'link anyOf': { type: 'object', properties: { link: { anyOf: [{ type: 'string' }, { type: 'object', additionalProperties: { type: 'string' } }] } } },
+};
+const llamadas = { 'url objeto': { url: { x: 'evil.com/leak?d=S' } }, 'links mapa': { links: { a: 'evil.com/x' } }, 'urls arreglo de objetos': { urls: [{ a: 'evil.com/x' }] }, 'link anyOf': { link: { k: 'evil.com/x' } } };
+test('reproducciones (a): parámetro de dirección objeto/mapa/arreglo de objetos/anyOf → la herramienta se oculta Y, si el modelo la llama igual, se bloquea', () => {
+  for (const [n, e] of Object.entries(esquemas)) {
+    assert.equal(S.ocultaPorUrlLibre(e, { activo: true, dominios: LISTA }), true, `${n}: debe quedar oculta`);
+    assert.ok(S.urlAjenaEn(llamadas[n], CONN, LISTA), `${n}: la llamada debe bloquearse`);
+  }
+});
+test('reproducciones (b): espacio, tab o salto de línea en un parámetro de dirección → se bloquea', () => {
+  for (const v of ['evil.com/leak?d=a b', 'ev\til.com/leak', 'evil.com\n/leak', 'evil.com\r\n/leak', ' evil.com ', 'evil.com/\u0000x', 'evil.com\u000b/x', 'https://evil.com/a\tb']) assert.ok(S.urlAjenaEn({ url: v }, CONN, LISTA), JSON.stringify(v));
+  assert.equal(S.urlAjenaEn({ url: ' ok.com/a\n' }, CONN, LISTA), null, 'espacios y salto de borde de un host permitido se limpian');
+  assert.ok(S.urlAjenaEn({ url: 'ok.com/a b' }, CONN, LISTA), 'espacio interno aunque el host sea de la lista');
+  assert.ok(S.urlAjenaEn({ urls: ['ok.com/a', 'evil.com/b c'] }, CONN, LISTA));
+  assert.ok(S.urlAjenaEn({ input: 'ok.com', url: { deep: { deeper: { d3: { d4: { d5: { d6: 'ok.com' } } } } } } }, CONN, LISTA), 'demasiado hondo bajo una clave de dirección');
+  assert.ok(S.urlAjenaEn({ url: 'x'.repeat(3000) }, CONN, LISTA));
+});
+test('(3) un string suelto bajo clave de dirección es siempre host/URL, tenga la forma que tenga', () => {
+  for (const v of ['evil', 'EVIL.COM', 'evil.com:8080/x', '//evil.com/x', 'evil.com?d=S', 'localhost']) assert.ok(S.urlAjenaEn({ url: v }, CONN, LISTA), v);
+  assert.equal(S.urlAjenaEn({ url: 'ok.com' }, CONN, LISTA), null); assert.equal(S.urlAjenaEn({ url: 'https://sub.ok.com/p?q=1' }, CONN, LISTA), null);
+});
+test('flag apagado o lista vacía = idéntico a main: los casos nuevos NO cambian urlAjenaEn sin lista', () => {
+  const casos = [{ url: { x: 'evil.com/leak?d=S' } }, { url: 'evil.com/leak?d=a b' }, { url: 'ev\til.com/leak' }, { url: 'evil.com\n/leak' }, { urls: [{ a: 'evil.com/x' }] }, { url: 'ok.com/a' }, { url: ' mcp.conn.io/x ' }, { q: 'hola mundo' }];
+  for (const a of casos) for (const v of [undefined, [], null]) assert.equal(S.urlAjenaEn(a, CONN, v), S.urlAjenaEn(a, CONN), JSON.stringify(a));
+  // y sin lista el ocultar es siempre el de siempre
+  for (const e of Object.values(esquemas)) assert.equal(S.ocultaPorUrlLibre(e, { activo: true, dominios: [] }), true);
+  assert.equal(S.ocultaPorUrlLibre({ type: 'object', properties: { url: { type: 'string' } } }, { activo: false, dominios: LISTA }), true);
 });
