@@ -81,3 +81,21 @@ export function decidirResolucion(e) {
   if (TRANSITORIAS.has(clase) && (e.fallos || 0) + 1 <= e.reintentosMax) return { ...base, plano: volver('previsto'), contarFallo: true };
   return { ...base, plano: volver('revisar', j.error || 'falló'), pausa: `el plano ${n} falló: ${j.error || 'sin motivo'}`, contarFallo: TRANSITORIAS.has(clase) };
 }
+
+// ---- cableado con el Estudio y topes de Ajustes (puros; antes vivían en serie-local.mjs, que lee archivos) ----
+/** El cableado con el Estudio (media.mjs), aparte para probarlo con el de verdad. precio: null si no es fiable (falla cerrado). */
+export function cablearMedia(media) {
+  const modelo = id => (id ? media.models().find(x => x.id === id) : null);
+  return {
+    capsDe: id => { const m = modelo(id); return m && m.on && m.kind === 'image' ? media.capsOf(m) : null; },
+    precioPlano: (id, aj) => { const m = modelo(id); if (!m) return null; const e = media.estimate({ model: id, n: 1, settings: aj || {} });
+      return typeof e === 'number' && Number.isFinite(e) && (e > 0 || m.engine === 'prueba') ? { generacion: e, gratis: m.engine === 'prueba' } : null; },
+    existeRef: id => !!media.resolve(id),
+  };
+}
+/** Los topes de la serie desde office.config.json → dimitri (serieTopeUsd, serieTopeMesUsd, serieReintentos). Solo valores válidos; lo demás queda en CONFIG_SERIE. */
+export function configDeAjustes(d) {
+  const x = d && typeof d === 'object' ? d : {}, num = (v, max) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : undefined);
+  const c = { topeSerieUsd: num(x.serieTopeUsd, 1000), topeMesCarruselesUsd: num(x.serieTopeMesUsd, 10000), reintentosMax: Number.isInteger(x.serieReintentos) && x.serieReintentos >= 0 && x.serieReintentos <= 3 ? x.serieReintentos : undefined };
+  return Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined));
+}

@@ -36,6 +36,7 @@ export async function reservar(db, d) {
   const max = d.maxMicro, tope = d.topeSerieMicro, peso = d.peso ?? 1, carrusel = d.carrusel ? 1 : 0, topeMes = d.topeMesMicro ?? 0, cupo = d.cupoDiaPeso ?? 0;
   if (![max, tope, peso, topeMes, cupo, d.n, d.intento].every(entero) || typeof d.mes !== 'string' || typeof d.dia !== 'string' || !Number.isFinite(d.ahora)) return { ok: false, codigo: 'clave', motivo: 'datos de reserva no válidos' };
   const ya = await lineaDe(db, d.clave);
+  if (ya && ya.serie_id !== d.serieId) return { ok: false, codigo: 'clave', motivo: 'esa clave ya es de otra serie' }; // falla cerrado: nunca se «repite» la reserva de otra serie
   if (ya) return ya.estado === 'liberado' ? { ok: false, codigo: 'liberada', motivo: 'esa reserva ya se liberó; usa otro intento' } : { ok: true, repetida: true };
   const r = await db.prepare(`insert or ignore into series_libro (clave, serie_id, n, intento, estado, max_micro, real_micro, excedio, mes, dia, carrusel, peso, salio, at)
     select ?, ?, ?, ?, 'reservado', ?, 0, 0, ?, ?, ?, ?, 1, ?
@@ -45,6 +46,7 @@ export async function reservar(db, d) {
     .bind(d.clave, d.serieId, d.n, d.intento, max, d.mes, d.dia, carrusel, peso, d.ahora, d.serieId, max, tope, carrusel, d.mes, max, topeMes, cupo > 0 ? 1 : 0, d.dia, peso, cupo).run();
   if ((r.meta?.changes ?? 0) === 1) return { ok: true };
   const ahora = await lineaDe(db, d.clave); // otra petición la metió justo antes (misma clave): es la misma reserva
+  if (ahora && ahora.serie_id !== d.serieId) return { ok: false, codigo: 'clave', motivo: 'esa clave ya es de otra serie' };
   if (ahora) return ahora.estado === 'liberado' ? { ok: false, codigo: 'liberada', motivo: 'esa reserva ya se liberó; usa otro intento' } : { ok: true, repetida: true };
   // no cupo: se dice cuál tope fue (solo para el mensaje; la decisión ya la tomó la sentencia)
   const res = await resumenDeSerie(db, d.serieId), usado = res.reservado + res.gastado + res.incierto;
@@ -85,4 +87,30 @@ export async function resolverIncierto(db, clave, huboCobro, realMicro = 0) {
     ? await db.prepare(`update series_libro set estado = 'liquidado', real_micro = case when ? > 0 then ? else max_micro end, excedio = case when ? > max_micro then 1 else 0 end where clave = ? and estado = 'incierto'`).bind(realMicro, realMicro, realMicro, clave).run()
     : await db.prepare(`update series_libro set estado = 'liberado' where clave = ? and estado = 'incierto'`).bind(clave).run();
   return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_incierto', 'ese paso no está en duda');
+}
+
+/** ¿Cuántas series están generando AHORA? Una serie cuenta si está en muestra o corriendo, O si tiene algún plano en el aire (trabajo enviado y no terminado) aunque esté pausada o cancelada: lo que va en el aire se liquida después y borrar la serie lo dejaría sin dueño.
+ *  Restablecer a Dimitri se niega si hay alguna. Si la tabla aún no existe (migración sin aplicar) no hay ninguna. */
+export async function hayCorriendo(db) {
+  try { return (await db.prepare(`select count(*) as n from series where estado in ('muestra', 'corriendo') or exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo')`).first()).n; }
+  catch (e) { if (/no such table/i.test(String(e?.message || e))) return 0; throw e; }
+}
+/** Las líneas del libro de una serie (≤ 100), de la más vieja a la más nueva. Solo lectura. */
+export async function lineas(db, serieId) {
+  const { results } = await db.prepare('select clave, n, intento, estado, max_micro, real_micro, excedio, salio, at from series_libro where serie_id = ? order by n, intento limit 100').bind(serieId).all();
+  return results.map((r) => ({ clave: r.clave, n: r.n, intento: r.intento, estado: r.estado, maxMicro: r.max_micro, realMicro: r.estado === 'liquidado' ? r.real_micro : null, excedio: !!r.excedio, salio: !!r.salio, at: r.at }));
+}
+/** Barrido de líneas HUÉRFANAS (su serie ya no existe: se restableció o se podó): una línea `reservada` que nadie va a cerrar.
+ *  Con certeza de que nada salió (`trabajoDe(clave) === false`) se libera y se devuelve el cupo; si hubo trabajo o NO se sabe (`trabajoDe` ausente o null) queda `incierta` (cuenta contra los topes hasta que alguien decida).
+ *  Una línea ya `incierta` no se toca. → { liberadas, inciertas, pendientes } */
+export async function barrerHuerfanas(db, { trabajoDe = null } = {}) {
+  const { results } = await db.prepare(`select clave, estado from series_libro where estado in ('reservado', 'incierto') and serie_id not in (select id from series) limit 100`).all();
+  const out = { liberadas: 0, inciertas: 0, pendientes: 0 };
+  for (const r of results) {
+    if (r.estado === 'incierto') { out.pendientes++; continue; }
+    const hubo = trabajoDe ? await trabajoDe(r.clave) : null;
+    if (hubo === false) { if ((await liberar(db, r.clave, { nuncaSalio: true })).ok) out.liberadas++; }
+    else if ((await marcarIncierto(db, r.clave)).ok) out.inciertas++;
+  }
+  return out;
 }

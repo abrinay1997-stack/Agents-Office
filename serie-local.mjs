@@ -8,22 +8,8 @@ import { armarPedidoVision, revisarPlano, fichaDeRevision, USD_POR_REVISION, MAX
 import { tipoDe } from './ver-imagen-core.mjs';
 import { vistaSerie, resumenSerie, pausarSerie, cancelarSerie } from './series.mjs'; // 11.5: la serie persistida
 
-/** El cableado con el Estudio (media.mjs), aparte para probarlo con el de verdad. precio: null si no es fiable (falla cerrado). */
-export function cablearMedia(media) {
-  const modelo = id => (id ? media.models().find(x => x.id === id) : null);
-  return {
-    capsDe: id => { const m = modelo(id); return m && m.on && m.kind === 'image' ? media.capsOf(m) : null; },
-    precioPlano: (id, aj) => { const m = modelo(id); if (!m) return null; const e = media.estimate({ model: id, n: 1, settings: aj || {} });
-      return typeof e === 'number' && Number.isFinite(e) && (e > 0 || m.engine === 'prueba') ? { generacion: e, gratis: m.engine === 'prueba' } : null; },
-    existeRef: id => !!media.resolve(id),
-  };
-}
-/** Los topes de la serie desde office.config.json → dimitri (serieTopeUsd, serieTopeMesUsd, serieReintentos). Solo valores válidos; lo demás queda en CONFIG_SERIE. */
-export function configDeAjustes(d) {
-  const x = d && typeof d === 'object' ? d : {}, num = (v, max) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : undefined);
-  const c = { topeSerieUsd: num(x.serieTopeUsd, 1000), topeMesCarruselesUsd: num(x.serieTopeMesUsd, 10000), reintentosMax: Number.isInteger(x.serieReintentos) && x.serieReintentos >= 0 && x.serieReintentos <= 3 ? x.serieReintentos : undefined };
-  return Object.fromEntries(Object.entries(c).filter(([, v]) => v !== undefined));
-}
+export { cablearMedia, configDeAjustes } from './series-bomba-core.mjs'; // el cableado con el Estudio y los topes: puros, y la nube los usa también
+
 export function crearSeries({ biblia, capsDe, existeRef, precioPlano, cifras = () => ({}), activo = () => false, id = () => 'serie-' + Date.now().toString(36), config = null, modeloUnico = () => null, vision = null,
   almacen = null, generarActivo = () => false, auditar = () => {}, alCancelar = () => {}, generador = null }) {
   const conf = () => (typeof config === 'function' ? config() : config) || null;
