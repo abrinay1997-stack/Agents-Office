@@ -89,9 +89,10 @@ export async function resolverIncierto(db, clave, huboCobro, realMicro = 0) {
   return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_incierto', 'ese paso no está en duda');
 }
 
-/** ¿Cuántas series están generando AHORA (muestra o corriendo)? Restablecer a Dimitri se niega si hay alguna. Si la tabla aún no existe (migración sin aplicar) no hay ninguna. */
+/** ¿Cuántas series están generando AHORA? Una serie cuenta si está en muestra o corriendo, O si tiene algún plano en el aire (trabajo enviado y no terminado) aunque esté pausada o cancelada: lo que va en el aire se liquida después y borrar la serie lo dejaría sin dueño.
+ *  Restablecer a Dimitri se niega si hay alguna. Si la tabla aún no existe (migración sin aplicar) no hay ninguna. */
 export async function hayCorriendo(db) {
-  try { return (await db.prepare(`select count(*) as n from series where estado in ('muestra', 'corriendo')`).first()).n; }
+  try { return (await db.prepare(`select count(*) as n from series where estado in ('muestra', 'corriendo') or exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo')`).first()).n; }
   catch (e) { if (/no such table/i.test(String(e?.message || e))) return 0; throw e; }
 }
 /** Las líneas del libro de una serie (≤ 100), de la más vieja a la más nueva. Solo lectura. */

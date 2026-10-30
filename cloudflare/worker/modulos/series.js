@@ -1,10 +1,11 @@
 // Series de imágenes (storyboard, carruseles del mes) en la nube — N2/N3: SOLO LECTURA Y PROPUESTA. Nada aquí genera, reserva ni gasta: no hay bomba, no hay token de GENERAR y ninguna ruta llama a un motor.
 //   GET  /api/series                    → { series: [resumen], activo }
 //   GET  /api/series/<id>               → { serie: vista (lista blanca; el gasto sale del libro SQL) }
-//   GET  /api/series/<id>/libro         → { lineas }  las líneas del libro de esa serie (solo lectura)
+//   GET  /api/series/<id>/libro         → { lineas }  las líneas del libro de esa serie (solo lectura; SOLO administradores: lleva dinero)
 //   POST /api/series/proponer {brief, planos, guardar?}  → la PROPUESTA (con `guardar: true` se guarda como «prevista»; no gasta)
 //   POST /api/series/<id>/tanda {planos}                 → añade 1 a 8 planos a una serie prevista (la escaleta cambia de hash)
-// Todo detrás de `dimitri.seriesNube` (APAGADO por defecto): apagado, cada ruta contesta 501 en español. Escribir es SOLO de un administrador (nunca un agente); leer, de cualquier cuenta.
+// Todo detrás de `dimitri.seriesNube` (APAGADO por defecto): apagado, cada ruta contesta 501 en español. Escribir es SOLO de un administrador (nunca un agente); leer la lista y la serie, de cualquier cuenta PERO sin dinero
+// (SEG-04: el rol «lectura» ve resultados, no dinero; el editor tampoco): el gasto, los topes y las líneas del libro son solo de un administrador.
 // generar, resolver, pausar y cancelar contestan 501: todavía no existen en la nube (llegan en su propio PR, con revisión doble).
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { leerCfg } from '../lib/ajustes.js';
@@ -12,7 +13,7 @@ import { crearAlmacenD1 } from '../lib/series/almacen.js';
 import { seriesNubeActiva } from '../lib/series/flags.js';
 import { resumenDeSerie, inciertos, lineas } from '../lib/series/libro.js';
 import { proponer, anadirTanda } from '../lib/series/propuesta.js';
-import { vistaSerie, resumenSerie } from '../../../series-vista-core.mjs';
+import { vistaSerie, resumenSerie, sinDinero } from '../../../series-vista-core.mjs';
 import { ID_SERIE_OK } from '../../../series-bomba-core.mjs';
 
 export const nombre = 'series';
@@ -32,6 +33,9 @@ export async function manejar(ctx) {
   const proponiendo = ruta === '/api/series/proponer' && metodo === 'POST';
   if (!proponiendo && !m && ruta !== '/api/series') return error('no such route', 404);
 
+  // ---- el libro lleva dinero: solo un administrador (el rol se mira ANTES del interruptor, como lo demás) ----
+  if (metodo === 'GET' && m && m[2] === 'libro' && !esAdmin) return prohibido('Las líneas del libro de una serie llevan dinero: son de un administrador.');
+
   // ---- quien escribe o decide: SOLO un administrador (el rol se comprueba ANTES del interruptor) ----
   if (metodo !== 'GET') {
     if (!esAdmin) return prohibido('Proponer o cambiar una serie es de un administrador (no de un agente ni de un editor).');
@@ -42,13 +46,14 @@ export async function manejar(ctx) {
   const almacen = crearAlmacenD1(db);
 
   if (metodo === 'GET') {
-    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => resumenSerie(s)), activo: true });
+    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => (esAdmin ? resumenSerie(s) : sinDinero(resumenSerie(s)))), activo: true });
     if (!m || (m[2] && m[2] !== 'libro')) return error('no such route', 404);
     if (m[1] === 'proponer') return error('no such route', 404);
     const s = await almacen.uno(m[1]);
     if (!s) return error('No encuentro esa serie.', 404);
     if (m[2] === 'libro') return json({ serie: s.id, lineas: await lineas(db, s.id) });
-    return json({ serie: vistaSerie(s, { libro: await resumenDeSerie(db, s.id), inciertos: await inciertos(db, s.id) }) });
+    const v = vistaSerie(s, { libro: await resumenDeSerie(db, s.id), inciertos: await inciertos(db, s.id) });
+    return json({ serie: esAdmin ? v : sinDinero(v) }); // quien no es administrador sabe QUÉ pasos están en duda, no cuánto
   }
 
   // ---- escribir (solo propuesta): nada gasta ----

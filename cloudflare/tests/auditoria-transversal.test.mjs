@@ -109,6 +109,13 @@ test('MATRIZ: el editor no puede lo que decide el dueño (aprobar, tocar Meta, c
   }
 });
 
+test('MATRIZ: lo que lleva DINERO es solo del administrador — el libro de una serie (SEG-04: «lectura» y editor ven resultados, no dinero), con el interruptor de las series apagado', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  for (const quien of ['editor', 'lectura']) { const x = await o[quien]('GET', '/api/series/abc123/libro'); assert.equal(x.status, 403, `${quien} /libro dio ${x.status}`); }
+  assert.equal((await o.admin('GET', '/api/series/abc123/libro')).status, 501, 'el administrador llega hasta el interruptor (apagado)');
+  assert.equal((await o.anon('GET', '/api/series/abc123/libro')).status, 401);
+});
+
 test('MATRIZ: toda ruta de escritura escrita en un módulo aparece en la lista de arriba', () => {
   // Saca los literales '/api/…' del código de los módulos y de lib/rutas.js (sin comentarios); los de lectura pura no cuentan. Una ruta nueva que escribe tiene que entrar en ESCRIBEN y se prueba sola.
   const fuentes = [join(RAIZ, 'worker/lib/rutas.js'), ...readdirSync(join(RAIZ, 'worker/modulos')).filter((f) => f.endsWith('.js')).map((f) => join(RAIZ, 'worker/modulos', f))];

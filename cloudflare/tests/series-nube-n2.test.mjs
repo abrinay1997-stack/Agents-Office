@@ -53,6 +53,10 @@ test('SERIES N2: roles — sin sesión 401; escribir es solo de un administrador
       assert.equal((await o.editor(m, r, {})).status, 403, `editor ${m} ${r} (interruptor ${encendido})`);
       assert.equal((await o.lectura(m, r, {})).status, 403, `lectura ${m} ${r}`);
     }
+    // el libro lleva dinero: solo un administrador, con el interruptor apagado o encendido (el rol se mira antes)
+    assert.equal((await o.editor('GET', '/api/series/abc/libro')).status, 403, `editor /libro (interruptor ${encendido})`);
+    assert.equal((await o.lectura('GET', '/api/series/abc/libro')).status, 403, `lectura /libro (interruptor ${encendido})`);
+    assert.notEqual((await o.admin('GET', '/api/series/abc/libro')).status, 403);
     if (encendido) { assert.equal((await o.editor('GET', '/api/series')).status, 200); assert.equal((await o.lectura('GET', '/api/series')).status, 200); }
   }
 });
@@ -92,15 +96,33 @@ test('SERIES N2: proponer rechaza lo que no es un plano (vacío, demasiado largo
 test('SERIES N2: leer — lista, vista de lista blanca (sin brief ni prompts) con el gasto del LIBRO SQL, y sus líneas', { skip: SALTAR }, async () => {
   const o = await oficina();
   const id = (await o.admin('POST', '/api/series/proponer', { brief: BRIEF, planos: [plano(1), plano(2)], guardar: true })).j.guardada.id;
-  const lista = await o.editor('GET', '/api/series'); assert.equal(lista.status, 200); assert.equal(lista.j.series.length, 1); assert.equal(lista.j.series[0].id, id);
+  const lista = await o.admin('GET', '/api/series'); assert.equal(lista.status, 200); assert.equal(lista.j.series.length, 1); assert.equal(lista.j.series[0].id, id); assert.ok(lista.j.series[0].gasto, 'el administrador ve el gasto');
   await L.reservar(o.d1, { clave: `${id}:1:1`, serieId: id, n: 1, intento: 1, maxMicro: 1_500_000, topeSerieMicro: 10_000_000, mes: '2026-10', dia: '2026-10-30', carrusel: true, topeMesMicro: 45_000_000, peso: 1, cupoDiaPeso: 0, ahora: 1 });
   await L.reservar(o.d1, { clave: `${id}:2:1`, serieId: id, n: 2, intento: 1, maxMicro: 500_000, topeSerieMicro: 10_000_000, mes: '2026-10', dia: '2026-10-30', carrusel: true, topeMesMicro: 45_000_000, peso: 1, cupoDiaPeso: 0, ahora: 2 });
   await L.marcarIncierto(o.d1, `${id}:2:1`);
-  const v = await o.lectura('GET', `/api/series/${id}`); assert.equal(v.status, 200);
+  const va = await o.admin('GET', `/api/series/${id}`); assert.equal(va.status, 200); const v = va;
   assert.equal(v.j.serie.gasto.reservadoUsd, 1.5); assert.equal(v.j.serie.gasto.inciertoUsd, 0.5); assert.equal(v.j.serie.gasto.disponibleUsd, 8); assert.equal(v.j.serie.pasos_inciertos.length, 1);
   const txt = JSON.stringify(v.j); assert.ok(!txt.includes('objetivo') && !txt.includes('mostrar el sofá') && !txt.includes('prompt_exacto') && !txt.includes('token'), 'la vista es de lista blanca');
-  const l = await o.editor('GET', `/api/series/${id}/libro`); assert.equal(l.j.lineas.length, 2); assert.deepEqual(l.j.lineas.map((x) => x.estado), ['reservado', 'incierto']);
+  const l = await o.admin('GET', `/api/series/${id}/libro`); assert.equal(l.j.lineas.length, 2); assert.deepEqual(l.j.lineas.map((x) => x.estado), ['reservado', 'incierto']);
   assert.equal((await o.admin('GET', '/api/series/no-existe')).status, 404); assert.equal((await o.admin('GET', '/api/series/proponer')).status, 404);
+});
+
+test('SERIES N2 (SEG-04): lectura y editor ven resultados y avances, pero NINGUNA cifra de dinero (ni en la lista, ni en la serie, ni en las versiones, ni en los pasos en duda)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const id = (await o.admin('POST', '/api/series/proponer', { brief: BRIEF, planos: [plano(1), plano(2)], guardar: true })).j.guardada.id;
+  await L.reservar(o.d1, { clave: `${id}:1:1`, serieId: id, n: 1, intento: 1, maxMicro: 1_500_000, topeSerieMicro: 10_000_000, mes: '2026-10', dia: '2026-10-30', carrusel: false, topeMesMicro: 0, peso: 1, cupoDiaPeso: 0, ahora: 1 });
+  await L.marcarIncierto(o.d1, `${id}:1:1`);
+  o.d1._db.prepare("update series set json = json_set(json, '$.escaleta[0].versiones', json('[{\"v\":1,\"intento\":1,\"costo_usd\":0.07}]')) where id = ?").run(id);
+  const dinero = /usd|micro|gasto|tope|costo|disponible|reservad|gastad/i;
+  for (const quien of [o.lectura, o.editor]) {
+    for (const r of ['/api/series', `/api/series/${id}`]) {
+      const x = await quien('GET', r); assert.equal(x.status, 200, r);
+      const claves = JSON.stringify(x.j, (k, v) => (k && !/^\d+$/.test(k) && typeof v !== 'object' ? (k + '|') : v)); // solo los NOMBRES de campo
+      assert.doesNotMatch(claves, dinero, `${r}: ${claves.match(dinero)}`); assert.ok(!JSON.stringify(x.j).includes('0.07') && !JSON.stringify(x.j).includes('1.5'), `${r} no lleva cifras`);
+    }
+    const v = (await quien('GET', `/api/series/${id}`)).j.serie; assert.equal(v.progreso.total, 2); assert.equal(v.pasos_inciertos.length, 1, 'sí sabe que un paso está en duda'); assert.deepEqual(Object.keys(v.pasos_inciertos[0]).sort(), ['clave', 'intento', 'n']);
+  }
+  assert.ok((await o.admin('GET', `/api/series/${id}`)).j.serie.escaleta[0].versiones[0].costo_usd === 0.07, 'el administrador sí lo ve');
 });
 
 test('SERIES N3: la tanda añade planos con la numeración que sigue, cambia el hash, devuelve la serie a «prevista» y respeta los límites', { skip: SALTAR }, async () => {
@@ -155,6 +177,19 @@ test('RESTABLECER: con una serie GENERANDO, restablecer a Dimitri se niega con 4
   db.prepare("update series set estado = 'pausado' where id = ?").run(id);
   const ok = await o.admin('POST', '/api/restablecer/confirmar', { token: p1.j.pendiente.token, escribio: 'RESTABLECER' }); assert.equal(ok.status, 200, 'la misma confirmación sigue valiendo: no se gastó');
   assert.equal(db.prepare('select count(*) n from series').get().n, 0, 'las series sí se restablecen');
+});
+
+test('RESTABLECER: una serie PAUSADA (o cancelada) con un paso en el aire también lo bloquea; sin paso en el aire, no', { skip: SALTAR }, async () => {
+  const o = await oficina(), db = o.d1._db;
+  const id = (await o.admin('POST', '/api/series/proponer', { brief: BRIEF, planos: [plano(1), plano(2)], guardar: true })).j.guardada.id;
+  const planoEn = (e) => db.prepare("update series set json = json_set(json, '$.escaleta[1].estado', ?) where id = ?").run(e, id);
+  for (const estado of ['pausado', 'cancelado', 'hecho']) {
+    poner(db, id, estado); planoEn('previsto');
+    assert.equal((await o.admin('POST', '/api/restablecer', { modo: 'vacia', ambitos: ['dimitri'] })).status, 200, `${estado} sin paso en el aire`);
+    planoEn('corriendo');
+    const x = await o.admin('POST', '/api/restablecer', { modo: 'vacia', ambitos: ['dimitri'] }); assert.equal(x.status, 409, `${estado} con un paso en el aire`); assert.match(x.j.error, /paso en el aire/);
+  }
+  assert.equal(await L.hayCorriendo(o.d1), 1); planoEn('listo'); assert.equal(await L.hayCorriendo(o.d1), 0);
 });
 
 test('LIBRO: el barrido de líneas huérfanas libera con certeza de que nada salió, deja «incierta» ante la duda y no toca lo que tiene serie ni lo ya incierto', { skip: SALTAR }, async () => {

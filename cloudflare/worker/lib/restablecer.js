@@ -168,11 +168,11 @@ export async function estado(env, db, ahora = Date.now()) {
 }
 
 /** Paso 1: valida, cuenta y deja la clave de un solo uso. → { pendiente } o { error, status } */
-/** Restablecer «Dimitri» (o restaurar un respaldo que lo trae) borra las series: con una GENERANDO (muestra o corriendo) se niega, con su motivo. → null o { error, status: 409 }. */
+/** Restablecer «Dimitri» (o restaurar un respaldo que lo trae) borra las series: con una GENERANDO (muestra o corriendo) o con un paso en el aire (aunque esté pausada) se niega, con su motivo. → null o { error, status: 409 }. */
 async function guardiaSeries(db, ambitos) {
   if (!Array.isArray(ambitos) || !ambitos.includes('dimitri')) return null;
   const n = await hayCorriendo(db);
-  return n > 0 ? { error: `Hay ${n === 1 ? 'una serie generando' : n + ' series generando'}: pausa o cancela ${n === 1 ? 'esa serie' : 'esas series'} antes de restablecer a Dimitri (lo que lleva gastado no se borra del libro, pero la serie sí).`, status: 409 } : null;
+  return n > 0 ? { error: `Hay ${n === 1 ? 'una serie generando o con un paso en el aire' : n + ' series generando o con un paso en el aire'}: espera a que termine ${n === 1 ? 'ese paso' : 'esos pasos'} (o pausa la serie y vuelve a intentarlo) antes de restablecer a Dimitri; lo que lleva gastado no se borra del libro, pero la serie sí.`, status: 409 } : null;
 }
 
 export async function pedirRestablecer(env, db, pedido, { ahora = Date.now() } = {}) {

@@ -26,3 +26,12 @@ export const resumenSerie = s => {
     creada: v.creada, actualizada: v.actualizada, pausa_motivo: v.pausa_motivo || null };
 };
 
+
+/** La misma vista SIN dinero, para quien no es administrador (SEG-04: el rol «lectura» ve resultados, no dinero; el editor tampoco): fuera `gasto`, el tope, el costo de cada versión y lo que costó cada paso en duda.
+ *  Se quedan los avances, los estados y cuáles pasos están en duda (sin cifra). Sirve para la vista y para el resumen de la lista. Pura. */
+export function sinDinero(v) {
+  if (!v) return v;
+  const { gasto, tope_usd, pasos_inciertos, escaleta, ...r } = v; void gasto; void tope_usd;
+  return { ...r, ...(escaleta ? { escaleta: escaleta.map(p => ({ ...p, versiones: (p.versiones || []).map(x => ({ v: x.v, intento: x.intento })) })) } : {}),
+    ...(pasos_inciertos ? { pasos_inciertos: pasos_inciertos.map(x => ({ clave: x.clave, n: x.n, intento: x.intento })) } : {}) };
+}
