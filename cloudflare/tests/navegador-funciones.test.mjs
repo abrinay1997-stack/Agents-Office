@@ -76,6 +76,15 @@ for (const ancho of [320, 360, 390, 430, 1280]) {
     await p.click('button[data-fn="lotes-nube"]');
     await p.waitForSelector('button[data-fn="lotes-nube"][data-on="0"]');
     assert.equal((await leerDoc(d1, 'estudio.config', {})).valor.lotesNube, false);
+    // las tres que antes pedían la consola: notas, notificaciones y la de lectura (viene ENCENDIDA y se puede apagar)
+    await p.click('button[data-fn="notas-personales"]'); await p.waitForSelector('button[data-fn="notas-personales"][data-on="1"]');
+    assert.equal((await leerDoc(d1, 'notas.config', {})).valor.activo, true);
+    await p.click('button[data-fn="notificaciones"]'); await p.waitForSelector('button[data-fn="notificaciones"][data-on="1"]');
+    assert.equal(await p.locator('button[data-fn="lectura-ve-resultados"]').getAttribute('data-on'), '1', 'viene encendida');
+    assert.match(await p.textContent('#pane'), /Nunca ve dinero/);
+    await p.click('button[data-fn="lectura-ve-resultados"]'); await p.waitForSelector('button[data-fn="lectura-ve-resultados"][data-on="0"]');
+    assert.equal((await leerDoc(d1, 'notificaciones.config', {})).valor.lecturaVeResultados, false);
+    assert.equal((await leerDoc(d1, 'notificaciones.config', {})).valor.activo, true);
     // un POST que falla no deja la confirmación abierta: el siguiente toque vuelve a pedirla
     await p.route('**/api/funciones', async (r) => { if (r.request().method() === 'POST') { await p.unroute('**/api/funciones'); return r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"caído"}' }); } return r.fallback(); });
     await p.click('button[data-fn="lotes-nube"]'); await p.click('button[data-fn="lotes-nube"]');

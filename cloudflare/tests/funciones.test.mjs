@@ -19,7 +19,7 @@ async function mundo() {
   return { d1, db: d1._db, admin: como('admin'), editor: como('editor'), lectura: como('lectura'), anon: como(null) };
 }
 const filaDe = (j, id) => j.funciones.find((f) => f.id === id);
-const DOCS = { chat: ['chat.config', 'activo'], 'carpetas-arbol': ['estudio.config', 'carpetasArbol'], 'lotes-nube': ['estudio.config', 'lotesNube'] };
+const DOCS = { chat: ['chat.config', 'activo'], 'notas-personales': ['notas.config', 'activo'], notificaciones: ['notificaciones.config', 'activo'], 'carpetas-arbol': ['estudio.config', 'carpetasArbol'], 'lotes-nube': ['estudio.config', 'lotesNube'] };
 const CFG = { 'sesion-deslizante': ['sesion', 'deslizante'], 'acceso-retroceso': ['acceso', 'retroceso'], 'series-nube': ['dimitri', 'seriesNube'] };
 
 test('el panel no ofrece gasto de pago ni nada con pinta de secreto', () => {
@@ -40,7 +40,7 @@ test('roles: anónimo 401; editor y lectura 403 antes de mirar nada (GET y POST)
   const g = await m.admin('GET', '/api/funciones');
   assert.equal(g.status, 200);
   assert.deepEqual(g.j.funciones.map((f) => f.id), FUNCIONES.map((f) => f.id));
-  for (const f of g.j.funciones) assert.equal(f.activa, false, `${f.id} empieza como hoy`);
+  for (const f of g.j.funciones) assert.equal(f.activa, f.id === 'lectura-ve-resultados', `${f.id} empieza como hoy (solo la de lectura viene encendida)`);
   assert.deepEqual(g.j.enlaces.map((e) => e.id), ENLACES.map((e) => e.id));
 });
 
@@ -82,6 +82,8 @@ test('cada interruptor se escribe donde el catálogo dice, se refleja en GET, lo
     for (const doc of ['config-local', 'ajustes']) assert.equal((await leerDoc(m.d1, doc, {})).valor[a][b], true, `${id} en ${doc}`);
   }
   assert.equal((await m.admin('GET', '/api/chat/config')).j.activo, true);
+  assert.equal((await m.admin('GET', '/api/notas-personales/config')).j.activo, true);
+  assert.equal((await m.admin('GET', '/api/notificaciones/config')).j.activo, true);
   assert.equal((await m.admin('GET', '/api/media/limites')).j.limites.lotesNube, true);
   assert.equal(m.db.prepare("select count(*) n from chat_miembros where canal_id = 'general'").get().n, 3, 'las cuentas quedan en #general');
   for (const f of LISTAS) assert.equal((await m.admin('POST', '/api/funciones', { id: f.id, activo: false })).status, 200, f.id);
@@ -163,4 +165,20 @@ test('el id es exacto: con espacios o en mayúsculas no está en la lista', { sk
   const m = await mundo();
   for (const id of [' chat', 'chat ', 'CHAT', 'chat\n']) assert.equal((await m.admin('POST', '/api/funciones', { id, activo: true })).status, 422, JSON.stringify(id));
   assert.equal(m.db.prepare("select count(*) n from docs where clave = 'chat.config'").get().n, 0);
+});
+
+test('«la cuenta de lectura ve resultados» viene ENCENDIDA, se muestra real, se apaga y se enciende sin tocar lo demás', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  assert.equal(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').activa, true, 'sin documento vale lo que el código supone: encendida');
+  assert.match(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').que, /Nunca ve dinero/);
+  await m.admin('POST', '/api/funciones', { id: 'notificaciones', activo: true });
+  const r = await m.admin('POST', '/api/funciones', { id: 'lectura-ve-resultados', activo: false });
+  assert.equal(r.status, 200); assert.equal(r.j.cambio, true); assert.equal(filaDe(r.j, 'lectura-ve-resultados').activa, false);
+  assert.deepEqual((await leerDoc(m.d1, 'notificaciones.config', {})).valor, { activo: true, lecturaVeResultados: false }, 'cada clave en su sitio, sin pisar la otra');
+  assert.equal((await m.admin('GET', '/api/notificaciones/config')).j.lecturaVeResultados, false, 'el código que la lee ve lo mismo');
+  assert.equal((await m.admin('POST', '/api/funciones', { id: 'lectura-ve-resultados', activo: false })).j.cambio, false);
+  assert.equal((await m.admin('POST', '/api/funciones', { id: 'lectura-ve-resultados', activo: true })).j.cambio, true);
+  assert.equal((await leerDoc(m.d1, 'notificaciones.config', {})).valor.lecturaVeResultados, true);
+  const filas = m.db.prepare("select detalle from auditoria where tipo = 'funciones' and detalle like '%lectura-ve-resultados%' order by rowid").all().map((x) => JSON.parse(x.detalle));
+  assert.deepEqual(filas, [{ id: 'lectura-ve-resultados', de: 'encendida', a: 'apagada' }, { id: 'lectura-ve-resultados', de: 'apagada', a: 'encendida' }]);
 });

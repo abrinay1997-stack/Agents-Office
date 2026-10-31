@@ -23,10 +23,34 @@ export const FUNCIONES = [
   {
     id: 'chat',
     titulo: 'Chat interno del equipo',
-    que: 'El chat entre las personas de la oficina, con la campanita, «escribiendo…» y notas personales. Solo entre personas: los agentes no lo leen ni escriben en él.',
+    que: 'El chat entre las personas de la oficina, con «escribiendo…» y no leídos. Solo entre personas: los agentes no lo leen ni escriben en él.',
     donde: 'chat.config', ruta: 'activo',
     lista: true, gasta: false,
     nota: 'Al encenderlo, cada cuenta entra sola en #general la primera vez que abre el chat.',
+  },
+  {
+    id: 'notas-personales',
+    titulo: 'Notas para cuando entres',
+    que: 'Dejarle una nota a una persona del equipo que la ve al entrar («Mientras no estabas»). Solo a quien eliges, texto plano de hasta 500 letras. Va con la campanita.',
+    donde: 'notas.config', ruta: 'activo',
+    lista: true, gasta: false,
+    nota: 'Al apagarla, las notas ya dejadas no se borran: vuelven a verse al encenderla.',
+  },
+  {
+    id: 'notificaciones',
+    titulo: 'Notificaciones por persona',
+    que: 'La campanita: a cada persona le llegan los avisos que le tocan según su rol, y quien lo pida ve un aviso corto cuando otra persona se conecta.',
+    donde: 'notificaciones.config', ruta: 'activo',
+    lista: true, gasta: false,
+    nota: 'Apagada, la campanita no se dibuja; los avisos de siempre (Estado, Telegram) siguen igual.',
+  },
+  {
+    id: 'lectura-ve-resultados',
+    titulo: 'La cuenta de solo lectura ve resultados',
+    que: 'Encendida (lo normal): una cuenta de «lectura» ve tareas, calendario, notas, el trabajo terminado de los agentes, el Cerebro y Contenido. Nunca ve dinero, Anuncios, Bandeja ni los ajustes de seguridad. Apagada, ve menos.',
+    donde: 'notificaciones.config', ruta: 'lecturaVeResultados', defecto: true,
+    lista: true, gasta: false,
+    nota: 'Es una función de SEGURIDAD y viene encendida. Apagarla cierra el trabajo de los agentes, el Cerebro y Contenido a las cuentas de lectura; no abre nada nuevo.',
   },
   {
     id: 'carpetas-arbol',
@@ -130,7 +154,9 @@ export function poner(obj, ruta, valor) {
 export const leer = (obj, ruta) => String(ruta).split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), obj);
 
 /** ¿Está encendida? Como el código que la lee: solo `=== true`. */
-export const activa = (f, docs) => leer(f.donde === 'config' ? { ...(docs[DOC_LOCAL] || {}), ...(docs[DOC_AJUSTES] || {}) } : (docs[f.donde] || {}), f.ruta) === true;
+/** El valor de la ruta en UN documento, con el valor que ya tiene cuando no está escrito (`defecto`): solo `=== true` enciende, y lo que no existe vale lo que el código que la lee supone. */
+export const valorEn = (f, doc) => { const v = leer(doc || {}, f.ruta); return v === undefined ? f.defecto === true : v === true; };
+export const activa = (f, docs) => valorEn(f, f.donde === 'config' ? { ...(docs[DOC_LOCAL] || {}), ...(docs[DOC_AJUSTES] || {}) } : (docs[f.donde] || {}));
 
 /**
  * Qué hay que escribir para dejar encendidas (o apagadas) las funciones pedidas.
