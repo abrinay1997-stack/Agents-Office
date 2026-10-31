@@ -28,7 +28,7 @@ test('el catálogo está bien formado', () => {
     assert.ok(!ids.has(f.id), `id repetido: ${f.id}`); ids.add(f.id);
     assert.ok(f.titulo && f.titulo.length <= 60, `${f.id}: título largo o vacío`);
     assert.ok(f.que && f.que.length <= 240, `${f.id}: «qué hace» largo o vacío`);
-    assert.ok(['config', 'estudio.config', 'chat.config'].includes(f.donde), `${f.id}: documento desconocido`);
+    assert.ok(['config', 'estudio.config', 'chat.config', 'notas.config', 'notificaciones.config'].includes(f.donde), `${f.id}: documento desconocido`);
     assert.match(f.ruta, /^[A-Za-z][\w.]*$/, `${f.id}: ruta rara`);
     assert.strictEqual(typeof f.gasta, 'boolean', `${f.id}: falta «gasta»`);
     if (!f.lista) assert.ok(f.porque, `${f.id}: si no está lista, tiene que decir por qué`);

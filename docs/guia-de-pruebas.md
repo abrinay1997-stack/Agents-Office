@@ -10,7 +10,7 @@ Tres caminos, del más cómodo al más a mano:
 
 1. **Ajustes → Funciones nuevas** (solo administradores, en la nube; en el teléfono: Más → Ajustes → Funciones nuevas). Una tarjeta por función con su estado real (✓ Encendida / – Apagada), qué hace y un botón. Lo que puede abrir la puerta al gasto (lotes) pide un segundo toque. Lo que **no está construido todavía** (retoques de foto en la nube, series que gastan) no se puede encender y dice por qué. Apagar siempre se puede. Nada se enciende solo.
 2. **GitHub → Actions → «Cloudflare · encender funciones»**: lo mismo, sin entrar a la oficina (útil si la oficina no abre).
-3. Los demás (notas para cuando entres, notificaciones por persona, «la cuenta de lectura ve resultados») todavía no están en el panel: se cambian con una llamada de administrador desde la consola del navegador (F12) ya con sesión iniciada, p. ej. `fetch('/api/notas-personales/config',{method:'POST',headers:{'content-type':'application/json'},body:'{"activo":true}'})`.
+3. Todo lo de esta guía que dice «Funciones nuevas» ya se enciende desde el panel o desde el botón de GitHub; ya no hay nada que pedir por la consola.
 
 Dónde ver el cambio: recarga la página después de encender una función.
 
@@ -39,7 +39,8 @@ Dónde ver el cambio: recarga la página después de encender una función.
 
 ## E. Chat del equipo
 16. **Chat interno** (Funciones nuevas). Al encenderlo, todas las cuentas quedan en #general. El botón del chat está en el dock (escritorio) y junto a la lupa (teléfono). Prueba con dos cuentas: mensajes, no leídos, «escribiendo…». Un administrador NO lee los directos de otras personas. Sin gasto.
-17. **Notas para cuando entres y notificaciones por persona** (OFF, por la consola, ver arriba). Campanita con avisos según rol. Sin gasto.
+17. **Notas para cuando entres y notificaciones por persona** (Funciones nuevas, sin gasto; el botón de GitHub con «listas» también las enciende: ninguna toca dinero). Encendidas, aparece la campanita: prueba con dos cuentas dejar una nota («Mientras no estabas», hasta 500 letras, solo a quien eliges) y ver los avisos según el rol. Apagadas, la campanita desaparece; las notas ya dejadas vuelven al encender.
+17b. **Avisos de agentes para cuentas de solo lectura** (Funciones nuevas, de SEGURIDAD, viene ENCENDIDA). **No cambia lo que la cuenta de lectura puede abrir ni ver en las páginas** (eso lo decide el rol, y esa prueba es la 1). Solo decide qué avisos de la campanita le llegan, y **solo se nota con «Notificaciones por persona» encendida**. Prueba: con notificaciones encendidas, haz que un agente termine una tarea; la cuenta de lectura debe ver ese aviso en su campanita. Apaga esta función: el aviso de agentes, Contenido y Cerebro deja de llegarle (los básicos siguen). Vuelve a encenderla al terminar.
 18. **Telegram por cuenta**: necesita un bot real.
 
 ## F. Dimitri
@@ -56,7 +57,7 @@ Dónde ver el cambio: recarga la página después de encender una función.
 27. **Dominios por conector** (OFF, Ajustes → Seguridad): encendido, cada conector tiene «Dominios que puede consultar» (solo administradores). Riesgo: un dominio que acepte subidas. Sin gasto.
 
 ## Orden sugerido
-1) 1, 2, 3, 5, 6, 21 (lectura/seguro) → 2) 16 y 17 con dos cuentas → 3) 19 y 20 → 4) 7 (pasos gratis), 10, 24, 25, 26, 27 → 5) con gasto pequeño: 7 (paso 2), 8, 14 → 6) con gasto: 9 GENERAR, 11 → 7) al final y con cuidado: 15.
+1) 1, 2, 3, 5, 6, 21 (lectura/seguro) → 2) 16, 17 y 17b con dos cuentas → 3) 19 y 20 → 4) 7 (pasos gratis), 10, 24, 25, 26, 27 → 5) con gasto pequeño: 7 (paso 2), 8, 14 → 6) con gasto: 9 GENERAR, 11 → 7) al final y con cuidado: 15.
 
 ## Requieren llaves reales (no probables sin ellas)
 Meta (publicar, Bandeja, Anuncios, imágenes), motores de pago del Estudio (Google, fal, Higgsfield, MiniMax…), Telegram, Zapier/Make/Stripe.

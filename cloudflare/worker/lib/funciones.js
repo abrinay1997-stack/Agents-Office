@@ -3,7 +3,7 @@
 // de GitHub (cloudflare/scripts/encender-funciones.mjs). Aquí solo se lee cada documento con su versión y se guarda con compare-and-set: si otra persona lo
 // cambió entre medias se vuelve a calcular; nunca se reemplaza un documento entero a ciegas y lo demás se conserva.
 // Lo que el catálogo marca `lista: false` NO se enciende desde aquí (el panel dice por qué); apagar siempre se puede. Ningún secreto, ningún flag de gasto de pago.
-import { FUNCIONES, porId, documentosDe, poner, leer, activa } from '../../../funciones-core.mjs';
+import { FUNCIONES, porId, documentosDe, poner, valorEn, activa } from '../../../funciones-core.mjs';
 import { leerDoc, guardarDoc } from './almacen.js';
 import { sembrarGeneral } from './chat/chat.js';
 
@@ -39,7 +39,7 @@ export async function cambiar(db, { id, activo }, usuario) {
   let escribio = false;
   for (let intento = 0; intento < 5; intento++) {
     const { docs, version } = intento === 0 ? primero : await leerTodos(db, claves);
-    const faltan = claves.filter((c) => (leer(docs[c] || {}, f.ruta) === true) !== activo);
+    const faltan = claves.filter((c) => valorEn(f, docs[c]) !== activo);
     if (!faltan.length) { // todos los documentos dicen lo pedido: verificado
       if (f.id === 'chat' && activo && (escribio || de !== activo)) await sembrarGeneral(db);
       if (escribio || de !== activo) { try { await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'funciones', String(usuario?.email || usuario?.nombre || 'alguien').slice(0, 120), JSON.stringify({ id: f.id, de: de ? 'encendida' : 'apagada', a: activo ? 'encendida' : 'apagada' })).run(); } catch { /* la auditoría no tumba un cambio ya hecho */ } }
