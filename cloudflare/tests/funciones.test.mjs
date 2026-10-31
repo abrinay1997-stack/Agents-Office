@@ -5,7 +5,7 @@ import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 import { manejar } from '../worker/lib/rutas.js';
 import { guardarDoc, leerDoc } from '../worker/lib/almacen.js';
 import { FUNCIONES, LISTAS } from '../../funciones-core.mjs';
-import { ENLACES } from '../worker/lib/funciones.js';
+import { ENLACES, cambiar } from '../worker/lib/funciones.js';
 
 async function mundo() {
   const d1 = crearD1(), env = envDePrueba(d1);
@@ -125,4 +125,42 @@ test('los enlaces muestran el estado real de los ajustes que ya existen', { skip
   await guardarDoc(m.d1, 'config-local', { hooks: { tokenEnQuery: false }, contenido: { publicarYa: true } });
   g = (await m.admin('GET', '/api/funciones')).j;
   assert.equal(e('hooks-token').activa, false); assert.equal(e('publicar-ya').activa, true);
+});
+
+// Un proxy sobre la D1: justo después de la primera escritura de un documento, otra persona guarda `config-local` (la carrera que dejaba el flag a medias).
+const conCarrera = (d1, despuesDe, meter) => { let hecho = false; return new Proxy(d1, { get(t, k) { if (k !== 'prepare') return t[k]; return (sql) => { const st = t.prepare(sql); if (!/update docs set json/.test(sql) || hecho) return st; const bind = st.bind.bind(st); st.bind = (...a) => { const r = bind(...a); if (a[2] === despuesDe) { const run = r.run.bind(r); r.run = async () => { const x = await run(); if (!hecho) { hecho = true; await meter(); } return x; }; } return r; }; return st; }; } }); };
+
+test('CARRERA: una función de dos documentos queda en AMBOS aunque config-local cambie entre las dos escrituras', { skip: SALTAR }, async () => {
+  for (const [id, [a, b]] of Object.entries(CFG)) for (const activo of [true, false]) {
+    const d1 = crearD1();
+    await guardarDoc(d1, 'config-local', { costs: 1, [a]: { [b]: !activo } }); await guardarDoc(d1, 'ajustes', { x: 1, [a]: { [b]: !activo } });
+    const db = conCarrera(d1, 'ajustes', async () => { await guardarDoc(d1, 'config-local', { ...(await leerDoc(d1, 'config-local', {})).valor, otra: 'cambio ajeno' }); });
+    const r = await cambiar(db, { id, activo }, { email: 'x@x' });
+    assert.equal(r.ok, true, `${id} ${activo}: ${JSON.stringify(r)}`);
+    for (const doc of ['ajustes', 'config-local']) assert.equal((await leerDoc(d1, doc, {})).valor[a][b], activo, `${id} ${activo} en ${doc}`);
+    assert.equal((await leerDoc(d1, 'config-local', {})).valor.otra, 'cambio ajeno', 'lo que otro guardó se conserva');
+    assert.equal(d1._db.prepare("select count(*) n from auditoria where tipo = 'funciones'").get().n, 1);
+  }
+});
+
+test('si un documento no se puede dejar completo, el error lo dice (nunca «encendida» a medias)', { skip: SALTAR }, async () => {
+  const d1 = crearD1();
+  let n = 0; const db = new Proxy(d1, { get(t, k) { if (k !== 'prepare') return t[k]; return (sql) => { const st = t.prepare(sql); if (/update docs set json/.test(sql)) { const bind = st.bind.bind(st); st.bind = (...a) => { const r = bind(...a); const run = r.run.bind(r); r.run = async () => { if (a[2] === 'config-local') return { meta: { changes: 0 } }; return run(); }; return r; }; } if (/insert or ignore into docs/.test(sql) || /on conflict/.test(sql)) n++; return st; }; } });
+  await guardarDoc(d1, 'config-local', { a: 1 }); await guardarDoc(d1, 'ajustes', { a: 1 });
+  const r = await cambiar(db, { id: 'sesion-deslizante', activo: true }, { email: 'x@x' });
+  assert.equal(r.status, 409); assert.match(r.error, /Alguien cambió|vuelve a intentarlo/);
+  assert.equal(d1._db.prepare("select count(*) n from auditoria where tipo = 'funciones'").get().n, 0);
+});
+
+test('un fallo al auditar no tumba un cambio ya hecho', { skip: SALTAR }, async () => {
+  const d1 = crearD1();
+  const db = new Proxy(d1, { get(t, k) { if (k !== 'prepare') return t[k]; return (sql) => { if (/insert into auditoria/.test(sql)) throw new Error('auditoría caída'); return t.prepare(sql); }; } });
+  const r = await cambiar(db, { id: 'carpetas-arbol', activo: true }, { email: 'x@x' });
+  assert.equal(r.ok, true); assert.equal((await leerDoc(d1, 'estudio.config', {})).valor.carpetasArbol, true);
+});
+
+test('el id es exacto: con espacios o en mayúsculas no está en la lista', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  for (const id of [' chat', 'chat ', 'CHAT', 'chat\n']) assert.equal((await m.admin('POST', '/api/funciones', { id, activo: true })).status, 422, JSON.stringify(id));
+  assert.equal(m.db.prepare("select count(*) n from docs where clave = 'chat.config'").get().n, 0);
 });

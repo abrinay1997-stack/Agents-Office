@@ -215,7 +215,9 @@ export function registrar(shell) {
         const on = b.dataset.on === '1', gasta = b.dataset.gasta === '1';
         if (!on && gasta && b.dataset.seguro !== '1') { b.dataset.seguro = '1'; b.textContent = 'Sí, encender (puede abrir gasto)'; return; }
         const r = await conEstado(b, () => enviar('/api/funciones', { id: b.dataset.fn, activo: !on }), { ocupado: 'Guardando…', hecho: on ? 'Apagada ✓' : 'Encendida ✓' });
-        if (r.ok) setTimeout(() => { if (sec === 'funciones') pintarFunciones().catch(() => {}); }, 700);
+        delete b.dataset.seguro; // un toque fallido no deja el siguiente sin confirmación
+        if (!r.ok && !on) b.textContent = 'Encender';
+        setTimeout(() => { if (sec === 'funciones') pintarFunciones().catch(() => {}); }, r.ok ? 700 : 200);
       }
 
       // ---- pintar la sección que toca

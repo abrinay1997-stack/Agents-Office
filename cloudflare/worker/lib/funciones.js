@@ -3,7 +3,7 @@
 // de GitHub (cloudflare/scripts/encender-funciones.mjs). Aquí solo se lee cada documento con su versión y se guarda con compare-and-set: si otra persona lo
 // cambió entre medias se vuelve a calcular; nunca se reemplaza un documento entero a ciegas y lo demás se conserva.
 // Lo que el catálogo marca `lista: false` NO se enciende desde aquí (el panel dice por qué); apagar siempre se puede. Ningún secreto, ningún flag de gasto de pago.
-import { FUNCIONES, porId, documentosDe, plan, activa } from '../../../funciones-core.mjs';
+import { FUNCIONES, porId, documentosDe, poner, leer, activa } from '../../../funciones-core.mjs';
 import { leerDoc, guardarDoc } from './almacen.js';
 import { sembrarGeneral } from './chat/chat.js';
 
@@ -24,27 +24,30 @@ export async function listar(db) {
   return { funciones, enlaces };
 }
 
-/** Cambia UNA función. → { ok, id, de, a, cambio } o { error, status }. */
+/** Cambia UNA función. → { ok, id, de, a, cambio } o { error, status }.
+ *  Cada documento se comprueba y se escribe POR SEPARADO (una función de `config` vive en dos: `ajustes` y `config-local`, y el que la lee puede ser cualquiera de los dos):
+ *  se escribe solo donde la ruta no vale ya lo pedido, con compare-and-set, y al final se relee y se verifica que quedó en TODOS. Si no, error en palabras (nunca «Encendida» a medias). */
 export async function cambiar(db, { id, activo }, usuario) {
-  const f = typeof id === 'string' ? porId(id) : null;
+  const f = typeof id === 'string' && FUNCIONES.some((x) => x.id === id) ? porId(id) : null; // el id exacto: ni espacios ni mayúsculas
   if (!f) return { error: 'Esa función no está en la lista.', status: 422 };
   if (activo !== true && activo !== false) return { error: '«activo» debe ser verdadero o falso.', status: 422 };
   if (f.panel) return { error: `${f.titulo}: se cambia en ${f.panel}, no desde aquí.`, status: 422 };
   if (activo === true && !f.lista) return { error: `${f.titulo}: no se puede encender todavía. ${f.porque || ''}`.trim(), status: 409 };
   const claves = documentosDe([f]);
-  for (let intento = 0; intento < 4; intento++) {
-    const { docs, version } = await leerTodos(db, claves);
-    const p = plan(docs, [{ id: f.id, activo }]);
-    if (p.avisos.length) return { error: p.avisos[0], status: 409 };
-    const h = p.hechos[0];
-    try {
-      for (const [clave, valor] of Object.entries(p.cambios)) await guardarDoc(db, clave, valor, { espera: version[clave] ?? 0 });
-    } catch (e) { if (e.conflicto) continue; throw e; }
-    if (!h.yaEstaba) {
-      if (f.id === 'chat' && activo) await sembrarGeneral(db);
-      await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'funciones', String(usuario?.email || usuario?.nombre || 'alguien').slice(0, 120), JSON.stringify({ id: f.id, de: h.de ? 'encendida' : 'apagada', a: h.a ? 'encendida' : 'apagada' })).run();
+  const primero = await leerTodos(db, claves);
+  const de = activa(f, primero.docs);
+  let escribio = false;
+  for (let intento = 0; intento < 5; intento++) {
+    const { docs, version } = intento === 0 ? primero : await leerTodos(db, claves);
+    const faltan = claves.filter((c) => (leer(docs[c] || {}, f.ruta) === true) !== activo);
+    if (!faltan.length) { // todos los documentos dicen lo pedido: verificado
+      if (f.id === 'chat' && activo && (escribio || de !== activo)) await sembrarGeneral(db);
+      if (escribio || de !== activo) { try { await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'funciones', String(usuario?.email || usuario?.nombre || 'alguien').slice(0, 120), JSON.stringify({ id: f.id, de: de ? 'encendida' : 'apagada', a: activo ? 'encendida' : 'apagada' })).run(); } catch { /* la auditoría no tumba un cambio ya hecho */ } }
+      return { ok: true, id: f.id, de, a: activo, cambio: escribio || de !== activo };
     }
-    return { ok: true, id: f.id, de: h.de, a: h.a, cambio: !h.yaEstaba };
+    try {
+      for (const c of faltan) { await guardarDoc(db, c, poner(docs[c] || {}, f.ruta, activo), { espera: version[c] ?? 0 }); escribio = true; }
+    } catch (e) { if (!e.conflicto) throw e; } // alguien guardó entre medias: se vuelve a leer y a comprobar cada documento
   }
-  return { error: 'Alguien cambió los ajustes en este mismo momento. Vuelve a intentarlo.', status: 409 };
+  return { error: 'Alguien cambió los ajustes en este mismo momento y no pude dejarlo completo. Mira el estado y vuelve a intentarlo.', status: 409 };
 }

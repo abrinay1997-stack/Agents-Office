@@ -35,7 +35,7 @@
       if (!on && b.dataset.gasta === '1' && b.dataset.seguro !== '1') { b.dataset.seguro = '1'; b.textContent = 'Sí, encender (puede abrir gasto)'; return; }
       b.disabled = true; dec('Guardando…');
       try { await api('/api/funciones', { metodo: 'POST', cuerpo: { id: b.dataset.fn, activo: !on } }); await dibujar(); const nueva = pane.querySelector(`button[data-fn="${b.dataset.fn}"]`); const m2 = nueva?.parentElement.querySelector('.nb-msg'); if (m2) m2.textContent = on ? 'Apagada.' : 'Encendida. Recarga la página para verla funcionar.'; document.dispatchEvent(new CustomEvent('ao:funciones')); }
-      catch (x) { b.disabled = false; dec(x.message, true); }
+      catch (x) { b.disabled = false; delete b.dataset.seguro; if (!on) b.textContent = 'Encender'; dec(x.message, true); try { await dibujar(); const m3 = pane.querySelector(`button[data-fn="${b.dataset.fn}"]`)?.parentElement.querySelector('.nb-msg'); if (m3) { m3.textContent = x.message; m3.classList.add('mal'); } } catch { /* sin red: queda el mensaje */ } }
     });
   }
   window.AO_AJUSTES_EXTRA = (window.AO_AJUSTES_EXTRA || []).concat([{ key: 'nube-funciones', label: 'Funciones nuevas', render: (pane) => pintar(pane) }]);

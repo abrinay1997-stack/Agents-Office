@@ -76,6 +76,13 @@ for (const ancho of [320, 360, 390, 430, 1280]) {
     await p.click('button[data-fn="lotes-nube"]');
     await p.waitForSelector('button[data-fn="lotes-nube"][data-on="0"]');
     assert.equal((await leerDoc(d1, 'estudio.config', {})).valor.lotesNube, false);
+    // un POST que falla no deja la confirmación abierta: el siguiente toque vuelve a pedirla
+    await p.route('**/api/funciones', async (r) => { if (r.request().method() === 'POST') { await p.unroute('**/api/funciones'); return r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"caído"}' }); } return r.fallback(); });
+    await p.click('button[data-fn="lotes-nube"]'); await p.click('button[data-fn="lotes-nube"]');
+    await p.waitForFunction(() => /caído/.test(document.querySelector('#pane').textContent));
+    await p.click('button[data-fn="lotes-nube"]');
+    assert.match(await p.textContent('button[data-fn="lotes-nube"]'), /Sí, encender/, 'vuelve a pedir el segundo toque');
+    assert.equal((await leerDoc(d1, 'estudio.config', {})).valor.lotesNube, false, 'el toque tras el fallo no enciende');
     assert.equal(await sinDesborde(p), true);
     assert.deepEqual(errores, []);
     await ctx.close();
