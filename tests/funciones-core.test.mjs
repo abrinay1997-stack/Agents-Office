@@ -4,7 +4,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Desde la carpeta de ESTE archivo, nunca desde donde se lanzó node: el botón de GitHub corre sus pasos dentro de `cloudflare/`
+// y una ruta relativa buscaba `cloudflare/cloudflare/worker`.
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 import { FUNCIONES, MANEJABLES, LISTAS, porId, plan, poner, leer, activa, documentosDe, idsDe, DOC_AJUSTES, DOC_LOCAL } from '../funciones-core.mjs';
 
 const archivos = (dir, acc = []) => {
@@ -33,7 +38,7 @@ test('el catálogo está bien formado', () => {
 
 // El test que de verdad importa: un interruptor que apunte a una clave que nadie lee sería un botón que no hace nada.
 test('cada interruptor lo lee el código del Worker', () => {
-  const fuentes = archivos('cloudflare/worker').map((p) => readFileSync(p, 'utf8')).join('\n');
+  const fuentes = archivos(join(RAIZ, 'cloudflare/worker')).map((p) => readFileSync(p, 'utf8')).join('\n');
   for (const f of FUNCIONES) {
     const hoja = f.ruta.split('.').pop();
     assert.ok(fuentes.includes(hoja), `«${f.id}» apunta a ${f.donde} → ${f.ruta}, pero el Worker no menciona «${hoja}» en ninguna parte: sería un botón muerto`);

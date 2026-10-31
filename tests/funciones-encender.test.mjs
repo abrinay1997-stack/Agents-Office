@@ -5,10 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
-const RAIZ = process.cwd();
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..'); // no `process.cwd()`: estos tests deben correr desde cualquier carpeta
 
 /** Monta un `npx` de mentira que habla como wrangler: lee de un JSON de documentos y apunta cada comando que recibe. */
 function montar(docs) {
