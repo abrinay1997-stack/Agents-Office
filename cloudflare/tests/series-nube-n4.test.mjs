@@ -71,7 +71,7 @@ async function montar({ cfg = { dimitri: { seriesNube: true } }, biblia = true }
     const ls = lineas(id), suma = ls.reduce((a, l) => a + (l.estado === 'liquidado' ? l.real_micro : l.estado === 'liberado' ? 0 : l.max_micro), 0);
     assert.ok(suma <= usd2u(s?.tope_usd ?? 10), 'el libro nunca pasa del tope');
     for (const l of ls) if (l.estado === 'liberado') assert.ok(!js.some((j) => j.serie.n === l.n && j.serie.intento === l.intento), `una reserva con trabajo vivo nunca se libera (${l.clave})`);
-    for (const [clave, pa] of Object.entries(s?.pasos || {})) if (pa.pedido_ok) { const l = ls.find((x) => x.clave === clave); assert.ok(l && l.estado !== 'liberado' || js.some((j) => `${j.serie.n}:${j.serie.intento}` === `${pa.n}:${pa.intento}`) === false || true, 'pedido_ok'); }
+    for (const [clave, pa] of Object.entries(s?.pasos || {})) if (pa.pedido_ok) assert.ok(ls.find((x) => x.clave === clave), `todo pedido enviado tiene su línea en el libro (${clave})`);
     return { js, ls };
   };
   return { d1, base, env, R2, llamadas, u, reloj, deps, gen, almacen, nuevaSerie, uno, q, jobsDe, lineas, autorizar, correr, invariantes, enviadas, cookies: null };
@@ -254,6 +254,67 @@ test('N4: el estado del libro y de la serie se recuperan tras una autorización 
   const c = (await g.presupuesto({ id, usuario: o.u.admin })).cuerpo.confirmar;
   await o.almacen.actualizar(id, (y) => { y.escaleta[0].estado = 'corriendo'; return y; });
   const r = await g.generar({ id, confirmacion: c.token, costoMostradoUsd: c.costoMostradoUsd, usuario: o.u.admin, idem: 'idem-enmarcha' }); assert.equal(r.estado, 409); assert.equal(r.cuerpo.codigo, 'en_marcha');
+});
+
+// ---- el dinero, con un motor «que cuesta» simulado (el catálogo real solo trae `prueba`, que es gratis) ----
+const CARO = async (o, usd = 0.3) => { const real = await o.deps().cable(); return { ...real, precioPlano: () => ({ generacion: usd }) }; };
+const liquidarAparte = async (o, serieId, n, micro, extra = {}) => { const clave = `${serieId}:${n}:1`; const rr = await L.reservar(o.d1, { clave, serieId, n, intento: 1, maxMicro: micro, topeSerieMicro: 100_000_000, mes: '2026-10', dia: DIA, carrusel: true, topeMesMicro: 1_000_000_000_000, peso: 1, cupoDiaPeso: 0, ahora: 1, ...extra }); assert.equal(rr.ok, true, JSON.stringify(rr)); if (micro) assert.equal((await L.liquidar(o.d1, clave, micro)).ok, true); return clave; };
+const sinPaso = async (o, id, motivo) => { const s = await o.uno(id); assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, motivo, s.pausa_motivo); assert.equal(o.jobsDe(id).length, 0, 'no hay trabajo'); assert.ok(o.lineas(id).every((l) => l.estado === 'liberado' || l.serie_id !== id || l.n >= 9), JSON.stringify(o.lineas(id).map((l) => l.estado))); assert.ok(s.escaleta.every((p) => p.estado === 'previsto'), 'el plano vuelve a la fila'); };
+
+test('N4 dinero: a US$0,30 por plano con 2,8 ya liquidados, el paso se rechaza por el TOPE DE LA SERIE antes de pedir nada', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(3), g = o.gen(); await o.autorizar(g, id, 'todo');
+  await o.almacen.actualizar(id, (y) => ({ ...y, tope_usd: 3 })); await liquidarAparte(o, id, 9, 2_800_000);
+  await o.gen({ cable: () => CARO(o) }).tick(); await sinPaso(o, id, /tope de la serie/);
+  assert.equal(o.lineas(id).length, 1, 'la reserva rechazada no escribió nada: solo queda la línea de antes');
+});
+
+test('N4 dinero: ... por el TOPE DEL MES de carruseles (otra serie ya gastó 2,8 este mes)', { skip: SALTAR }, async () => {
+  const o = await montar({ cfg: { dimitri: { seriesNube: true, serieTopeMesUsd: 3 } } }), id = await o.nuevaSerie(3), g = o.gen(); await o.autorizar(g, id, 'todo');
+  await liquidarAparte(o, 'otra-serie', 1, 2_800_000);
+  await o.gen({ cable: () => CARO(o) }).tick(); await sinPaso(o, id, /tope del mes/);
+});
+
+test('N4 dinero: ... por el CUPO DEL DÍA (3 pasos de series ya cuentan de un cupo de 3), y al día siguiente el cupo vuelve', { skip: SALTAR }, async () => {
+  const estudioDe = (o) => ({ ...o.deps().estudio, budget: async () => ({ limit: 4, dailyBudget: null, monthlyBudget: null }) }); // cupo de series = floor(4 × 0,75) = 3
+  const o = await montar(), id = await o.nuevaSerie(3), g = o.gen(); await o.autorizar(g, id, 'todo');
+  for (const n of [1, 2, 3]) await liquidarAparte(o, 'otra-serie', n, 0);
+  await o.gen({ estudio: estudioDe(o) }).tick(); await sinPaso(o, id, /cupo diario/);
+  const o2 = await montar(), id2 = await o2.nuevaSerie(3); await o2.autorizar(o2.gen(), id2, 'todo');
+  for (const n of [1, 2, 3]) await liquidarAparte(o2, 'otra-serie', n, 0, { dia: '2026-10-29' });
+  await o2.gen({ estudio: estudioDe(o2) }).tick(); assert.equal(o2.jobsDe(id2).length, 1);
+});
+
+test('N4 dinero: el presupuesto (la cifra que se enseña) también respeta el tope de la serie y el del mes — y el del mes solo vale para carruseles', { skip: SALTAR }, async () => {
+  const o = await montar({ cfg: { dimitri: { seriesNube: true, serieTopeMesUsd: 3 } } }), id = await o.nuevaSerie(3), g = o.gen({ cable: () => CARO(o) });
+  assert.equal((await g.presupuesto({ id, modo: 'todo', usuario: o.u.admin })).estado, 200, 'US$0,90 caben en el mes'); await liquidarAparte(o, 'otra-serie', 1, 2_800_000);
+  const x = await g.presupuesto({ id, modo: 'todo', usuario: o.u.admin }); assert.equal(x.estado, 409); assert.equal(x.cuerpo.codigo, 'tope');
+  const o2 = await montar({ cfg: { dimitri: { seriesNube: true, serieTopeMesUsd: 3 } } }), id2 = await o2.nuevaSerie(3, { ...BRIEF, formato: 'post' }); await liquidarAparte(o2, 'otra-serie', 1, 2_800_000);
+  assert.equal((await o2.gen({ cable: () => CARO(o2) }).presupuesto({ id: id2, modo: 'todo', usuario: o2.u.admin })).estado, 200, 'una serie que no es carrusel no cuenta contra el mes');
+  const o3 = await montar(), id3 = await o3.nuevaSerie(3); await o3.almacen.actualizar(id3, (y) => ({ ...y, tope_usd: 3 })); await liquidarAparte(o3, id3, 9, 2_800_000);
+  assert.equal((await o3.gen({ cable: () => CARO(o3) }).presupuesto({ id: id3, modo: 'todo', usuario: o3.u.admin })).estado, 409, 'no cabe en lo que queda del tope de la serie');
+});
+
+// ---- el CAS de «marcar» revalida lo que autoriza, y la adopción tras un rechazo ----
+test('N4 CAS: si la autorización cambia de manos, o aparece un plano en el aire, JUSTO antes de marcar, no se reserva ni se pide nada', { skip: SALTAR }, async () => {
+  const caso = async (cambio, motivo) => {
+    const o = await montar(), id = await o.nuevaSerie(3), g = o.gen(); await o.autorizar(g, id, 'todo');
+    o.d1._est.antes = (sql) => { if (!/^update series set json/.test(sql)) return false; o.base._db.prepare(`update series set json = json_set(json, ${cambio}), version = version + 1 where id = ?`).run(id); return true; }; // otra petición escribe entre la lectura y la escritura: el CAS falla y fn se vuelve a aplicar sobre lo nuevo
+    await g.tick(); const s = await o.uno(id); assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, motivo, s.pausa_motivo); assert.equal(o.jobsDe(id).length, 0); assert.equal(o.lineas(id).length, 0, 'ninguna reserva'); assert.deepEqual(Object.keys(s.pasos), [], 'ningún paso marcado');
+  };
+  await caso("'$.autorizado.por', 'otra-cuenta'", /autorización cambió/);
+  await caso("'$.escaleta[1].estado', 'corriendo'", /en el aire/);
+});
+
+test('N4 adopción: si pedir lanza un error pero el trabajo SÍ entró, se adopta (nunca se libera con un trabajo vivo) y la serie sigue; si no entró nada, la reserva se devuelve', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), base = o.deps();
+  const estudio = { ...base.estudio, pedir: async (req, op) => { await base.estudio.pedir(req, op); throw new Error('se cortó la respuesta'); } };
+  const g = o.gen({ estudio }); await o.autorizar(g, id, 'todo'); await g.tick();
+  const s = await o.uno(id), clave = claveIdempotencia(id, 1, 1);
+  assert.equal(o.jobsDe(id).length, 1, 'el trabajo existe'); assert.equal(s.pasos[clave].pedido_ok, 1, 'queda apuntado'); assert.equal(s.pasos[clave].estado, 'enviado'); assert.equal(o.lineas(id)[0].estado, 'reservado', 'la reserva sigue viva');
+  assert.notEqual(s.estado, 'pausado');
+  const f = await o.correr(o.gen(), id, (x) => x.estado === 'hecho'); assert.equal(f.estado, 'hecho'); assert.deepEqual(o.lineas(id).map((l) => l.estado), ['liquidado', 'liquidado']);
+  const o2 = await montar(), id2 = await o2.nuevaSerie(2); const g2 = o2.gen({ estudio: { ...o2.deps().estudio, pedir: async () => { throw new Error('el Estudio dijo que no'); } } });
+  await o2.autorizar(g2, id2, 'todo'); await g2.tick(); await sinPaso(o2, id2, /no aceptó/);
 });
 
 // ---- las rutas de verdad: roles, interruptor, cabecera ----
