@@ -13,7 +13,7 @@ import { instalarZona } from '../worker/lib/zona.js';
 import { serializarBiblia } from '../../biblia-core.mjs';
 import { crearAlmacenD1 } from '../worker/lib/series/almacen.js';
 import { proponer } from '../worker/lib/series/propuesta.js';
-import { crearGenerador, depsReales, idDeTrabajo, GRACIA_MS } from '../worker/lib/series/generar.js';
+import { crearGenerador, depsReales, idDeTrabajo, GRACIA_MS, MAX_REPETICIONES } from '../worker/lib/series/generar.js';
 import { cadaMinuto as cadaMinutoSeries } from '../worker/modulos/series.js';
 import * as trabajos from '../worker/lib/estudio/trabajos.js';
 import * as L from '../worker/lib/series/libro.js';
@@ -70,7 +70,7 @@ async function montar({ cfg = { dimitri: { seriesNube: true } }, biblia = true }
     for (const [k, n] of porClave) assert.equal(n, 1, `≤ 1 trabajo por clave (${k})`);
     const ls = lineas(id), suma = ls.reduce((a, l) => a + (l.estado === 'liquidado' ? l.real_micro : l.estado === 'liberado' ? 0 : l.max_micro), 0);
     assert.ok(suma <= usd2u(s?.tope_usd ?? 10), 'el libro nunca pasa del tope');
-    for (const l of ls) if (l.estado === 'liberado') assert.ok(!js.some((j) => j.serie.n === l.n && j.serie.intento === l.intento), `una reserva con trabajo vivo nunca se libera (${l.clave})`);
+    for (const l of ls) if (l.estado === 'liberado') assert.ok(!js.some((j) => j.serie.n === l.n && j.serie.intento === l.intento && j.state !== 'failed'), `una reserva con trabajo vivo (o terminado bien) nunca se libera (${l.clave})`);
     for (const [clave, pa] of Object.entries(s?.pasos || {})) if (pa.pedido_ok) assert.ok(ls.find((x) => x.clave === clave), `todo pedido enviado tiene su línea en el libro (${clave})`);
     return { js, ls };
   };
@@ -315,6 +315,86 @@ test('N4 adopción: si pedir lanza un error pero el trabajo SÍ entró, se adopt
   const f = await o.correr(o.gen(), id, (x) => x.estado === 'hecho'); assert.equal(f.estado, 'hecho'); assert.deepEqual(o.lineas(id).map((l) => l.estado), ['liquidado', 'liquidado']);
   const o2 = await montar(), id2 = await o2.nuevaSerie(2); const g2 = o2.gen({ estudio: { ...o2.deps().estudio, pedir: async () => { throw new Error('el Estudio dijo que no'); } } });
   await o2.autorizar(g2, id2, 'todo'); await g2.tick(); await sinPaso(o2, id2, /no aceptó/);
+});
+
+
+// ================= N5a: lo que había que cerrar ANTES de abrir un motor de pago (motores de pago siguen cerrados) =================
+const PEDIDO = { prompt: 'un sofá', model: 'prueba', kind: 'image', n: 1 }, ADMIN = { rol: 'admin', email: 'x@y.test' };
+const marcarTrabajo = (o, id, json) => o.base._db.prepare("update estudio_trabajos set estado = 'failed', json = json_set(json, '$.state', 'failed', '$.causa', ?, '$.error', 'Cancelado por ti.') where json_extract(json, '$.serie.id') = ? and estado in ('queued','running')").run(json, id);
+
+test('N5a lease: un tick «congelado» más de GRACIA entre confirmar y pedir — otro tick libera la línea — NO crea el trabajo (ni queda nada liberado con trabajo vivo)', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), real = o.deps().estudio;
+  const estudio = { ...real, pedir: async (req, op) => { o.reloj.t += GRACIA_MS + 1000; await o.gen().reconciliar(); return real.pedir(req, op); } };
+  const g = o.gen({ estudio }); await o.autorizar(g, id, 'todo'); await g.tick();
+  const { js, ls } = o.invariantes(id, await o.uno(id));
+  assert.equal(js.length, 0, 'ningún trabajo: la línea ya no estaba reservada'); assert.equal(ls.length, 1); assert.equal(ls[0].estado, 'liberado'); assert.equal(ls[0].salio, 0, 'se sabe que nada salió');
+  assert.equal((await o.uno(id)).estado, 'pausado'); assert.ok((await o.uno(id)).escaleta.every((p) => p.estado === 'previsto'));
+  // el orden contrario: el trabajo entra primero y la otra bomba, al reconciliar, lo ADOPTA (no libera nada)
+  const o2 = await montar(), id2 = await o2.nuevaSerie(2), real2 = o2.deps().estudio;
+  const estudio2 = { ...real2, pedir: async (req, op) => { const j = await real2.pedir(req, op); o2.reloj.t += GRACIA_MS + 1000; await o2.gen().reconciliar(); return j; } };
+  const g2 = o2.gen({ estudio: estudio2 }); await o2.autorizar(g2, id2, 'todo'); await g2.tick();
+  const r = o2.invariantes(id2, await o2.uno(id2)); assert.equal(r.js.length, 1); assert.equal(r.ls[0].estado, 'reservado'); assert.equal((await o2.uno(id2)).pasos[claveIdempotencia(id2, 1, 1)].pedido_ok, 1);
+  const f = await o2.correr(o2.gen(), id2, (x) => x.estado === 'hecho'); assert.equal(f.estado, 'hecho');
+});
+
+test('N5a lease: las sentencias solas — pedir no entra si la línea no está reservada, y liberar no vale si el trabajo ya existe', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(1); await o.deps().cable();
+  const clave = `${id}:1:1`, jobId = idDeTrabajo(clave), forzar = (c) => ({ id: jobId, serie: { id, n: 1, intento: 1 }, condicion: c ? { clave } : undefined });
+  await assert.rejects(() => o.deps().estudio.pedir(PEDIDO, { usuario: ADMIN, forzar: forzar(true) }), /ya no está viva/, 'sin línea reservada no entra');
+  await liquidarAparte(o, id, 1, 0); await L.liquidar(o.d1, clave, 0); // línea «liquidado»: tampoco
+  await assert.rejects(() => o.deps().estudio.pedir(PEDIDO, { usuario: ADMIN, forzar: forzar(true) }), /ya no está viva/);
+  assert.equal(o.jobsDe(id).length, 0);
+  const o2 = await montar(), id2 = await o2.nuevaSerie(1); await o2.deps().cable(); const c2 = `${id2}:1:1`, j2 = idDeTrabajo(c2);
+  assert.equal((await L.reservar(o2.d1, { clave: c2, serieId: id2, n: 1, intento: 1, maxMicro: 0, topeSerieMicro: 1e7, mes: '2026-10', dia: DIA, carrusel: true, topeMesMicro: 1e12, peso: 1, cupoDiaPeso: 0, ahora: 1 })).ok, true);
+  const t = await o2.deps().estudio.pedir(PEDIDO, { usuario: ADMIN, forzar: { id: j2, serie: { id: id2, n: 1, intento: 1 }, condicion: { clave: c2 } } }); assert.equal(t.id, j2);
+  const otra = await o2.deps().estudio.pedir(PEDIDO, { usuario: ADMIN, forzar: { id: j2, serie: { id: id2, n: 1, intento: 1 }, condicion: { clave: c2 } } }); assert.equal(otra.id, j2, 'la misma clave es el mismo trabajo'); assert.equal(o2.jobsDe(id2).length, 1);
+  const l = await L.liberar(o2.d1, c2, { nuncaSalio: true, sinTrabajoId: j2 }); assert.equal(l.ok, false); assert.equal(o2.lineas(id2)[0].estado, 'reservado', 'con el trabajo vivo la línea NO se libera');
+});
+
+test('N5a reintentos: un plano cuyo trabajo se cancela una y otra vez no gira para siempre — al pasar el tope queda para revisar y la serie se pausa con el motivo', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), g = o.gen(); await o.autorizar(g, id, 'todo');
+  for (let i = 0; i < 12; i++) { await g.tick(); o.reloj.t += 60000; if ((await o.uno(id)).estado === 'pausado') break; marcarTrabajo(o, id, 'cancelado'); }
+  const s = await o.uno(id); assert.equal(s.estado, 'pausado', 'no gira para siempre'); assert.match(s.pausa_motivo, new RegExp(`se repitió ${MAX_REPETICIONES} veces`)); assert.equal(s.repeticiones[1], MAX_REPETICIONES);
+  assert.equal(s.escaleta[0].estado, 'revisar'); assert.equal(o.jobsDe(id).length, MAX_REPETICIONES + 1, 'el primero y tres repeticiones');
+  assert.ok(o.lineas(id).every((l) => l.estado === 'liberado'), 'motor gratis: nada se cobró, todo liberado'); o.invariantes(id, s);
+});
+
+test('N5a reintentos: con un motor de pago simulado, al pasar el tope el paso queda INCIERTO (cuenta contra los topes) y la serie se pausa', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), g = o.gen({ permitirPago: () => true, engineDe: () => 'fal' }); await o.autorizar(g, id, 'todo');
+  for (let i = 0; i < 12; i++) { await g.tick(); o.reloj.t += 60000; if ((await o.uno(id)).estado === 'pausado') break; marcarTrabajo(o, id, 'cancelado_en_cola'); } // «cancelado en cola» y sin que el servicio aceptara nada: es previo al cobro, se repite
+  const s = await o.uno(id); assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /se repitió/); assert.equal(s.escaleta[0].estado, 'revisar');
+  const ls = o.lineas(id); assert.equal(ls.at(-1).estado, 'incierto', 'la última queda en duda'); assert.ok(ls.slice(0, -1).every((l) => l.estado === 'liberado'));
+  assert.equal(o.jobsDe(id).length, MAX_REPETICIONES + 1);
+});
+
+test('N5a reintentos: un fallo que cuenta como fallo (red) NO suma al contador de repeticiones, y las repeticiones persisten entre ticks', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), g = o.gen(); await o.autorizar(g, id, 'todo');
+  await g.tick(); marcarTrabajo(o, id, 'cancelado'); o.reloj.t += 60000; await g.tick(); assert.equal((await o.uno(id)).repeticiones[1], 1);
+  assert.equal((await o.uno(id)).fallos[1] || 0, 0, 'cancelar no cuenta como fallo');
+  const o2 = await montar(), id2 = await o2.nuevaSerie(2), g2 = o2.gen(); await o2.autorizar(g2, id2, 'todo'); await g2.tick();
+  o2.base._db.prepare("update estudio_trabajos set estado = 'failed', json = json_set(json, '$.state', 'failed', '$.errorClass', 'red', '$.causa', 'red', '$.error', 'sin red') where json_extract(json, '$.serie.id') = ?").run(id2);
+  o2.reloj.t += 60000; await g2.tick(); const s2 = await o2.uno(id2); assert.equal(s2.fallos[1], 1); assert.equal(s2.repeticiones?.[1] || 0, 0);
+});
+
+test('N5a interruptor: se relee antes de CADA paso y otra vez justo antes de pedir (apagarlo entre medias no envía nada)', { skip: SALTAR }, async () => {
+  const caso = async (apagarEnLlamada, esperaLineas) => {
+    const o = await montar(), id = await o.nuevaSerie(2); await o.autorizar(o.gen(), id, 'todo');
+    let n = 0; const g = o.gen({ cfg: async () => ({ dimitri: { seriesNube: ++n !== apagarEnLlamada } }) }); // llamada 1 = el tick; 2 = al empezar el paso; 3 = justo antes de pedir
+    await g.tick(); const s = await o.uno(id);
+    assert.equal(s.estado, 'pausado'); assert.match(s.pausa_motivo, /se apagó/); assert.equal(o.jobsDe(id).length, 0, 'no se envió nada');
+    assert.equal(o.lineas(id).length, esperaLineas); assert.ok(o.lineas(id).every((l) => l.estado === 'liberado')); assert.ok(s.escaleta.every((p) => p.estado === 'previsto'));
+  };
+  await caso(2, 0); // al empezar el paso: ni siquiera se reserva
+  await caso(3, 1); // justo antes de pedir: se había reservado y se devuelve
+});
+
+test('N5a poda: limpiar() del Estudio no lanza si falta la tabla `series` (migración sin aplicar) y sigue podando lo viejo', { skip: SALTAR }, async () => {
+  const o = await montar();
+  o.base._db.exec('drop table series');
+  const ins = o.base._db.prepare("insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)");
+  ins.run('jviejo0001', JSON.stringify({ id: 'jviejo0001', state: 'done', items: [], serie: { id: 'x', n: 1, intento: 1 } }), 'done', 1); ins.run('jnuevo0001', JSON.stringify({ id: 'jnuevo0001', state: 'done', items: [] }), 'done', Date.now());
+  await trabajos.cadaMinuto(o.env, o.d1);
+  assert.deepEqual(o.q('select id from estudio_trabajos').map((f) => f.id), ['jnuevo0001'], 'sin tabla de series la poda es la de siempre');
 });
 
 // ---- las rutas de verdad: roles, interruptor, cabecera ----

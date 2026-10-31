@@ -96,8 +96,11 @@ export async function pedir(env, db, req, { usuario, presets = false, forzar = n
   catch (e) { throw new ErrorPedido(enNube(e.message), 400); }
   if (j.engine !== 'prueba' && usuario?.rol !== 'admin') throw new ErrorPedido('Solo un administrador pide trabajos de pago del Estudio (las tarjetas de «Prueba» son gratis para todos).', 403);
   if (forzar) { j.id = String(forzar.id); j.serie = { id: String(forzar.serie.id), n: forzar.serie.n, intento: forzar.serie.intento }; j.by = 'dimitri'; }
-  const ins = await db.prepare(`insert ${forzar ? 'or ignore ' : ''}into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)`).bind(j.id, JSON.stringify(j), j.state, j.at).run();
-  if (forzar && !ins.meta?.changes) return pub(await cargar(db, j.id)); // ya existía (la misma clave de idempotencia): es ese mismo trabajo, no se crea otro
+  const cond = forzar?.condicion?.clave; // la bomba de series: el trabajo SOLO entra si la línea de su libro sigue «reservado» (en la MISMA sentencia: no hay hueco entre comprobar y pedir)
+  const ins = forzar
+    ? await db.prepare(`insert or ignore into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) select ?,?,?,?,0,0,0${cond ? ` where exists (select 1 from series_libro where clave = ? and estado = 'reservado')` : ''}`).bind(...[j.id, JSON.stringify(j), j.state, j.at], ...(cond ? [cond] : [])).run()
+    : await db.prepare('insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)').bind(j.id, JSON.stringify(j), j.state, j.at).run();
+  if (forzar && !ins.meta?.changes) { const ya = await cargar(db, j.id); if (ya) return pub(ya); throw new ErrorPedido('La reserva de ese paso ya no está viva: no se pidió nada.', 409); } // si ya existía (la misma clave de idempotencia) es ese mismo trabajo; si no, no entró nada
   // el tope se comprueba DESPUÉS de insertar y contando solo lo que llegó antes (por su orden de entrada): dos pedidos a la vez no pueden pasarse del tope los dos
   if (j.engine !== 'prueba') {
     try {
@@ -284,8 +287,12 @@ export async function cadaMinuto(env, db) {
 async function limpiar(db, ahora = Date.now()) {
   // el trabajo de una serie VIVA (o con un plano en el aire) no se poda: la bomba lo necesita para liquidar; sin él, un cobro quedaría «incierto»
   const deSerieViva = `coalesce(json_extract(json, '$.serie.id'), '') in (select id from series where estado in ('previsto','espera_ok','muestra','corriendo','pausado') or exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo'))`;
-  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and at < ? and not (${deSerieViva})`).bind(ahora - SEMANA).run();
-  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and id not in (select id from estudio_trabajos order by at desc limit ?) and not (${deSerieViva})`).bind(MAX_TRABAJOS).run();
+  const borrar = async (exento) => {
+    await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and at < ?${exento ? ` and not (${deSerieViva})` : ''}`).bind(ahora - SEMANA).run();
+    await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and id not in (select id from estudio_trabajos order by at desc limit ?)${exento ? ` and not (${deSerieViva})` : ''}`).bind(MAX_TRABAJOS).run();
+  };
+  try { await borrar(true); }
+  catch (e) { if (!/no such table:?\s*series\b/i.test(String(e?.message || e))) throw e; await borrar(false); } // sin la tabla de series (migración sin aplicar) no hay series vivas que proteger: la poda es la de siempre
 }
 
 /** Espera a que el trabajo termine, o a `ms` (lo que pase primero), empujándolo si hace falta. Los agentes y los scripts esperan un poco, nunca un video entero. */

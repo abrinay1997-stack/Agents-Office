@@ -27,6 +27,7 @@ import { leerBiblia } from './biblia.js';
 import * as L from './libro.js';
 
 export { MUESTRA, AUTORIZACION_MS };
+export const MAX_REPETICIONES = 3; // un plano cuyo trabajo termina «cancelado» o «interrumpido» se repite sin contar como fallo… hasta este tope; luego queda para revisar y la serie se pausa
 export const GRACIA_MS = 5 * 60e3; // un plano marcado que nunca llegó a pedir su trabajo se da por caído solo pasado este tiempo (así una bomba lenta no choca con la siguiente)
 export const CANDADO = 'series:bomba';
 const TTL_TOKEN_MS = 120000, TTL_IDEM_MS = 600000, TTL_CANDADO_MS = 90000;
@@ -221,11 +222,15 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
         continue;
       }
       const pagado = pagadoDe(paso?.engine); // sin motor conocido = de pago (falla cerrado)
-      const dec = decidirResolucion({ n: p0.n, hayPaso: !!paso, apuntoJob: !!paso?.pedido_ok, job: j, pagado, genUsd: paso?.genUsd, fallos: s0.fallos[p0.n] || 0, reintentosMax: conf.reintentosMax, cancelada: !!s0.cancelada });
+      const dec0 = decidirResolucion({ n: p0.n, hayPaso: !!paso, apuntoJob: !!paso?.pedido_ok, job: j, pagado, genUsd: paso?.genUsd, fallos: s0.fallos[p0.n] || 0, reintentosMax: conf.reintentosMax, cancelada: !!s0.cancelada });
+      // un plano que se repite una y otra vez sin llegar a terminar (cancelado, interrumpido) no gira para siempre: al pasar el tope queda para revisar (en un motor de pago, además, en duda: cuenta contra los topes) y la serie se pausa
+      const repite = !!paso?.pedido_ok && dec0.libro === 'liberar' && dec0.plano.estado === 'previsto' && !dec0.contarFallo, tope = repite && (s0.repeticiones?.[p0.n] || 0) + 1 > MAX_REPETICIONES;
+      const motivoTope = `el plano ${p0.n} se repitió ${MAX_REPETICIONES} veces sin llegar a terminar (se canceló o se interrumpió cada vez): revísalo antes de seguir`;
+      const dec = tope ? { ...dec0, ...(pagado ? { libro: 'incierto', pasoEstado: 'incierto', devolverUso: 0 } : {}), plano: { estado: 'revisar', motivo: motivoTope }, pausa: motivoTope } : dec0;
       // 1) el libro (idempotente: repetirlo no cambia nada); si la línea ya está en el estado que se quería, es lo mismo que haberlo hecho
       let exc = false;
       if (clave && dec.libro) {
-        const r = dec.libro === 'liquidar' ? await L.liquidar(db, clave, usd2u(dec.real)) : dec.libro === 'liberar' ? await L.liberar(db, clave, { nuncaSalio: dec.devolverUso === 1 }) : await L.marcarIncierto(db, clave);
+        const r = dec.libro === 'liquidar' ? await L.liquidar(db, clave, usd2u(dec.real)) : dec.libro === 'liberar' ? await L.liberar(db, clave, { nuncaSalio: dec.devolverUso === 1, sinTrabajoId: j ? null : idDeTrabajo(clave) }) : await L.marcarIncierto(db, clave);
         const meta = { liquidar: 'liquidado', liberar: 'liberado', incierto: 'incierto' }[dec.libro];
         if (!r.ok && r.estado !== meta && r.codigo !== 'sin_reserva') { console.error(`[series] libro ${clave}: ${r.motivo}`); continue; } // en un estado inesperado no se toca nada más: lo decide una persona
         if (dec.libro === 'liquidar') exc = !!(await L.lineaDe(db, clave))?.excedio;
@@ -238,6 +243,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
         if (dec.libro === 'liquidar') { pa.realUsd = dec.real; planoA(y, p0.n, (q) => ({ ...nuevaVersion({ ...q, estado: 'corriendo' }, { archivo: dec.plano.archivo, intento: pa.intento, costo_usd: dec.real, prompt: q.prompt_exacto }), motivo: null })); }
         else planoA(y, p0.n, (q) => ({ ...q, estado: dec.plano.estado, motivo: dec.plano.motivo }));
         if (dec.contarFallo) y.fallos[p0.n] = (y.fallos[p0.n] || 0) + 1;
+        if (repite && !tope) { y.repeticiones = { ...(y.repeticiones || {}) }; y.repeticiones[p0.n] = (y.repeticiones[p0.n] || 0) + 1; } // contador PERSISTENTE por plano
         return y;
       });
       const pausa = dec.pausa || (exc ? dec.pausaSiExcede : null);
@@ -248,7 +254,9 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
   }
 
   async function iniciar(s, paso, cfg) {
-    const n = paso.n, p = s.escaleta.find((x) => x.n === n), id = s.id, conf = confDe(cfg), cable = await d.cable();
+    const n = paso.n, p = s.escaleta.find((x) => x.n === n), id = s.id;
+    cfg = await d.cfg(); if (!seriesNubeActiva(cfg)) return pausar(id, 'generar series en la nube se apagó (dimitri.seriesNube): vuelve a pedir el clic para seguir'); // el interruptor se relee antes de CADA paso, no solo al empezar el tick
+    const conf = confDe(cfg), cable = await d.cable();
     // antes de CADA paso: quién autorizó sigue siendo administrador
     const rol = s.autorizado?.por ? await d.rolDe(s.autorizado.por) : null;
     if (rol !== 'admin') return pausar(id, 'quien autorizó ya no es administrador: otro administrador tiene que dar el clic otra vez');
@@ -275,7 +283,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     });
     if (!r || sin) return sin ? pausar(id, sin) : undefined;
     const soltar = async (motivo, nunca = true) => { // el paso no llegó a salir (se sabe seguro): devuelve la reserva y el plano vuelve a la fila
-      if (nunca) await L.liberar(db, clave, { nuncaSalio: true });
+      if (nunca) await L.liberar(db, clave, { nuncaSalio: true, sinTrabajoId: idDeTrabajo(clave) });
       await almacen.actualizar(id, (y) => { if (y.pasos[clave]) y.pasos[clave].estado = 'liberado'; return planoA(y, n, (q) => (q.estado === 'corriendo' ? { ...q, estado: 'previsto' } : q)); });
       return pausar(id, motivo);
     };
@@ -286,12 +294,13 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     let vivo = false;
     await almacen.actualizar(id, (y) => { const pa = y.pasos[clave]; if (pa?.estado === 'marcado' && y.escaleta.find((q) => q.n === n)?.estado === 'corriendo' && autorizacionDe(y) && ['muestra', 'corriendo'].includes(y.estado)) { pa.estado = 'reservado'; vivo = true; } return y; });
     if (!vivo) return soltar('el paso cambió mientras se reservaba: no se envió nada');
-    // 4) PEDIR (un trabajo de la cola del Estudio con id determinista: pedir dos veces es el mismo trabajo)
+    // 4) PEDIR (un trabajo de la cola del Estudio con id determinista: pedir dos veces es el mismo trabajo). Otra vez el interruptor; y el trabajo solo ENTRA si la línea sigue «reservado» (misma sentencia: si otro tick la liberó mientras este esperaba, no se pide nada)
+    if (!seriesNubeActiva(await d.cfg())) return soltar('generar series en la nube se apagó (dimitri.seriesNube): no se envió nada');
     let job = null, rechazo = null;
     try {
       const aj = p.ajustes && typeof p.ajustes === 'object' ? { ...p.ajustes } : {}; if (p.semilla != null) aj.seed = p.semilla;
       job = await d.estudio.pedir({ prompt: p.prompt_exacto, model: p.modelo, kind: 'image', n: 1, settings: aj, media: p.refs.length ? { reference: p.refs } : {}, purpose: `Serie «${s.titulo}» · plano ${n}` },
-        { usuario: { rol: 'admin', email: 'series@bomba', id: s.autorizado.por }, forzar: { id: idDeTrabajo(clave), serie: { id, n, intento } } });
+        { usuario: { rol: 'admin', email: 'series@bomba', id: s.autorizado.por }, forzar: { id: idDeTrabajo(clave), serie: { id, n, intento }, condicion: { clave } } });
     } catch (e) { rechazo = e; }
     if (rechazo) { // ¿entró el trabajo antes del error? entonces SÍ se adopta (nunca se libera con un trabajo vivo)
       if (await d.estudio.trabajo(idDeTrabajo(clave))) job = { id: idDeTrabajo(clave) };
