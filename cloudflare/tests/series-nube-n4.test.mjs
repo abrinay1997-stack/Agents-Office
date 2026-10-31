@@ -27,16 +27,16 @@ const T0 = 1_900_000_000_000, DIA = '2026-10-30';
 /** Una D1 que se «corta» en la escritura número k (para probar qué pasa si el Worker muere justo después de la sentencia k). */
 function conCorte(base) {
   const est = { n: 0, k: null, escrituras: 0 };
-  const envolver = (sent) => ({
-    bind: (...a) => envolver(sent.bind(...a)),
+  const envolver = (sent, sql = '') => ({
+    bind: (...a) => envolver(sent.bind(...a), sql),
     first: (...a) => sent.first(...a), all: (...a) => sent.all(...a),
     run: async (...a) => {
-      const esEscritura = true; est.escrituras++;
+      const esEscritura = true; est.escrituras++; if (est.antes && est.antes(sql)) est.antes = null;
       if (esEscritura && est.k != null && ++est.n > est.k) { est.k = null; throw new Error('corte simulado'); }
       return sent.run(...a);
     },
   });
-  return { prepare: (sql) => envolver(base.prepare(sql)), batch: base.batch, _db: base._db, _est: est, armar(k) { est.n = 0; est.k = k; }, desarmar() { est.k = null; } };
+  return { prepare: (sql) => envolver(base.prepare(sql), sql), batch: base.batch, _db: base._db, _est: est, armar(k) { est.n = 0; est.k = k; }, desarmar() { est.k = null; } };
 }
 
 async function montar({ cfg = { dimitri: { seriesNube: true } }, biblia = true } = {}) {
@@ -138,6 +138,18 @@ test('N4: lo que cambia desde que se mostró la cifra invalida el clic — escal
   assert.equal((await g.generar({ id, confirmacion: 'inventado-0123456789', costoMostradoUsd: 0, usuario: o.u.admin, idem: 'idem-inv-001' })).estado, 409);
   assert.equal((await g.generar({ id, confirmacion: c2.token, costoMostradoUsd: c2.costoMostradoUsd, usuario: o.u.admin, idem: 'idem-bien-01' })).estado, 200);
   assert.equal(o.jobsDe(id).length, 0, 'autorizar no envía nada: lo hace la bomba'); assert.equal(o.lineas(id).length, 0);
+});
+
+test('N4: la escaleta cambia JUSTO entre consumir el token y autorizar — también con la serie ya en «muestra» (que no pasa por transicion) — no se autoriza nada', { skip: SALTAR }, async () => {
+  for (const previo of ['previsto', 'muestra']) {
+    const o = await montar(), id = await o.nuevaSerie(4), g = o.gen();
+    if (previo === 'muestra') { await o.autorizar(g, id, 'muestra'); await g.pausar({ id, usuario: o.u.admin }); await o.almacen.actualizar(id, (y) => ({ ...y, estado: 'muestra', autorizado: null })); } // una muestra ya abierta sin autorización vigente
+    const c = (await g.presupuesto({ id, modo: 'muestra', usuario: o.u.admin })).cuerpo.confirmar;
+    o.d1._est.antes = (sql) => { if (!/delete from series_tokens/.test(sql)) return false; o.base._db.prepare("update series set json = json_set(json, '$.escaleta[0].prompt_exacto', 'cambiado a mano') where id = ?").run(id); return true; };
+    const r = await g.generar({ id, confirmacion: c.token, costoMostradoUsd: c.costoMostradoUsd, modo: 'muestra', usuario: o.u.admin, idem: `idem-race-${previo}` });
+    assert.equal(r.estado, 409, previo); assert.equal(r.cuerpo.codigo, 'hash', previo);
+    assert.equal((await o.uno(id)).autorizado, null, `${previo}: nada quedó autorizado`); assert.equal(o.jobsDe(id).length, 0);
+  }
 });
 
 test('N4: una autorización vencida (6 h), una escaleta editada tras autorizar y un administrador degradado PAUSAN la serie sin enviar nada', { skip: SALTAR }, async () => {

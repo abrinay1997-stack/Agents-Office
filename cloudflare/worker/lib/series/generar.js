@@ -150,6 +150,8 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     let falla = null;
     const g = await almacen.actualizar(s.id, (y) => {
       if (y.escaleta.some((p) => p.estado === 'corriendo')) { falla = { message: 'Hay un plano en marcha.', codigo: 'en_marcha' }; return undefined; }
+      if (hashEscaleta(y) !== c.hash) { falla = { message: 'La escaleta cambió mientras se confirmaba: vuelve a pedir el presupuesto.', codigo: 'hash' }; return undefined; } // también si ya estaba en «muestra» (ahí no pasa por `transicion`)
+      if (!['previsto', 'espera_ok', 'pausado', 'muestra'].includes(y.estado)) { falla = { message: `Una serie ${y.estado} no se genera.`, codigo: 'estado' }; return undefined; }
       const auth = { ok: true, serieId: y.id, hash: c.hash, topeMax: c.topeUsd }; let cur = { ...y, token_reg: null, token_actual: null, pausa_motivo: null, muestra_lista: false };
       const ir = (a) => { const r = transicion(cur, a, { autorizacion: auth }); if (!r.ok) throw Object.assign(new Error(r.motivo), { codigo: r.codigo }); cur = r.serie; };
       try { if (cur.estado !== 'muestra') ir('muestra'); if (modo === 'todo') ir('corriendo'); } catch (e) { falla = e; return undefined; }
