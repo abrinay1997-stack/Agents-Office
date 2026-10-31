@@ -129,7 +129,7 @@ test('publicar-ya no está al alcance de Dimitri, el asistente, los agentes ni T
   const ruta = d => { for (const f of fs.readdirSync(path.join(raiz, d), { withFileTypes: true })) { const r = d + '/' + f.name; if (f.isDirectory()) ruta(r); else if (/\.m?js$/.test(f.name) && /publicar-ya|publicarYa/.test(lee(r))) hallados.push(r); } };
   for (const d of ['contenido', 'oficina', 'src', 'cloudflare/worker', 'cloudflare/public', 'tareas', 'anuncios', 'media']) if (fs.existsSync(path.join(raiz, d))) ruta(d);
   for (const f of fs.readdirSync(raiz).filter(x => /\.m?js$/.test(x))) if (/publicar-ya|publicarYa/.test(lee(f))) hallados.push(f);
-  const raros = hallados.filter(f => !/^(src\/|contenido\/|settings\.mjs$|serve\.mjs$|cloudflare\/(worker\/lib\/contenido\/|worker\/modulos\/contenido\.js$|public\/))/.test(f));
+  const raros = hallados.filter(f => !/^(src\/|contenido\/|settings\.mjs$|serve\.mjs$|cloudflare\/(worker\/lib\/contenido\/|worker\/modulos\/contenido\.js$|worker\/lib\/funciones\.js$|public\/))/.test(f));
   assert.deepEqual(raros, [], 'publicar-ya solo vive en el controlador, la sesión, la página y los ajustes');
   for (const f of ['sub.mjs', 'oficina/rutas.mjs', 'oficina-mcp.mjs', 'contenido-mcp.mjs', 'telegram.mjs']) assert.ok(!/publicar-ya|publicarYa/.test(lee(f)), f);
   assert.match(lee('cloudflare/worker/modulos/contenido.js'), /repetir\|publicar-ya/, 'solo administrador en la nube');

@@ -363,3 +363,7 @@ Un botón (Cerebro → Herramientas; en el celular, un chip) que el administrado
 ## Siguiente
 
 Falta 8b y 9 (ver `docs/plan-cloudflare-completo.md`). El límite de intentos de acceso por IP ya existe (fase 10).
+
+## Funciones nuevas (Ajustes, 31 oct 2026)
+
+`GET|POST /api/funciones` (solo administradores) es el panel de Ajustes para encender y apagar lo que se publicó apagado. No tiene almacén propio: usa el catálogo y `plan()` de `funciones-core.mjs` (los mismos del script «Cloudflare · encender funciones») y escribe cada interruptor en su documento de D1 (`chat.config`, `estudio.config`, y `ajustes` + `config-local`) con compare-and-set. Detalle y reglas en CLAUDE.md; guía de pruebas en `docs/guia-de-pruebas.md`.

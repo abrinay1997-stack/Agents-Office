@@ -95,7 +95,7 @@ test('Ajustes cubre TODAS las secciones que el servidor define (nada de escritor
   for (const f of settings.FIELDS) assert.ok(['text', 'number', 'bool', 'select', 'list', 'depts', 'checks', 'time', 'people'].includes(f.type), `${f.path}: tipo «${f.type}» sin control móvil`);
   const campos = leer('src/movil/vistas/campos.js');
   for (const t of ['bool', 'select', 'number', 'time', 'list', 'depts', 'checks', 'people']) assert.ok(campos.includes(`'${t}'`), `campos.js no dibuja «${t}»`);
-  for (const s of ['cifras', 'voz', 'empresa', 'apariencia', 'agentes', 'modelos']) assert.ok(META[s], `falta ${s}`);
+  for (const s of ['cifras', 'voz', 'empresa', 'apariencia', 'agentes', 'modelos', 'funciones']) assert.ok(META[s], `falta ${s}`);
   assert.ok(/\/api\/settings/.test(lista) && !/FIELDS\s*=\s*\[/.test(lista), 'los campos vienen del servidor, no se redefinen aquí');
 });
 
