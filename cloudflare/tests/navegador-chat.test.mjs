@@ -25,13 +25,13 @@ async function mundo() {
   const ana = d1._db.prepare('select id from users where email = ?').get(c.email).id; d1._db.prepare('insert into perfiles (user_id, nombre) values (?,?)').run(ana, 'Ana');
   return { d1, env, ana, beto: nueva('beto@panaclaw.test', 'editor', 'Beto'), carla: nueva('carla@panaclaw.test', 'lectura', 'Carla'), dani: nueva('dani@panaclaw.test', 'editor', 'Dani') };
 }
-async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0, falla = false, reducido = false } = {}) {
+async function pagina(o, quien, rol, { ancho = 1280, activo = true, lento = 0, falla = false, reducido = false, cuerpo = '<main>oficina</main>', clase = '' } = {}) {
   if (activo) await guardarConfig(o.d1, { activo: true });
   const cookie = `__Host-sesion=${await abrirSesion(o.d1, quien)}`, ctx = await nav.newContext({ viewport: { width: ancho, height: 800 }, ...(reducido ? { reducedMotion: 'reduce' } : {}) }), p = await ctx.newPage(), errores = [];
   const peticiones = []; p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (r) => {
     const req = r.request(), u = new URL(req.url());
-    if (u.pathname === '/') return r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--ink:#111;--cream:#fff;--hairline:#ddd;--grey:#555;--focus:#06c}${leer('nube.css')}</style></head><body><main>oficina</main></body></html>` });
+    if (u.pathname === '/') return r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--ink:#111;--cream:#fff;--hairline:#ddd;--grey:#555;--focus:#06c}${leer('nube.css')}</style></head><body class="${clase}">${cuerpo}</body></html>` });
     if (u.pathname === '/shim.js') return r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: SHIM(rol) });
     if (u.pathname === '/nube-chat.js') return r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: leer('nube-chat.js') });
     if (lento && req.method() === 'POST' && /\/mensajes$/.test(u.pathname)) await new Promise((r) => setTimeout(r, lento));
@@ -86,6 +86,32 @@ test('privacidad: un administrador no ve (ni en el DOM) el canal privado ajeno n
   await adm.ctx.close();
   const lee = await pagina(o, o.carla, 'lectura'); await lee.p.click('#nbChatBtn'); await lee.p.click('.ch-fila'); await lee.p.waitForSelector('.ch-solo');
   assert.equal(await lee.p.locator('#ch-texto').count(), 0); await lee.ctx.close();
+});
+
+// 31 oct 2026, el dueño: «la burbuja del chat se ve horrible, está puesta al azar y se superpone encima de otras cosas».
+// El botón ya no flota: va en el dock arriba (escritorio) y en la cabecera junto a la lupa (teléfono). Esto lo vigila.
+const DOCK = '<div id="topbar" data-shell><div id="topdock" role="toolbar" aria-label="Herramientas"><button id="topAppr" type="button">⚠ <span>0</span></button><button id="topStudio" class="tb-ic" type="button">E</button></div></div><main>oficina</main>';
+const CABECERA = '<div id="mvRoot" data-shell><header class="mv-bar"><h1 class="mv-titulo">Inicio</h1><div class="mv-bar-der"><span class="mv-acc" id="mvAcc"></span><button type="button" class="mv-ic mv-buscar" aria-label="Buscar en la oficina">L</button><button type="button" class="mv-pend" id="mvAprob" hidden></button></div></header><main class="mv-main"></main></div>';
+
+test('el botón del chat no flota: va en el dock en escritorio y junto a la lupa en el teléfono', { skip: SALTAR }, async (t) => {
+  const o = await mundo();
+  // escritorio: dentro del dock, nunca suelto por encima de la página
+  { const { p, ctx, errores } = await pagina(o, o.ana, 'admin', { cuerpo: DOCK });
+    await p.waitForSelector('#topdock #nbChatBtn');
+    assert.equal(await p.locator('#nbChatBtn.ch-suelto').count(), 0, 'sigue flotando');
+    assert.equal(await p.$eval('#nbChatBtn', (b) => getComputedStyle(b).position), 'relative');
+    assert.equal(await p.$eval('#nbChatBtn', (b) => b.classList.contains('tb-ic')), true, 'no se ve como los demás iconos del dock');
+    assert.deepEqual(errores, []); await ctx.close(); }
+  // teléfono: en la cabecera, JUSTO antes de la lupa
+  { const { p, ctx, errores } = await pagina(o, o.ana, 'admin', { ancho: 390, cuerpo: CABECERA, clase: 'movil' });
+    await p.waitForSelector('.mv-bar-der #nbChatBtn');
+    assert.equal(await p.$eval('#nbChatBtn', (b) => b.nextElementSibling?.classList.contains('mv-buscar')), true, 'no quedó junto a la lupa');
+    assert.equal(await p.$eval('#nbChatBtn', (b) => b.classList.contains('mv-ic')), true);
+    const r = await p.$eval('#nbChatBtn', (b) => { const x = b.getBoundingClientRect(); return { w: x.width, h: x.height }; });
+    assert.ok(r.w >= 44 && r.h >= 44, `objetivo táctil de 44 px: salió ${r.w}x${r.h}`);
+    // y no se monta encima de nada: lo que hay bajo su centro es él mismo
+    assert.equal(await p.$eval('#nbChatBtn', (b) => { const x = b.getBoundingClientRect(); return document.elementFromPoint(x.left + x.width / 2, x.top + x.height / 2)?.closest('#nbChatBtn') ? 'el' : 'otro'; }), 'el');
+    assert.deepEqual(errores, []); await ctx.close(); }
 });
 
 test('teléfono (390 px): pantalla completa, lista → hilo → atrás, sin desborde, campo de 16 px', { skip: SALTAR }, async (t) => {

@@ -30,9 +30,27 @@
   const anunciar = (t) => { if (vivo) { vivo.textContent = ''; setTimeout(() => { vivo.textContent = t; }, 50); } };
   const fallar = (t) => { msg = t; if (alerta) { alerta.textContent = ''; setTimeout(() => { alerta.textContent = t; }, 50); } };
 
+  /** DÓNDE VIVE EL BOTÓN. Nunca flota: la oficina ya tiene dos sitios para una herramienta y el chat usa el que toque.
+   *   · teléfono  → la cabecera, justo antes de la lupa (`.mv-bar-der`), como el ⚠ de aprobaciones;
+   *   · escritorio → el dock de la barra de arriba (`#topdock`), como el Estudio o el Calendario.
+   *  Antes era `position: fixed` con medidas a ojo y se montaba encima de las tarjetas. La versión móvil crea y destruye su
+   *  armazón al cruzar los 820 px, así que esto se vuelve a mirar en cada repintado y el botón se muda solo. */
+  function colocar() {
+    const movil = document.body.classList.contains('movil');
+    const cabecera = movil ? document.querySelector('#mvRoot .mv-bar-der') : null;
+    const lupa = cabecera?.querySelector('.mv-buscar');
+    const dock = movil ? null : document.querySelector('#topdock');
+    const casa = cabecera || dock;
+    if (!casa) { if (boton.parentNode !== document.body) document.body.appendChild(boton); boton.className = 'ch-btn ch-suelto'; return; }
+    boton.className = movil ? 'ch-btn mv-ic' : 'ch-btn tb-ic';
+    if (boton.parentNode === casa && (!lupa || boton.nextElementSibling === lupa)) return; // ya está en su sitio
+    if (lupa) casa.insertBefore(boton, lupa); else casa.appendChild(boton);
+  }
+
   function pintarBoton() {
     if (!activo) { boton?.remove(); boton = null; return; }
-    if (!boton) { boton = document.createElement('button'); boton.type = 'button'; boton.id = 'nbChatBtn'; boton.className = 'ch-btn'; boton.setAttribute('aria-haspopup', 'dialog'); boton.addEventListener('click', () => (abierto ? cerrar() : abrir())); document.body.appendChild(boton); }
+    if (!boton) { boton = document.createElement('button'); boton.type = 'button'; boton.id = 'nbChatBtn'; boton.setAttribute('aria-haspopup', 'dialog'); boton.addEventListener('click', () => (abierto ? cerrar() : abrir())); }
+    colocar();
     const n = res.total;
     boton.setAttribute('aria-label', n ? `Chat: ${n} sin leer` : 'Chat'); boton.setAttribute('aria-expanded', String(abierto));
     boton.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>${n ? `<span class="ch-n" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}`;
@@ -217,5 +235,9 @@
   });
   window.addEventListener('ao:chat-conectado', () => { cargarResumen(); if (abierto && vista === 'hilo' && canal) cargarHilo(canal.id); }); // la puesta al día al volver el socket
   N.chat = { abrir, cerrar, recargar: cargarResumen };
+  // La versión móvil crea y destruye su armazón al cruzar los 820 px (y `body.movil` cambia con ella): el botón se muda en ese
+  // momento, no en el próximo sondeo, que puede tardar segundos. Observar la clase del body cuesta nada.
+  try { new MutationObserver(() => { if (boton) colocar(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch { /* un navegador sin observador sigue mudándose en cada sondeo */ }
+
   regiones(); cargarResumen();
 })();
