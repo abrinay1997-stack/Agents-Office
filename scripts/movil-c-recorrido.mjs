@@ -206,7 +206,8 @@ export async function correr({ capturas = false } = {}) {
     // ════════════════════════════ la nube (simulada): las rutas de cloudflare/worker/modulos/{conectores,equipo,modelos}.js
     const ctxN = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }), pg = await ctxN.newPage();
     await ctxN.addInitScript(() => { try { localStorage.setItem('ao.onboarded', '1'); } catch {} window.AO_NUBE = { pestana: 'prueba' }; });
-    const guardados = { conector: null, modelos: null, nombre: null, rol: null, invitacion: null };
+    const FN = [{ id: 'chat', titulo: 'Chat interno del equipo', que: 'El chat entre las personas.', gasta: false, lista: true, activa: false }, { id: 'lotes-nube', titulo: 'Lotes del Estudio en la nube', que: 'Muchas fotos con la misma receta.', gasta: true, lista: true, activa: false }, { id: 'retoques-nube', titulo: 'Retoques de foto en la nube', que: 'Luz y color.', gasta: false, lista: false, porque: 'Nunca se probó en producción.', activa: false }];
+    const guardados = { funciones: [], conector: null, modelos: null, nombre: null, rol: null, invitacion: null };
     let conectores = [{ nombre: 'zapier', etiqueta: 'Zapier', url: 'https://mcp.zapier.com/api/mcp', activo: true, auth_tipo: 'bearer', cabecera: null, tokenPuesto: true, tokenGuardado: true, secreto: null, departamentos: ['sales'], herramientas_lectura: ['buscar_contacto'], herramientas_envio: ['enviar_mensaje'], plantilla: 'zapier', iconUri: 'data:image/svg+xml;utf8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22%3E%3Crect width=%2240%22 height=%2240%22 rx=%229%22 fill=%22%23ff4f00%22/%3E%3C/svg%3E' }];
     const PLANT = [{ id: 'zapier', nombre: 'Zapier', auth: 'bearer', pista: '', oauth: false, pasos: ['Entra a Zapier MCP y crea un servidor.', 'Copia la dirección y el token.', 'Pégalos aquí.'], iconUri: conectores[0].iconUri }, { id: 'n8n', nombre: 'n8n', auth: 'bearer', pista: 'Activa el acceso MCP en tu n8n.', iconUri: conectores[0].iconUri }, { id: 'otro', nombre: 'Otro', auth: 'bearer', pista: 'Cualquier servidor MCP remoto.', iconUri: conectores[0].iconUri }];
     const equipo = { yo: 'u1', miembros: [{ id: 'u1', nombre: 'Abrinay', email: 'a@panaclaw.com', rol: 'admin', color: '#1F5FD1', foto: null, yo: true, fundador: true }, { id: 'u2', nombre: 'Marta', email: 'marta@panaclaw.com', rol: 'editor', color: '#B3261E', foto: null }], invitaciones: [{ id: 'i1', email: 'pepe@panaclaw.com', rol: 'lectura', expira: Date.now() + 5 * 864e5 }] };
@@ -227,6 +228,8 @@ export async function correr({ capturas = false } = {}) {
       if (p === '/api/modelos' && m === 'GET') return json(r, { catalogo: cat, ajustes: ajM, proveedores: [{ nombre: 'Anthropic', llave: 'ANTHROPIC_API_KEY', llavePuesta: true }, { nombre: 'Meta', llave: 'META_API_KEY', llavePuesta: false }], agentes: [{ id: 'lexi', nombre: 'LEXI', depto: 'sales', modelo: '' }] });
       if (p === '/api/modelos' && m === 'PUT') { guardados.modelos = b().ajustes; ajM = b().ajustes; return json(r, { ok: true, ajustes: ajM, cambios: ['oficina'] }); }
       if (p === '/api/modelos/probar') return json(r, { ok: true, id: b().modelo, nombre: 'Claude Sonnet 5.5', texto: 'Hola, soy Claude. ¿En qué te ayudo hoy?', ms: 1400, tokens: { entrada: 12, salida: 14 }, costo: 0.0004 });
+      if (p === '/api/funciones' && m === 'GET') return json(r, { funciones: FN.map(f => ({ ...f })), enlaces: [{ id: 'hooks-token', titulo: 'Aceptar el token en la dirección (?token=)', que: 'Para los webhooks.', campo: 'hooks.tokenEnQuery', grupo: 'seguridad', activa: true }, { id: 'significado', titulo: 'Buscar notas por significado', que: 'Tiene su propio camino.', donde: 'Cerebro → Actualizar conexiones', activa: null }] });
+      if (p === '/api/funciones' && m === 'POST') { const f = FN.find(x => x.id === b().id); if (!f) return json(r, { error: 'no' }, 422); f.activa = b().activo === true; guardados.funciones.push(b()); return json(r, { ok: true }); }
       return r.continue();
     });
     await pg.goto(o.base); await pg.waitForSelector('#mvRoot .mv-tabs'); await pg.waitForSelector('[data-vista="inicio"] .mv-card', { timeout: 15000 }); await espera(500);
@@ -268,6 +271,17 @@ export async function correr({ capturas = false } = {}) {
     paso(guardados.modelos && guardados.modelos.oficina === 'claude-opus-5' && guardados.modelos.funciones.enrutador === 'claude-sonnet-5-5', 'Modelos: el selector por función se guarda con PUT /api/modelos');
     await pg.locator('[data-vista="ajustes-seccion"] [data-probar]').tap(); await pg.waitForSelector('#mvmRes .mv-card', { timeout: 6000 }); await fotoN('31-modelos-probar');
     paso(/Hola, soy Claude/.test(await pg.locator('#mvmRes').innerText()), 'Modelos: «Probar este modelo» muestra la respuesta, el tiempo y el costo');
+    // Funciones nuevas (solo la nube, solo administradores)
+    await tocarN('.mv-tab[data-tab="mas"]'); await tocarN('.mv-hoja.mv-mas [data-vista="ajustes"]'); await pg.waitForSelector('[data-vista="ajustes"]:not([hidden]) [data-ir="funciones"]', { timeout: 8000 });
+    await tocarN('[data-vista="ajustes"] [data-ir="funciones"]'); await pg.waitForSelector('[data-vista="ajustes-seccion"] [data-fn="chat"]'); await fotoN('32-funciones');
+    for (const w of [320, 360, 390, 430]) { await pg.setViewportSize({ width: w, height: 800 }); await espera(150); await medirEn(`Funciones nuevas a ${w} px`); }
+    paso(await pg.locator('[data-fn="retoques-nube"]').isDisabled() && /No se puede encender/.test(await pg.locator('[data-vista="ajustes-seccion"] .mv-cuerpo').innerText()), 'Funciones: lo no construido no se enciende y dice por qué');
+    await tocarN('[data-fn="chat"]'); await pg.waitForFunction(() => document.querySelector('[data-fn="chat"]')?.dataset.on === '1', null, { timeout: 6000 });
+    paso(guardados.funciones.length === 1 && guardados.funciones[0].id === 'chat' && guardados.funciones[0].activo === true, 'Funciones: un toque enciende el chat (POST /api/funciones, booleano)');
+    await tocarN('[data-fn="lotes-nube"]'); paso(guardados.funciones.length === 1 && /Sí, encender/.test(await pg.locator('[data-fn="lotes-nube"]').innerText()), 'Funciones: lo que puede gastar pide un segundo toque');
+    await tocarN('[data-fn="lotes-nube"]'); await pg.waitForFunction(() => document.querySelector('[data-fn="lotes-nube"]')?.dataset.on === '1', null, { timeout: 6000 });
+    await tocarN('[data-fn="chat"]'); await pg.waitForFunction(() => document.querySelector('[data-fn="chat"]')?.dataset.on === '0', null, { timeout: 6000 });
+    paso(guardados.funciones.at(-1).activo === false, 'Funciones: apagar es un toque'); await pg.goBack().catch(() => {});
     paso(true, 'Nube simulada: sin errores graves de página'); await ctxN.close();
   } finally { await browser.close(); o.cerrar(); }
   console.log(`\n${res.length - fallos}/${res.length} pasos bien${fallos ? ` · ${fallos} FALLAN` : ''}`);

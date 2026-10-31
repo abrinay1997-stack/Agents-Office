@@ -208,3 +208,8 @@ body.movil #nbChat { inset: 0; width: auto; height: auto; border-radius: 0; grid
 /* C2 — el contador late (como el de D'CASA) y «está escribiendo…»; sin animación con «reducir movimiento». El número siempre está: no depende del movimiento. */
 .ch-escribe { min-height: 1.3em; margin: 2px 0 0; font-size: 12px; color: var(--grey); font-style: italic; }
 @media (prefers-reduced-motion: no-preference) { .ch-n, .ch-bad { animation: ch-late 1.6s ease-in-out infinite; } @keyframes ch-late { 0%, 100% { scale: 1; } 50% { scale: 1.14; } } }
+/* Ajustes → Funciones nuevas */
+.fn-lista { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 10px; } .fn-card { border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 14px; } .fn-card p { margin: 6px 0; font-size: 14px; line-height: 1.4; }
+.fn-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; } .fn-cab h4 { margin: 0; font-size: 15px; } .fn-on, .fn-off { font-size: 13px; } .fn-off { color: inherit; }
+.fn-gasto { padding: 8px 10px; border-radius: 8px; background: #fff4d6; color: #6b4a00; } .fn-porque { padding: 8px 10px; border-radius: 8px; background: #eee; color: #333; } .fn-nota { display: block; color: inherit; font-size: 13px; }
+.fn-acc { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px; } .fn-acc .sg-btn { min-height: 36px; } body.movil .fn-acc .sg-btn { min-height: 44px; font-size: 16px; }

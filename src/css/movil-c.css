@@ -98,3 +98,5 @@ body.dark #mvRoot .mv-medidor.warn i { background: #F2C25B; } .mv-medidor-t { ma
 .mv-cont { float: right; font-weight: 600; font-size: 13px; color: var(--mv-grey); }
 .mv-fila-llave { display: flex; justify-content: space-between; align-items: center; min-height: 52px; padding: 8px 14px; } .mv-fila-llave em { font-style: normal; font-weight: 700; } .mv-fila-llave.ok em { color: var(--mv-acc); } .mv-fila-llave.falta em { color: var(--mv-rojo); }
 .mv-res .mv-card { margin-top: 10px; } .mv-res h4 { margin: 8px 0 4px; font-size: 15px; }
+.mv-fn h4 { margin: 0 0 4px; font-size: 17px; } .mv-fn .mv-btn { width: 100%; min-height: 48px; font-size: 16px; margin-top: 8px; } .mv-estado { margin: 0 0 6px; font-size: 15px; color: var(--mv-grey); } .mv-estado.ok { color: var(--mv-ink); }
+.mv-fn-enl { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; min-height: 44px; font-size: 16px; } .mv-fn-enl small { font-size: 14px; color: var(--mv-grey); line-height: 1.35; }

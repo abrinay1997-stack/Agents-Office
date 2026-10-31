@@ -50,6 +50,7 @@ const con = (o, fn) => conSesion(o.d1, fn);
 // Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
 // Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
 const ESCRIBEN = [
+  '/api/funciones',
   '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas',
   '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
   '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
@@ -68,6 +69,7 @@ const ESCRIBEN = [
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
 const SOLO_ADMIN = [
+  ['POST', '/api/funciones'],
   ['POST', '/api/chat/config'],
   ['PUT', '/api/modelos'], ['POST', '/api/modelos/probar'], ['POST', '/api/modelos/comparar'], ['POST', '/api/conectores/probar'], ['PUT', '/api/conectores/gmail/token'], ['DELETE', '/api/conectores/gmail/token'],
   ['POST', '/api/conectores'], ['POST', '/api/migrar/notas'], ['POST', '/api/migrar/filas'], ['POST', '/api/migrar/docs'],

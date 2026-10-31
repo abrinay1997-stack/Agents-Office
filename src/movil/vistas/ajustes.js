@@ -15,6 +15,7 @@ export const META = {
   voz: ['Voz de marca', 'Cómo habla tu marca', 'dimitri'], empresa: ['Preparar desde mi web', 'La oficina lee tu sitio', 'nube'], aprobaciones: ['Aprobaciones', 'Plazos, deshacer e importes', 'alerta'],
   seguridad: ['Seguridad', 'Quién puede enviar, publicar o pagar', 'estado'], costos: ['Presupuesto', 'Tope del mes y precio de una hora', 'costos'], equipo: ['Personas del equipo', 'Quién recibe avisos y aprueba', 'persona'],
   conectores: ['Reglas de los conectores', 'Qué pueden usar los agentes', 'conectores'], avisos: ['Avisos y Telegram', 'Qué te avisa y a qué hora', 'nube'], modelos: ['Modelos', 'Qué modelo hace cada trabajo', 'cerebro'],
+  funciones: ['Funciones nuevas', 'Encender lo que se publicó apagado', 'check'],
   agentes: ['Agentes', 'Su ficha: brief, skills, lecciones', 'persona'], apariencia: ['Apariencia y versión', 'Tema y cómo se ve en este teléfono', 'tema'],
 };
 const VISTAS = { estado: ['Estado de la oficina', 'Que todo funcione', 'estado'], perfil: ['Mi perfil', 'Tu nombre, foto y contraseña', 'persona'], 'equipo-cuentas': ['Cuentas y roles', 'Quién entra a la oficina', 'persona'], 'costos-retorno': ['Costos y retorno', 'Gasto, horas ahorradas, sugerencias', 'costos'], negocio: ['Cómo va el negocio', 'Tus indicadores', 'negocio'], 'conectores-vista': ['Conectores', 'Las herramientas conectadas', 'conectores'] };
@@ -25,12 +26,12 @@ const LISTA = [
   { h: 'La oficina', items: ['general', 'estudio', 'contenido', 'anuncios', 'calidad', 'cifras', 'voz', 'empresa'] },
   { h: 'Dinero y control', items: ['aprobaciones', 'seguridad', 'costos', '@costos-retorno', '@negocio'] },
   { h: 'Equipo', items: ['equipo', 'agentes'] },
-  { h: 'Integraciones', items: ['@conectores-vista', 'conectores', 'avisos', 'modelos'] },
+  { h: 'Integraciones', items: ['@conectores-vista', 'conectores', 'avisos', 'modelos', 'funciones'] },
   { h: 'Apariencia', items: ['apariencia'] },
 ];
 
-const ESPECIALES = new Set(['apariencia', 'agentes', 'cifras', 'voz', 'empresa', 'modelos']);
-const E = { data: null, rol: null, modelos: undefined, pend: new Map(), cifras: null, voz: null, menos: null };
+const ESPECIALES = new Set(['apariencia', 'agentes', 'cifras', 'voz', 'empresa', 'modelos', 'funciones']);
+const E = { data: null, rol: null, modelos: undefined, funciones: undefined, pend: new Map(), cifras: null, voz: null, menos: null };
 const nube = () => !!window.AO_NUBE;
 async function datos(ctx, fresco) {
   if (E.data && !fresco) return E.data;
@@ -51,6 +52,7 @@ export function registrar(shell) {
       const fila = (id, st) => {
         const v = id[0] === '@' ? VISTAS[id.slice(1)] : META[id]; if (!v) return '';
         if (id === 'modelos' && !E.modelos) return '';
+        if (id === 'funciones' && !E.funciones) return ''; // solo la nube y solo administradores
         if (id[0] !== '@' && E.data && !ESPECIALES.has(id) && !E.data.groups.some(g => g[0] === id)) return ''; // un grupo que esta oficina no tiene
         const n = id === '@estado' ? nAtencion(st) : 0;
         return `<li><button type="button" class="mv-lista-b" data-ir="${esc(id)}">${svg(v[2], 'mv-lista-i')}<span><b>${esc(v[0])}</b><small>${esc(v[1])}</small></span>${n ? `<em class="mv-insignia ambar" aria-label="${n} ${n === 1 ? 'cosa necesita' : 'cosas necesitan'} atención">${n}</em>` : ''}${svg('der', 'mv-der')}</button></li>`;
@@ -71,6 +73,7 @@ export function registrar(shell) {
       async function cargar() {
         try { await datos(ctx, true); err = ''; } catch (e) { err = e.message; }
         if (E.modelos === undefined && nube()) { E.modelos = false; if (await esAdmin(ctx)) { try { await ctx.api('/api/modelos'); E.modelos = true; } catch { E.modelos = false; } } }
+        if (E.funciones === undefined) E.funciones = nube() && await esAdmin(ctx);
         pintar();
       }
       el._cargar = cargar; ctx.store.alCambiar(() => { if (!el.hidden) pintar(); });
@@ -192,6 +195,29 @@ export function registrar(shell) {
       const leerModelosDe = a => ({ personalizados: a.personalizados || [], oficina: a.oficina || '', funciones: { ...(a.funciones || {}) }, departamentos: { ...(a.departamentos || {}) }, agentes: { ...(a.agentes || {}) } });
       const tarjetaM = (r, rot) => r.ok ? `<article class="mv-card"><h4>${rot}: ${esc(r.nombre || r.id)}</h4><p class="mv-texto">${esc(r.texto)}</p><p class="mv-meta">${(r.ms / 1000).toFixed(1).replace('.', ',')} s · ${r.tokens?.entrada ?? '?'} → ${r.tokens?.salida ?? '?'} tokens · ${r.costo != null ? usd(r.costo) : 'sin precio'}</p></article>` : `<article class="mv-card"><h4>${rot}: ${esc(r.nombre || r.id || '')}</h4><p class="mv-texto rojo">✕ ${esc(r.error)}</p></article>`;
 
+
+      // ---- Funciones nuevas (solo la nube, solo administradores): un interruptor por función, con su estado real; el catálogo es el de funciones-core.mjs y lo sirve /api/funciones
+      async function pintarFunciones() {
+        const d = await ctx.api('/api/funciones');
+        const fila = f => {
+          const on = f.activa === true, cierra = !on && !f.lista; // lo que no está construido no se enciende (apagar siempre se puede)
+          const gasto = f.gasta ? '<p class="mv-aviso malo" role="note">Puede abrir la puerta a gastar dinero. Encenderla no gasta: gastan sus botones, que siguen pidiendo tu clic y respetando los topes.</p>' : '';
+          const porque = cierra ? `<p class="mv-aviso" role="note">No se puede encender todavía. ${esc(f.porque || '')}</p>` : (f.nota ? `<p class="mv-meta">${esc(f.nota)}</p>` : '');
+          const panel = f.panel ? `<p class="mv-aviso" role="note">Se cambia en ${esc(f.panel)}, no desde aquí.</p>` : '';
+          const accion = f.panel ? '' : `<button type="button" class="mv-btn ${on ? '' : 'primario'}" data-fn="${esc(f.id)}" data-on="${on ? 1 : 0}" data-gasta="${f.gasta ? 1 : 0}"${cierra ? ' disabled' : ''}>${on ? 'Apagar' : 'Encender'}</button>`;
+          return `<article class="mv-card mv-fn"><h4>${esc(f.titulo)}</h4><p class="mv-estado ${on ? 'ok' : ''}"><b>${on ? '✓ Encendida' : '– Apagada'}</b></p><p class="mv-texto">${esc(f.que)}</p>${gasto}${porque}${panel}${accion}</article>`;
+        };
+        const enl = e => `<li class="mv-fn-enl"><b>${esc(e.titulo)}</b><small>${esc(e.que)}</small><small>${e.activa === null ? '' : (e.activa ? '✓ Encendida. ' : '– Apagada. ')}Se cambia en ${esc(e.donde || (e.grupo ? 'Ajustes → ' + (META[e.grupo]?.[0] || e.grupo) : ''))}.</small></li>`;
+        cuerpo.innerHTML = aviso('Funciones que se publicaron apagadas. Cada una se enciende con un toque y se apaga igual; nada se enciende solo.') + d.funciones.map(fila).join('') + '<h3 class="mv-gh">Ya tienen su sitio</h3><ul class="mv-lista">' + d.enlaces.map(enl).join('') + '</ul>';
+        pie.hidden = true;
+      }
+      async function cambiarFuncion(b) {
+        const on = b.dataset.on === '1', gasta = b.dataset.gasta === '1';
+        if (!on && gasta && b.dataset.seguro !== '1') { b.dataset.seguro = '1'; b.textContent = 'Sí, encender (puede abrir gasto)'; return; }
+        const r = await conEstado(b, () => enviar('/api/funciones', { id: b.dataset.fn, activo: !on }), { ocupado: 'Guardando…', hecho: on ? 'Apagada ✓' : 'Encendida ✓' });
+        if (r.ok) setTimeout(() => { if (sec === 'funciones') pintarFunciones().catch(() => {}); }, 700);
+      }
+
       // ---- pintar la sección que toca
       async function pintar(id, fresco) {
         const n = ++cargando; sec = id; fields = []; guardado = false; btn.dataset.accion = ''; btn.textContent = 'Guardar'; btn.ac0 = undefined; delete btn.ac0;
@@ -199,7 +225,7 @@ export function registrar(shell) {
         cuerpo.innerHTML = esqueleto(5); pie.hidden = true; pie.querySelectorAll('.ac-err').forEach(x => x.remove()); gst.textContent = ''; pie.classList.remove('sucio');
         try {
           if (id === 'cifras') await pintarCifras(); else if (id === 'voz') await pintarVoz(); else if (id === 'empresa') pintarEmpresa();
-          else if (id === 'apariencia') pintarApariencia(); else if (id === 'agentes') await pintarAgentes(); else if (id === 'modelos') await pintarModelos(); else await pintarGrupo(id);
+          else if (id === 'apariencia') pintarApariencia(); else if (id === 'agentes') await pintarAgentes(); else if (id === 'modelos') await pintarModelos(); else if (id === 'funciones') await pintarFunciones(); else await pintarGrupo(id);
         } catch (e) { if (n === cargando) cuerpo.innerHTML = `<div class="mv-vacio" role="alert">${svg('alerta', 'mv-vacio-i')}<h3>No se pudo abrir</h3><p>${esc(e.message)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>`; pie.hidden = true; return; }
         if (n !== cargando) return;
         marcar(); if (fresco) sc.scrollTop = 0;
@@ -244,6 +270,7 @@ export function registrar(shell) {
       });
       cuerpo.addEventListener('click', async e => {
         if (e.target.closest('[data-reintentar]')) return pintar(sec);
+        const fn = e.target.closest('[data-fn]'); if (fn) return cambiarFuncion(fn);
         const ag = e.target.closest('[data-agente]'); if (ag) return ctx.navegar('agente', { id: ag.dataset.agente });
         if (e.target.closest('[data-persona-mas]')) { const c = cuerpo.querySelector('.mv-people'); c.insertAdjacentHTML('beforeend', personaHTML({})); c.lastElementChild.querySelector('input').focus(); marcar(); return; }
         if (e.target.closest('[data-persona-quitar]')) { e.target.closest('.mv-persona').remove(); marcar(); return; }
