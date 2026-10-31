@@ -153,7 +153,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
       if (y.escaleta.some((p) => p.estado === 'corriendo')) { falla = { message: 'Hay un plano en marcha.', codigo: 'en_marcha' }; return undefined; }
       if (hashEscaleta(y) !== c.hash) { falla = { message: 'La escaleta cambió mientras se confirmaba: vuelve a pedir el presupuesto.', codigo: 'hash' }; return undefined; } // también si ya estaba en «muestra» (ahí no pasa por `transicion`)
       if (!['previsto', 'espera_ok', 'pausado', 'muestra'].includes(y.estado)) { falla = { message: `Una serie ${y.estado} no se genera.`, codigo: 'estado' }; return undefined; }
-      const auth = { ok: true, serieId: y.id, hash: c.hash, topeMax: c.topeUsd }; let cur = { ...y, token_reg: null, token_actual: null, pausa_motivo: null, muestra_lista: false };
+      const auth = { ok: true, serieId: y.id, hash: c.hash, topeMax: c.topeUsd }; let cur = { ...y, token_reg: null, token_actual: null, pausa_motivo: null, muestra_lista: false, repeticiones: {} }; // un clic nuevo, con la cifra a la vista, reinicia el contador de repeticiones (no el de fallos ni el libro)
       const ir = (a) => { const r = transicion(cur, a, { autorizacion: auth }); if (!r.ok) throw Object.assign(new Error(r.motivo), { codigo: r.codigo }); cur = r.serie; };
       try { if (cur.estado !== 'muestra') ir('muestra'); if (modo === 'todo') ir('corriendo'); } catch (e) { falla = e; return undefined; }
       return { ...cur, autorizado: { hash: c.hash, topeMax: c.topeUsd, serieId: y.id, en: d.ahora(), modo, topeMesUsd: c.topeMesUsd, por: usuario.id } };
@@ -200,7 +200,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     }
     const r = await L.resolverIncierto(db, clave, cobro, cobro ? usd2u(realUsd || 0) : 0);
     if (!r.ok) return err(409, r.motivo, { codigo: r.codigo });
-    const x = await almacen.actualizar(s0.id, (y) => { const pa = y.pasos[clave]; if (pa) pa.estado = cobro ? 'liquidado' : 'liberado'; const n = pa?.n; if (!n) return y; const i = y.escaleta.findIndex((p) => p.n === n); if (i >= 0 && y.escaleta[i].estado === 'revisar' && !cobro) y.escaleta[i] = { ...y.escaleta[i], estado: 'previsto', motivo: null }; return y; });
+    const x = await almacen.actualizar(s0.id, (y) => { const pa = y.pasos[clave]; if (pa) pa.estado = cobro ? 'liquidado' : 'liberado'; const n = pa?.n; if (!n) return y; const i = y.escaleta.findIndex((p) => p.n === n); if (i >= 0 && y.escaleta[i].estado === 'revisar' && !cobro) { y.escaleta[i] = { ...y.escaleta[i], estado: 'previsto', motivo: null }; if (y.repeticiones) y.repeticiones = { ...y.repeticiones, [n]: 0 }; } return y; }); // un plano decidido por una persona empieza sus repeticiones de cero
     await auditar('resolver', { por: usuario.email || usuario.id, serie: s0.id, clave, cobro });
     return { estado: 200, cuerpo: { resuelto: true, hash: x?.hash, nota: 'Anotado. Es solo contabilidad: no gasta ni reanuda nada.' } };
   }
@@ -253,9 +253,9 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     return cambios;
   }
 
-  async function iniciar(s, paso, cfg) {
+  async function iniciar(s, paso) {
     const n = paso.n, p = s.escaleta.find((x) => x.n === n), id = s.id;
-    cfg = await d.cfg(); if (!seriesNubeActiva(cfg)) return pausar(id, 'generar series en la nube se apagó (dimitri.seriesNube): vuelve a pedir el clic para seguir'); // el interruptor se relee antes de CADA paso, no solo al empezar el tick
+    const cfg = await d.cfg(); if (!seriesNubeActiva(cfg)) return pausar(id, 'generar series en la nube se apagó (dimitri.seriesNube): vuelve a pedir el clic para seguir'); // el interruptor se relee antes de CADA paso, no solo al empezar el tick
     const conf = confDe(cfg), cable = await d.cable();
     // antes de CADA paso: quién autorizó sigue siendo administrador
     const rol = s.autorizado?.por ? await d.rolDe(s.autorizado.por) : null;
@@ -284,8 +284,10 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     if (!r || sin) return sin ? pausar(id, sin) : undefined;
     const soltar = async (motivo, nunca = true) => { // el paso no llegó a salir (se sabe seguro): devuelve la reserva y el plano vuelve a la fila
       if (nunca) await L.liberar(db, clave, { nuncaSalio: true, sinTrabajoId: idDeTrabajo(clave) });
-      await almacen.actualizar(id, (y) => { if (y.pasos[clave]) y.pasos[clave].estado = 'liberado'; return planoA(y, n, (q) => (q.estado === 'corriendo' ? { ...q, estado: 'previsto' } : q)); });
-      return pausar(id, motivo);
+      // SOLO si el plano sigue siendo de ESTE intento: si otro tick (con el candado ya caducado) liberó la línea y lanzó el intento siguiente mientras este esperaba, ese plano es del otro y no se toca (ni el paso, ni el estado, ni se pausa la serie)
+      let propio = false;
+      await almacen.actualizar(id, (y) => { const q = y.escaleta.find((x) => x.n === n); if (!q || q.estado !== 'corriendo' || q.intento_actual !== intento) return undefined; propio = true; if (y.pasos[clave]) y.pasos[clave].estado = 'liberado'; return planoA(y, n, (z) => ({ ...z, estado: 'previsto' })); });
+      return propio ? pausar(id, motivo) : undefined;
     };
     // 2) RESERVAR (una sentencia atómica con el tope de la serie, el del mes de carruseles y el cupo del día)
     const rs = await L.reservar(db, { clave, serieId: id, n, intento, maxMicro, topeSerieMicro: usd2u(topeDe(s, conf)), mes, dia, carrusel, topeMesMicro: carrusel ? usd2u(conf.topeMesCarruselesUsd) : 0, peso: weightOf('image', 1), cupoDiaPeso: cupoSerieDia(bud.limit, conf), ahora: d.ahora() });
@@ -319,7 +321,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
       case 'caducada': case 'pausar': await pausar(a.id, a.motivo); return a;
       case 'terminar': { let ok = false; await almacen.actualizar(a.id, (y) => { const h = cerrarSerie(y, d.ahora()); ok = !!h; return h; }); if (ok) await auditar('hecha', { serie: a.id }); return a; }
       case 'muestra_lista': await almacen.actualizar(a.id, (y) => ({ ...y, muestra_lista: true })); await auditar('muestra_lista', { serie: a.id }); return a;
-      case 'gasto': { const s = await almacen.uno(a.id); if (s) await iniciar(s, a.paso, cfg); return a; }
+      case 'gasto': { const s = await almacen.uno(a.id); if (s) await iniciar(s, a.paso); return a; }
       default: return a;
     }
   }

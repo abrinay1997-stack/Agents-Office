@@ -328,7 +328,8 @@ test('N5a lease: un tick «congelado» más de GRACIA entre confirmar y pedir �
   const g = o.gen({ estudio }); await o.autorizar(g, id, 'todo'); await g.tick();
   const { js, ls } = o.invariantes(id, await o.uno(id));
   assert.equal(js.length, 0, 'ningún trabajo: la línea ya no estaba reservada'); assert.equal(ls.length, 1); assert.equal(ls[0].estado, 'liberado'); assert.equal(ls[0].salio, 0, 'se sabe que nada salió');
-  assert.equal((await o.uno(id)).estado, 'pausado'); assert.ok((await o.uno(id)).escaleta.every((p) => p.estado === 'previsto'));
+  assert.ok((await o.uno(id)).escaleta.every((p) => p.estado === 'previsto'), 'el plano volvió a la fila (lo hizo el otro tick; A ya no toca nada que no sea suyo)');
+  const fin = await o.correr(o.gen(), id, (x) => x.estado === 'hecho'); assert.equal(fin.estado, 'hecho'); assert.equal(o.jobsDe(id).length, 2, 'un trabajo por plano, de un intento posterior'); o.invariantes(id, fin);
   // el orden contrario: el trabajo entra primero y la otra bomba, al reconciliar, lo ADOPTA (no libera nada)
   const o2 = await montar(), id2 = await o2.nuevaSerie(2), real2 = o2.deps().estudio;
   const estudio2 = { ...real2, pedir: async (req, op) => { const j = await real2.pedir(req, op); o2.reloj.t += GRACIA_MS + 1000; await o2.gen().reconciliar(); return j; } };
@@ -396,6 +397,42 @@ test('N5a poda: limpiar() del Estudio no lanza si falta la tabla `series` (migra
   await trabajos.cadaMinuto(o.env, o.d1);
   assert.deepEqual(o.q('select id from estudio_trabajos').map((f) => f.id), ['jnuevo0001'], 'sin tabla de series la poda es la de siempre');
 });
+
+test('N5a soltar: el tick A congelado dentro de pedir, mientras otro tick entero libera su línea y lanza el intento 2, NO toca el plano del intento 2 ni lo pausa', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), real = o.deps().estudio; let congelado = false;
+  const estudio = { ...real, pedir: async (req, op) => { if (!congelado) { congelado = true; o.reloj.t += GRACIA_MS + 1000; await o.gen().tick(); } return real.pedir(req, op); } }; // el candado de A ya caducó: B puede ser un tick completo (reconcilia, libera la línea 1 y lanza el intento 2)
+  const g = o.gen({ estudio }); await o.autorizar(g, id, 'todo'); await g.tick();
+  const s = await o.uno(id), p1 = s.escaleta[0];
+  assert.equal(p1.estado, 'corriendo', 'el plano sigue siendo del intento 2'); assert.equal(p1.intento_actual, 2); assert.notEqual(s.estado, 'pausado', 'A no pausa la serie de B');
+  assert.deepEqual(o.jobsDe(id).map((j) => j.serie.intento), [2], 'solo el trabajo del intento 2'); const ls = o.lineas(id); assert.deepEqual(ls.map((l) => `${l.intento}:${l.estado}`), ['1:liberado', '2:reservado']);
+  assert.equal(s.pasos[claveIdempotencia(id, 1, 1)].estado, 'liberado'); assert.notEqual(s.pasos[claveIdempotencia(id, 1, 2)].estado, 'liberado');
+  const f = await o.correr(o.gen(), id, (x) => x.estado === 'hecho'); assert.equal(f.estado, 'hecho'); assert.equal(o.jobsDe(id).length, 2, 'un trabajo por plano: ningún intento 3'); assert.ok(f.escaleta.every((p) => p.versiones.length === 1)); o.invariantes(id, f);
+});
+
+test('N5a pago: con un motor de pago simulado, un trabajo que falla por CUALQUIER causa que no sea claramente previa al cobro nunca llega a «liberado» (queda en duda)', { skip: SALTAR }, async () => {
+  const marcar = (o, id, causa, extra = '') => o.base._db.prepare(`update estudio_trabajos set estado = 'failed', json = json_set(json, '$.state', 'failed', '$.causa', ?, '$.error', 'falló'${extra}) where json_extract(json, '$.serie.id') = ? and estado in ('queued','running')`).run(causa, id);
+  for (const [causa, extra] of [['red', ''], ['tiempo', ''], ['servicio', ''], ['espera', ''], ['interrumpido', ''], ['cancelado', ''], ['key', ''], ['saldo', ''], ['desconocida', ''], ['previo', ", '$.aceptado', json('true')"], ['cancelado_en_cola', ", '$.aceptado', json('true')"]]) {
+    const o = await montar(), id = await o.nuevaSerie(2), g = o.gen({ permitirPago: () => true, engineDe: () => 'fal' }); await o.autorizar(g, id, 'todo'); await g.tick();
+    marcar(o, id, causa, extra); o.reloj.t += 60000; await g.reconciliar();
+    const l = o.lineas(id)[0]; assert.equal(l.estado, 'incierto', `causa «${causa}${extra ? ' con aceptado' : ''}»: ${l.estado}`); assert.equal((await o.uno(id)).estado, 'pausado');
+  }
+  const o = await montar(), id = await o.nuevaSerie(2), g = o.gen({ permitirPago: () => true, engineDe: () => 'fal' }); await o.autorizar(g, id, 'todo'); await g.tick(); marcar(o, id, 'previo'); o.reloj.t += 60000; await g.reconciliar();
+  assert.equal(o.lineas(id)[0].estado, 'liberado', 'solo «previo» sin aceptar libera');
+});
+
+test('N5a repeticiones: un plano decidido por una persona (resolver) o un clic nuevo (generar) empieza el contador de cero; el de fallos no se toca', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(2), g = o.gen(); await o.autorizar(g, id, 'todo');
+  await o.almacen.actualizar(id, (y) => ({ ...y, repeticiones: { 1: 2 }, fallos: { 1: 1 } }));
+  await g.pausar({ id, usuario: o.u.admin }); await o.autorizar(g, id, 'todo');
+  const s = await o.uno(id); assert.deepEqual(s.repeticiones, {}); assert.deepEqual(s.fallos, { 1: 1 });
+  // resolver: el paso incierto se decide «sin cobro» y el plano vuelve a la fila con su contador a cero
+  const o2 = await montar(), id2 = await o2.nuevaSerie(2), clave = claveIdempotencia(id2, 1, 1);
+  await o2.almacen.actualizar(id2, (y) => { y.repeticiones = { 1: 3 }; y.pasos[clave] = { n: 1, intento: 1, estado: 'incierto' }; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar' }; return y; });
+  await liquidarAparte(o2, id2, 1, 0); await L.marcarIncierto(o2.d1, clave);
+  assert.equal((await o2.gen().resolver({ id: id2, clave, cobro: false, usuario: o2.u.admin })).estado, 200);
+  const s2 = await o2.uno(id2); assert.equal(s2.escaleta[0].estado, 'previsto'); assert.equal(s2.repeticiones[1], 0);
+});
+
 
 // ---- las rutas de verdad: roles, interruptor, cabecera ----
 async function conRutas({ encendido = true } = {}) {
