@@ -61,9 +61,9 @@ test('SERIES N2: roles — sin sesión 401; escribir es solo de un administrador
   }
 });
 
-test('SERIES N2: generar, resolver, pausar y cancelar NO existen en la nube todavía (501 al administrador, aunque el interruptor esté encendido)', { skip: SALTAR }, async () => {
+test('SERIES N2→N4: generar, resolver, pausar y cancelar ya existen (N4) y, sobre una serie que no existe, contestan 404/409/422 al administrador — nunca 501, y sin una sola llamada a un motor', { skip: SALTAR }, async () => {
   const o = await oficina();
-  for (const q of ['generar', 'resolver', 'pausar', 'cancelar']) { const x = await o.admin('POST', `/api/series/abc/${q}`, {}); assert.equal(x.status, 501, q); assert.match(x.j.error, /todavía no están/); }
+  for (const q of ['presupuesto', 'generar', 'continuar', 'resolver', 'pausar', 'cancelar']) { const x = await o.admin('POST', `/api/series/abc/${q}`, {}); assert.ok([404, 409, 422].includes(x.status), `${q}: ${x.status}`); }
   assert.equal(o.llamadas.length, 0);
 });
 

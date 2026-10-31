@@ -64,7 +64,7 @@ const ESCRIBEN = [
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
   '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
   '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/chat/config', '/api/chat/canales', '/api/chat/directo', '/api/chat/canales/abc123/mensajes', '/api/chat/canales/abc123/escribiendo', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar', '/api/vinculo-telegram/desvincular', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
-  '/api/series/proponer', '/api/series/abc123/tanda', '/api/series/abc123/generar', '/api/series/abc123/resolver', '/api/series/abc123/pausar', '/api/series/abc123/cancelar',
+  '/api/series/proponer', '/api/series/abc123/tanda', '/api/series/abc123/presupuesto', '/api/series/abc123/generar', '/api/series/abc123/continuar', '/api/series/abc123/resolver', '/api/series/abc123/pausar', '/api/series/abc123/cancelar',
   '/api/media/presets', '/api/media/presets/apply', '/api/media/lotes', '/api/media/lotes/hoja', '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
@@ -77,7 +77,7 @@ const SOLO_ADMIN = [
   ['POST', '/api/routines'], ['PATCH', '/api/agents/olead'], ['POST', '/api/agents/olead/forget'],
   ['POST', '/api/contenido/piezas/abc123/aprobar'], ['POST', '/api/contenido/piezas/abc123/entregar'], ['PUT', '/api/contenido/config'], ['POST', '/api/contenido/cola/tick'], ['POST', '/api/contenido/llenar'], ['POST', '/api/contenido/mejorar'],
   ['POST', '/api/anuncios/accion'], ['POST', '/api/anuncios/borradores/abc123/crear'], ['POST', '/api/anuncios/sincronizar'], ['POST', '/api/anuncios/deshacer'], ['POST', '/api/anuncios/conversiones'],
-  ['POST', '/api/series/proponer'], ['POST', '/api/series/abc123/tanda'], ['POST', '/api/series/abc123/generar'], ['POST', '/api/series/abc123/resolver'], ['POST', '/api/series/abc123/pausar'], ['POST', '/api/series/abc123/cancelar'],
+  ['POST', '/api/series/proponer'], ['POST', '/api/series/abc123/tanda'], ['POST', '/api/series/abc123/presupuesto'], ['POST', '/api/series/abc123/generar'], ['POST', '/api/series/abc123/continuar'], ['POST', '/api/series/abc123/resolver'], ['POST', '/api/series/abc123/pausar'], ['POST', '/api/series/abc123/cancelar'],
   ['POST', '/api/restablecer'], ['POST', '/api/restablecer/confirmar'], ['POST', '/api/restablecer/deshacer'], ['POST', '/api/onboard/aplicar'], ['POST', '/api/onboard/deshacer'], ['POST', '/api/onboard/descartar'],
   ['POST', '/api/sub/chat'], ['POST', '/api/sub/ops'], ['PUT', '/api/settings/telegram'], ['POST', '/api/settings'], ['POST', '/api/costs/apply'], ['POST', '/api/contenido/meta/sincronizar'], ['POST', '/api/contenido/analiticas/actualizar'], ['POST', '/api/contenido/analiticas/indicadores'], ['POST', '/api/business/value'], ['POST', '/api/brain/upload'], ['POST', '/api/cifras'], ['PUT', '/api/triggers'], ['POST', '/api/equipo/invitaciones'], ['POST', '/api/voces/design'],
 ];
@@ -207,7 +207,7 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
   for (const [d, nombre] of [[RETENCION_DIAS.notas_papelera + 5, 'n-vieja'], [2, 'n-nueva']]) db.prepare("insert into notas_papelera (nombre, grupo, texto, borrada) values (?, 'Notas', 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0 });
   assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from notas_papelera where nombre = 'n-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
@@ -386,7 +386,7 @@ const TABLAS = {
   contenido_dias: 'una fila por cuenta y día de Analíticas (pequeña)', notas: 'el índice de una ejecución deja fuera los entregables de más de 180 días',
   filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); presets-versiones: las últimas 20 por preset, podadas al guardar (lib/estudio/presets.js); el resto es configuración',
   estudio_lotes: 'mantenimiento',
-  series: 'mantenimiento', series_libro: 'mantenimiento',
+  series: 'mantenimiento', series_libro: 'mantenimiento', series_tokens: 'mantenimiento',
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
   auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', chat_mensajes: 'mantenimiento', notas_personales: 'mantenimiento',

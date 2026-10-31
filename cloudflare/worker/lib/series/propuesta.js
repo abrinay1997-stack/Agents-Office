@@ -73,7 +73,7 @@ export async function anadirTanda(env, db, id, { planos } = {}, { almacen, ahora
     desde = y.escaleta.length; // se renumera DENTRO del cambio: si otra tanda entró en medio, se vuelve a calcular con lo que hay
     const nuevos = r.serie.escaleta.map((p, i) => ({ ...p, n: desde + i + 1 }));
     const escaleta = [...y.escaleta, ...nuevos], rc = recostear(escaleta, { precioPlano: c.cable.precioPlano, config: c.config });
-    return { ...y, escaleta, estado: 'previsto', token_reg: null, autorizado: null, costo_mostrado_usd: rc.costoMostradoUsd, cabe: rc.cabe };
+    return { ...y, escaleta, estado: 'previsto', token_reg: null, token_actual: null, autorizado: null, costo_mostrado_usd: rc.costoMostradoUsd, cabe: rc.cabe };
   });
   if (fallo) return { estado: fallo.estado, cuerpo: { error: fallo.error } };
   if (!s || !serieValida(s)) return { estado: 404, cuerpo: { error: 'No encuentro esa serie.' } };

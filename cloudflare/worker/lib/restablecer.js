@@ -31,6 +31,7 @@ export const CONSERVA_TABLAS = ['users', 'sessions', 'sesiones_uso', 'conectores
   'notas_personales', 'notas_estado', 'presencia_cuenta', 'cuenta_telegram', // N1: lo que las personas se dejan entre sí y su última visita no son de la oficina: un restablecimiento no lo toca
   'chat_canales', 'chat_miembros', 'chat_mensajes', // C0: lo que las personas se escriben no es de la oficina: un restablecimiento no lo toca
   'notificaciones', // N0: lo leído y no leído de cada persona no es de la oficina: un restablecimiento no lo toca
+  'series_tokens', // series (N4): tokens de 2 minutos; no son de la oficina
   'series_libro', // series (N1): el libro del dinero es contabilidad: un restablecimiento no lo toca (lo reservado o en duda sigue contando contra los topes)
   'notas_vectores']; // los vectores de significado son datos derivados que se reconocen por el hash del texto: no entran al respaldo (pesan mucho) y se podan solos al indexar
 export const CONSERVA_DOCS = ['config', 'notificaciones.config', 'chat.config', 'notas.config', 'ajustes', 'config-local', 'config.contenido', 'estudio.config', 'estudio.uso', 'estudio.voces', 'triggers', 'telegram.estado', 'tareas.config', 'notices', 'meta.freno', 'bandeja.abierta', 'contenido.meta.cuentas', 'contenido.meta.freno', 'contenido.metricool.subidas', 'contenido.mejores-horas', 'contenido.redes', 'contenido.modo', 'arranque.estado', 'sesion.estado', 'dimitri-ia-estado', DOC_RESPALDOS, DOC_PASO];

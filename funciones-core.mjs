@@ -55,7 +55,7 @@ export const FUNCIONES = [
   {
     id: 'series-nube',
     titulo: 'Series de imágenes en la nube: ver y proponer',
-    que: 'Dimitri propone y organiza series de imágenes desde la nube. Solo leer y proponer: no genera y no gasta.',
+    que: 'Dimitri propone y organiza series de imágenes desde la nube y, con el motor gratis «Prueba», puedes autorizarlas y generarlas (no cuesta nada). Los motores de pago siguen cerrados.',
     donde: 'config', ruta: 'dimitri.seriesNube',
     lista: true, gasta: false,
   },
@@ -83,7 +83,7 @@ export const FUNCIONES = [
     donde: 'config', ruta: 'dimitri.seriesNubePago',
     requiere: 'series-nube',
     lista: false,
-    porque: 'Todavía no hace nada: la parte que genera en la nube (la bomba del reloj) no está construida y contesta «no disponible». Generar series sigue siendo cosa de tu computadora.',
+    porque: 'Todavía no hace nada: la bomba del reloj ya corre, pero solo con el motor gratis «Prueba»; abrir los motores de pago es el siguiente paso, con revisión doble. Generar series que cuestan sigue siendo cosa de tu computadora.',
     gasta: true,
   },
   {
