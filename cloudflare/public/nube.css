@@ -163,12 +163,21 @@ body.movil .nt-conexion { bottom: calc(76px + env(safe-area-inset-bottom)); } .n
 .nt-tg { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 14px; } .nt-tg p { margin: 0 0 8px; } .nt-tg .sg-btn { min-height: 36px; } body.movil .nt-tg .sg-btn { min-height: 44px; }
 .nt-cod { display: inline-block; padding: 4px 8px; border-radius: 6px; background: #f1f1f1; color: #111; font: 700 15px/1.4 ui-monospace, monospace; letter-spacing: .04em; user-select: all; overflow-wrap: anywhere; }
 
-/* C1 — chat interno. Botón junto a la campanita; panel de dos columnas a lo ancho y de pantalla completa en el teléfono. Sin :hover como único camino, objetivos de 44 px en el teléfono, campos de 16 px. */
-.ch-btn { position: fixed; right: 68px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
-body.movil .ch-btn { bottom: calc(76px + env(safe-area-inset-bottom)); }
-.ch-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
+/* C1 — chat interno. Panel de dos columnas a lo ancho y de pantalla completa en el teléfono. Sin :hover como único camino, objetivos de 44 px en el teléfono, campos de 16 px.
+   EL BOTÓN NO FLOTA (31 oct 2026, el dueño: «se ve horrible, está puesto al azar y se superpone encima de otras cosas»): vive en el dock de la barra de arriba
+   en escritorio y en la cabecera, junto a la lupa, en el teléfono. Quien lo muda es `colocar()` de nube-chat.js; aquí solo va la insignia y el respaldo. */
+/* La medida es SUYA, no prestada: `.tb-ic` vive en la página y `.mv-ic` en el paquete de la versión móvil, y este botón lo
+   inyecta el Worker. Si uno de esos estilos no estuviera, el botón seguiría siendo tocable (44 px en el teléfono, la regla de la casa). */
+.ch-btn { position: relative; min-width: 36px; min-height: 36px; display: inline-grid; place-items: center; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; }
+body.movil .ch-btn { min-width: 44px; min-height: 44px; flex: none; border-radius: 12px; }
+.ch-btn.ch-suelto { position: fixed; right: 68px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); } /* respaldo: una página sin dock ni cabecera */
+body.movil .ch-btn.ch-suelto { bottom: calc(76px + env(safe-area-inset-bottom)); }
+.ch-btn svg { width: 19px; height: 19px; }
+body.movil .ch-btn svg { width: 22px; height: 22px; }
+.ch-n { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #B3261E; color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; pointer-events: none; }
+body.movil .ch-n { min-width: 20px; height: 20px; border-radius: 10px; font-size: 12px; line-height: 20px; }
 .ch-btn:focus-visible, #nbChat button:focus-visible, #nbChat textarea:focus-visible, #nbChat input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-#nbChat { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(780px, calc(100vw - 32px)); height: min(78vh, 640px); height: min(78dvh, 640px); display: grid; grid-template-columns: 260px 1fr; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); overflow: hidden; }
+#nbChat { position: fixed; right: 16px; top: 60px; z-index: 126; width: min(780px, calc(100vw - 32px)); height: min(78vh, 640px); height: min(78dvh, 640px); max-height: calc(100dvh - 76px); display: grid; grid-template-columns: 260px 1fr; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); overflow: hidden; }
 .ch-izq, .ch-der { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px; overflow: auto; } .ch-izq { border-right: 1px solid var(--hairline); }
 .ch-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; } .ch-cab h2 { margin: 0; font-size: 16px; overflow-wrap: anywhere; } .ch-tit { display: flex; align-items: center; gap: 8px; min-width: 0; }
 #nbChat h3 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
