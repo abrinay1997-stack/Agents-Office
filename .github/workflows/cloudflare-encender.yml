@@ -1,0 +1,65 @@
+# Enciende (o apaga) las funciones que se publicaron apagadas, en la oficina que ya está en producción.
+#
+# POR QUÉ. Cada función nueva se publica detrás de su interruptor, apagado, para que nada que gaste dinero o toque el acceso
+# se encienda solo al desplegar. Los interruptores viven en la base de datos y hasta ahora no tenían pantalla: encenderlos
+# pedía la consola del navegador. Este botón es el camino honesto mientras el panel «Funciones nuevas» de Ajustes no esté.
+#
+# NO despliega, NO migra, NO toca cuentas ni contraseñas, NO gasta: escribe un sí/no en un documento de ajustes.
+# La lista de funciones, y cuál está lista para encenderse, está en funciones-core.mjs.
+name: Cloudflare · encender funciones
+
+on:
+  workflow_dispatch:
+    inputs:
+      funciones:
+        description: 'Cuáles: «listas» (las construidas de punta a punta), «todas», o una lista como «chat,lotes-nube»'
+        required: true
+        default: 'listas'
+        type: string
+      apagar:
+        description: 'Apagarlas en lugar de encenderlas'
+        required: false
+        default: false
+        type: boolean
+      probar:
+        description: 'Solo decirme qué haría, sin escribir nada'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: cloudflare-encender
+
+permissions:
+  contents: read
+
+jobs:
+  encender:
+    # Como «sembrar administrador» (SEG-07): solo desde main y con la aprobación del entorno «produccion».
+    if: ${{ github.ref == 'refs/heads/main' }}
+    environment: produccion
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - name: Comprobar que hay credenciales
+        run: |
+          falta=""
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do [ -z "${!v}" ] && falta="$falta $v"; done
+          if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
+      - run: npm ci --no-audit --no-fund
+      - name: Comprobar el catálogo antes de tocar producción
+        run: node --test ../tests/funciones-core.test.mjs
+      - name: Encender
+        run: |
+          node scripts/encender-funciones.mjs \
+            --funciones='${{ inputs.funciones }}' \
+            ${{ inputs.apagar && '--apagar' || '' }} \
+            ${{ inputs.probar && '--probar' || '' }}
