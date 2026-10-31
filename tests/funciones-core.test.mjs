@@ -45,6 +45,22 @@ test('cada interruptor lo lee el código del Worker', () => {
   }
 });
 
+// El botón falló dos veces por el ENTORNO, no por el catálogo: una por la ruta y otra porque wrangler.jsonc lleva un
+// marcador en database_id hasta que `preparar-cuenta.mjs` escribe el id real. Este test vigila el orden de los pasos.
+test('el workflow prepara la cuenta antes de hablar con la base, y comprueba antes de escribir', () => {
+  const y = readFileSync(join(RAIZ, '.github/workflows/cloudflare-encender.yml'), 'utf8');
+  const preparar = y.indexOf('preparar-cuenta.mjs');
+  const comprobar = y.indexOf('funciones-core.test.mjs');
+  const encender = y.indexOf('encender-funciones.mjs');
+  assert.ok(preparar > 0, 'falta preparar-cuenta.mjs: wrangler.jsonc tiene un marcador en database_id y D1 contesta «Invalid uuid»');
+  assert.ok(comprobar > 0, 'falta la comprobación del catálogo');
+  assert.ok(encender > 0, 'falta el paso que enciende');
+  assert.ok(preparar < encender, 'preparar la cuenta va ANTES de tocar la base');
+  assert.ok(comprobar < encender, 'comprobar el catálogo va ANTES de escribir nada');
+  assert.match(y, /environment: produccion/, 'falta la guarda del entorno de producción');
+  assert.match(y, /refs\/heads\/main/, 'falta la guarda de que solo corre desde main');
+});
+
 test('encender no pisa el resto del documento', () => {
   const docs = { [DOC_AJUSTES]: { name: 'PanaClaw', dimitri: { otra: 1 }, costs: { monthlyBudget: 50 } }, [DOC_LOCAL]: { name: 'PanaClaw' } };
   const { cambios } = plan(docs, [{ id: 'series-nube', activo: true }]);
