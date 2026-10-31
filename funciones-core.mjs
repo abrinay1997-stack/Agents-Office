@@ -46,12 +46,13 @@ export const FUNCIONES = [
   },
   {
     id: 'lectura-ve-resultados',
-    titulo: 'La cuenta de solo lectura ve resultados',
-    que: 'Encendida (lo normal): una cuenta de «lectura» ve tareas, calendario, notas, el trabajo terminado de los agentes, el Cerebro y Contenido. Nunca ve dinero, Anuncios, Bandeja ni los ajustes de seguridad. Apagada, ve menos.',
+    titulo: 'Avisos de agentes para cuentas de solo lectura',
+    que: 'Decide qué avisos de la campanita ve una cuenta de «lectura»: encendida (lo normal) ve los de agentes, Contenido y Cerebro; apagada, solo los básicos. NO cambia lo que esa cuenta puede abrir.',
     donde: 'notificaciones.config', ruta: 'lecturaVeResultados', defecto: true,
     lista: true, gasta: false,
-    nota: 'Es una función de SEGURIDAD y viene encendida. Apagarla cierra el trabajo de los agentes, el Cerebro y Contenido a las cuentas de lectura; no abre nada nuevo.',
+    nota: 'Viene encendida y solo se nota con «Notificaciones por persona» encendida. No da ni quita acceso a páginas ni datos: eso lo decide el rol.',
   },
+
   {
     id: 'carpetas-arbol',
     titulo: 'Carpetas en árbol en el Estudio',
@@ -153,9 +154,8 @@ export function poner(obj, ruta, valor) {
 /** Lee la ruta `a.b.c`. */
 export const leer = (obj, ruta) => String(ruta).split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), obj);
 
-/** ¿Está encendida? Como el código que la lee: solo `=== true`. */
-/** El valor de la ruta en UN documento, con el valor que ya tiene cuando no está escrito (`defecto`): solo `=== true` enciende, y lo que no existe vale lo que el código que la lee supone. */
-export const valorEn = (f, doc) => { const v = leer(doc || {}, f.ruta); return v === undefined ? f.defecto === true : v === true; };
+/** ¿Está encendida? El valor de la ruta en UN documento, leído como lo lee el código: una función normal solo enciende con `=== true`; una que viene encendida (`defecto: true`) solo se apaga con `false` (`!== false`, como `veCategoria`), y lo que no está escrito vale su defecto. */
+export const valorEn = (f, doc) => { const v = leer(doc || {}, f.ruta); return f.defecto === true ? v !== false : v === true; };
 export const activa = (f, docs) => valorEn(f, f.donde === 'config' ? { ...(docs[DOC_LOCAL] || {}), ...(docs[DOC_AJUSTES] || {}) } : (docs[f.donde] || {}));
 
 /**

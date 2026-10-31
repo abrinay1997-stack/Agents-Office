@@ -81,7 +81,7 @@ for (const ancho of [320, 360, 390, 430, 1280]) {
     assert.equal((await leerDoc(d1, 'notas.config', {})).valor.activo, true);
     await p.click('button[data-fn="notificaciones"]'); await p.waitForSelector('button[data-fn="notificaciones"][data-on="1"]');
     assert.equal(await p.locator('button[data-fn="lectura-ve-resultados"]').getAttribute('data-on'), '1', 'viene encendida');
-    assert.match(await p.textContent('#pane'), /Nunca ve dinero/);
+    assert.match(await p.textContent('#pane'), /NO cambia lo que esa cuenta puede abrir/);
     await p.click('button[data-fn="lectura-ve-resultados"]'); await p.waitForSelector('button[data-fn="lectura-ve-resultados"][data-on="0"]');
     assert.equal((await leerDoc(d1, 'notificaciones.config', {})).valor.lecturaVeResultados, false);
     assert.equal((await leerDoc(d1, 'notificaciones.config', {})).valor.activo, true);

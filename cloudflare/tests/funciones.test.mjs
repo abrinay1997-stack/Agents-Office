@@ -170,7 +170,7 @@ test('el id es exacto: con espacios o en mayúsculas no está en la lista', { sk
 test('«la cuenta de lectura ve resultados» viene ENCENDIDA, se muestra real, se apaga y se enciende sin tocar lo demás', { skip: SALTAR }, async () => {
   const m = await mundo();
   assert.equal(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').activa, true, 'sin documento vale lo que el código supone: encendida');
-  assert.match(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').que, /Nunca ve dinero/);
+  assert.match(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').que, /NO cambia lo que esa cuenta puede abrir/);
   await m.admin('POST', '/api/funciones', { id: 'notificaciones', activo: true });
   const r = await m.admin('POST', '/api/funciones', { id: 'lectura-ve-resultados', activo: false });
   assert.equal(r.status, 200); assert.equal(r.j.cambio, true); assert.equal(filaDe(r.j, 'lectura-ve-resultados').activa, false);
@@ -181,4 +181,18 @@ test('«la cuenta de lectura ve resultados» viene ENCENDIDA, se muestra real, s
   assert.equal((await leerDoc(m.d1, 'notificaciones.config', {})).valor.lecturaVeResultados, true);
   const filas = m.db.prepare("select detalle from auditoria where tipo = 'funciones' and detalle like '%lectura-ve-resultados%' order by rowid").all().map((x) => JSON.parse(x.detalle));
   assert.deepEqual(filas, [{ id: 'lectura-ve-resultados', de: 'encendida', a: 'apagada' }, { id: 'lectura-ve-resultados', de: 'apagada', a: 'encendida' }]);
+});
+
+test('valorEn lee como el código: lo no booleano cuenta como veCategoria (!== false) en la de lectura y como === true en las demás', async () => {
+  const { valorEn, porId } = await import('../../funciones-core.mjs');
+  const lect = porId('lectura-ve-resultados'), chat = porId('chat');
+  for (const [v, quiere] of [[undefined, true], [true, true], [false, false], ['false', true], [0, true], [null, true], ['x', true]]) assert.equal(valorEn(lect, { lecturaVeResultados: v }), quiere, `lectura con ${JSON.stringify(v)}`);
+  for (const [v, quiere] of [[undefined, false], [true, true], [false, false], ['true', false], [1, false], [null, false]]) assert.equal(valorEn(chat, { activo: v }), quiere, `chat con ${JSON.stringify(v)}`);
+  const { veCategoria } = await import('../worker/lib/notificaciones.js');
+  for (const v of ['false', 0, null, undefined, false, true]) assert.equal(valorEn(lect, { lecturaVeResultados: v }), veCategoria('lectura', 'agentes', { lecturaVeResultados: v }), `el panel y veCategoria dicen lo mismo con ${JSON.stringify(v)}`);
+  // un valor raro escrito a mano se puede apagar desde el panel: queda false de verdad
+  const m = await mundo(); await guardarDoc(m.d1, 'notificaciones.config', { lecturaVeResultados: 'false' });
+  assert.equal(filaDe((await m.admin('GET', '/api/funciones')).j, 'lectura-ve-resultados').activa, true);
+  assert.equal((await m.admin('POST', '/api/funciones', { id: 'lectura-ve-resultados', activo: false })).j.cambio, true);
+  assert.equal((await leerDoc(m.d1, 'notificaciones.config', {})).valor.lecturaVeResultados, false);
 });
