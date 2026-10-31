@@ -19,6 +19,8 @@ export function crearAlmacenD1(db, { ahora = () => Date.now(), azar = () => Math
   return {
     /** Las series vivas (muestra, corriendo, pausado) SIEMPRE primero, y luego las más nuevas: con más de MAX_LISTA series, la bomba y la lista nunca dejan fuera una que está generando. */
     async todas() { return (await db.prepare(`select id, estado, version, json from series order by (case when estado in ('muestra','corriendo','pausado') then 0 else 1 end), creada desc limit ?`).bind(MAX_LISTA).all()).results.map(leerFila).filter(Boolean); },
+    /** Las series con algún plano en el aire (corriendo), sea cual sea su estado (también pausadas o canceladas): lo que la bomba tiene que reconciliar. */
+    async enVuelo() { return (await db.prepare(`select id, estado, version, json from series where exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo') limit 50`).all()).results.map(leerFila).filter(Boolean); },
     async estadoDe(id) { return (await db.prepare('select estado from series where id = ?').bind(String(id)).first())?.estado ?? null; },
     async uno(id) { const f = ID_SERIE_OK.test(String(id)) ? await fila(String(id)) : null; return f ? leerFila(f) : null; },
     /** Guarda una serie NUEVA. Nunca pisa otra con el mismo id (si existe, el id lleva un sufijo). */

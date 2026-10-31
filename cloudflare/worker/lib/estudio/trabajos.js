@@ -78,7 +78,7 @@ class ErrorPedido extends Error { constructor(m, estado = 400, extra = {}) { sup
 export { ErrorPedido };
 
 /** Pone en cola una generación. `usuario`: quien la pide (los motores de pago son del administrador). → el trabajo */
-export async function pedir(env, db, req, { usuario, presets = false } = {}) { // `presets`: solo lo pasa lib/estudio/presets.js (y retry, con lo que ya guardó el propio trabajo); un body crudo de /api/media/jobs nunca trae el rastro del banco
+export async function pedir(env, db, req, { usuario, presets = false, forzar = null } = {}) { // `forzar` { id, serie:{id,n,intento} }: SOLO la bomba de las series (módulo series), nunca un body: da al trabajo un id determinista (idempotente) y su marca de serie // `presets`: solo lo pasa lib/estudio/presets.js (y retry, con lo que ya guardó el propio trabajo); un body crudo de /api/media/jobs nunca trae el rastro del banco
   const hay = (v) => Array.isArray(v) && v.length > 0;
   // el rastro del banco de presets (preset, receta, canal) SÍ viaja; los pasos que necesitan sharp (retoques locales, QA) todavía no existen en la nube
   const retoquesOn = presets && hayRetoques(env, S.cfg); // Fase 4 D (interruptor `retoquesNube` + binding IMAGES): los pasos de DESPUÉS de la IA los hace el cron aquí mismo
@@ -95,7 +95,9 @@ export async function pedir(env, db, req, { usuario, presets = false } = {}) { /
   try { j = armarTrabajo(pedido, { cfg: S.cfg, resolve: (id) => existen.has(String(id).replace(/\\/g, '/')), folderOf: (id) => (carpeta && carpeta.id === id ? carpeta : null), budget: () => b }); }
   catch (e) { throw new ErrorPedido(enNube(e.message), 400); }
   if (j.engine !== 'prueba' && usuario?.rol !== 'admin') throw new ErrorPedido('Solo un administrador pide trabajos de pago del Estudio (las tarjetas de «Prueba» son gratis para todos).', 403);
-  await db.prepare('insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)').bind(j.id, JSON.stringify(j), j.state, j.at).run();
+  if (forzar) { j.id = String(forzar.id); j.serie = { id: String(forzar.serie.id), n: forzar.serie.n, intento: forzar.serie.intento }; j.by = 'dimitri'; }
+  const ins = await db.prepare(`insert ${forzar ? 'or ignore ' : ''}into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)`).bind(j.id, JSON.stringify(j), j.state, j.at).run();
+  if (forzar && !ins.meta?.changes) return pub(await cargar(db, j.id)); // ya existía (la misma clave de idempotencia): es ese mismo trabajo, no se crea otro
   // el tope se comprueba DESPUÉS de insertar y contando solo lo que llegó antes (por su orden de entrada): dos pedidos a la vez no pueden pasarse del tope los dos
   if (j.engine !== 'prueba') {
     try {
@@ -194,7 +196,7 @@ async function paso(env, db, id, ahora) {
     delete j.enviando;
     if (!j.remote?.length) {
       const motivo = 'se interrumpió mientras se enviaba al servicio: puede que ya lo haya cobrado. Revisa su panel y, si no llegó nada, reintenta.';
-      if (j.items.length) { j.state = 'done'; j.warning = `llegaron ${j.items.length} de ${j.n}: ${motivo}`; } else { j.state = 'failed'; j.error = limpiarSecretos(motivo); j.errorClass = 'tiempo'; }
+      if (j.items.length) { j.state = 'done'; j.warning = `llegaron ${j.items.length} de ${j.n}: ${motivo}`; } else { j.state = 'failed'; j.error = limpiarSecretos(motivo); j.errorClass = 'tiempo'; j.causa = 'interrumpido'; }
       return cerrar(env, db, j, m, ahora);
     }
   }
@@ -232,6 +234,10 @@ async function paso(env, db, id, ahora) {
     const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado' } : explicar(e.message, e.status);
     ex.texto = String(ex.texto).replace(/[A-Za-z0-9_-]{24,}/g, '…'); // nunca un cuerpo crudo ni nada que parezca una llave: ni errorRaw, que en la nube no se guarda
     if (j.items.length) { j.state = 'done'; j.warning = ex.texto; } else { j.state = 'failed'; j.error = limpiarSecretos(ex.texto); j.errorClass = ex.clase; }
+    // la CAUSA estructurada que lee la bomba de series (como en la oficina local): `previo` solo por una señal POSITIVA de rechazo del propio POST y sin que el servicio haya aceptado nada; lo demás, la clase del error
+    const aceptado = !!j.remote?.length || j.aceptado === true || e?.fase === 'descarga';
+    if (aceptado) j.aceptado = true;
+    if (j.state === 'failed') j.causa = j.cancel ? 'cancelado' : !aceptado && e?.rechazo === true ? 'previo' : ex.clase;
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${String(e.message).replace(/[A-Za-z0-9_-]{24,}/g, '…')}`);
   }
   delete j.enviando;
@@ -242,6 +248,7 @@ async function cerrar(env, db, j, m, ahora) {
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
   if (j.versionOf && j.items.length) { try { const o = await galeria.item(db, j.versionOf); if (o) await galeria.update(db, j.versionOf, { versions: [...new Set([...(Array.isArray(o.versions) ? o.versions : []), ...j.items])] }); } catch (e) { console.warn('estudio versions:', e.message); } }
   if (j.engine !== 'prueba' && j.items.length) await gastar(env, db, { video: 'videos', audio: 'audios', music: 'music' }[j.kind] || 'images', j.items.length, j.cost);
+  if (j.remote?.length) j.aceptado = true; // el servicio ya tomó el pedido (la bomba de series lo necesita después de borrar `remote`)
   delete j.remote;
   await guardarFila(db, j);
   const out = pub(j);
@@ -275,8 +282,10 @@ export async function cadaMinuto(env, db) {
 }
 /** Los trabajos terminados se guardan una semana (y no más de 400): los archivos viven en la galería. */
 async function limpiar(db, ahora = Date.now()) {
-  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and at < ?`).bind(ahora - SEMANA).run();
-  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and id not in (select id from estudio_trabajos order by at desc limit ?)`).bind(MAX_TRABAJOS).run();
+  // el trabajo de una serie VIVA (o con un plano en el aire) no se poda: la bomba lo necesita para liquidar; sin él, un cobro quedaría «incierto»
+  const deSerieViva = `coalesce(json_extract(json, '$.serie.id'), '') in (select id from series where estado in ('previsto','espera_ok','muestra','corriendo','pausado') or exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo'))`;
+  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and at < ? and not (${deSerieViva})`).bind(ahora - SEMANA).run();
+  await db.prepare(`delete from estudio_trabajos where estado in ('done','failed') and id not in (select id from estudio_trabajos order by at desc limit ?) and not (${deSerieViva})`).bind(MAX_TRABAJOS).run();
 }
 
 /** Espera a que el trabajo termine, o a `ms` (lo que pase primero), empujándolo si hace falta. Los agentes y los scripts esperan un poco, nunca un video entero. */
