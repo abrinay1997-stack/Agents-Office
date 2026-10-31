@@ -69,9 +69,12 @@ export async function liquidar(db, clave, realMicro) {
   return l?.estado === 'liquidado' ? { ok: true, repetida: true } : motivoDe(db, clave, 'no_reservado', 'solo un paso reservado se liquida');
 }
 /** El paso no llegó a salir: devuelve la reserva. `nuncaSalio: true` solo con la certeza de que nada llegó al motor (entonces también se devuelve el cupo del día). */
-export async function liberar(db, clave, { nuncaSalio = false } = {}) {
+export async function liberar(db, clave, { nuncaSalio = false, sinTrabajoId = null } = {}) {
   if (!sano(clave)) return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
-  const r = await db.prepare(`update series_libro set estado = 'liberado', salio = ? where clave = ? and estado = 'reservado'`).bind(nuncaSalio ? 0 : 1, clave).run();
+  // `sinTrabajoId`: la bomba de series solo libera si el trabajo de ese paso NO existe (en la misma sentencia). Con el `insert … where exists (reservado)` de pedir, o entra el trabajo o se libera la línea: nunca las dos.
+  const r = sinTrabajoId
+    ? await db.prepare(`update series_libro set estado = 'liberado', salio = ? where clave = ? and estado = 'reservado' and not exists (select 1 from estudio_trabajos where id = ?)`).bind(nuncaSalio ? 0 : 1, clave, String(sinTrabajoId)).run()
+    : await db.prepare(`update series_libro set estado = 'liberado', salio = ? where clave = ? and estado = 'reservado'`).bind(nuncaSalio ? 0 : 1, clave).run();
   return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_reservado', 'solo se libera una reserva viva');
 }
 /** Un envío a un motor de pago sin respuesta: «puede haberse cobrado». Sigue contando y pide la decisión del dueño. */
