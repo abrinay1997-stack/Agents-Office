@@ -49,3 +49,19 @@ test('el despliegue nunca cancela a medias y el volcado de secretos no llega a w
   const env = entornoSinSecretos({ SECRETS_JSON: '{"A":"x"}', CLOUDFLARE_API_TOKEN: 't', PATH: '/bin' });
   assert.equal(env.SECRETS_JSON, undefined); assert.equal(env.CLOUDFLARE_API_TOKEN, 't'); assert.equal(env.PATH, '/bin');
 });
+
+test('el despliegue de main y las pruebas de un PR nunca comparten grupo de concurrencia (un push de PR desplazaba al despliegue)', () => {
+  const t = sinComentarios(wf('cloudflare-desplegar.yml'));
+  const m = t.match(/concurrency:\s*\n\s*group: (cloudflare-desplegar-\$\{\{ (.+) \}\})/);
+  assert.ok(m, 'el grupo lleva la expresión por evento');
+  assert.match(m[2], /github\.event_name == 'pull_request' && format\('pr-\{0\}', github\.event\.pull_request\.number\) \|\| 'main'/);
+  // evalúa esa expresión para cada evento, como lo haría GitHub
+  const grupo = (evento, numero) => 'cloudflare-desplegar-' + (evento === 'pull_request' ? `pr-${numero}` : 'main');
+  assert.notEqual(grupo('pull_request', 7), grupo('push'));
+  assert.notEqual(grupo('pull_request', 7), grupo('workflow_dispatch'));
+  assert.notEqual(grupo('pull_request', 7), grupo('pull_request', 8), 'dos PR tampoco se desplazan entre sí');
+  assert.equal(grupo('push'), grupo('workflow_dispatch'), 'un despliegue a mano y el de un push sí se serializan');
+  // el despliegue nunca se corta a medias, y ningún otro workflow usa el grupo viejo (cada uno tiene el suyo)
+  assert.match(t, /cancel-in-progress: false/);
+  for (const f of fs.readdirSync(DIR)) if (f !== 'cloudflare-desplegar.yml') assert.doesNotMatch(wf(f), /group: cloudflare-desplegar(\s|-\$)/, f);
+});
