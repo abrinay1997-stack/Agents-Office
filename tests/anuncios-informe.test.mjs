@@ -286,3 +286,16 @@ test('A7: la nota del informe no viaja por GitHub (`.gitignore` ya ignora brain-
   const vuelta = gi.filter(l => l.startsWith('!brain-panaclaw/Agents Office/'));
   assert.ok(!vuelta.some(l => /informes/.test(l)), 'y ninguna excepción la devuelve: ' + vuelta.join(', '));
 });
+
+test('el informe cuenta el mes en la zona de la cuenta, no en UTC (borde del mes)', () => {
+  const h = (at) => ({ at, quien: 'dueno', que: 'pausar', objeto: { id: 'A1', nivel: 'anuncio', nombre: 'Combo' }, antes: { estado: 'ACTIVE' }, despues: { estado: 'PAUSED' } });
+  const zona = 'America/Panama'; // UTC-5, sin cambio de hora
+  const oct = new Date('2026-10-31T23:30:00-05:00').toISOString(), nov = new Date('2026-11-01T00:30:00-05:00').toISOString(); // = 2026-11-01T04:30Z y 05:30Z: en UTC los dos son noviembre
+  assert.equal(oct, '2026-11-01T04:30:00.000Z');
+  const de = (mes, hoy, at) => informeAnuncios({ mes, hoy, zona, historial: [h(at)] }).texto;
+  const t1 = de('2026-10', '2026-11-05', oct);
+  assert.match(t1, /En total: 1 pausa\./, '31 oct 23:30 Panamá cuenta en octubre'); assert.match(t1, /2026-10-31 · Pausa/, 'y se rotula con su día local');
+  assert.doesNotMatch(de('2026-11', '2026-11-05', oct), /En total: 1 pausa\./, 'y no en noviembre');
+  assert.match(de('2026-11', '2026-11-05', nov), /En total: 1 pausa\./, '1 nov 00:30 Panamá cuenta en noviembre');
+  assert.doesNotMatch(de('2026-10', '2026-11-05', nov), /En total: 1 pausa\./, 'y no en octubre');
+});
