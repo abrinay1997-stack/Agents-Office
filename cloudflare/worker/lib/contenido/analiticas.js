@@ -74,7 +74,10 @@ export function crearAnaliticasD1({ db, bucket, meta, fetchFn = (...a) => fetch(
 
   /** Lo guardado de los últimos `dias` días, listo para las cuentas de src/contenido-cifras.js. */
   async function leer({ dias = 90 } = {}) {
-    const filasPorMes = []; for (const m of mesesDeLectura(dias, ahora)) filasPorMes.push(await filasDelMes(m));
+    // UNA sola consulta para todos los meses: antes era una por mes (2 o 3 según el día del mes) y un turno de Dimitri pasaba de 50 consultas a D1 casi todo el año.
+    const meses = mesesDeLectura(dias, ahora), porMes = Object.fromEntries(meses.map(m => [m, {}]));
+    for (const f of (await db.prepare(`select id, mes, json from contenido_dias where mes in (${meses.map(() => '?').join(',')})`).bind(...meses).all()).results) (porMes[f.mes] ||= {})[f.id] = JSON.parse(f.json);
+    const filasPorMes = meses.map(m => porMes[m]);
     return armarLectura({ filasPorMes, pubs: await pubsGuardadas(), dias, ahora });
   }
   return { fotografiarCuenta, actualizar, pendientes, leer, miniatura, fechaDeFoto: () => fechaDeFoto(new Date(ahora())), horaDeLaFoto: HORA_DE_LA_FOTO };
