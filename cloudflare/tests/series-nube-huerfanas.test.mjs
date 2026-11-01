@@ -306,6 +306,9 @@ test('N6 SEG-04: quien no es administrador no ve cifras del tope en el motivo de
   await o.almacen.actualizar(id, (y) => { y.pausa_motivo = 'el tope diario del Estudio (US$5.00) no alcanza para este paso'; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar', motivo: 'costó US$0.45 y pasa del tope' }; return y; });
   await o.almacen.actualizar(id, (y) => { y.escaleta[1] = { ...y.escaleta[1], estado: 'revisar', motivo: 'el plano 2 usa una referencia que ya no está' }; return y; });
   const adm = await o.admin('GET', `/api/series/${id}`); assert.match(adm.j.serie.pausa_motivo, /US\$5\.00/); assert.match(adm.j.serie.escaleta[0].motivo, /US\$0\.45/);
+  // el administrador ve las cifras TAMBIÉN en la lista (resumen), no solo en el detalle
+  const admLista = (await o.admin('GET', '/api/series')).j.series.find((x) => x.id === id);
+  assert.match(admLista.pausa_motivo, /US\$5\.00/, 'el administrador ve el motivo entero en la lista'); assert.equal(typeof admLista.gasto?.topeUsd, 'number', 'y el gasto y el tope'); assert.ok('gastadoUsd' in admLista.gasto);
   for (const quien of ['editor', 'lectura']) {
     const una = await o[quien]('GET', `/api/series/${id}`), lista = await o[quien]('GET', '/api/series');
     for (const t of [JSON.stringify(una.j), JSON.stringify(lista.j)]) { assert.doesNotMatch(t, /US\$|5\.00|0\.45|tope diario/i, `${quien} no ve cifras`); }
@@ -389,4 +392,17 @@ test('N6 estático: cada ruta de series con una acción de dinero pasa `confirma
   // y nadie más llama a estas acciones con dinero fuera del módulo de series
   const { readdirSync } = await import('node:fs'); const dir = new URL('../worker/modulos/', import.meta.url);
   for (const f of readdirSync(dir)) if (f !== 'series.js') assert.doesNotMatch(readFileSync(new URL(f, dir), 'utf8'), /\.(resolverHuerfana|resolver)\(\{[^}]*clave/, `${f} no debe decidir líneas del libro`);
+});
+
+
+test('N6 SEG-04 (menores): topes con número sin símbolo («tope de 12», «cupo 20 imágenes») tampoco llegan a editor/lectura; «plano 2» e «intento 3» sí', { skip: SALTAR }, async () => {
+  const { sinCifras } = await import('../worker/modulos/series.js');
+  const GENERICO = /un administrador tiene el detalle/;
+  const SI = ['tope de 12', 'el cupo 20 imágenes al día no alcanza', 'Presupuesto diario agotado: 7 de 10', 'gastado 3 en el día', 'quedan disponible 4', 'el límite es 50', 'se pasó de US$5', 'costó 0.45', '12,50 dólares',
+    '12 imágenes de cupo', '3 de cupo', '12.5 gastados', 'cuesta 4.5', 'cuesta $3', 'tope diario 5 y el plano 2 falló', 'plano 12 con el cupo en 40'];
+  for (const t of SI) assert.match(sinCifras(t), GENERICO, `debe enmascararse: ${t}`);
+  const NO = ['el plano 2 usa una referencia que ya no está', 'intento 3 cancelado', 'la serie se pausó porque el plano 4 falló', 'la pausó un administrador', 'tope alcanzado',
+    'cupo agotado, plano 2', 'modelo no disponible: plano 2 falló', 'tope diario alcanzado (plano 3)', 'límite de reintentos alcanzado en el intento 2', 'presupuesto agotado en el paso 4', 'cupo agotado, plano 12', 'plano 2 gastado de más'];
+  for (const t of NO) assert.equal(sinCifras(t), t, `NO debe enmascararse: ${t}`);
+  assert.equal(sinCifras(null), null);
 });

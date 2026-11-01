@@ -238,3 +238,16 @@ test('Series (escritorio): un contenedor que no se ve (otra pestaña de Ajustes,
   assert.equal(cuantos(gets, '/api/series') - n1, 1, 'al volver a verse se reanuda');
   assert.deepEqual(errores, []); await ctx.close();
 });
+
+test('Series (escritorio): si el contenedor deja de verse SIN que nadie llame a ocultar() y vuelve a verse, el sondeo se reanuda solo (sin abrir() ni mostrar())', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, gets, errores } = await abrir({ ancho: 1280, reloj: true, enMarcha: true });
+  await p.waitForSelector('.sr-card'); await p.waitForTimeout(200);
+  await p.evaluate(() => { document.getElementById('pane').style.display = 'none'; });
+  const n0 = cuantos(gets, '/api/series'); await p.clock.runFor(45000); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n0, 0, 'invisible: ninguna petición, pero el temporizador sigue vivo');
+  await p.evaluate(() => { document.getElementById('pane').style.display = ''; }); // vuelve a verse, sin que nadie llame a nada
+  await p.clock.runFor(10100); await p.waitForTimeout(400);
+  assert.ok(cuantos(gets, '/api/series') - n0 >= 1, 'al volver a verse se reanuda sola en menos de un ciclo');
+  assert.deepEqual(errores, []); await ctx.close();
+});
