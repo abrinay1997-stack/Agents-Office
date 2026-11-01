@@ -78,6 +78,34 @@ test('lo que viene: con eventos() de verdad, una tarea programada y su límite e
   assert.equal(r.total, 1); assert.equal(r.grupos[0].items[0].vence, true); assert.equal(r.grupos[0].items[0].conHora, true);
 });
 
+test('lo que viene: dos tareas DISTINTAS con el mismo título el mismo día NO se funden; tampoco dos rutinas; una rutina funde solo UNA fecha límite', () => {
+  const lim = new Date(2026, 10, 1, 23, 59).getTime(), t = 'Revisar el presupuesto';
+  const dos = proximosPorDia([{ tipo: 'limite', at: lim, titulo: t, id: 'A', conHora: false }, { tipo: 'limite', at: lim, titulo: t, id: 'B', conHora: false }], { ahora: AHORA });
+  assert.equal(dos.total, 2); assert.equal(dos.grupos[0].items.length, 2);
+  const mixtas = proximosPorDia([{ tipo: 'tarea', at: manana9, titulo: t, id: 'A', conHora: true }, { tipo: 'mia', at: lim, titulo: t, id: 'B', conHora: false }], { ahora: AHORA });
+  assert.equal(mixtas.total, 2, 'una programada y una mía con otro id son dos cosas');
+  const rutinas = proximosPorDia([{ tipo: 'rutina', at: manana9, titulo: t, id: 'R1', conHora: true }, { tipo: 'rutina', at: manana9, titulo: t, id: 'R2', conHora: true }], { ahora: AHORA });
+  assert.equal(rutinas.total, 2, 'dos rutinas distintas no se funden');
+  const una = proximosPorDia([{ tipo: 'rutina', at: manana9, titulo: t, id: 'R1', conHora: true }, { tipo: 'limite', at: lim, titulo: t, id: 'A', conHora: false }, { tipo: 'limite', at: lim, titulo: t, id: 'B', conHora: false }], { ahora: AHORA });
+  assert.equal(una.total, 2, 'la rutina funde con una sola de las dos fechas límite'); assert.ok(una.grupos[0].items.some(e => e.tipo === 'rutina' && e.vence));
+  const misma = proximosPorDia([{ tipo: 'tarea', at: manana9, titulo: t, id: 'A', conHora: true }, { tipo: 'limite', at: lim, titulo: t, id: 'A', conHora: false }], { ahora: AHORA });
+  assert.equal(misma.total, 1, 'la misma tarea (mismo id): su hora y su límite son una entrada'); assert.ok(misma.grupos[0].items[0].vence && misma.grupos[0].items[0].conHora);
+});
+
+test('avisos: lo que se repitió lo dice («×2») en Inicio y en la hoja', async () => {
+  const r = avisosSinRepetir([{ id: 'a', task: 'T', kind: 'x', text: 'Hoy vence «X».', t: AHORA }, { id: 'b', task: 'T', kind: 'x', text: 'Hoy vence «X».', t: AHORA - H }], { ahora: AHORA });
+  assert.equal(r.hoy[0].veces, 2);
+  for (const f of ['../src/movil/vistas/inicio.js', '../src/movil/avisos.js']) assert.match(fs.readFileSync(new URL(f, import.meta.url), 'utf8'), /n\.veces > 1 \? `<span class="mv-iav-x"/, f + ' pinta ×N');
+});
+
+test('«Actualizado hace…»: se refresca solo cada minuto, solo cambia el texto y el temporizador se limpia al ocultar y al desmontar', () => {
+  const s = fs.readFileSync(new URL('../src/movil/vistas/inicio.js', import.meta.url), 'utf8');
+  assert.match(s, /setInterval\(/); assert.match(s, /\},\s*60e3\)/); assert.match(s, /clearInterval\(reloj\)/);
+  assert.match(s, /alOcultar\(el\)\s*\{\s*el\._reloj\?\.\(false\)/); assert.match(s, /desmontar\(el\)\s*\{\s*el\._reloj\?\.\(false\)/);
+  const cuerpoReloj = s.slice(s.indexOf('const etiquetaPie'), s.indexOf('el._mcp = cargaMcp'));
+  assert.doesNotMatch(cuerpoReloj, /ctx\.api|refrescar\(|fetch/, 'el reloj no pide nada al servidor');
+});
+
 test('«algo necesita atención» dice qué: lo que falla antes que lo que avisa, y cuántos más', () => {
   const status = { overall: 'warn', checks: [
     { id: 'claude', label: 'Proveedor de IA', state: 'ok', detail: 'Bien.' },

@@ -43,17 +43,27 @@ export function diaCorto(ms, ahora = Date.now()) {
  * @returns {{ grupos: {dia:string, titulo:string, items:object[]}[], total:number, resto:number }}
  */
 export function proximosPorDia(evs, { ahora = Date.now(), max = 4 } = {}) {
-  const por = new Map();
+  const esTarea = e => e.tipo !== 'rutina', esLim = e => e.tipo === 'limite' || e.tipo === 'mia';
+  const lista = [];
+  // 1) lo que es la MISMA tarea (mismo id el mismo día: su hora y su fecha límite) es una entrada; dos tareas con ids distintos NUNCA se funden
+  const porTarea = new Map();
   for (const e of evs || []) {
     if (!e || e.hecha || e.pausada || e.saltada) continue;
-    const esLimite = e.tipo === 'limite' || (e.tipo === 'mia' && !e.conHora && !!e.id && e.estado !== 'scheduled');
-    const k = `${ymdDe(e.at)}|${normaTexto(e.titulo)}`, v = por.get(k);
-    if (!v) { por.set(k, { ...e, vence: e.tipo === 'limite' || e.tipo === 'mia' && esLimite, veces: 1 }); continue; }
-    v.veces++;
-    if (esLimite || e.tipo === 'limite') v.vence = true;
-    if (e.conHora && !v.conHora) { Object.assign(v, { at: e.at, conHora: true, tipo: e.tipo, id: e.id || v.id }); }
+    if (esTarea(e) && e.id) {
+      const k = `${e.id}|${ymdDe(e.at)}`, v = porTarea.get(k);
+      if (v) { if (esLim(e)) v.vence = true; if (e.conHora && !v.conHora) Object.assign(v, { at: e.at, conHora: true, tipo: e.tipo }); continue; }
+      const n = { ...e, vence: esLim(e) }; porTarea.set(k, n); lista.push(n);
+    } else lista.push({ ...e, vence: esLim(e) });
   }
-  const unicos = [...por.values()].sort((a, b) => a.at - b.at);
+  // 2) una rutina y la tarea que ella misma dispara (mismo título el mismo día): se funden uno a uno; dos rutinas, o dos tareas, con el mismo título no
+  const rutinas = lista.filter(e => e.tipo === 'rutina'), tomadas = new Set();
+  for (const r of rutinas) {
+    const t = lista.find(x => x !== r && !tomadas.has(x) && esTarea(x) && ymdDe(x.at) === ymdDe(r.at) && normaTexto(x.titulo) === normaTexto(r.titulo));
+    if (!t) continue;
+    tomadas.add(t); r.vence = r.vence || t.vence; r.fundida = t.id; lista.splice(lista.indexOf(t), 1);
+    if (!r.conHora && t.conHora) Object.assign(r, { at: t.at, conHora: true });
+  }
+  const unicos = lista.sort((a, b) => a.at - b.at);
   const corte = unicos.slice(0, max), dias = new Map();
   for (const e of corte) { const k = ymdDe(e.at); if (!dias.has(k)) dias.set(k, { dia: k, titulo: diaCorto(e.at, ahora), items: [] }); dias.get(k).items.push(e); }
   return { grupos: [...dias.values()], total: unicos.length, resto: Math.max(0, unicos.length - corte.length) };

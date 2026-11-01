@@ -51,6 +51,8 @@ function datos() {
 async function preparar(browser, { ancho, tema, escenario, o }) {
   const ctx = await browser.newContext({ viewport: { width: ancho, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }), page = await ctx.newPage(), errores = [];
   await ctx.addInitScript(t => { try { localStorage.setItem('ao.theme', t); } catch {} }, tema);
+  // cuenta los temporizadores de un minuto vivos (el de «Actualizado hace…» debe irse al ocultar Inicio y no acumularse)
+  await ctx.addInitScript(() => { window.__iv = new Set(); const si = window.setInterval.bind(window), ci = window.clearInterval.bind(window); window.setInterval = (f, ms, ...a) => { const id = si(f, ms, ...a); if (ms === 60000) window.__iv.add(id); return id; }; window.clearInterval = id => { window.__iv.delete(id); return ci(id); }; });
   page.on('pageerror', e => errores.push('pageerror: ' + e.message));
   const d = datos(), vacio = escenario === 'vacio';
   const json = (route, cuerpo) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cuerpo) });
@@ -151,8 +153,24 @@ export async function correr({ capturas = false, antes = false } = {}) {
         await page.locator('[data-vista="inicio"] [data-avisos]').tap(); await page.waitForSelector('.mv-hoja .mv-gh'); await espera(300);
         const hoja = await page.locator('.mv-hoja').innerText();
         paso(/HOY/i.test(hoja) && /ANTES DE HOY/i.test(hoja) && (hoja.match(/Mañana vence «Decidir/g) || []).length === 1, 'Avisos (hoja): «Hoy» y «Antes de hoy» separados y el aviso repetido sale una vez');
+        paso(/×2/.test(hoja), 'Avisos (hoja): el aviso que se repitió lo dice, discreto («×2»), en vez de esconderlo');
         await foto('avisos'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' }).catch(() => {});
         await page.evaluate(() => { document.querySelector('[data-vista="inicio"] .mv-scroll').scrollTop = 0; });
+        // ---- la campanita, desde la cabecera: abre «Mientras no estabas», se cierra y el foco vuelve a ella ----
+        const caja = await page.locator('#nbCampana').boundingBox();
+        paso(caja.width >= 43.5 && caja.height >= 43.5, `la campanita de la cabecera mide 44 px o más (${Math.round(caja.width)}×${Math.round(caja.height)})`);
+        await page.locator('#nbCampana').tap(); await page.waitForSelector('#nbNotas .nt-cab'); await espera(300);
+        paso(/Mientras no estabas/.test(await page.locator('#nbNotas').innerText()) && await page.getAttribute('#nbCampana', 'aria-expanded') === 'true', 'campanita: un toque abre la hoja «Mientras no estabas»');
+        const x = await page.locator('#nbNotas [data-a="x"]').boundingBox();
+        paso(x.width >= 43.5 && x.height >= 43.5, `campanita: el botón de cerrar de la hoja mide 44 px o más (${Math.round(x.width)}×${Math.round(x.height)})`);
+        paso(await page.evaluate(() => { const h = document.getElementById('nbNotas').getBoundingClientRect(), t = document.querySelector('#mvRoot .mv-tabs').getBoundingClientRect(); return h.bottom <= t.top + 1 && h.left >= -1 && h.right <= innerWidth + 1; }), 'campanita: la hoja no tapa la barra de pestañas ni se sale de la pantalla');
+        await page.locator('#nbNotas [data-a="x"]').tap(); await page.waitForSelector('#nbNotas', { state: 'detached' });
+        paso(await page.evaluate(() => document.activeElement?.id === 'nbCampana'), 'campanita: al cerrar, el foco vuelve a la campanita');
+        // ---- «Actualizado hace…»: un temporizador mientras Inicio se ve, ninguno al ocultarse, sin fugas tras varias idas y vueltas ----
+        const iv = () => page.evaluate(() => window.__iv.size), con = await iv();
+        let fuga = false;
+        for (let i = 0; i < 3; i++) { await page.locator('.mv-tab[data-tab="tareas"]').tap(); await page.waitForSelector('[data-vista="tareas"]:not([hidden])'); await espera(200); const fuera = await iv(); await page.locator('.mv-tab[data-tab="inicio"]').tap(); await page.waitForSelector('[data-vista="inicio"]:not([hidden])'); await espera(200); if (fuera !== con - 1 || await iv() !== con) fuga = true; }
+        paso(!fuga && con >= 1, `«Actualizado hace…»: el temporizador de un minuto se va al ocultar Inicio y vuelve uno solo (${con} vivo)`);
         await page.locator('[data-vista="inicio"] .ini-ev').first().tap(); await page.waitForSelector('[data-vista="tareas"]:not([hidden]), [data-vista="calendario"]:not([hidden])', { timeout: 5000 }).catch(() => {});
         paso(await page.evaluate(() => !!document.querySelector('[data-vista="tareas"]:not([hidden]), [data-vista="calendario"]:not([hidden])')), 'Un toque en una entrada de «Lo que viene» la abre');
       }

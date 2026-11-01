@@ -55,3 +55,4 @@
 /* nada tapa lo último: sitio de sobra bajo el contenido (la barra de pestañas ya está fuera del área de scroll) */
 [data-vista="inicio"] .mv-scroll { padding-bottom: 32px; }
 @media (max-width: 340px) { .mv-card .mv-card-ir { display: none; } .mv-acc-fila { grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; } .mv-acc-fila .mv-acc-p { gap: 4px; padding: 4px; } .mv-ini .mv-saludo-t { font-size: 22px; } .mv-acc-fila button { font-size: 12px; } .mv-acc-fila .mv-acc-p { font-size: 14px; } .ini-ev time { width: 64px; font-size: 12px; } .ini-linea-t { font-size: 14px; } }
+.mv-iav-x { margin-left: 6px; padding: 0 6px; border-radius: 99px; background: var(--mv-surf2); color: var(--mv-grey); font-size: 12px; font-weight: 800; }

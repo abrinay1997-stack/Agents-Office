@@ -23,7 +23,7 @@ export function registrar(shell) {
     id: 'inicio', titulo: () => empresa() || 'Inicio', icono: 'inicio', grupo: 'tab',
     montar(el, ctx) {
       el.innerHTML = '<div class="mv-scroll"><div class="mv-cuerpo mv-ini" aria-live="polite"></div></div>';
-      let mcp = null, ult = 0, refrescando = false;
+      let mcp = null, ult = 0, refrescando = false, reloj = 0;
       const cargaMcp = () => ctx.store.conectores().then(j => { mcp = j; pintar(); }).catch(() => { if (!mcp) mcp = false; pintar(); });
       const cuerpo = el.querySelector('.mv-cuerpo'), sc = el.querySelector('.mv-scroll'), st = ctx.store.st;
       const cabecera = () => `<div class="mv-ini-cab"><h2 class="mv-saludo-t">${saludoDe()}</h2><span class="mv-fecha">${esc(fechaHoy())}</span></div>${acciones()}`;
@@ -50,7 +50,7 @@ export function registrar(shell) {
           : `<button type="button" class="ini-linea" data-agenda aria-label="Lo que viene: nada programado en los próximos días. Abrir la agenda">${svg('calendario')}<span class="ini-linea-t">Lo que viene</span><span class="ini-linea-m">Nada en 3 días</span>${svg('der', 'mv-der')}</button>`;
         const avisos = av.total
           ? `<section class="mv-card" aria-label="Avisos"><div class="mv-card-cab static"><span class="mv-card-t">${svg('nube')} Avisos <b>${av.total}</b></span><button type="button" class="mv-link" data-leidos>Marcar leídos</button></div>
-              ${avHoy.length ? `<ul class="mv-mini mv-iavs">${avHoy.map(n => `<li class="${esc(n.level || '')}">${n.task ? `<button type="button" class="mv-iav" data-tarea="${esc(n.task)}">` : '<div class="mv-iav">'}<span class="mv-iav-t">${esc(String(n.text).replace(/`/g, '').slice(0, 160))}</span> <time>${n.t ? esc(hace(n.t)) : ''}</time>${n.task ? '</button>' : '</div>'}</li>`).join('')}</ul>` : '<p class="mv-nada">Nada nuevo hoy.</p>'}
+              ${avHoy.length ? `<ul class="mv-mini mv-iavs">${avHoy.map(n => `<li class="${esc(n.level || '')}">${n.task ? `<button type="button" class="mv-iav" data-tarea="${esc(n.task)}">` : '<div class="mv-iav">'}<span class="mv-iav-t">${esc(String(n.text).replace(/`/g, '').slice(0, 160))}</span> <time>${n.t ? esc(hace(n.t)) : ''}</time>${n.veces > 1 ? `<span class="mv-iav-x" aria-hidden="true">×${n.veces}</span><span class="mv-sr"> (se repitió ${n.veces} veces)</span>` : ''}${n.task ? '</button>' : '</div>'}</li>`).join('')}</ul>` : '<p class="mv-nada">Nada nuevo hoy.</p>'}
               <button type="button" class="mv-mas-link" data-avisos>${av.antes.length ? `Antes de hoy · ${av.antes.length}${av.hoy.length > 3 ? ` · y ${av.hoy.length - 3} de hoy` : ''} · Ver todos` : av.hoy.length > 3 ? `Ver los ${av.hoy.length}` : 'Ver todos'}</button></section>`
           : `<button type="button" class="ini-linea" data-avisos aria-label="Avisos: todo al día. Abrir">${svg('nube')}<span class="ini-linea-t">Avisos</span><span class="ini-linea-m ok">Todo al día ✓</span>${svg('der', 'mv-der')}</button>`;
         const cx = mcp === false ? `<button type="button" class="ini-linea" data-conectores aria-label="Conectores: no se pudieron leer. Abrir">${svg('conectores')}<span class="ini-linea-t">Conectores</span><span class="ini-linea-m warn">No se pudieron leer</span>${svg('der', 'mv-der')}</button>` : mcp ? lineaHTML(mcp) : '<div class="ini-linea ini-linea-esq" aria-hidden="true"></div>';
@@ -83,8 +83,13 @@ export function registrar(shell) {
       });
       ctx.tirar(sc, () => ctx.store.refrescar());
       ctx.store.alCambiar(() => { ult = Date.now(); if (!el.hidden) pintar(); });
-      el._mcp = cargaMcp; pintar(); cargaMcp();
+      // «Actualizado hace X» sigue el paso del tiempo mientras Inicio se ve: cada minuto solo cambia ese texto (no pide nada al servidor); al ocultarse el temporizador se va
+      const etiquetaPie = () => { if (refrescando || !ult) return; const b = cuerpo.querySelector('[data-refrescar]'); if (b) b.textContent = `Actualizado ${hace(ult)} · Actualizar`; };
+      el._reloj = on => { clearInterval(reloj); reloj = 0; if (on) reloj = setInterval(() => { if (!el.hidden && !document.hidden) etiquetaPie(); }, 60e3); };
+      el._mcp = cargaMcp; pintar(); cargaMcp(); el._reloj(true);
     },
-    alMostrar(el, ctx) { ctx.store.refrescar(); el._mcp?.(); },
+    alMostrar(el, ctx) { ctx.store.refrescar(); el._mcp?.(); el._reloj?.(true); },
+    alOcultar(el) { el._reloj?.(false); },
+    desmontar(el) { el._reloj?.(false); },
   });
 }

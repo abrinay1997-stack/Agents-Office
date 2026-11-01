@@ -143,7 +143,7 @@ body.movil .nt-campana { bottom: calc(76px + env(safe-area-inset-bottom)); }
 body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); width: auto; max-height: calc(86dvh - 64px); border-radius: 16px 16px 0 0; padding-bottom: 16px; } /* deja libre la barra de pestañas */
 .nt-cab { display: flex; justify-content: space-between; align-items: center; } .nt-cab h2 { margin: 0; font-size: 17px; }
 .nt-hoja h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
-.nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; }
+.nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; } body.movil .nt-hoja .sg-btn { min-width: 44px; }
 .nt-lista, .nt-avisos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .nt-nota { border-radius: 10px; padding: 10px 12px; color: #1b1b1b; box-shadow: 0 1px 3px rgba(0,0,0,.16); } .nt-nota .nt-de { margin: 0 0 4px; } .nt-nota small { color: #3d3d3d; } .nt-cuerpo { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nt-nota .sg-btn { background: rgba(255,255,255,.7); color: #1b1b1b; border-color: rgba(0,0,0,.25); }

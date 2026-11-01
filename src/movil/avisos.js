@@ -6,7 +6,7 @@ import { avisosSinRepetir } from './inicio-puro.js';
 
 export function contar(st) { return esperanOk(st.tareas).length + avisosSinRepetir((st.status && st.status.notices) || []).total; }
 
-const fila = n => `<li class="${esc(n.level || '')}${n.leido ? '' : ' nuevo'}">${n.task ? `<button type="button" class="mv-iav" data-tarea="${esc(n.task)}">` : '<div class="mv-iav">'}<span class="mv-iav-t">${esc(String(n.text).replace(/`/g, ''))}</span> <time>${n.t ? hace(n.t) : ''}</time>${n.task ? '</button>' : '</div>'}</li>`;
+const fila = n => `<li class="${esc(n.level || '')}${n.leido ? '' : ' nuevo'}">${n.task ? `<button type="button" class="mv-iav" data-tarea="${esc(n.task)}">` : '<div class="mv-iav">'}<span class="mv-iav-t">${esc(String(n.text).replace(/`/g, ''))}</span> <time>${n.t ? hace(n.t) : ''}</time>${n.veces > 1 ? `<span class="mv-iav-x" aria-hidden="true">×${n.veces}</span><span class="mv-sr"> (se repitió ${n.veces} veces)</span>` : ''}${n.task ? '</button>' : '</div>'}</li>`;
 const grupo = (titulo, lista) => lista.length ? `<h3 class="mv-gh">${titulo}</h3><ul class="mv-mini mv-iavs">${lista.map(fila).join('')}</ul>` : '';
 
 export function abrirAvisos(ctx) {
