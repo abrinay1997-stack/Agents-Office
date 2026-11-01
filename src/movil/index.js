@@ -15,6 +15,7 @@ import { registrar as estado } from './vistas/estado.js';
 import { registrar as negocio } from './vistas/negocio.js';
 import { registrar as equipo } from './vistas/equipo.js';
 import { registrar as agente } from './vistas/agente.js';
+import { registrar as series } from './vistas/series.js'; // N6: Series de imágenes en la nube (la pantalla compartida la pone cloudflare/public/nube-series.js)
 // equipo B: Cerebro, Estudio, Buscar (Dimitri con imágenes vive dentro de vistas/dimitri.js → dimitri-extra.js)
 import { registrar as cerebro } from './vistas/cerebro.js';
 import { registrar as estudio } from './vistas/estudio.js';
@@ -26,7 +27,7 @@ const preferencia = () => { try { const v = localStorage.getItem('ao.movil'); re
 export const quiere = (ancho = innerWidth) => { const p = preferencia(); return p === 'movil' || (p === 'auto' && ancho <= MAX_ANCHO); };
 
 const shell = crearShell();
-for (const r of [inicio, tareas, calendario, dimitri, aprobaciones, mas, cerebro, estudio, buscar, diferidas, ajustes, conectores, costos, estado, negocio, equipo, agente]) r(shell);
+for (const r of [inicio, tareas, calendario, dimitri, aprobaciones, mas, cerebro, estudio, buscar, diferidas, ajustes, conectores, costos, estado, negocio, equipo, agente, series]) r(shell);
 
 function sync() {
   document.documentElement.classList.remove('mv-pre');

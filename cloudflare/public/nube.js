@@ -75,11 +75,11 @@
     } catch { /* una URL rara: se deja pasar tal cual */ }
     return fetch0(u, o);
   };
-  async function api(ruta, { metodo = 'GET', cuerpo, bytes } = {}) {
-    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) }).catch(() => { throw new Error('Sin conexión con la oficina. Revisa tu internet e inténtalo otra vez.'); });
+  async function api(ruta, { metodo = 'GET', cuerpo, bytes, cabeceras } = {}) {
+    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), ...(cabeceras || {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) }).catch(() => { throw new Error('Sin conexión con la oficina. Revisa tu internet e inténtalo otra vez.'); });
     if (r.status === 401) { location.reload(); throw new Error('Tu sesión terminó.'); }
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || 'No se pudo completar.');
+    if (!r.ok) throw Object.assign(new Error(d.error || 'No se pudo completar.'), { datos: d, estado: r.status }); // `datos`: el cuerpo del error (p. ej. la cifra y el token de una confirmación pedida)
     return d;
   }
 

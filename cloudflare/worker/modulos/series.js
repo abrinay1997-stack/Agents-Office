@@ -10,6 +10,7 @@
 //   POST /api/series/<id>/presupuesto {modo}                      → la cifra y el token (no gasta)
 //   POST /api/series/<id>/generar {confirmacion, costoMostradoUsd, modo}  (cabecera Idempotency-Key obligatoria) → autoriza 6 h; la bomba (reloj de cada minuto) da los pasos
 //   POST /api/series/<id>/continuar {confirmacion, costoMostradoUsd}      → lo mismo con modo «todo», desde una muestra lista o una pausa
+//   GET  /api/series/libro/huerfanas · POST /api/series/libro/resolver {clave, cobro, realUsd?, confirmacion?}  (N6: líneas del libro que ninguna serie lleva; solo administrador; el segundo clic trae la cifra)
 //   POST /api/series/<id>/pausar · /cancelar · /resolver {clave, cobro, realUsd}   (bajan el gasto o son contabilidad)
 // Los motores de pago siguen cerrados (N5).
 import { json, error, prohibido } from '../lib/respuesta.js';
@@ -26,6 +27,11 @@ export const nombre = 'series';
 export const grupos = ['series'];
 
 const APAGADO = 'Las series en la nube están apagadas: un administrador las enciende con dimitri.seriesNube. Mientras, siguen en la oficina de tu computadora.';
+// SEG-04: los motivos de una pausa o de un plano pueden llevar cifras del tope del Estudio o precios; quien no es administrador solo ve que hay un motivo, sin cifras ni palabras de dinero.
+const CON_DINERO = /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares/i; // solo cifras de dinero: «plano 2» o «intento 3» se quedan
+const CORREO = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
+export const sinCifras = (t) => { if (typeof t !== 'string') return t; const x = t.replace(CORREO, 'un administrador'); return CON_DINERO.test(x) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : x; };
+const limpiarMotivos = (v) => (v && typeof v === 'object' ? { ...v, ...('pausa_motivo' in v ? { pausa_motivo: sinCifras(v.pausa_motivo) } : {}), ...(Array.isArray(v.escaleta) ? { escaleta: v.escaleta.map((p) => ({ ...p, motivo: sinCifras(p.motivo) })) } : {}) } : v);
 const noEsta = (m) => json({ error: m, pendiente: true }, 501);
 const quien = (u) => String(u?.nombre || u?.email || 'alguien').slice(0, 80);
 const auditar = (db, usuario, accion, detalle) => db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'serie', quien(usuario), JSON.stringify({ accion, ...detalle })).run();
@@ -34,12 +40,13 @@ export async function manejar(ctx) {
   const { req, env, db, ruta, usuario } = ctx;
   if (ruta !== '/api/series' && !ruta.startsWith('/api/series/')) return null;
   const metodo = req.method, esAdmin = usuario.rol === 'admin' && !usuario.agente;
-  const m = ruta.match(/^\/api\/series\/([\w-]{1,60})(?:\/(libro|tanda|presupuesto|generar|continuar|resolver|pausar|cancelar))?$/);
+  const m = ruta.match(/^\/api\/series\/([\w-]{1,60})(?:\/(libro|tanda|presupuesto|generar|continuar|resolver|pausar|cancelar|huerfanas))?$/);
+  const libroGlobal = m && m[1] === 'libro' && (m[2] === 'huerfanas' || m[2] === 'resolver'); // las líneas del libro SIN serie: /api/series/libro/huerfanas y /resolver
   const proponiendo = ruta === '/api/series/proponer' && metodo === 'POST';
   if (!proponiendo && !m && ruta !== '/api/series') return error('no such route', 404);
 
   // ---- el libro lleva dinero: solo un administrador (el rol se mira ANTES del interruptor, como lo demás) ----
-  if (metodo === 'GET' && m && m[2] === 'libro' && !esAdmin) return prohibido('Las líneas del libro de una serie llevan dinero: son de un administrador.');
+  if (metodo === 'GET' && m && (m[2] === 'libro' || (libroGlobal && m[2] === 'huerfanas')) && !esAdmin) return prohibido('Las líneas del libro de una serie llevan dinero: son de un administrador.');
 
   // ---- quien escribe o decide: SOLO un administrador (el rol se comprueba ANTES del interruptor) ----
   if (metodo !== 'GET') {
@@ -49,18 +56,24 @@ export async function manejar(ctx) {
   if (!seriesNubeActiva(await leerCfg(db))) return noEsta(APAGADO);
   const almacen = crearAlmacenD1(db);
 
+  if (metodo === 'GET' && libroGlobal && m[2] === 'huerfanas') { const r = await crearGenerador(env, db).huerfanas({ usuario }); return json(r.cuerpo, r.estado); }
   if (metodo === 'GET') {
-    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => (esAdmin ? resumenSerie(s) : sinDinero(resumenSerie(s)))), activo: true });
+    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => (esAdmin ? resumenSerie(s) : limpiarMotivos(sinDinero(resumenSerie(s))))), activo: true });
     if (!m || (m[2] && m[2] !== 'libro')) return error('no such route', 404);
     if (m[1] === 'proponer') return error('no such route', 404);
     const s = await almacen.uno(m[1]);
     if (!s) return error('No encuentro esa serie.', 404);
     if (m[2] === 'libro') return json({ serie: s.id, lineas: await lineas(db, s.id) });
     const v = vistaSerie(s, { libro: await resumenDeSerie(db, s.id), inciertos: await inciertos(db, s.id) });
-    return json({ serie: esAdmin ? v : sinDinero(v) }); // quien no es administrador sabe QUÉ pasos están en duda, no cuánto
+    if (esAdmin) v.escaleta = v.escaleta.map((p) => { const raw = s.escaleta.find((q) => q.n === p.n), ult = raw?.versiones?.at?.(-1); return { ...p, intento: ult?.intento ?? null, imagen: typeof ult?.archivo === 'string' && ult.archivo && !/[\x00-\x1f\\?#]|\.\.|^\//.test(ult.archivo) ? ult.archivo.slice(0, 300) : null }; }); // la imagen del último intento: solo para un administrador (su nombre lleva el prompt)
+    return json({ serie: esAdmin ? v : limpiarMotivos(sinDinero(v)) }); // quien no es administrador sabe QUÉ pasos están en duda, no cuánto
   }
 
   // ---- autorizar, pausar, cancelar, decidir un paso en duda: el generador (N4) ----
+  if (libroGlobal && m[2] === 'resolver' && metodo === 'POST') {
+    try { const b = (await ctx.cuerpo(req, 16 * 1024)) || {}, r = await crearGenerador(env, db).resolverHuerfana({ clave: b.clave, cobro: b.cobro, realUsd: b.realUsd, confirmacion: b.confirmacion, usuario }); return json(r.cuerpo, r.estado); }
+    catch (e) { if (Number.isInteger(e?.status)) return error(e.message, e.status); throw e; }
+  }
   const ACCIONES = ['presupuesto', 'generar', 'continuar', 'resolver', 'pausar', 'cancelar'];
   if (m && ACCIONES.includes(m[2]) && ID_SERIE_OK.test(m[1])) {
     try {
@@ -70,7 +83,7 @@ export async function manejar(ctx) {
       else if (m[2] === 'generar' || m[2] === 'continuar') r = await g.generar({ id, confirmacion: b.confirmacion, costoMostradoUsd: b.costoMostradoUsd, modo: m[2] === 'continuar' ? 'todo' : (b.modo === 'todo' ? 'todo' : 'muestra'), usuario, idem: req.headers.get('idempotency-key'), soloDesde: m[2] === 'continuar' ? ['muestra', 'pausado'] : null });
       else if (m[2] === 'pausar') r = await g.pausar({ id, usuario });
       else if (m[2] === 'cancelar') r = await g.cancelar({ id, usuario });
-      else r = await g.resolver({ id, clave: b.clave, cobro: b.cobro, realUsd: b.realUsd, usuario });
+      else r = await g.resolver({ id, clave: b.clave, cobro: b.cobro, realUsd: b.realUsd, confirmacion: b.confirmacion, usuario });
       return json(r.cuerpo, r.estado);
     } catch (e) {
       if (Number.isInteger(e?.status)) return error(e.message, e.status);

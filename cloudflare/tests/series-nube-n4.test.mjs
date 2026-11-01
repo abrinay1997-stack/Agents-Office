@@ -76,6 +76,8 @@ async function montar({ cfg = { dimitri: { seriesNube: true } }, biblia = true }
   };
   return { d1, base, env, R2, llamadas, u, reloj, deps, gen, almacen, nuevaSerie, uno, q, jobsDe, lineas, autorizar, correr, invariantes, enviadas, cookies: null };
 }
+/** decidir un paso en duda de una serie viva: dos clics (la cifra y el token del servidor; sin token no ejecuta) */
+const resolver2 = async (g, a) => { const p = await g.resolver(a); if (p.estado !== 409 || p.cuerpo.codigo !== 'confirmar') return p; return g.resolver({ ...a, confirmacion: p.cuerpo.confirmar.token }); };
 const listo = (s) => ['hecho', 'pausado', 'cancelado'].includes(s.estado) || s.muestra_lista;
 
 test('N4: flujo completo con el motor gratis — presupuesto → generar → la bomba hace la muestra (3), el libro se liquida y el trabajo lleva su marca de serie', { skip: SALTAR }, async () => {
@@ -223,8 +225,8 @@ test('N4: REINICIO con un motor «de pago» simulado — un plano en el aire sin
   assert.equal(o.jobsDe(id).length, 0, 'no se reenvió nada'); for (let i = 0; i < 3; i++) await g.tick(); assert.equal(o.jobsDe(id).length, 0);
   const v = (await L.resumenDeSerie(o.d1, id)); assert.equal(v.incierto, 500_000, 'sigue contando');
   // presupuesto nuevo: avisa del paso incierto; resolver lo cierra
-  assert.equal((await g.resolver({ id, clave, cobro: true, realUsd: 0.45, usuario: o.u.admin })).estado, 200); assert.equal(o.lineas(id)[0].estado, 'liquidado'); assert.equal(o.lineas(id)[0].real_micro, 450_000);
-  assert.equal((await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).estado, 409, 'una vez decidido, no se vuelve a decidir');
+  assert.equal((await resolver2(g, { id, clave, cobro: true, realUsd: 0.45, usuario: o.u.admin })).estado, 200); assert.equal(o.lineas(id)[0].estado, 'liquidado'); assert.equal(o.lineas(id)[0].real_micro, 450_000);
+  assert.equal((await resolver2(g, { id, clave, cobro: false, usuario: o.u.admin })).estado, 409, 'una vez decidido, no se vuelve a decidir');
   assert.equal((await g.resolver({ id, clave: 'otra:1:1', cobro: false, usuario: o.u.admin })).estado, 404);
   assert.equal((await g.resolver({ id, clave, cobro: 'si', usuario: o.u.admin })).estado, 422);
 });
@@ -429,7 +431,7 @@ test('N5a repeticiones: un plano decidido por una persona (resolver) o un clic n
   const o2 = await montar(), id2 = await o2.nuevaSerie(2), clave = claveIdempotencia(id2, 1, 1);
   await o2.almacen.actualizar(id2, (y) => { y.repeticiones = { 1: 3 }; y.pasos[clave] = { n: 1, intento: 1, estado: 'incierto' }; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar' }; return y; });
   await liquidarAparte(o2, id2, 1, 0); await L.marcarIncierto(o2.d1, clave);
-  assert.equal((await o2.gen().resolver({ id: id2, clave, cobro: false, usuario: o2.u.admin })).estado, 200);
+  assert.equal((await resolver2(o2.gen(), { id: id2, clave, cobro: false, usuario: o2.u.admin })).estado, 200);
   const s2 = await o2.uno(id2); assert.equal(s2.escaleta[0].estado, 'previsto'); assert.equal(s2.repeticiones[1], 0);
 });
 

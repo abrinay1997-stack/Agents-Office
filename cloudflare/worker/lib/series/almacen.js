@@ -22,6 +22,16 @@ export function crearAlmacenD1(db, { ahora = () => Date.now(), azar = () => Math
     /** Las series con algún plano en el aire (corriendo), sea cual sea su estado (también pausadas o canceladas): lo que la bomba tiene que reconciliar. */
     async enVuelo() { return (await db.prepare(`select id, estado, version, json from series where exists (select 1 from json_each(series.json, '$.escaleta') where json_extract(value, '$.estado') = 'corriendo') limit 50`).all()).results.map(leerFila).filter(Boolean); },
     async estadoDe(id) { return (await db.prepare('select estado from series where id = ?').bind(String(id)).first())?.estado ?? null; },
+    /** Varias series por su id en UNA consulta (≤ 90 ids por sentencia: D1 admite 100 parámetros) → Map id → serie. */
+    async variasPorId(ids) {
+      const lim = [...new Set((ids || []).map(String).filter((x) => ID_SERIE_OK.test(x)))], mapa = new Map();
+      for (let i = 0; i < lim.length; i += 90) {
+        const parte = lim.slice(i, i + 90);
+        const { results } = await db.prepare(`select id, estado, version, json from series where id in (${parte.map(() => '?').join(',')})`).bind(...parte).all();
+        for (const f of results) { const s = leerFila(f); if (s) mapa.set(s.id, s); }
+      }
+      return mapa;
+    },
     async uno(id) { const f = ID_SERIE_OK.test(String(id)) ? await fila(String(id)) : null; return f ? leerFila(f) : null; },
     /** Guarda una serie NUEVA. Nunca pisa otra con el mismo id (si existe, el id lleva un sufijo). */
     async crear(serie, extra = {}) {
