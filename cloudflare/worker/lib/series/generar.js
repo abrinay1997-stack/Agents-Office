@@ -188,44 +188,55 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     await auditar('cancelar', { por: usuario.email || usuario.id, serie: x.id, enAire });
     return { estado: 200, cuerpo: { cancelada: true, enAire, nota: 'Cancelada. Lo que ya iba en el aire se pidió cancelar; lo que termine igual se liquida.' } };
   }
-  async function resolver({ id, clave, cobro, realUsd = 0, usuario } = {}) {
-    if (!usuario || usuario.rol !== 'admin' || usuario.agente) return err(403, 'Decidir si hubo un cobro es de un administrador.');
+  const sinAdmin = (usuario) => (!usuario || usuario.rol !== 'admin' || usuario.agente ? err(403, 'Decidir una línea del libro es de un administrador.') : null);
+  const textoDecision = (donde, maxMicro, cobro, realMicro) => {
+    if (!maxMicro) return `Cerrar el paso ${donde}: era de un motor gratis, no hay dinero en juego (US$0); solo se cierra la línea y deja de contar en el cupo. No se puede deshacer.`;
+    const cifra = u2usd(realMicro > 0 ? realMicro : maxMicro);
+    return cobro
+      ? `Anotar que SÍ se cobró el paso ${donde}: se contará US$${cifra} de gasto real${realMicro > 0 ? '' : ' (todo lo que estaba reservado)'} y se cierra. No se puede deshacer.`
+      : `Anotar que NO se cobró el paso ${donde}: se liberan US$${u2usd(maxMicro)} que estaban reservados y se cierra. No se puede deshacer. Si en realidad el proveedor sí cobró, ese gasto quedará sin contar.`;
+  };
+  /** Decidir un paso «incierto» de una serie que existe. Dos clics, como las huérfanas: sin `confirmacion` NO ejecuta (409 con el texto, la cifra DEL SERVIDOR y un token de un solo uso); con ella decide con compare-and-set (misma versión de la serie). */
+  async function resolver({ id, clave, cobro, realUsd = 0, confirmacion, usuario } = {}) {
+    const no = sinAdmin(usuario); if (no) return no;
     if (typeof cobro !== 'boolean') return err(422, 'Di si hubo cobro (true o false).');
     const s0 = await almacen.uno(typeof id === 'string' ? id : ''); if (!s0) return err(404, 'No encuentro esa serie.');
     const linea = typeof clave === 'string' ? await L.lineaDe(db, clave) : null;
     if (!linea || linea.serie_id !== s0.id) return err(404, 'Esa línea del libro no es de esta serie.');
+    let realMicro = 0;
     if (cobro && realUsd !== undefined && realUsd !== 0) {
       if (typeof realUsd !== 'number' || !Number.isFinite(realUsd) || realUsd < 0) return err(422, 'El cobro real debe ser un número finito, 0 o más.');
       if (usd2u(realUsd) > linea.max_micro) return err(422, `El cobro real (US$${realUsd}) pasa de lo reservado para ese paso (US$${u2usd(linea.max_micro)}).`);
+      realMicro = usd2u(realUsd);
     }
-    const r = await L.resolverIncierto(db, clave, cobro, cobro ? usd2u(realUsd || 0) : 0);
+    if (linea.estado !== 'incierto') return err(409, 'ese paso no está en duda', { codigo: 'no_incierto' });
+    if (!confirmacion) {
+      const token = `p${azarHex(32)}`, vence = d.ahora() + TTL_TOKEN_MS, texto = textoDecision(`del plano ${linea.n} de «${s0.titulo}»`, linea.max_micro, cobro, realMicro);
+      await tokens.poner(token, { tipo: 'resolver-paso', serieId: s0.id, clave, cobro, realMicro, estado: linea.estado, serieVersion: s0.v ?? null, por: usuario.id, vence }, vence);
+      return err(409, 'Falta la confirmación: confirma ESTA decisión con la cifra a la vista (la confirmación vale 2 minutos).', { codigo: 'confirmar', gasta: false, confirmar: { token, texto, vence, cobro, cifraUsd: u2usd(realMicro > 0 ? realMicro : linea.max_micro) } });
+    }
+    if (typeof confirmacion !== 'string') return err(422, 'La confirmación no es válida.', { codigo: 'token' });
+    const reg = await tokens.tomar(confirmacion);
+    if (!reg || reg.tipo !== 'resolver-paso' || reg.serieId !== s0.id || reg.clave !== clave || reg.cobro !== cobro || reg.realMicro !== realMicro || reg.por !== usuario.id || reg.estado !== linea.estado || (reg.serieVersion ?? null) !== (s0.v ?? null)) return err(409, 'La confirmación ya no vale (se usó, venció o algo cambió). Vuelve a pedirla.', { codigo: 'token' });
+    if (d.ahora() > reg.vence) return err(409, 'La confirmación venció (2 minutos). Vuelve a pedirla.', { codigo: 'token' });
+    const r = await L.resolverIncierto(db, clave, cobro, realMicro, { serieVersion: s0.v ?? null });
     if (!r.ok) return err(409, r.motivo, { codigo: r.codigo });
     const x = await almacen.actualizar(s0.id, (y) => { const pa = y.pasos[clave]; if (pa) pa.estado = cobro ? 'liquidado' : 'liberado'; const n = pa?.n; if (!n) return y; const i = y.escaleta.findIndex((p) => p.n === n); if (i >= 0 && y.escaleta[i].estado === 'revisar' && !cobro) { y.escaleta[i] = { ...y.escaleta[i], estado: 'previsto', motivo: null }; if (y.repeticiones) y.repeticiones = { ...y.repeticiones, [n]: 0 }; } return y; }); // un plano decidido por una persona empieza sus repeticiones de cero
-    await auditar('resolver', { por: usuario.email || usuario.id, serie: s0.id, clave, cobro });
-    return { estado: 200, cuerpo: { resuelto: true, hash: x?.hash, nota: 'Anotado. Es solo contabilidad: no gasta ni reanuda nada.' } };
+    await auditar('resolver', { por: usuario.email || usuario.id, serie: s0.id, clave, cobro, realMicro });
+    return { estado: 200, cuerpo: { resuelto: true, hash: x?.hash, nota: 'Anotado. Es solo contabilidad y no se puede deshacer: no gasta ni reanuda nada.' } };
   }
 
   // ---- líneas HUÉRFANAS del libro (N6): una línea reservada o en duda que ninguna serie lleva. Solo un administrador, con un segundo clic que trae la cifra (token de un solo uso). Es contabilidad: no gasta ni reanuda nada, y no se deshace. ----
-  const sinAdmin = (usuario) => (!usuario || usuario.rol !== 'admin' || usuario.agente ? err(403, 'Decidir una línea del libro es de un administrador.') : null);
   async function listarHuerfanas() {
-    const vivasL = await L.vivas(db), series = new Map(), out = [];
+    const vivasL = await L.vivas(db), series = await almacen.variasPorId([...new Set(vivasL.map((l) => l.serie_id))]), out = []; // UNA consulta para todas las series (no una por línea)
     for (const l of vivasL) {
-      if (!series.has(l.serie_id)) series.set(l.serie_id, await almacen.uno(l.serie_id));
-      const s = series.get(l.serie_id);
+      const s = series.get(l.serie_id) ?? null;
       if (!L.esHuerfana(s, l)) continue;
       out.push({ clave: l.clave, serieId: l.serie_id, titulo: s?.titulo ?? null, serieExiste: !!s, n: l.n, intento: l.intento, estado: l.estado, maxUsd: u2usd(l.max_micro), edadMin: Math.max(0, Math.round((d.ahora() - l.at) / 60000)), madura: l.estado === 'incierto' || d.ahora() - l.at >= GRACIA_MS });
     }
     return out;
   }
   async function huerfanas({ usuario } = {}) { const no = sinAdmin(usuario); if (no) return no; return { estado: 200, cuerpo: { huerfanas: await listarHuerfanas() } }; }
-  const textoHuerfana = (h, cobro, realMicro) => {
-    const donde = h.serie ? `del plano ${h.n} de «${h.serie.titulo}»` : `del plano ${h.n} de una serie que ya no existe (${h.serie_id})`;
-    const cifra = u2usd(realMicro > 0 ? realMicro : h.max_micro);
-    if (!h.max_micro) return `Cerrar el paso ${donde}: era de un motor gratis, no hay dinero en juego (US$0); solo se cierra la línea y deja de contar en el cupo. No se puede deshacer.`;
-    return cobro
-      ? `Anotar que SÍ se cobró el paso ${donde}: se contará US$${cifra} de gasto real${realMicro > 0 ? '' : ' (todo lo que estaba reservado)'} y se cierra. No se puede deshacer.`
-      : `Anotar que NO se cobró el paso ${donde}: se liberan US$${u2usd(h.max_micro)} que estaban reservados y se cierra. No se puede deshacer. Si en realidad el proveedor sí cobró, ese gasto quedará sin contar.`;
-  };
   /** Sin `confirmacion`: valida y devuelve el texto con la cifra y un token (no cambia nada). Con ella: consume el token (una sola vez) y decide. */
   async function resolverHuerfana({ clave, cobro, realUsd = 0, confirmacion, usuario } = {}) {
     const no = sinAdmin(usuario); if (no) return no;
@@ -243,7 +254,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     if (cobro && realMicro > linea.max_micro) return err(422, `El cobro real (US$${realUsd}) pasa de lo reservado para ese paso (US$${u2usd(linea.max_micro)}).`);
     if (linea.estado === 'reservado' && d.ahora() - linea.at < GRACIA_MS) return err(409, 'Esa línea es reciente: puede que su paso todavía esté en marcha. Espera unos minutos y vuelve a mirarla.', { codigo: 'reciente' });
     if (!confirmacion) {
-      const token = `h${azarHex(32)}`, vence = d.ahora() + TTL_TOKEN_MS, texto = textoHuerfana({ ...linea, serie: s }, cobro, realMicro);
+      const token = `h${azarHex(32)}`, vence = d.ahora() + TTL_TOKEN_MS, texto = textoDecision(s ? `del plano ${linea.n} de «${s.titulo}»` : `del plano ${linea.n} de una serie que ya no existe (${linea.serie_id})`, linea.max_micro, cobro, realMicro);
       await tokens.poner(token, { tipo: 'resolver-huerfana', clave, cobro, realMicro, estado: linea.estado, serieVersion: s?.v ?? null, por: usuario.id, vence }, vence);
       return { estado: 200, cuerpo: { confirmar: { token, texto, vence, cobro, cifraUsd: u2usd(realMicro > 0 ? realMicro : linea.max_micro) }, gasta: false, nota: 'Todavía no se anotó nada: confirma ESTA decisión.' } };
     }

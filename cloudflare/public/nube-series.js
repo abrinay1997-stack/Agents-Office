@@ -23,33 +23,51 @@
     catch (e) { b.removeAttribute('aria-busy'); b.removeAttribute('aria-disabled'); b.innerHTML = antes; const m = (e && e.message) || 'No se pudo.', s = document.createElement('span'); s.className = 'sr-err'; s.setAttribute('role', 'alert'); s.textContent = m; b.after(s); b.dataset.reintentar = '1'; return { ok: false, error: m }; }
   }
 
+  /** UNA instancia por contenedor: abrir() sobre el mismo contenedor devuelve la que ya hay (y la repinta con su estado, sin perder una confirmación abierta). ocultar() para el sondeo; mostrar() lo reanuda; cerrar() quita todo. */
   function abrir(cont, { conEstado = null, movil = false } = {}) {
+    if (cont._srInst && !cont._srInst.cerrada) { cont._srInst.mostrar(); return cont._srInst; }
     const acc = conEstado || accionLocal;
     const S = { lista: null, apagado: false, id: null, serie: null, libro: null, huer: null, vista: 'lista', conf: null, resolv: null, error: '', cargando: true };
     const admin = () => N.yo()?.rol === 'admin';
-    const vivo = () => cont.isConnected;
-    let temporizador = 0;
+    let cerrada = false, visible = true, seq = 0, enVuelo = 0, temporizador = 0;
+    const vivo = () => !cerrada && cont.isConnected && !!cont.querySelector(':scope > .sr-raiz'); // si otra pantalla se llevó el contenido del contenedor, esta instancia ya no pinta ni sondea
     const foco = () => { const h = cont.querySelector('[data-foco]'); if (h) h.focus({ preventScroll: true }); };
 
     /* ---------- datos ---------- */
-    async function cargarLista() {
+    // Cada carga lleva su número: si llega una respuesta de una carga que ya no es la última (un «Actualizar» a mano, ocultar la pantalla), se descarta y no pisa nada.
+    async function cargarLista(mi) {
+      let lista = null, huer = null, apagado = false, error = '';
       try {
-        const d = await api('/api/series'); S.lista = d.series || []; S.apagado = false; S.error = '';
-        if (admin()) { try { S.huer = (await api('/api/series/libro/huerfanas')).huerfanas || []; } catch { S.huer = null; } }
-      } catch (e) { if (/apagadas/.test(e.message)) { S.apagado = true; S.error = ''; } else S.error = e.message; }
-      S.cargando = false;
+        const d = await api('/api/series'); lista = d.series || [];
+        if (admin()) { try { huer = (await api('/api/series/libro/huerfanas')).huerfanas || []; } catch { huer = null; } }
+      } catch (e) { if (/apagadas/.test(e.message)) apagado = true; else error = e.message; }
+      if (mi !== seq) return false;
+      if (lista) { S.lista = lista; S.huer = huer; } S.apagado = apagado; S.error = error; S.cargando = false; return true;
     }
-    async function cargarSerie(id) {
-      try { S.serie = (await api('/api/series/' + encodeURIComponent(id))).serie; S.libro = null; if (admin() && S.verLibro) S.libro = (await api('/api/series/' + encodeURIComponent(id) + '/libro')).lineas; S.error = ''; }
-      catch (e) { S.error = e.message; }
-      S.cargando = false;
+    async function cargarSerie(id, mi) {
+      let serie = null, libro = null, error = '';
+      try { serie = (await api('/api/series/' + encodeURIComponent(id))).serie; if (admin() && S.verLibro) libro = (await api('/api/series/' + encodeURIComponent(id) + '/libro')).lineas; }
+      catch (e) { error = e.message; }
+      if (mi !== seq) return false;
+      if (serie) { S.serie = serie; S.libro = libro; } S.error = error; S.cargando = false; return true;
     }
-    async function recargar(quieto = false) { if (S.vista === 'detalle' && S.id) await cargarSerie(S.id); else await cargarLista(); if (vivo() && !(quieto && (S.conf || S.resolv))) pintar(); programar(); }
-    function programar() {
+    /** `quieto`: lo pide el temporizador; no se solapa con una carga en curso y no repinta si hay una confirmación abierta. */
+    async function recargar(quieto = false) {
+      if (quieto && enVuelo) return;
+      const mi = ++seq; enVuelo++; let aplicada;
+      try { aplicada = S.vista === 'detalle' && S.id ? await cargarSerie(S.id, mi) : await cargarLista(mi); } finally { enVuelo--; }
+      if (!aplicada || !vivo()) return;
+      if (!(quieto && (S.conf || S.resolv))) pintar();
+      programar();
+    }
+    function programar() { // solo se sondea con la pantalla a la vista, la pestaña visible y una serie generando
       clearTimeout(temporizador);
       const vive = S.vista === 'detalle' ? ['muestra', 'corriendo'].includes(S.serie?.estado) : (S.lista || []).some((x) => ['muestra', 'corriendo'].includes(x.estado));
-      if (vive) temporizador = setTimeout(() => { if (vivo() && !S.conf && !S.resolv) recargar(true); }, 10000);
+      if (vive && visible && !document.hidden && !cerrada) temporizador = setTimeout(() => { if (!vivo()) return cerrar(); if (visible && !document.hidden && !S.conf && !S.resolv) recargar(true); else programar(); }, 10000);
     }
+    function ocultar() { visible = false; clearTimeout(temporizador); seq++; } // lo que venga en vuelo se descarta
+    function mostrar() { visible = true; if (cerrada) return; pintar(); recargar(true); }
+    function cerrar() { if (cerrada) return; cerrada = true; clearTimeout(temporizador); seq++; cont.removeEventListener('click', alClic); cont.removeEventListener('keydown', alTecla); document.removeEventListener('visibilitychange', alVisibilidad); if (cont._srInst === inst) delete cont._srInst; }
 
     /* ---------- pantallas ---------- */
     const poner = (html) => { cont.innerHTML = `<div class="sr-raiz${movil ? ' sr-movil' : ''}" data-pantalla="${esc(S.vista)}">${html}</div>`; foco(); };
@@ -166,33 +184,32 @@
       if (a === 'resolver-pedir') {
         const r0 = S.resolv, cobro = b.dataset.cobro === '1', campo = cont.querySelector('#sr-real'), txt = (campo?.value || '').trim().replace(',', '.'), real = cobro && txt ? Number(txt) : 0;
         if (cobro && txt && (!Number.isFinite(real) || real < 0)) { N.aviso?.('Escribe un número, por ejemplo 0,25.'); campo?.focus(); return; }
-        if (!r0.huerfana) { // un paso de una serie que existe: la ruta de siempre; el segundo clic lo da esta pantalla con la cifra a la vista
-          const cifra = cobro ? (real || r0.maxUsd) : r0.maxUsd;
-          r0.conf = { cobro, cifraUsd: cifra, real, texto: cobro ? `Anotar que SÍ se cobró el paso ${r0.n}: se contará ${usd(cifra)} de gasto real${real ? '' : ' (todo lo que estaba reservado)'} y se cierra. No se puede deshacer.` : `Anotar que NO se cobró el paso ${r0.n}: se liberan ${usd(r0.maxUsd)} reservados y se cierra. No se puede deshacer. Si el proveedor sí cobró, ese gasto quedará sin contar.` }; return pintar();
-        }
-        const r = await acc(b, () => api('/api/series/libro/resolver', { metodo: 'POST', cuerpo: { clave: r0.clave, cobro, realUsd: real } }), { ocupado: 'Calculando…', hecho: 'Listo', ms: 300 });
+        // la cifra y el token los da SIEMPRE el servidor: el primer envío no ejecuta y contesta con el texto (200 en una línea huérfana, 409 «confirmar» en el paso de una serie que existe)
+        const ruta = r0.huerfana ? '/api/series/libro/resolver' : `/api/series/${encodeURIComponent(S.id)}/resolver`;
+        const pedir = async () => { try { return await api(ruta, { metodo: 'POST', cuerpo: { clave: r0.clave, cobro, realUsd: real } }); } catch (e) { if (e.datos?.confirmar) return e.datos; throw e; } };
+        const r = await acc(b, pedir, { ocupado: 'Calculando…', hecho: 'Listo', ms: 300 });
         if (r.ok) { r0.conf = { ...r.valor.confirmar, real }; pintar(); }
         return;
       }
       if (a === 'resolver-ok') {
         const r0 = S.resolv, c = r0.conf;
-        const peticion = r0.huerfana ? () => api('/api/series/libro/resolver', { metodo: 'POST', cuerpo: { clave: r0.clave, cobro: c.cobro, realUsd: c.real || 0, confirmacion: c.token } })
-          : () => api(`/api/series/${encodeURIComponent(S.id)}/resolver`, { metodo: 'POST', cuerpo: { clave: r0.clave, cobro: c.cobro, realUsd: c.real || 0 } });
+        const peticion = () => api(r0.huerfana ? '/api/series/libro/resolver' : `/api/series/${encodeURIComponent(S.id)}/resolver`, { metodo: 'POST', cuerpo: { clave: r0.clave, cobro: c.cobro, realUsd: c.real || 0, confirmacion: c.token } });
         const r = await acc(b, peticion, { ocupado: 'Anotando…', hecho: 'Anotado' });
         if (r.ok) { S.resolv = null; setTimeout(() => vivo() && recargar(), 700); }
       }
     }
 
-    if (!cont._sr) {
-      cont._sr = true;
-      cont.addEventListener('click', (ev) => { const b = ev.target.closest('button[data-a]'); if (b && cont.contains(b)) { if (b.dataset.reintentar) { b.removeAttribute('data-reintentar'); } hacer(b); } });
-      cont.addEventListener('keydown', (ev) => { // Escape cancela una confirmación abierta y devuelve el foco al detalle
-        if (ev.key !== 'Escape') return; if (S.conf) { S.conf = null; ev.stopPropagation(); pintar(); } else if (S.resolv) { S.resolv = null; ev.stopPropagation(); pintar(); }
-      });
+    function alClic(ev) { const b = ev.target.closest('button[data-a]'); if (b && cont.contains(b)) { if (b.dataset.reintentar) b.removeAttribute('data-reintentar'); hacer(b); } }
+    function alTecla(ev) { // Escape cancela una confirmación abierta y devuelve el foco al detalle
+      if (ev.key !== 'Escape') return; if (S.conf) { S.conf = null; ev.stopPropagation(); pintar(); } else if (S.resolv) { S.resolv = null; ev.stopPropagation(); pintar(); }
     }
+    function alVisibilidad() { if (document.hidden) clearTimeout(temporizador); else if (visible && vivo()) recargar(true); }
+    cont.addEventListener('click', alClic); cont.addEventListener('keydown', alTecla); document.addEventListener('visibilitychange', alVisibilidad);
+    const inst = { recargar, mostrar, ocultar, cerrar, get cerrada() { return cerrada; } };
+    cont._srInst = inst;
     pintar();
     recargar();
-    return { recargar, cerrar() { clearTimeout(temporizador); } };
+    return inst;
   }
 
   N.series = { abrir };

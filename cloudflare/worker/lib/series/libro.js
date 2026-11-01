@@ -84,11 +84,11 @@ export async function marcarIncierto(db, clave) {
   return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_reservado', 'solo un paso reservado puede quedar incierto');
 }
 /** Decisión del dueño sobre un paso incierto: ¿hubo cobro? Con cobro, se liquida con lo que dijo (o con el máximo si no dijo nada); sin cobro, se libera (el cupo del día sigue gastado: el envío salió). */
-export async function resolverIncierto(db, clave, huboCobro, realMicro = 0) {
+export async function resolverIncierto(db, clave, huboCobro, realMicro = 0, { serieVersion = null } = {}) {
   if (!sano(clave) || !entero(realMicro) || typeof huboCobro !== 'boolean') return { ok: false, codigo: 'clave', motivo: 'datos no válidos' };
   const r = huboCobro
-    ? await db.prepare(`update series_libro set estado = 'liquidado', real_micro = case when ? > 0 then ? else max_micro end, excedio = case when ? > max_micro then 1 else 0 end where clave = ? and estado = 'incierto'`).bind(realMicro, realMicro, realMicro, clave).run()
-    : await db.prepare(`update series_libro set estado = 'liberado' where clave = ? and estado = 'incierto'`).bind(clave).run();
+    ? await db.prepare(`update series_libro set estado = 'liquidado', real_micro = case when ? > 0 then ? else max_micro end, excedio = case when ? > max_micro then 1 else 0 end where clave = ? and estado = 'incierto' and (? is null or exists (select 1 from series where id = series_libro.serie_id and version = ?))`).bind(realMicro, realMicro, realMicro, clave, serieVersion, serieVersion).run()
+    : await db.prepare(`update series_libro set estado = 'liberado' where clave = ? and estado = 'incierto' and (? is null or exists (select 1 from series where id = series_libro.serie_id and version = ?))`).bind(clave, serieVersion, serieVersion).run();
   return (r.meta?.changes ?? 0) === 1 ? { ok: true } : motivoDe(db, clave, 'no_incierto', 'ese paso no está en duda');
 }
 

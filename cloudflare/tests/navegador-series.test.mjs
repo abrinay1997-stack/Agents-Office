@@ -27,7 +27,7 @@ const SHIM = (rol) => `window.AO_NUBE = { esc: (s) => String(s ?? '').replace(/[
 const PAGINA = (css) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{--ink:#111;--cream:#fff;--hairline:#ddd;--grey:#555;--focus:#06c}body{font:14px system-ui;margin:0;background:#fff;color:#111}.pane{padding:16px;max-width:760px}${css}</style></head><body><div class="pane" id="pane"></div></body></html>`;
 
 /** Una oficina con una serie guardada (si `serie`), el interruptor encendido (si `encendido`), la página, y las peticiones que hace la pantalla anotadas. */
-async function abrir({ ancho, rol = 'admin', encendido = true, titulo = 'Sala de verano', huerfana = false }) {
+async function abrir({ ancho, rol = 'admin', encendido = true, titulo = 'Sala de verano', huerfana = false, reloj = false, enMarcha = false }) {
   const { d1, env } = await oficina({ conector: false });
   const editor = await sembrar(d1, { email: 'ed@panaclaw.test', rol: 'editor' }); void editor;
   if (encendido) await guardarDoc(d1, 'config-local', { dimitri: { seriesNube: true } });
@@ -35,27 +35,29 @@ async function abrir({ ancho, rol = 'admin', encendido = true, titulo = 'Sala de
   const almacen = crearAlmacenD1(d1);
   const r = await proponer(env, d1, { brief: { titulo, objetivo: 'mostrar el sofá', formato: 'carrusel' }, planos: [1, 2, 3, 4].map((i) => ({ descripcion: `plano ${i}`, prompt: `un sofá gris en una sala luminosa, vista ${i}`, modelo: 'prueba' })), guardar: true }, { almacen });
   const id = r.cuerpo.guardada.id;
+  if (enMarcha) { const f = d1._db.prepare('select json from series where id = ?').get(id), j = JSON.parse(f.json); j.estado = 'muestra'; d1._db.prepare("update series set json = ?, estado = 'muestra' where id = ?").run(JSON.stringify(j), id); } // una serie «generando»: la pantalla la sondea
   let clave = null;
   if (huerfana) { clave = claveIdempotencia(id, 1, 1); await L.reservar(d1, { clave, serieId: id, n: 1, intento: 1, maxMicro: 500_000, topeSerieMicro: 10_000_000, mes: '2026-10', dia: '2026-10-30', carrusel: true, topeMesMicro: 45_000_000, peso: 1, cupoDiaPeso: 0, ahora: Date.now() - 20 * 60e3 }); await L.marcarIncierto(d1, clave); d1._db.prepare('delete from series').run(); }
   const { manejar } = await import('../worker/lib/rutas.js');
   const correo = rol === 'admin' ? 'dueno@panaclaw.test' : 'ed@panaclaw.test';
   const entrada = await manejar(new Request('https://oficina.test/api/acceso', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: correo, contrasena: 'una-clave-larga-123' }) }), env); // secrets-ok
   const cookie = entrada.headers.get('set-cookie').split(';')[0];
-  const ctx = await nav.newContext({ viewport: { width: ancho, height: 900 } }); const p = await ctx.newPage(); const errores = [], pedidos = [];
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: 900 } }); const p = await ctx.newPage(); const errores = [], pedidos = [], gets = [];
   p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (rt) => {
     const req = rt.request(), u = new URL(req.url());
     if (u.pathname === '/') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: PAGINA(leer('nube.css')) });
     if (u.pathname === '/shim.js') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: SHIM(rol) });
     if (u.pathname === '/nube-series.js') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: leer('nube-series.js') });
-    if (req.method() !== 'GET') pedidos.push({ m: req.method(), ruta: u.pathname, idem: req.headers()['idempotency-key'] || null, cuerpo: req.postData() });
+    if (req.method() === 'GET') gets.push(u.pathname); else pedidos.push({ m: req.method(), ruta: u.pathname, idem: req.headers()['idempotency-key'] || null, cuerpo: req.postData() });
     const resp = await manejar(new Request(u.href, { method: req.method(), headers: { 'content-type': 'application/json', cookie, ...(req.headers()['idempotency-key'] ? { 'idempotency-key': req.headers()['idempotency-key'] } : {}) }, body: req.postData() || undefined }), env);
     return rt.fulfill({ status: resp.status, headers: { 'content-type': 'application/json' }, body: await resp.text() });
   });
+  if (reloj) await p.clock.install(); // el tiempo lo mueve el test, no el reloj de la pared
   await p.goto('https://oficina.test/');
   await p.addScriptTag({ url: '/shim.js' }); await p.addScriptTag({ url: '/nube-series.js' });
   await p.evaluate(() => window.AO_AJUSTES_EXTRA.find((x) => x.key === 'nube-series').render(document.getElementById('pane')));
-  return { p, ctx, d1, id, clave, errores, pedidos, env };
+  return { p, ctx, d1, id, clave, errores, pedidos, gets, env };
 }
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const medidas = (p) => p.evaluate(() => [...document.querySelectorAll('#pane button, #pane input')].filter((e) => !e.disabled && e.offsetParent).map((e) => ({ n: (e.textContent || e.id).trim().slice(0, 30), h: e.getBoundingClientRect().height, f: parseFloat(getComputedStyle(e).fontSize), tag: e.tagName })));
@@ -147,4 +149,64 @@ test('Series: la línea huérfana se decide con dos toques — el primero NO cam
   const l = d1._db.prepare('select estado, real_micro from series_libro where clave = ?').get(clave); assert.equal(l.estado, 'liquidado'); assert.equal(l.real_micro, 200_000);
   assert.equal(pedidos.filter((x) => x.ruta === '/api/series/libro/resolver').length, 2, 'dos peticiones: pedir la cifra y confirmar');
   assert.equal(await sinDesborde(p), true); assert.deepEqual(errores, []); await ctx.close();
+});
+
+const cuantos = (gets, ruta) => gets.filter((x) => x === ruta).length;
+
+test('Series: UNA sola instancia por contenedor — abrir() otra vez (el armazón móvil lo hace en cada «mostrar») no duplica ni clics ni peticiones, y no pierde la confirmación abierta', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, id, errores, pedidos, gets } = await abrir({ ancho: 390 });
+  await p.waitForSelector('.sr-card');
+  const base = cuantos(gets, '/api/series');
+  for (let i = 1; i <= 3; i++) { await p.evaluate(() => window.AO_NUBE.series.abrir(document.getElementById('pane'))); await p.waitForSelector('.sr-card'); await p.waitForFunction((n) => true, base); }
+  await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - base, 3, 'cada «mostrar» pide la lista UNA vez, no una por cada instancia que hubiera');
+  assert.equal(await p.evaluate(() => { const c = document.getElementById('pane'); return !!c._srInst; }), true);
+  await p.click('.sr-abrir'); await p.waitForSelector('.sr-planos');
+  for (let i = 0; i < 3; i++) await p.evaluate(() => window.AO_NUBE.series.abrir(document.getElementById('pane')));
+  await p.waitForSelector('.sr-planos');
+  await p.click('button[data-a="presupuesto"][data-modo="muestra"]'); await p.waitForSelector('.sr-conf');
+  assert.equal(pedidos.filter((x) => x.ruta.endsWith('/presupuesto')).length, 1, 'un clic = una petición (no una por instancia)');
+  // volver a la pantalla (mostrar) con la confirmación abierta: sigue ahí y no la pisa una lista ni un detalle viejo
+  for (let i = 0; i < 3; i++) { await p.evaluate(() => window.AO_NUBE.series.abrir(document.getElementById('pane'))); await p.waitForTimeout(250); assert.equal(await p.locator('.sr-conf').count(), 1, 'la confirmación abierta no se pierde'); assert.equal(await p.locator('.sr-lista').count(), 0, 'ninguna instancia pinta la lista encima'); }
+  await p.click('button[data-a="generar"]');
+  await p.waitForFunction(() => /Autorizada|Generando/.test(document.getElementById('pane').textContent), null, { timeout: 8000 });
+  assert.equal(pedidos.filter((x) => x.ruta.endsWith('/generar')).length, 1, 'una sola autorización'); void id;
+  assert.deepEqual(errores, []); await ctx.close();
+});
+
+test('Series: el sondeo de 10 s solo corre con la pantalla a la vista, la pestaña visible y una serie generando — oculta no pide nada; al volver, se reanuda; un «Actualizar» a mano no se solapa', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, errores, gets } = await abrir({ ancho: 390, reloj: true, enMarcha: true });
+  await p.waitForSelector('.sr-card'); await p.waitForTimeout(200);
+  const n0 = cuantos(gets, '/api/series');
+  await p.clock.runFor(10100); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n0, 1, 'visible y generando: UNA petición cada 10 s');
+  // oculta (como hace el armazón móvil: sin desconectar)
+  await p.evaluate(() => document.getElementById('pane')._srInst.ocultar());
+  const n1 = cuantos(gets, '/api/series');
+  await p.clock.runFor(65000); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n1, 0, 'oculta: ninguna petición en 65 s');
+  // la pestaña del navegador oculta tampoco sondea
+  await p.evaluate(() => document.getElementById('pane')._srInst.mostrar()); await p.waitForTimeout(300);
+  const n2 = cuantos(gets, '/api/series'); assert.equal(n2 - n1, 1, 'al volver se reanuda con UNA carga');
+  await p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await p.clock.runFor(35000); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n2, 0, 'con la pestaña oculta no se sondea');
+  await p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); }); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n2, 1, 'al volver la pestaña se pone al día una vez');
+  // un «Actualizar» a mano y el temporizador a la vez: la carga en curso no se duplica
+  const n3 = cuantos(gets, '/api/series');
+  await p.evaluate(() => { const i = document.getElementById('pane')._srInst; i.recargar(); i.recargar(true); i.recargar(true); }); await p.waitForTimeout(400);
+  assert.equal(cuantos(gets, '/api/series') - n3, 1, 'las cargas del temporizador no se solapan con una en curso');
+  // sin serie generando no hay sondeo
+  assert.deepEqual(errores, []); await ctx.close();
+});
+
+test('Series: sin ninguna serie generando no se sondea nunca', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, gets } = await abrir({ ancho: 390, reloj: true });
+  await p.waitForSelector('.sr-card'); await p.waitForTimeout(200); const n0 = cuantos(gets, '/api/series');
+  await p.clock.runFor(120000); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n0, 0); await ctx.close();
 });

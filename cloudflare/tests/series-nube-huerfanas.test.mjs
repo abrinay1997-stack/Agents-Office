@@ -12,6 +12,7 @@ import { crearAlmacenD1 } from '../worker/lib/series/almacen.js';
 import { proponer } from '../worker/lib/series/propuesta.js';
 import { crearGenerador, depsReales, idDeTrabajo, GRACIA_MS } from '../worker/lib/series/generar.js';
 import * as L from '../worker/lib/series/libro.js';
+import { tokensSerie } from '../worker/lib/series/tokens.js';
 import { claveIdempotencia, usd2u } from '../../serie-core.mjs';
 
 const BIB = { tono: 'cálido y sencillo', luz: 'luz natural', composicion: 'producto centrado', nunca: ['neón'], paleta: [{ rol: 'primario', hex: '#336699' }] };
@@ -226,4 +227,102 @@ test('N6 segundo clic: el token se gasta aunque la decisión no entre — repeti
   o.base._db.prepare("update estudio_trabajos set estado = 'done' where id = ?").run(idDeTrabajo(clave));
   const b = await g.resolverHuerfana({ clave, cobro: false, confirmacion: tok, usuario: o.u.admin }); assert.equal(b.estado, 409); assert.equal(b.cuerpo.codigo, 'token', 'el token ya se usó'); assert.equal(o.linea(clave).estado, 'incierto');
   assert.equal((await o.decidir(g, clave, false)).b.estado, 200, 'con una confirmación nueva, sí');
+});
+
+
+test('N6 CAS (revisión A): si la serie cambia JUSTO antes de decidir, la versión vieja no vale — ni liquida ni libera (huérfana con serie viva, y paso en duda de una serie viva)', { skip: SALTAR }, async () => {
+  const o = await montar(), id = await o.nuevaSerie(3), clave = claveIdempotencia(id, 1, 1);
+  await o.reservar(id, 1, 1); await L.marcarIncierto(o.d1, clave);
+  await o.almacen.actualizar(id, (y) => { y.intentos[1] = 1; y.pasos[clave] = { n: 1, intento: 1, estado: 'liberado' }; return y; });
+  const vieja = (await o.almacen.uno(id)).v, l = o.linea(clave), ok = { antesDeMs: o.reloj.t + 1, trabajoId: idDeTrabajo(clave) };
+  await o.almacen.actualizar(id, (y) => ({ ...y, pausa_motivo: 'cambió justo antes' })); // la serie sube de versión
+  assert.equal((await L.resolverHuerfana(o.d1, l, true, 0, { ...ok, serieVersion: vieja })).ok, false, 'versión vieja: no vale');
+  assert.equal(o.linea(clave).estado, 'incierto', 'ni liquidó ni liberó');
+  assert.equal((await L.resolverHuerfana(o.d1, l, true, 0, { ...ok, serieVersion: (await o.almacen.uno(id)).v })).ok, true, 'con la versión de ahora, sí');
+  // el paso en duda de una serie viva: la misma regla en resolverIncierto
+  const c2 = claveIdempotencia(id, 2, 1); await o.reservar(id, 2, 1); await L.marcarIncierto(o.d1, c2);
+  const v2 = (await o.almacen.uno(id)).v; await o.almacen.actualizar(id, (y) => ({ ...y, pausa_motivo: 'otra vez' }));
+  assert.equal((await L.resolverIncierto(o.d1, c2, false, 0, { serieVersion: v2 })).ok, false); assert.equal(o.linea(c2).estado, 'incierto');
+  assert.equal((await L.resolverIncierto(o.d1, c2, true, 250_000, { serieVersion: v2 })).ok, false, 'también «sí cobró»'); assert.equal(o.linea(c2).estado, 'incierto');
+  assert.equal((await L.resolverIncierto(o.d1, c2, false, 0, { serieVersion: (await o.almacen.uno(id)).v })).ok, true);
+});
+
+/** un paso en duda de una serie VIVA, listo para decidir */
+async function pasoEnDuda(o, n = 3) {
+  const id = await o.nuevaSerie(n), clave = claveIdempotencia(id, 1, 1);
+  await o.reservar(id, 1, 1); await L.marcarIncierto(o.d1, clave);
+  await o.almacen.actualizar(id, (y) => { y.intentos[1] = 1; y.pasos[clave] = { n: 1, intento: 1, estado: 'incierto' }; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar' }; return y; });
+  return { id, clave };
+}
+
+test('N6 revisión A: decidir un paso en duda de una serie VIVA también es de dos clics — sin token NO ejecuta (409 con el texto y la cifra del servidor), y el token es de una cuenta, una decisión, una cifra, una versión y un solo uso', { skip: SALTAR }, async () => {
+  const o = await montar(), g = o.gen(), { id, clave } = await pasoEnDuda(o);
+  const a = await g.resolver({ id, clave, cobro: true, realUsd: 0.3, usuario: o.u.admin });
+  assert.equal(a.estado, 409); assert.equal(a.cuerpo.codigo, 'confirmar'); assert.equal(a.cuerpo.gasta, false); assert.match(a.cuerpo.confirmar.texto, /SÍ se cobró.*US\$0\.3.*No se puede deshacer/); assert.equal(a.cuerpo.confirmar.cifraUsd, 0.3);
+  assert.equal(o.linea(clave).estado, 'incierto', 'el primer clic no ejecuta'); assert.equal((await o.almacen.uno(id)).pasos[clave].estado, 'incierto');
+  const quieta = () => assert.equal(o.linea(clave).estado, 'incierto');
+  const pide = async (cobro, real, quien = o.u.admin) => (await g.resolver({ id, clave, cobro, realUsd: real, usuario: quien })).cuerpo.confirmar.token;
+  assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: 'inventado1234', usuario: o.u.admin })).estado, 409); quieta();
+  const t1 = await pide(false); assert.equal((await g.resolver({ id, clave, cobro: true, realUsd: 0, confirmacion: t1, usuario: o.u.admin })).estado, 409, 'otra decisión'); quieta();
+  const t2 = await pide(true, 0.3); assert.equal((await g.resolver({ id, clave, cobro: true, realUsd: 0.4, confirmacion: t2, usuario: o.u.admin })).estado, 409, 'otra cifra'); quieta();
+  const t3 = await pide(false); assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: t3, usuario: o.u.admin2 })).estado, 409, 'otra cuenta'); quieta();
+  const t4 = await pide(false); o.reloj.t += 130_000; assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: t4, usuario: o.u.admin })).estado, 409, 'vencido'); quieta();
+  const t5 = await pide(false); await o.almacen.actualizar(id, (y) => ({ ...y, pausa_motivo: 'cambió' }));
+  assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: t5, usuario: o.u.admin })).estado, 409, 'la serie cambió entre los dos clics'); quieta();
+  const t6 = await pide(true, 0.3);
+  const [x, y] = await Promise.all([g.resolver({ id, clave, cobro: true, realUsd: 0.3, confirmacion: t6, usuario: o.u.admin }), g.resolver({ id, clave, cobro: true, realUsd: 0.3, confirmacion: t6, usuario: o.u.admin })]);
+  assert.deepEqual([x.estado, y.estado].sort(), [200, 409], 'dos clics a la vez: solo uno decide');
+  assert.equal(o.linea(clave).estado, 'liquidado'); assert.equal(o.linea(clave).real_micro, 300_000); assert.equal((await o.almacen.uno(id)).pasos[clave].estado, 'liquidado');
+  assert.equal((await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).cuerpo.codigo, 'no_incierto', 'ya decidido');
+  for (const quien of [o.u.editor, o.u.lectura, null, { ...o.u.admin, agente: 'ada' }]) assert.equal((await g.resolver({ id, clave, cobro: false, usuario: quien })).estado, 403);
+});
+
+test('N6 revisión A: el token de un paso en duda se gasta aunque la decisión no entre, y no sirve para decidir una línea huérfana (ni al revés)', { skip: SALTAR }, async () => {
+  const o = await montar(), g = o.gen(), { id, clave } = await pasoEnDuda(o);
+  const tok = (await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).cuerpo.confirmar.token;
+  const x = await g.resolverHuerfana({ clave, cobro: false, confirmacion: tok, usuario: o.u.admin }); assert.equal(x.estado, 409);
+  assert.equal(o.linea(clave).estado, 'incierto');
+  const o2 = await montar(), g2 = o2.gen(), id2 = await o2.nuevaSerie(3), c2 = claveIdempotencia(id2, 1, 1);
+  await o2.reservar(id2, 1, 1); await L.marcarIncierto(o2.d1, c2); o2.base._db.prepare('delete from series').run();
+  const t2 = (await g2.resolverHuerfana({ clave: c2, cobro: false, usuario: o2.u.admin })).cuerpo.confirmar.token;
+  o2.base._db.prepare("insert into series (id, estado, version, json, creada, actualizada) values (?, 'previsto', 1, '{}', 1, 1)").run(id2);
+  assert.equal((await g2.resolver({ id: id2, clave: c2, cobro: false, confirmacion: t2, usuario: o2.u.admin })).estado, 404, 'un json roto no es una serie: no hay forma de usarlo');
+});
+
+test('N6 listarHuerfanas: UNA consulta para todas las series (no una por línea), también con más de 90 series distintas', { skip: SALTAR }, async () => {
+  const o = await montar(), g = o.gen(); o.base._db.prepare('delete from series').run();
+  const n = 100;
+  for (let i = 0; i < n; i++) o.base._db.prepare("insert into series_libro (clave, serie_id, n, intento, estado, max_micro, real_micro, excedio, mes, dia, carrusel, peso, salio, at) values (?, ?, 1, 1, 'incierto', 1000, 0, 0, '2026-10', ?, 0, 1, 1, ?)").run(`s${i}:1:1`, `s${i}`, DIA, T0 + i);
+  const sql = []; const prep = o.d1.prepare; o.d1.prepare = (q) => { sql.push(q); return prep(q); };
+  const r = await g.huerfanas({ usuario: o.u.admin }); o.d1.prepare = prep;
+  assert.equal(r.cuerpo.huerfanas.length, n);
+  const deSeries = sql.filter((q) => /from series\b(?!_)/.test(q));
+  assert.ok(deSeries.length <= 2, `consultas a series: ${deSeries.length} (≤ 2: 100 ids en trozos de 90)`); assert.ok(sql.length <= 4, `consultas en total: ${sql.length}`);
+  assert.ok(deSeries.every((q) => (q.match(/\?/g) || []).length <= 90), 'ningún trozo pasa de 90 parámetros');
+});
+
+test('N6 SEG-04: quien no es administrador no ve cifras del tope en el motivo de una pausa ni de un plano; el administrador, el texto entero', { skip: SALTAR }, async () => {
+  const o = await conRutas(), id = await o.nuevaSerie(3);
+  await o.almacen.actualizar(id, (y) => { y.pausa_motivo = 'el tope diario del Estudio (US$5.00) no alcanza para este paso'; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar', motivo: 'costó US$0.45 y pasa del tope' }; return y; });
+  const adm = await o.admin('GET', `/api/series/${id}`); assert.match(adm.j.serie.pausa_motivo, /US\$5\.00/); assert.match(adm.j.serie.escaleta[0].motivo, /US\$0\.45/);
+  for (const quien of ['editor', 'lectura']) {
+    const una = await o[quien]('GET', `/api/series/${id}`), lista = await o[quien]('GET', '/api/series');
+    for (const t of [JSON.stringify(una.j), JSON.stringify(lista.j)]) { assert.doesNotMatch(t, /US\$|5\.00|0\.45|tope diario/i, `${quien} no ve cifras`); }
+    assert.match(una.j.serie.pausa_motivo, /un administrador tiene el detalle/); assert.match(una.j.serie.escaleta[0].motivo, /un administrador tiene el detalle/);
+  }
+});
+
+
+test('N6 revisión A: un token de otro tipo o de otra serie no sirve aunque lo demás coincida (probado con tokens escritos a mano); y un token se gasta aunque lo que se pidió no coincida', { skip: SALTAR }, async () => {
+  const o = await montar(), g = o.gen(), { id, clave } = await pasoEnDuda(o), tk = tokensSerie(o.d1, { ahora: () => o.reloj.t });
+  const s = await o.almacen.uno(id), base = { clave, cobro: false, realMicro: 0, estado: 'incierto', serieVersion: s.v, por: o.u.admin.id, vence: o.reloj.t + 100_000 };
+  await tk.poner('tokdeotrotipo1', { ...base, tipo: 'resolver-huerfana', serieId: id }, base.vence);
+  assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: 'tokdeotrotipo1', usuario: o.u.admin })).estado, 409, 'otro tipo');
+  await tk.poner('tokdeotraserie1', { ...base, tipo: 'resolver-paso', serieId: 'otra-serie' }, base.vence);
+  assert.equal((await g.resolver({ id, clave, cobro: false, confirmacion: 'tokdeotraserie1', usuario: o.u.admin })).estado, 409, 'otra serie');
+  assert.equal(o.linea(clave).estado, 'incierto');
+  // un token bueno, usado con otra cifra (no entra), ya no sirve después con la cifra correcta
+  const t = (await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).cuerpo.confirmar.token;
+  assert.equal((await g.resolver({ id, clave, cobro: true, realUsd: 0, confirmacion: t, usuario: o.u.admin })).estado, 409);
+  const otra = await g.resolver({ id, clave, cobro: false, confirmacion: t, usuario: o.u.admin }); assert.equal(otra.estado, 409); assert.equal(otra.cuerpo.codigo, 'token', 'el token ya se gastó'); assert.equal(o.linea(clave).estado, 'incierto');
 });

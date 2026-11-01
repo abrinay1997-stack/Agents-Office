@@ -16,7 +16,7 @@ const paso = (ok, que) => { if (!ok) fallos++; console.log(`${ok ? '✓' : '✗'
 const o = await oficina();
 let browser; try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
 const AXE = process.env.AO_AXE && fs.existsSync(process.env.AO_AXE) ? process.env.AO_AXE : null;
-const errores = [], autorizaciones = [];
+const errores = [], autorizaciones = []; let gets = 0;
 try {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }), page = await ctx.newPage();
   await ctx.addInitScript(() => {
@@ -31,6 +31,7 @@ try {
     escaleta: [1, 2, 3, 4].map((n) => ({ n, estado: 'previsto', descripcion: `plano ${n}`, modelo: 'prueba', versiones: [], motivo: null })) });
   await page.route('**/api/**', async (r) => {
     const p = new URL(r.request().url()).pathname, m = r.request().method();
+    if (m === 'GET' && p.startsWith('/api/series')) gets++;
     if (p === '/api/series' && m === 'GET') return json(r, { series: [serie()], activo: true });
     if (p === '/api/series/libro/huerfanas') return json(r, { huerfanas: [] });
     if (p === '/api/series/serie-abc' && m === 'GET') return json(r, { serie: serie() });
@@ -55,6 +56,14 @@ try {
   if (AXE) { await page.addScriptTag({ path: AXE }); const v = await page.evaluate(async () => (await axe.run(document.querySelector('[data-vista="series"]:not([hidden])'))).violations.filter((x) => ['critical', 'serious'].includes(x.impact)).map((x) => x.id + ':' + x.nodes.length)); paso(v.length === 0, 'axe: sin críticos ni serios' + (v.length ? ' → ' + v.join(', ') : '')); } else console.log('(sin AO_AXE: axe no se corrió)');
   await page.locator(`${vista} button[data-a="generar"]`).tap(); await page.waitForFunction(() => /Autorizada|Generando/.test(document.querySelector('[data-vista="series"]')?.textContent || ''), null, { timeout: 8000 });
   paso(autorizaciones.length === 1 && /^sr[0-9a-f]{24}$/.test(autorizaciones[0].idem) && autorizaciones[0].cuerpo.confirmacion === 'tok-simulado-123', 'El segundo toque manda UNA autorización con su Idempotency-Key y el token del servidor');
+  // Volver a la pantalla una y otra vez: UNA instancia (una petición por visita), y oculta no sondea (la serie está «generando»)
+  await page.waitForSelector(`${vista} .sr-planos`); await espera(800);
+  const irYVolver = async () => { await page.locator('.mv-tabs button').first().tap(); await espera(400); await page.locator('.mv-tabs button').last().tap(); await page.waitForSelector('.mv-hoja'); await espera(300); await page.locator('.mv-hoja button[data-vista="series"]').tap(); await page.waitForSelector(`${vista} .sr-planos`); await espera(600); };
+  estado = 'pausado'; await espera(300); // sin serie generando no hay sondeo: las peticiones que se cuentan son solo las de volver
+  const g0 = gets; for (let i = 0; i < 3; i++) await irYVolver();
+  paso(gets - g0 === 3, `Volver 3 veces a Series: una petición por visita (${gets - g0})`);
+  estado = 'muestra'; await irYVolver(); /* ahora la serie SÍ está generando y la pantalla la sondea */ await page.locator('.mv-tabs button').first().tap(); await espera(400); const g1 = gets; await espera(11500);
+  paso(gets === g1, `Oculta no se sondea, ni siquiera con una serie generando (${gets - g1} peticiones en 11,5 s)`);
   paso(errores.length === 0, 'Sin errores de consola ni de página' + (errores.length ? ' → ' + errores.slice(0, 3).join(' | ') : ''));
   await ctx.close();
 } finally { await browser.close(); await o.cerrar?.(); }

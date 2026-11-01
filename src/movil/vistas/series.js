@@ -12,14 +12,15 @@ export function registrar(shell) {
       el.innerHTML = '<div class="mv-scroll"><div class="mv-cuerpo mv-series" aria-live="polite"></div></div>';
       const cuerpo = el.querySelector('.mv-series');
       let vista = null;
-      function cargar() {
+      function cargar() { // una sola instancia: al volver a la pantalla se reanuda (con su estado, también una confirmación abierta); no se crea otra
         const N = window.AO_NUBE;
+        if (vista && !vista.cerrada) { vista.mostrar(); return; }
         if (!N?.series) { cuerpo.innerHTML = `<p class="ac-vacio" role="alert"><b>No pude cargar.</b> ${esc('La pantalla de series todavía no llegó. Revisa tu conexión.')} <button type="button" class="mv-btn" data-reintentar>Reintentar</button></p>`; cuerpo.querySelector('[data-reintentar]').addEventListener('click', cargar); return; }
-        vista?.cerrar?.(); cuerpo.innerHTML = ''; vista = N.series.abrir(cuerpo, { conEstado, movil: true });
+        cuerpo.innerHTML = ''; vista = N.series.abrir(cuerpo, { conEstado, movil: true });
       }
-      el._cargar = cargar;
+      el._cargar = cargar; el._ocultar = () => vista?.ocultar();
     },
     alMostrar(el) { el._cargar(); },
-    alOcultar() { /* el temporizador de la pantalla se detiene solo cuando su contenedor sale de la página */ },
+    alOcultar(el) { el._ocultar?.(); }, // el armazón oculta con `hidden` sin desconectar: se para el sondeo de 10 s hasta volver
   });
 }

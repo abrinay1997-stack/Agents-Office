@@ -27,6 +27,10 @@ export const nombre = 'series';
 export const grupos = ['series'];
 
 const APAGADO = 'Las series en la nube están apagadas: un administrador las enciende con dimitri.seriesNube. Mientras, siguen en la oficina de tu computadora.';
+// SEG-04: los motivos de una pausa o de un plano pueden llevar cifras del tope del Estudio o precios; quien no es administrador solo ve que hay un motivo, sin cifras ni palabras de dinero.
+const CON_DINERO = /US\$|\$|\d|tope|presupuesto|cupo|precio|costo|gast|cobr/i;
+export const sinCifras = (t) => (typeof t === 'string' && CON_DINERO.test(t) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : t);
+const limpiarMotivos = (v) => (v && typeof v === 'object' ? { ...v, ...('pausa_motivo' in v ? { pausa_motivo: sinCifras(v.pausa_motivo) } : {}), ...(Array.isArray(v.escaleta) ? { escaleta: v.escaleta.map((p) => ({ ...p, motivo: sinCifras(p.motivo) })) } : {}) } : v);
 const noEsta = (m) => json({ error: m, pendiente: true }, 501);
 const quien = (u) => String(u?.nombre || u?.email || 'alguien').slice(0, 80);
 const auditar = (db, usuario, accion, detalle) => db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'serie', quien(usuario), JSON.stringify({ accion, ...detalle })).run();
@@ -53,7 +57,7 @@ export async function manejar(ctx) {
 
   if (metodo === 'GET' && libroGlobal && m[2] === 'huerfanas') { const r = await crearGenerador(env, db).huerfanas({ usuario }); return json(r.cuerpo, r.estado); }
   if (metodo === 'GET') {
-    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => (esAdmin ? resumenSerie(s) : sinDinero(resumenSerie(s)))), activo: true });
+    if (ruta === '/api/series') return json({ series: (await almacen.todas()).map((s) => (esAdmin ? resumenSerie(s) : limpiarMotivos(sinDinero(resumenSerie(s))))), activo: true });
     if (!m || (m[2] && m[2] !== 'libro')) return error('no such route', 404);
     if (m[1] === 'proponer') return error('no such route', 404);
     const s = await almacen.uno(m[1]);
@@ -61,7 +65,7 @@ export async function manejar(ctx) {
     if (m[2] === 'libro') return json({ serie: s.id, lineas: await lineas(db, s.id) });
     const v = vistaSerie(s, { libro: await resumenDeSerie(db, s.id), inciertos: await inciertos(db, s.id) });
     if (esAdmin) v.escaleta = v.escaleta.map((p) => { const raw = s.escaleta.find((q) => q.n === p.n), ult = raw?.versiones?.at?.(-1); return { ...p, intento: ult?.intento ?? null, imagen: typeof ult?.archivo === 'string' && ult.archivo && !/[\x00-\x1f\\?#]|\.\.|^\//.test(ult.archivo) ? ult.archivo.slice(0, 300) : null }; }); // la imagen del último intento: solo para un administrador (su nombre lleva el prompt)
-    return json({ serie: esAdmin ? v : sinDinero(v) }); // quien no es administrador sabe QUÉ pasos están en duda, no cuánto
+    return json({ serie: esAdmin ? v : limpiarMotivos(sinDinero(v)) }); // quien no es administrador sabe QUÉ pasos están en duda, no cuánto
   }
 
   // ---- autorizar, pausar, cancelar, decidir un paso en duda: el generador (N4) ----
