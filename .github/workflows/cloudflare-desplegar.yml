@@ -21,7 +21,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: cloudflare-desplegar
+  # Un grupo por PR y otro para main: GitHub solo guarda UN run pendiente por grupo, y con un grupo común cada push de un PR desplazaba al despliegue de main (que quedaba cancelado).
+  group: cloudflare-desplegar-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
   cancel-in-progress: false  # nunca se corta un despliegue a medias; el siguiente espera su turno
 
 permissions:
