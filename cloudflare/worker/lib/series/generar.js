@@ -98,7 +98,7 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     const x = await almacen.actualizar(s.id, (y) => { y.token_actual = reg.token; if (y.estado === 'previsto') { const t = transicion(y, 'espera_ok'); if (!t.ok) { aviso = t.motivo; return undefined; } return t.serie; } return y; });
     if (aviso || !x) return null;
     await tokens.poner(reg.token, reg, reg.vence);
-    return { token: reg.token, serieId: s.id, hash: c.hash, costoMostradoUsd: c.costoUsd, topeUsd: c.topeUsd, modo, planos: c.etapa.length, inciertos: c.inciertos, vence: reg.vence, texto: textoConfirmar(s, c) };
+    return { token: reg.token, serieId: s.id, hash: c.hash, costoMostradoUsd: c.costoUsd, topeUsd: c.topeUsd, modo, planos: c.etapa.length, inciertos: c.inciertos, vence: reg.vence, texto: textoConfirmar(s, c), topeMesUsd: c.topeMesUsd, estudio: c.estudio, disponibleUsd: c.disponibleUsd };
   }
   const motivosGenerales = async (s, id, cfg, modo) => {
     if (!seriesNubeActiva(cfg)) return err(409, 'Generar series en la nube está apagado (dimitri.seriesNube).');
@@ -203,6 +203,58 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     const x = await almacen.actualizar(s0.id, (y) => { const pa = y.pasos[clave]; if (pa) pa.estado = cobro ? 'liquidado' : 'liberado'; const n = pa?.n; if (!n) return y; const i = y.escaleta.findIndex((p) => p.n === n); if (i >= 0 && y.escaleta[i].estado === 'revisar' && !cobro) { y.escaleta[i] = { ...y.escaleta[i], estado: 'previsto', motivo: null }; if (y.repeticiones) y.repeticiones = { ...y.repeticiones, [n]: 0 }; } return y; }); // un plano decidido por una persona empieza sus repeticiones de cero
     await auditar('resolver', { por: usuario.email || usuario.id, serie: s0.id, clave, cobro });
     return { estado: 200, cuerpo: { resuelto: true, hash: x?.hash, nota: 'Anotado. Es solo contabilidad: no gasta ni reanuda nada.' } };
+  }
+
+  // ---- líneas HUÉRFANAS del libro (N6): una línea reservada o en duda que ninguna serie lleva. Solo un administrador, con un segundo clic que trae la cifra (token de un solo uso). Es contabilidad: no gasta ni reanuda nada, y no se deshace. ----
+  const sinAdmin = (usuario) => (!usuario || usuario.rol !== 'admin' || usuario.agente ? err(403, 'Decidir una línea del libro es de un administrador.') : null);
+  async function listarHuerfanas() {
+    const vivasL = await L.vivas(db), series = new Map(), out = [];
+    for (const l of vivasL) {
+      if (!series.has(l.serie_id)) series.set(l.serie_id, await almacen.uno(l.serie_id));
+      const s = series.get(l.serie_id);
+      if (!L.esHuerfana(s, l)) continue;
+      out.push({ clave: l.clave, serieId: l.serie_id, titulo: s?.titulo ?? null, serieExiste: !!s, n: l.n, intento: l.intento, estado: l.estado, maxUsd: u2usd(l.max_micro), edadMin: Math.max(0, Math.round((d.ahora() - l.at) / 60000)), madura: l.estado === 'incierto' || d.ahora() - l.at >= GRACIA_MS });
+    }
+    return out;
+  }
+  async function huerfanas({ usuario } = {}) { const no = sinAdmin(usuario); if (no) return no; return { estado: 200, cuerpo: { huerfanas: await listarHuerfanas() } }; }
+  const textoHuerfana = (h, cobro, realMicro) => {
+    const donde = h.serie ? `del plano ${h.n} de «${h.serie.titulo}»` : `del plano ${h.n} de una serie que ya no existe (${h.serie_id})`;
+    const cifra = u2usd(realMicro > 0 ? realMicro : h.max_micro);
+    if (!h.max_micro) return `Cerrar el paso ${donde}: era de un motor gratis, no hay dinero en juego (US$0); solo se cierra la línea y deja de contar en el cupo. No se puede deshacer.`;
+    return cobro
+      ? `Anotar que SÍ se cobró el paso ${donde}: se contará US$${cifra} de gasto real${realMicro > 0 ? '' : ' (todo lo que estaba reservado)'} y se cierra. No se puede deshacer.`
+      : `Anotar que NO se cobró el paso ${donde}: se liberan US$${u2usd(h.max_micro)} que estaban reservados y se cierra. No se puede deshacer. Si en realidad el proveedor sí cobró, ese gasto quedará sin contar.`;
+  };
+  /** Sin `confirmacion`: valida y devuelve el texto con la cifra y un token (no cambia nada). Con ella: consume el token (una sola vez) y decide. */
+  async function resolverHuerfana({ clave, cobro, realUsd = 0, confirmacion, usuario } = {}) {
+    const no = sinAdmin(usuario); if (no) return no;
+    if (typeof cobro !== 'boolean') return err(422, 'Di si hubo cobro (true o false).');
+    if (typeof clave !== 'string' || !clave || clave.length > 100) return err(422, 'Falta la línea del libro.');
+    let realMicro = 0;
+    if (cobro && realUsd !== undefined && realUsd !== 0) {
+      if (typeof realUsd !== 'number' || !Number.isFinite(realUsd) || realUsd < 0) return err(422, 'El cobro real debe ser un número finito, 0 o más.');
+      realMicro = usd2u(realUsd);
+    }
+    const linea = await L.lineaDe(db, clave); if (!linea) return err(404, 'No encuentro esa línea del libro.');
+    if (linea.estado !== 'reservado' && linea.estado !== 'incierto') return err(409, 'Esa línea ya está decidida.', { codigo: 'no_viva' });
+    const s = await almacen.uno(linea.serie_id);
+    if (!L.esHuerfana(s, linea)) return err(409, 'Esa línea la lleva una serie: decídela desde la serie.', { codigo: 'no_huerfana', serieId: linea.serie_id });
+    if (cobro && realMicro > linea.max_micro) return err(422, `El cobro real (US$${realUsd}) pasa de lo reservado para ese paso (US$${u2usd(linea.max_micro)}).`);
+    if (linea.estado === 'reservado' && d.ahora() - linea.at < GRACIA_MS) return err(409, 'Esa línea es reciente: puede que su paso todavía esté en marcha. Espera unos minutos y vuelve a mirarla.', { codigo: 'reciente' });
+    if (!confirmacion) {
+      const token = `h${azarHex(32)}`, vence = d.ahora() + TTL_TOKEN_MS, texto = textoHuerfana({ ...linea, serie: s }, cobro, realMicro);
+      await tokens.poner(token, { tipo: 'resolver-huerfana', clave, cobro, realMicro, estado: linea.estado, serieVersion: s?.v ?? null, por: usuario.id, vence }, vence);
+      return { estado: 200, cuerpo: { confirmar: { token, texto, vence, cobro, cifraUsd: u2usd(realMicro > 0 ? realMicro : linea.max_micro) }, gasta: false, nota: 'Todavía no se anotó nada: confirma ESTA decisión.' } };
+    }
+    if (typeof confirmacion !== 'string') return err(422, 'La confirmación no es válida.', { codigo: 'token' });
+    const reg = await tokens.tomar(confirmacion);
+    if (!reg || reg.tipo !== 'resolver-huerfana' || reg.clave !== clave || reg.cobro !== cobro || reg.realMicro !== realMicro || reg.por !== usuario.id || reg.estado !== linea.estado || (reg.serieVersion ?? null) !== (s?.v ?? null)) return err(409, 'La confirmación ya no vale (se usó, venció o algo cambió). Vuelve a pedirla.', { codigo: 'token' });
+    if (d.ahora() > reg.vence) return err(409, 'La confirmación venció (2 minutos). Vuelve a pedirla.', { codigo: 'token' });
+    const r = await L.resolverHuerfana(db, linea, cobro, realMicro, { serieVersion: s?.v ?? null, antesDeMs: d.ahora() - GRACIA_MS, trabajoId: idDeTrabajo(clave) });
+    if (!r.ok) return err(409, r.motivo, { codigo: 'cambio' });
+    await auditar('resolver_huerfana', { por: usuario.email || usuario.id, serie: linea.serie_id, clave, cobro, realMicro, antes: linea.estado, maxMicro: linea.max_micro });
+    return { estado: 200, cuerpo: { resuelto: true, nota: 'Anotado. Es solo contabilidad y no se puede deshacer: no gasta ni reanuda nada.' } };
   }
 
   // ---- la bomba ----
@@ -333,6 +385,6 @@ export function crearGenerador(env, db, deps = depsReales(env, db), { autorizaci
     try { const cfg = await d.cfg(); const rec = await reconciliar(cfg); const a = await avanzar(cfg); return { reconciliados: rec, accion: a?.tipo }; }
     finally { await cands.soltar(CANDADO, yo); }
   }
-  return { presupuesto, generar, pausar: pausarPorDueno, cancelar, resolver, tick, reconciliar: async () => reconciliar(await d.cfg()), calcular };
+  return { presupuesto, generar, pausar: pausarPorDueno, cancelar, resolver, huerfanas, resolverHuerfana, tick, reconciliar: async () => reconciliar(await d.cfg()), calcular };
 }
 void TRANSITORIAS;

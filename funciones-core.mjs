@@ -80,7 +80,7 @@ export const FUNCIONES = [
   {
     id: 'series-nube',
     titulo: 'Series de imágenes en la nube: ver y proponer',
-    que: 'Dimitri propone y organiza series de imágenes desde la nube y, con el motor gratis «Prueba», puedes autorizarlas y generarlas (no cuesta nada). Los motores de pago siguen cerrados.',
+    que: 'Series de imágenes en la nube: Dimitri las propone y tú las ves y las generas con el motor gratis «Prueba» (no cuesta). Los de pago siguen cerrados. Pantalla: Ajustes → «Series de imágenes».',
     donde: 'config', ruta: 'dimitri.seriesNube',
     lista: true, gasta: false,
   },

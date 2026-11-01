@@ -117,3 +117,34 @@ export async function barrerHuerfanas(db, { trabajoDe = null } = {}) {
   }
   return out;
 }
+
+// ---- Líneas HUÉRFANAS: una línea `reservado` o `incierto` que ningún plano de ninguna serie va a cerrar (la serie ya no existe, o su plano no apunta a ella). Sin esta decisión, siguen contando contra los topes del mes para siempre.
+const PASO_FINAL = new Set(['liquidado', 'liberado']);
+/** ¿Esta línea la sigue llevando alguien? Pura. Es de la serie (no huérfana) si el plano n está en el aire con ESE intento, o si el paso de la serie todavía no terminó. */
+export function esHuerfana(serie, l) {
+  if (!l || (l.estado !== 'reservado' && l.estado !== 'incierto')) return false;
+  if (!serie || !Array.isArray(serie.escaleta)) return true;
+  const plano = serie.escaleta.find((p) => p && p.n === l.n), paso = serie.pasos?.[l.clave];
+  if (plano?.estado === 'corriendo' && plano.intento_actual === l.intento) return false;
+  if (paso && !PASO_FINAL.has(paso.estado)) return false;
+  return true;
+}
+/** Las líneas vivas del libro (reservadas o en duda), de todas las series; el que llama decide cuáles son huérfanas. ≤ 100. */
+export async function vivas(db) {
+  return (await db.prepare(`select clave, serie_id, n, intento, estado, max_micro, at from series_libro where estado in ('reservado', 'incierto') order by at limit 100`).all()).results;
+}
+/** Decide una línea huérfana, TODO en una sentencia (CAS): solo si sigue en el estado que se leyó, la serie no cambió desde que se miró (o sigue sin existir), su trabajo no va en el aire y, si estaba `reservado`, tiene más edad que `antesDeMs`.
+ *  Con cobro se liquida con `realMicro` (0 = lo reservado); sin cobro se libera (el cupo del día sigue gastado: el envío pudo salir). → { ok } | { ok: false, motivo } */
+export async function resolverHuerfana(db, l, huboCobro, realMicro, { serieVersion = null, antesDeMs, trabajoId }) {
+  if (!l || !sano(l.clave) || !entero(realMicro) || typeof huboCobro !== 'boolean' || !Number.isFinite(antesDeMs)) return { ok: false, motivo: 'datos no válidos' };
+  const cobro = huboCobro ? 1 : 0, nuevo = huboCobro ? 'liquidado' : 'liberado';
+  const r = await db.prepare(`update series_libro set estado = ?,
+      real_micro = case when ? = 1 then (case when ? > 0 then ? else max_micro end) else real_micro end,
+      excedio = case when ? = 1 and ? > max_micro then 1 else excedio end
+    where clave = ? and estado = ?
+      and ((? is null and not exists (select 1 from series where id = series_libro.serie_id)) or exists (select 1 from series where id = series_libro.serie_id and version = ?))
+      and not exists (select 1 from estudio_trabajos where id = ? and estado in ('queued', 'running'))
+      and (estado = 'incierto' or at <= ?)`)
+    .bind(nuevo, cobro, realMicro, realMicro, cobro, realMicro, l.clave, l.estado, serieVersion, serieVersion, String(trabajoId), Math.round(antesDeMs)).run();
+  return (r.meta?.changes ?? 0) === 1 ? { ok: true } : { ok: false, motivo: 'esa línea cambió mientras la mirabas, o su trabajo todavía va en el aire, o es demasiado reciente: vuelve a mirarla' };
+}
