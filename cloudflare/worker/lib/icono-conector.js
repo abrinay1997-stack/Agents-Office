@@ -13,6 +13,9 @@ export const MAX_BYTES = 128 * 1024;
 export const MAX_REDIRECCIONES = 2;
 export const RAIZ = 'contenido/icono-conector/';
 export const PEDIDOS_POR_MINUTO = 30; // bajadas NUEVAS por persona y minuto
+export const NEGATIVA_MS = 10 * 60 * 1000; // un host sin favicon (o que falló) no se vuelve a pedir en 10 min
+export const NEGATIVA_MAX = 200; // tope de la caché negativa: nunca crece sin límite (los más viejos salen primero)
+const NEGATIVA = new Map(); // host → hasta cuándo (ms); el módulo pasa una por instancia (`env`)
 const MIME = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon' };
 
 /** Un host candidato: dominio completo, en minúsculas, que `urlPermitida` acepta. → { host } | { error, estado } */
@@ -69,16 +72,16 @@ export async function bajar(host, fetchFn = fetch) {
 
 export const cabecerasDe = (tipo, etag) => ({ 'content-type': MIME[tipo], 'cache-control': 'private, max-age=86400', etag: `"${etag}"`, 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'cross-origin-resource-policy': 'same-origin' });
 
-/** Los dominios de los conectores guardados (la lista blanca). */
+/** Los dominios de los conectores guardados y ENCENDIDOS (la lista blanca: uno apagado no pide icono). */
 export async function hostsRegistrados(db) {
-  const { results } = await db.prepare('select url from conectores').all();
+  const { results } = await db.prepare('select url from conectores where activo = 1').all();
   const hs = new Set();
   for (const f of results || []) { try { hs.add(new URL(f.url).hostname.toLowerCase().replace(/\.$/, '')); } catch { /* fila rara: se ignora */ } }
   return hs;
 }
 
 /** Sirve (o baja y guarda) el favicon de `crudo`. `registrados` = Set de hosts de conectores. → { estado, tipo, bytes|cuerpo, etag } | { estado, error } */
-export async function obtener({ crudo, registrados, bucket, fetchFn, cupo, ifNoneMatch }) {
+export async function obtener({ crudo, registrados, bucket, fetchFn, cupo, ifNoneMatch, negativa = NEGATIVA, ahora = Date.now }) {
   const v = validarHost(crudo); if (v.error) return { estado: v.estado, error: v.error };
   if (!registrados.has(v.host)) return { estado: 403, error: 'Solo se sirve el icono de los conectores que ya están añadidos.' };
   const clave = (await sha256(v.host)).slice(0, 40);
@@ -87,8 +90,15 @@ export async function obtener({ crudo, registrados, bucket, fetchFn, cupo, ifNon
     for (const e of EXT) if (await bucket.head(`${RAIZ}${clave}.${e}`)) return { estado: 304, etag: clave };
   }
   if (bucket) for (const e of EXT) { const o = await bucket.get(`${RAIZ}${clave}.${e}`); if (o) return { estado: 200, tipo: e, cuerpo: o.body, etag: clave }; }
+  const hasta = negativa.get(v.host);
+  if (hasta !== undefined) { if (ahora() < hasta) return { estado: 404, error: 'Ese sitio no tiene un icono que se pueda usar.' }; negativa.delete(v.host); }
   if (cupo && !(await cupo())) return { estado: 429, error: 'Demasiados iconos nuevos en un minuto: espera un momento.' };
-  const r = await bajar(v.host, fetchFn); if (!r) return { estado: 404, error: 'Ese sitio no tiene un icono que se pueda usar.' };
+  const r = await bajar(v.host, fetchFn);
+  if (!r) {
+    negativa.delete(v.host); negativa.set(v.host, ahora() + NEGATIVA_MS);
+    while (negativa.size > NEGATIVA_MAX) negativa.delete(negativa.keys().next().value);
+    return { estado: 404, error: 'Ese sitio no tiene un icono que se pueda usar.' };
+  }
   if (bucket) { try { await bucket.put(`${RAIZ}${clave}.${r.tipo}`, r.bytes, { httpMetadata: { contentType: MIME[r.tipo] } }); } catch { /* sin copia: se sirve igual */ } }
   return { estado: 200, tipo: r.tipo, bytes: r.bytes, etag: clave };
 }
