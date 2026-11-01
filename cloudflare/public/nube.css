@@ -133,13 +133,17 @@ body.movil .cx-b { flex: 1 1 100%; font-size: 16px; min-height: 48px; }
 /* N1 — campanita y hoja «Mientras no estabas» (se añade al final de nube.css). Colores de las notas con texto oscuro (AA); nada se atenúa con opacity; sin animación con «reducir movimiento». */
 .nt-campana { position: fixed; right: 16px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 body.movil .nt-campana { bottom: calc(76px + env(safe-area-inset-bottom)); }
+/* En la cabecera de la versión móvil (1 nov 2026): no flota, no tapa nada. La medida es suya (44 px) por si `.mv-ic` no estuviera. */
+.nt-campana.nt-en-cab, body.movil .nt-campana.nt-en-cab { position: relative; right: auto; bottom: auto; z-index: auto; width: 44px; height: 44px; min-width: 44px; flex: none; border: 0; border-radius: 12px; background: none; box-shadow: none; color: inherit; }
+.nt-campana.nt-en-cab:active { background: rgba(127,127,127,.18); }
+.nt-campana.nt-en-cab .nt-n, body.movil .mv-bar-der .ch-n { top: 2px; right: 0; }
 .nt-campana:focus-visible, .nt-hoja button:focus-visible, .nt-hoja select:focus-visible, .nt-hoja textarea:focus-visible, .nt-sw input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .nt-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
 .nt-hoja { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(400px, calc(100vw - 32px)); max-height: min(78vh, 640px); max-height: min(78dvh, 640px); overflow: auto; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }
 body.movil .nt-hoja { left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); width: auto; max-height: calc(86dvh - 64px); border-radius: 16px 16px 0 0; padding-bottom: 16px; } /* deja libre la barra de pestañas */
 .nt-cab { display: flex; justify-content: space-between; align-items: center; } .nt-cab h2 { margin: 0; font-size: 17px; }
 .nt-hoja h3 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
-.nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; }
+.nt-hoja .sg-btn { min-height: 36px; } body.movil .nt-hoja .sg-btn, body.movil .nt-hoja select, body.movil .nt-hoja textarea { min-height: 44px; font-size: 16px; } body.movil .nt-hoja .sg-btn { min-width: 44px; }
 .nt-lista, .nt-avisos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .nt-nota { border-radius: 10px; padding: 10px 12px; color: #1b1b1b; box-shadow: 0 1px 3px rgba(0,0,0,.16); } .nt-nota .nt-de { margin: 0 0 4px; } .nt-nota small { color: #3d3d3d; } .nt-cuerpo { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .nt-nota .sg-btn { background: rgba(255,255,255,.7); color: #1b1b1b; border-color: rgba(0,0,0,.25); }

@@ -1,0 +1,58 @@
+/* Versión móvil (1 nov 2026) — INICIO rehecho: acciones rápidas arriba, lo urgente primero, filas compactas para lo vacío, «lo que viene» por día
+   y avisos sin repetir. Va DESPUÉS de movil.css (corrige su bloque «Inicio»). Mismas reglas: 44 px, nada de :hover, texto ≥ 11 px, colores --mv-*. */
+.mv-ini { padding-top: 8px; }
+.mv-ini-cab { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 12px; margin: 2px 0 10px; }
+.mv-ini .mv-saludo-t { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.mv-ini .mv-fecha { margin: 0; font-size: 14px; color: var(--mv-grey); }
+
+/* las acciones, a la altura del pulgar y siempre a la vista */
+.mv-acc-fila { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 8px; margin: 0 0 12px; }
+.mv-acc-fila button { min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 6px; border: 1.5px solid var(--mv-line); border-radius: 14px; background: var(--mv-surf); color: var(--mv-ink); font-weight: 700; font-size: 13px; }
+.mv-acc-fila button:active { background: var(--mv-surf2); }
+.mv-acc-fila .mv-i { width: 22px; height: 22px; }
+.mv-acc-fila .mv-acc-p { white-space: nowrap; flex-direction: row; gap: 8px; background: var(--mv-ink); color: var(--mv-bg); border-color: var(--mv-ink); font-size: 15px; }
+.mv-acc-fila .mv-acc-p:active { opacity: .85; }
+
+/* el aviso de la oficina dice QUÉ pasa */
+.mv-ini .mv-banda b { font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; } .mv-ini .mv-banda small { font-size: 13px; }
+
+/* tarjetas: la cabecera dice una frase corta al lado del número */
+.mv-ini .mv-card { margin-bottom: 12px; padding-bottom: 6px; }
+.mv-card-cab { gap: 8px; } .mv-card-cab .mv-card-t { flex: 0 1 auto; min-width: 0; }
+.mv-card-cab .mv-der { flex: none; } .mv-card-ir { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: 13px; color: var(--mv-grey); font-weight: 600; }
+.mv-card.alerta .mv-card-ir { color: var(--mv-ambar); font-weight: 800; }
+.mv-mini li.mv-mas-n { color: var(--mv-grey); font-size: 13px; }
+
+/* una fila compacta para lo que está vacío o en orden (en vez de una tarjeta entera que dice «nada») */
+.ini-linea { width: 100%; min-height: 52px; margin: 0 0 12px; padding: 0 14px; display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--mv-line); border-radius: 14px; background: var(--mv-surf); color: var(--mv-ink); text-align: left; }
+.ini-linea:active { background: var(--mv-surf2); }
+.ini-linea-t { font-weight: 800; font-size: 15px; white-space: nowrap; }
+.ini-linea-m { flex: 1; min-width: 0; text-align: right; font-size: 13px; font-weight: 600; color: var(--mv-grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ini-linea-m.ok { color: var(--mv-acc); } .ini-linea-m.warn { color: var(--mv-ambar); font-weight: 800; }
+.ini-linea .mv-der { flex: none; color: var(--mv-grey); }
+.ini-linea-esq { background: var(--mv-surf2); border-color: transparent; animation: mv-resp 1.4s ease-in-out infinite; }
+.mv-cxs-mini { flex: 1; min-width: 0; padding: 0; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; overflow: hidden; }
+.mv-cxs-mini .mv-cx { width: 30px; height: 30px; border-radius: 8px; } .mv-cxs-mini .mv-cx img { width: 28px; height: 28px; border-radius: 7px; } .mv-cxs-mini .mv-cx b { font-size: 14px; } .mv-cxs-mini .mv-cx i { width: 10px; height: 10px; right: -3px; bottom: -3px; }
+.ini-linea .mv-cxs-mini + .ini-linea-m { flex: none; }
+
+/* lo que viene: por día, una entrada por cosa */
+.ini-dia { margin: 6px 0 0; padding-top: 8px; border-top: 1px solid var(--mv-line); font-size: 13px; font-weight: 800; letter-spacing: .02em; color: var(--mv-grey); }
+.ini-evs { list-style: none; margin: 0; padding: 0; }
+.ini-ev { width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 4px 0; border: 0; background: none; text-align: left; color: var(--mv-ink); }
+.ini-ev time { flex: none; width: 72px; white-space: nowrap; font-size: 13px; font-weight: 800; color: var(--mv-grey); font-variant-numeric: tabular-nums; }
+.ini-ev-t { flex: 1; min-width: 0; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.ini-ev em { flex: none; font-style: normal; font-size: 12px; font-weight: 800; padding: 1px 8px; border-radius: 99px; background: var(--mv-ambar-bg); color: var(--mv-ambar); } .ini-ev em.rut { background: var(--mv-surf2); color: var(--mv-grey); }
+
+/* avisos sin repetir; los de una tarea se tocan */
+.mv-iavs li { padding: 0; }
+.mv-iav { display: block; width: 100%; min-height: 44px; padding: 8px 0; border: 0; background: none; text-align: left; color: inherit; font-size: 15px; line-height: 1.35; }
+.mv-mini li.bad .mv-iav, .mv-mini li.warn .mv-iav { color: var(--mv-rojo); }
+.mv-iav time, .mv-mini li time { display: inline-block; margin-left: 6px; font-size: 13px; color: var(--mv-grey); font-weight: 600; }
+.mv-card-cab.static .mv-link { margin-left: auto; }
+
+.mv-ini-pie { display: flex; justify-content: center; margin: 2px 0 8px; }
+.mv-ini-pie .mv-link { color: var(--mv-grey); font-weight: 600; font-size: 13px; } .mv-ini-pie [aria-busy="true"] { color: var(--mv-acc); }
+/* nada tapa lo último: sitio de sobra bajo el contenido (la barra de pestañas ya está fuera del área de scroll) */
+[data-vista="inicio"] .mv-scroll { padding-bottom: 32px; }
+@media (max-width: 340px) { .mv-card .mv-card-ir { display: none; } .mv-acc-fila { grid-template-columns: 1.5fr 1fr 1fr; gap: 6px; } .mv-acc-fila .mv-acc-p { gap: 4px; padding: 4px; } .mv-ini .mv-saludo-t { font-size: 22px; } .mv-acc-fila button { font-size: 12px; } .mv-acc-fila .mv-acc-p { font-size: 14px; } .ini-ev time { width: 64px; font-size: 12px; } .ini-linea-t { font-size: 14px; } }
+.mv-iav-x { margin-left: 6px; padding: 0 6px; border-radius: 99px; background: var(--mv-surf2); color: var(--mv-grey); font-size: 12px; font-weight: 800; }

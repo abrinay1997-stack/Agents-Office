@@ -138,11 +138,15 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       paso(!v.length, `axe · ${nombre}: sin críticos ni serios${v.length ? ' → ' + v.join(' | ') : ''}`);
     };
     // ---- Inicio: conectores, franja de aprobación, Buscar ----
-    await page.waitForSelector('[data-vista="inicio"] [aria-label="Conectores"]', { timeout: 8000 }).catch(() => {});
-    paso(await page.locator('[data-vista="inicio"] [aria-label="Conectores"]').count() === 1, 'Inicio: los conectores se ven en una tarjeta (antes se escondían en el teléfono)');
+    await page.waitForSelector('[data-vista="inicio"] .ini-linea[data-conectores]', { timeout: 8000 }).catch(() => {});
+    paso(await page.locator('[data-vista="inicio"] .ini-linea[data-conectores]').count() === 1, 'Inicio: los conectores se ven en una fila compacta (antes se escondían en el teléfono)');
     toques = 0; await tocar('[data-vista="inicio"] [data-conectores]'); await page.waitForSelector('[data-vista="conectores"]:not([hidden]) .mv-intro, [data-vista="conectores"]:not([hidden]) .mv-vacio'); await foto('01b-conectores'); await medir('Conectores (pantalla)'); paso(toques <= 2, `Conectores: verlos está a ${toques} toques (≤ 2)`);
     await page.goBack(); await page.waitForSelector('[data-vista="inicio"]:not([hidden])');
-    paso(await page.locator('.mv-franja:not([hidden]) [data-ver]').count() === 1 && /1 borrador espera/.test(await texto('.mv-franja')), 'Aprobaciones: la franja sobre la barra dice «1 borrador espera tu OK · Ver»'); await medir('Inicio con la franja');
+    // 1 nov 2026: en Inicio la tarjeta «Esperan tu OK» ya está arriba, así que la franja de abajo no se repite; en las demás pestañas sí
+    paso(await page.locator('.mv-franja:not([hidden])').count() === 0 && /Esperan tu OK/.test(await texto('[data-vista="inicio"] [aria-label="Esperan tu visto bueno"]')), 'Inicio: la tarjeta «Esperan tu OK» va arriba y la franja de abajo no la repite'); await medir('Inicio con la tarjeta de aprobaciones');
+    await tocar('.mv-tab[data-tab="tareas"]'); await page.waitForSelector('[data-vista="tareas"]:not([hidden])');
+    paso(await page.locator('.mv-franja:not([hidden]) [data-ver]').count() === 1 && /1 borrador espera/.test(await texto('.mv-franja')), 'Aprobaciones: en las demás pestañas la franja sobre la barra dice «1 borrador espera tu OK · Ver»'); await medir('Tareas con la franja');
+    await tocar('.mv-tab[data-tab="inicio"]'); await page.waitForSelector('[data-vista="inicio"]:not([hidden])');
     toques = 0; await tocar('.mv-buscar'); await page.waitForSelector('[data-vista="buscar"]:not([hidden]) #mvQ', { timeout: 6000 }); paso(toques === 1, 'Buscar: un botón en la cabecera abre la búsqueda móvil (1 toque)'); await foto('01c-buscar'); await page.goBack(); await page.waitForSelector('[data-vista="buscar"]', { state: 'hidden' });
     await axe('Inicio');
 

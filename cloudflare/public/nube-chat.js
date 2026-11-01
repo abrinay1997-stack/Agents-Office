@@ -52,8 +52,8 @@
     if (!boton) { boton = document.createElement('button'); boton.type = 'button'; boton.id = 'nbChatBtn'; boton.setAttribute('aria-haspopup', 'dialog'); boton.addEventListener('click', () => (abierto ? cerrar() : abrir())); }
     colocar();
     const n = res.total;
-    boton.setAttribute('aria-label', n ? `Chat: ${n} sin leer` : 'Chat'); boton.setAttribute('aria-expanded', String(abierto));
-    boton.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>${n ? `<span class="ch-n" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}`;
+    boton.setAttribute('aria-label', n ? `Chat del equipo: ${n} sin leer` : 'Chat del equipo'); boton.setAttribute('aria-expanded', String(abierto));
+    boton.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19.5c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8M18.5 14.3c1.6.7 2.5 2.4 2.5 5.2"/></svg>${n ? `<span class="ch-n" aria-hidden="true">${n > 9 ? '9+' : n}</span>` : ''}`;
   }
 
   async function cargarResumen() {

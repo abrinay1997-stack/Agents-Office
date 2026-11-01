@@ -12,6 +12,19 @@
   const cuenta = () => (datos ? (datos.notas?.length || 0) + (datos.notificaciones?.noLeidas || 0) : 0);
   const hace = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'ahora' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} d`; };
 
+  /** DÓNDE VIVE LA CAMPANITA. En el teléfono NO flota (1 nov 2026, el dueño: «se superpone al contenido»): vive en la cabecera de la versión móvil,
+   *  junto al chat y la lupa, con su contador. En escritorio sigue siendo la de siempre, abajo a la derecha. La versión móvil crea y destruye su armazón
+   *  al cruzar los 820 px (y `body.movil` cambia con ella), así que se vuelve a mirar al cambiar esa clase. */
+  function colocar() {
+    if (!campana) return;
+    const cab = document.body.classList.contains('movil') ? document.querySelector('#mvRoot .mv-bar-der') : null;
+    if (!cab) { if (campana.parentNode !== document.body) document.body.appendChild(campana); campana.classList.remove('nt-en-cab', 'mv-ic'); return; }
+    campana.classList.add('nt-en-cab', 'mv-ic');
+    const antes = cab.querySelector('#nbChatBtn') || cab.querySelector('.mv-buscar'); // junto al chat, y los dos antes de la lupa
+    if (campana.parentNode === cab && (!antes || campana.nextElementSibling === antes)) return;
+    if (antes) cab.insertBefore(campana, antes); else cab.appendChild(campana);
+  }
+
   function pintarCampana() {
     if (!activo) { campana?.remove(); campana = null; return; }
     if (!campana) {
@@ -19,6 +32,7 @@
       campana.setAttribute('aria-haspopup', 'dialog'); campana.addEventListener('click', () => (abierta ? cerrar() : abrir()));
       document.body.appendChild(campana);
     }
+    colocar();
     const n = cuenta();
     campana.setAttribute('aria-label', n ? `Notas y avisos: ${n} sin leer` : 'Notas y avisos');
     campana.setAttribute('aria-expanded', String(abierta));
@@ -142,6 +156,7 @@
   window.addEventListener('ao:conexion', (e) => { if (activo && e.detail?.userId) avisoConexion(e.detail.userId); });
   window.addEventListener('ao:nota', () => cargar());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) cargar(); });
+  try { new MutationObserver(() => { if (campana) colocar(); }).observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true }); } catch { /* sin observador: se coloca en cada sondeo */ }
   N.notas = { abrir, cerrar, recargar: cargar };
   cargar();
 })();
