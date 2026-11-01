@@ -365,11 +365,11 @@ const PROVIDER = (() => {
   return { id: 'other', name: host, host, model: process.env.ANTHROPIC_MODEL || '' };
 })();
 const PUEDE_VER = PROVIDER.id === 'anthropic' || /^(1|si|sí|true)$/i.test(process.env.AO_VISION || ''); // 28 oct 2026: ¿el modelo de esta oficina mira imágenes? Claude sí; Meta Muse Spark no; otro proveedor compatible solo si el dueño lo dice (AO_VISION=1)
-let backend = 'claude-cli', sdk = null;
+let backend = 'claude-cli', sdk = null, SdkAbortError = null; // la clase de aborto del SDK (en 0.91 su `name` es 'Error': se reconoce por la clase)
 if (process.env.ANTHROPIC_API_KEY) {
   try {
     const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    sdk = new Anthropic(); backend = 'anthropic-sdk';
+    sdk = new Anthropic(); backend = 'anthropic-sdk'; SdkAbortError = Anthropic.APIUserAbortError || null;
   } catch (e) { console.warn('SDK not installed (npm install @anthropic-ai/sdk) — using the Claude CLI:', e.message.split('\n')[0]); }
 }
 
@@ -479,7 +479,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
       const s = sdk.messages.stream(req); let got = false, ac = null; if (stopKey) stoppers.set(stopKey, () => { s.abort(); ac?.abort(); });
       s.on('text', (_, snap) => { got = true; try { onText(snap); } catch {} });
       try { res = await s.finalMessage(); }
-      catch (e) { if (s.aborted || e?.name === 'APIUserAbortError' || got) { if (stopKey) stoppers.delete(stopKey); throw e; } ac = new AbortController(); res = await sdk.messages.create(req, { signal: ac.signal }).finally(() => stopKey && stoppers.delete(stopKey)); }
+      catch (e) { if (s.aborted || e?.name === 'APIUserAbortError' || (SdkAbortError && e instanceof SdkAbortError) || got) { if (stopKey) stoppers.delete(stopKey); throw e; } ac = new AbortController(); res = await sdk.messages.create(req, { signal: ac.signal }).finally(() => stopKey && stoppers.delete(stopKey)); }
       if (stopKey) stoppers.delete(stopKey);
     } else res = await sdk.messages.create(req);
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
