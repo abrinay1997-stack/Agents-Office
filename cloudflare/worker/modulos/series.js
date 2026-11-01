@@ -28,8 +28,9 @@ export const grupos = ['series'];
 
 const APAGADO = 'Las series en la nube están apagadas: un administrador las enciende con dimitri.seriesNube. Mientras, siguen en la oficina de tu computadora.';
 // SEG-04: los motivos de una pausa o de un plano pueden llevar cifras del tope del Estudio o precios; quien no es administrador solo ve que hay un motivo, sin cifras ni palabras de dinero.
-const CON_DINERO = /US\$|\$|\d|tope|presupuesto|cupo|precio|costo|gast|cobr/i;
-export const sinCifras = (t) => (typeof t === 'string' && CON_DINERO.test(t) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : t);
+const CON_DINERO = /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares/i; // solo cifras de dinero: «plano 2» o «intento 3» se quedan
+const CORREO = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
+export const sinCifras = (t) => { if (typeof t !== 'string') return t; const x = t.replace(CORREO, 'un administrador'); return CON_DINERO.test(x) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : x; };
 const limpiarMotivos = (v) => (v && typeof v === 'object' ? { ...v, ...('pausa_motivo' in v ? { pausa_motivo: sinCifras(v.pausa_motivo) } : {}), ...(Array.isArray(v.escaleta) ? { escaleta: v.escaleta.map((p) => ({ ...p, motivo: sinCifras(p.motivo) })) } : {}) } : v);
 const noEsta = (m) => json({ error: m, pendiente: true }, 501);
 const quien = (u) => String(u?.nombre || u?.email || 'alguien').slice(0, 80);
@@ -82,7 +83,7 @@ export async function manejar(ctx) {
       else if (m[2] === 'generar' || m[2] === 'continuar') r = await g.generar({ id, confirmacion: b.confirmacion, costoMostradoUsd: b.costoMostradoUsd, modo: m[2] === 'continuar' ? 'todo' : (b.modo === 'todo' ? 'todo' : 'muestra'), usuario, idem: req.headers.get('idempotency-key'), soloDesde: m[2] === 'continuar' ? ['muestra', 'pausado'] : null });
       else if (m[2] === 'pausar') r = await g.pausar({ id, usuario });
       else if (m[2] === 'cancelar') r = await g.cancelar({ id, usuario });
-      else r = await g.resolver({ id, clave: b.clave, cobro: b.cobro, realUsd: b.realUsd, usuario });
+      else r = await g.resolver({ id, clave: b.clave, cobro: b.cobro, realUsd: b.realUsd, confirmacion: b.confirmacion, usuario });
       return json(r.cuerpo, r.estado);
     } catch (e) {
       if (Number.isInteger(e?.status)) return error(e.message, e.status);

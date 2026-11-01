@@ -42,14 +42,14 @@ async function abrir({ ancho, rol = 'admin', encendido = true, titulo = 'Sala de
   const correo = rol === 'admin' ? 'dueno@panaclaw.test' : 'ed@panaclaw.test';
   const entrada = await manejar(new Request('https://oficina.test/api/acceso', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: correo, contrasena: 'una-clave-larga-123' }) }), env); // secrets-ok
   const cookie = entrada.headers.get('set-cookie').split(';')[0];
-  const ctx = await nav.newContext({ viewport: { width: ancho, height: 900 } }); const p = await ctx.newPage(); const errores = [], pedidos = [], gets = [];
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: 900 } }); const p = await ctx.newPage(); const errores = [], pedidos = [], gets = [], gate = { retener: null };
   p.on('pageerror', (e) => errores.push(String(e)));
   await p.route('https://oficina.test/**', async (rt) => {
     const req = rt.request(), u = new URL(req.url());
     if (u.pathname === '/') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: PAGINA(leer('nube.css')) });
     if (u.pathname === '/shim.js') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: SHIM(rol) });
     if (u.pathname === '/nube-series.js') return rt.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: leer('nube-series.js') });
-    if (req.method() === 'GET') gets.push(u.pathname); else pedidos.push({ m: req.method(), ruta: u.pathname, idem: req.headers()['idempotency-key'] || null, cuerpo: req.postData() });
+    if (req.method() === 'GET' && gate.retener && u.pathname === '/api/series') { gets.push(u.pathname); await gate.retener; } else if (req.method() === 'GET') gets.push(u.pathname); else pedidos.push({ m: req.method(), ruta: u.pathname, idem: req.headers()['idempotency-key'] || null, cuerpo: req.postData() });
     const resp = await manejar(new Request(u.href, { method: req.method(), headers: { 'content-type': 'application/json', cookie, ...(req.headers()['idempotency-key'] ? { 'idempotency-key': req.headers()['idempotency-key'] } : {}) }, body: req.postData() || undefined }), env);
     return rt.fulfill({ status: resp.status, headers: { 'content-type': 'application/json' }, body: await resp.text() });
   });
@@ -57,7 +57,7 @@ async function abrir({ ancho, rol = 'admin', encendido = true, titulo = 'Sala de
   await p.goto('https://oficina.test/');
   await p.addScriptTag({ url: '/shim.js' }); await p.addScriptTag({ url: '/nube-series.js' });
   await p.evaluate(() => window.AO_AJUSTES_EXTRA.find((x) => x.key === 'nube-series').render(document.getElementById('pane')));
-  return { p, ctx, d1, id, clave, errores, pedidos, gets, env };
+  return { p, ctx, d1, id, clave, errores, pedidos, gets, gate, env };
 }
 const sinDesborde = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const medidas = (p) => p.evaluate(() => [...document.querySelectorAll('#pane button, #pane input')].filter((e) => !e.disabled && e.offsetParent).map((e) => ({ n: (e.textContent || e.id).trim().slice(0, 30), h: e.getBoundingClientRect().height, f: parseFloat(getComputedStyle(e).fontSize), tag: e.tagName })));
@@ -158,8 +158,9 @@ test('Series: UNA sola instancia por contenedor — abrir() otra vez (el armazó
   const { p, ctx, id, errores, pedidos, gets } = await abrir({ ancho: 390 });
   await p.waitForSelector('.sr-card');
   const base = cuantos(gets, '/api/series');
-  for (let i = 1; i <= 3; i++) { await p.evaluate(() => window.AO_NUBE.series.abrir(document.getElementById('pane'))); await p.waitForSelector('.sr-card'); await p.waitForFunction((n) => true, base); }
-  await p.waitForTimeout(300);
+  for (let i = 1; i <= 3; i++) { const antes = cuantos(gets, '/api/series'); await p.evaluate(() => window.AO_NUBE.series.abrir(document.getElementById('pane'))); for (let k = 0; k < 80 && cuantos(gets, '/api/series') === antes; k++) await p.waitForTimeout(100); await p.waitForFunction(() => !document.getElementById('pane')._srInst.ocupada); }
+  for (let i = 0; i < 60 && cuantos(gets, '/api/series') - base < 3; i++) await p.waitForTimeout(100); // con la máquina cargada las respuestas tardan: se espera a la tercera
+  await p.waitForTimeout(500);
   assert.equal(cuantos(gets, '/api/series') - base, 3, 'cada «mostrar» pide la lista UNA vez, no una por cada instancia que hubiera');
   assert.equal(await p.evaluate(() => { const c = document.getElementById('pane'); return !!c._srInst; }), true);
   await p.click('.sr-abrir'); await p.waitForSelector('.sr-planos');
@@ -209,4 +210,31 @@ test('Series: sin ninguna serie generando no se sondea nunca', { skip: SALTAR },
   await p.waitForSelector('.sr-card'); await p.waitForTimeout(200); const n0 = cuantos(gets, '/api/series');
   await p.clock.runFor(120000); await p.waitForTimeout(300);
   assert.equal(cuantos(gets, '/api/series') - n0, 0); await ctx.close();
+});
+
+test('Series: ocultar() y mostrar() con una petición en vuelo no dejan el sondeo muerto', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, gets, gate, errores } = await abrir({ ancho: 390, reloj: true, enMarcha: true });
+  await p.waitForSelector('.sr-card'); await p.waitForTimeout(200);
+  let soltar; gate.retener = new Promise((r) => { soltar = r; });
+  await p.clock.runFor(10100); await p.waitForTimeout(300); // el temporizador pide y la respuesta queda retenida
+  await p.evaluate(() => { const i = document.getElementById('pane')._srInst; i.ocultar(); i.mostrar(); }); // se oculta y se vuelve a mostrar con la petición en vuelo
+  gate.retener = null; soltar(); await p.waitForTimeout(400);
+  const n = cuantos(gets, '/api/series');
+  await p.clock.runFor(10100); await p.waitForTimeout(300);
+  assert.ok(cuantos(gets, '/api/series') > n, 'el sondeo sigue vivo después de ocultar/mostrar con una carga en vuelo');
+  assert.deepEqual(errores, []); await ctx.close();
+});
+
+test('Series (escritorio): un contenedor que no se ve (otra pestaña de Ajustes, ventana cerrada) no sondea, y al volver a abrir se reanuda', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, gets, errores } = await abrir({ ancho: 1280, reloj: true, enMarcha: true });
+  await p.waitForSelector('.sr-card'); await p.waitForTimeout(200);
+  await p.evaluate(() => { document.getElementById('pane').style.display = 'none'; });
+  const n0 = cuantos(gets, '/api/series'); await p.clock.runFor(45000); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n0, 0, 'invisible: ninguna petición');
+  await p.evaluate(() => { document.getElementById('pane').style.display = ''; window.AO_NUBE.series.abrir(document.getElementById('pane')); }); await p.waitForTimeout(300);
+  const n1 = cuantos(gets, '/api/series'); await p.clock.runFor(10100); await p.waitForTimeout(300);
+  assert.equal(cuantos(gets, '/api/series') - n1, 1, 'al volver a verse se reanuda');
+  assert.deepEqual(errores, []); await ctx.close();
 });

@@ -56,17 +56,19 @@
       if (quieto && enVuelo) return;
       const mi = ++seq; enVuelo++; let aplicada;
       try { aplicada = S.vista === 'detalle' && S.id ? await cargarSerie(S.id, mi) : await cargarLista(mi); } finally { enVuelo--; }
-      if (!aplicada || !vivo()) return;
+      if (!aplicada) { if (vivo() && visible) programar(); return; } // una carga descartada (ocultar/mostrar con una petición en vuelo) no deja el sondeo muerto
+      if (!vivo()) return;
       if (!(quieto && (S.conf || S.resolv))) pintar();
       programar();
     }
+    const aLaVista = () => cont.isConnected && cont.getClientRects().length > 0; // el contenedor se ve de verdad (no display:none, no `hidden`): una pestaña de Ajustes que no está a la vista no sondea
     function programar() { // solo se sondea con la pantalla a la vista, la pestaña visible y una serie generando
       clearTimeout(temporizador);
       const vive = S.vista === 'detalle' ? ['muestra', 'corriendo'].includes(S.serie?.estado) : (S.lista || []).some((x) => ['muestra', 'corriendo'].includes(x.estado));
-      if (vive && visible && !document.hidden && !cerrada) temporizador = setTimeout(() => { if (!vivo()) return cerrar(); if (visible && !document.hidden && !S.conf && !S.resolv) recargar(true); else programar(); }, 10000);
+      if (vive && visible && !document.hidden && !cerrada && aLaVista()) temporizador = setTimeout(() => { if (!vivo()) return cerrar(); if (!aLaVista()) return; /* se reanuda con mostrar() */ if (visible && !document.hidden && !S.conf && !S.resolv) recargar(true); else programar(); }, 10000);
     }
     function ocultar() { visible = false; clearTimeout(temporizador); seq++; } // lo que venga en vuelo se descarta
-    function mostrar() { visible = true; if (cerrada) return; pintar(); recargar(true); }
+    function mostrar() { visible = true; if (cerrada) return; pintar(); if (enVuelo) programar(); else recargar(true); } // con una carga en vuelo (descartada por ocultar) el sondeo se rearma aquí
     function cerrar() { if (cerrada) return; cerrada = true; clearTimeout(temporizador); seq++; cont.removeEventListener('click', alClic); cont.removeEventListener('keydown', alTecla); document.removeEventListener('visibilitychange', alVisibilidad); if (cont._srInst === inst) delete cont._srInst; }
 
     /* ---------- pantallas ---------- */
@@ -203,9 +205,9 @@
     function alTecla(ev) { // Escape cancela una confirmación abierta y devuelve el foco al detalle
       if (ev.key !== 'Escape') return; if (S.conf) { S.conf = null; ev.stopPropagation(); pintar(); } else if (S.resolv) { S.resolv = null; ev.stopPropagation(); pintar(); }
     }
-    function alVisibilidad() { if (document.hidden) clearTimeout(temporizador); else if (visible && vivo()) recargar(true); }
+    function alVisibilidad() { if (document.hidden) clearTimeout(temporizador); else if (visible && vivo() && aLaVista()) recargar(true); }
     cont.addEventListener('click', alClic); cont.addEventListener('keydown', alTecla); document.addEventListener('visibilitychange', alVisibilidad);
-    const inst = { recargar, mostrar, ocultar, cerrar, get cerrada() { return cerrada; } };
+    const inst = { recargar, mostrar, ocultar, cerrar, get cerrada() { return cerrada; }, get ocupada() { return enVuelo > 0; } };
     cont._srInst = inst;
     pintar();
     recargar();

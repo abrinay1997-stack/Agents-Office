@@ -304,6 +304,7 @@ test('N6 listarHuerfanas: UNA consulta para todas las series (no una por línea)
 test('N6 SEG-04: quien no es administrador no ve cifras del tope en el motivo de una pausa ni de un plano; el administrador, el texto entero', { skip: SALTAR }, async () => {
   const o = await conRutas(), id = await o.nuevaSerie(3);
   await o.almacen.actualizar(id, (y) => { y.pausa_motivo = 'el tope diario del Estudio (US$5.00) no alcanza para este paso'; y.escaleta[0] = { ...y.escaleta[0], estado: 'revisar', motivo: 'costó US$0.45 y pasa del tope' }; return y; });
+  await o.almacen.actualizar(id, (y) => { y.escaleta[1] = { ...y.escaleta[1], estado: 'revisar', motivo: 'el plano 2 usa una referencia que ya no está' }; return y; });
   const adm = await o.admin('GET', `/api/series/${id}`); assert.match(adm.j.serie.pausa_motivo, /US\$5\.00/); assert.match(adm.j.serie.escaleta[0].motivo, /US\$0\.45/);
   for (const quien of ['editor', 'lectura']) {
     const una = await o[quien]('GET', `/api/series/${id}`), lista = await o[quien]('GET', '/api/series');
@@ -325,4 +326,67 @@ test('N6 revisión A: un token de otro tipo o de otra serie no sirve aunque lo d
   const t = (await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).cuerpo.confirmar.token;
   assert.equal((await g.resolver({ id, clave, cobro: true, realUsd: 0, confirmacion: t, usuario: o.u.admin })).estado, 409);
   const otra = await g.resolver({ id, clave, cobro: false, confirmacion: t, usuario: o.u.admin }); assert.equal(otra.estado, 409); assert.equal(otra.cuerpo.codigo, 'token', 'el token ya se gastó'); assert.equal(o.linea(clave).estado, 'incierto');
+});
+
+
+test('N6 SEG-04 (menores): «plano 2…» no se enmascara (solo el dinero); el correo de quien pausó no llega a quien no es administrador', { skip: SALTAR }, async () => {
+  const o = await conRutas(), id = await o.nuevaSerie(3);
+  await o.almacen.actualizar(id, (y) => { y.pausa_motivo = 'la pausó dueno@panaclaw.test'; y.escaleta[1] = { ...y.escaleta[1], estado: 'revisar', motivo: 'el plano 2 usa una referencia que ya no está' }; y.escaleta[2] = { ...y.escaleta[2], estado: 'revisar', motivo: 'se pasó por 12,50 dólares' }; return y; });
+  const adm = await o.admin('GET', `/api/series/${id}`); assert.match(adm.j.serie.pausa_motivo, /dueno@panaclaw\.test/);
+  const ed = await o.editor('GET', `/api/series/${id}`);
+  assert.equal(ed.j.serie.pausa_motivo, 'la pausó un administrador'); assert.doesNotMatch(JSON.stringify(ed.j), /panaclaw\.test/);
+  assert.equal(ed.j.serie.escaleta[1].motivo, 'el plano 2 usa una referencia que ya no está'); assert.match(ed.j.serie.escaleta[2].motivo, /un administrador tiene el detalle/);
+  assert.equal((await o.editor('GET', '/api/series')).j.series[0].pausa_motivo, 'la pausó un administrador');
+});
+
+test('N6 revisión: el ciclo completo de dos clics por la RUTA HTTP de un paso en duda — primer clic 409 con token, segundo con el token decide, reusarlo falla, el token de otro paso no sirve', { skip: SALTAR }, async () => {
+  const o = await conRutas(), { id, clave } = await pasoEnDuda(o), ruta = `/api/series/${id}/resolver`;
+  const c2 = claveIdempotencia(id, 2, 1); await o.reservar(id, 2, 1); await L.marcarIncierto(o.d1, c2);
+  await o.almacen.actualizar(id, (y) => { y.intentos[2] = 1; y.pasos[c2] = { n: 2, intento: 1, estado: 'incierto' }; y.escaleta[1] = { ...y.escaleta[1], estado: 'revisar' }; return y; });
+  const a = await o.admin('POST', ruta, { clave, cobro: true, realUsd: 0.25 });
+  assert.equal(a.status, 409); assert.equal(a.j.codigo, 'confirmar'); assert.match(a.j.confirmar.token, /^p[0-9a-f]{32}$/); assert.match(a.j.confirmar.texto, /US\$0\.25/); assert.equal(o.linea(clave).estado, 'incierto', 'el primer clic no ejecuta');
+  // el token del paso A no decide el paso B (misma serie)
+  const b1 = await o.admin('POST', ruta, { clave: c2, cobro: true, realUsd: 0.25, confirmacion: a.j.confirmar.token }); assert.equal(b1.status, 409); assert.equal(b1.j.codigo, 'token'); assert.equal(o.linea(c2).estado, 'incierto'); assert.equal(o.linea(clave).estado, 'incierto');
+  // y el de A, ya gastado en ese intento, tampoco vale para A
+  assert.equal((await o.admin('POST', ruta, { clave, cobro: true, realUsd: 0.25, confirmacion: a.j.confirmar.token })).j.codigo, 'token');
+  const a2 = await o.admin('POST', ruta, { clave, cobro: true, realUsd: 0.25 });
+  const ok = await o.admin('POST', ruta, { clave, cobro: true, realUsd: 0.25, confirmacion: a2.j.confirmar.token });
+  assert.equal(ok.status, 200, JSON.stringify(ok.j)); assert.equal(o.linea(clave).estado, 'liquidado'); assert.equal(o.linea(clave).real_micro, 250_000); assert.equal(o.linea(c2).estado, 'incierto', 'B sigue en duda');
+  assert.equal((await o.admin('POST', ruta, { clave, cobro: true, realUsd: 0.25, confirmacion: a2.j.confirmar.token })).status, 409, 'reusar el token falla');
+  assert.equal((await o.editor('POST', ruta, { clave: c2, cobro: false })).status, 403); assert.equal((await o.anon('POST', ruta, { clave: c2, cobro: false })).status, 401);
+});
+
+test('N6 revisión: con dos pasos inciertos de la MISMA serie, un token de A no decide B (la comprobación de la clave del token)', { skip: SALTAR }, async () => {
+  const o = await montar(), g = o.gen(), { id, clave } = await pasoEnDuda(o), c2 = claveIdempotencia(id, 2, 1);
+  await o.reservar(id, 2, 1); await L.marcarIncierto(o.d1, c2);
+  await o.almacen.actualizar(id, (y) => { y.intentos[2] = 1; y.pasos[c2] = { n: 2, intento: 1, estado: 'incierto' }; y.escaleta[1] = { ...y.escaleta[1], estado: 'revisar' }; return y; });
+  const tokA = (await g.resolver({ id, clave, cobro: false, usuario: o.u.admin })).cuerpo.confirmar.token;
+  const x = await g.resolver({ id, clave: c2, cobro: false, confirmacion: tokA, usuario: o.u.admin }); assert.equal(x.estado, 409); assert.equal(x.cuerpo.codigo, 'token');
+  assert.equal(o.linea(c2).estado, 'incierto'); assert.equal(o.linea(clave).estado, 'incierto');
+  // lo mismo con una línea huérfana: el token de una no decide la otra
+  const o2 = await montar(), g2 = o2.gen(), i2 = await o2.nuevaSerie(3), k1 = claveIdempotencia(i2, 1, 1), k2 = claveIdempotencia(i2, 2, 1);
+  for (const k of [[1, k1], [2, k2]]) { await o2.reservar(i2, k[0], 1); await L.marcarIncierto(o2.d1, k[1]); } o2.base._db.prepare('delete from series').run();
+  const t1 = (await g2.resolverHuerfana({ clave: k1, cobro: false, usuario: o2.u.admin })).cuerpo.confirmar.token;
+  assert.equal((await g2.resolverHuerfana({ clave: k2, cobro: false, confirmacion: t1, usuario: o2.u.admin })).estado, 409); assert.equal(o2.linea(k2).estado, 'incierto');
+});
+
+test('N6 variasPorId: 200 series se piden en trozos de 90 — nunca una sentencia con más de 90 parámetros (D1 admite 100)', { skip: SALTAR }, async () => {
+  const o = await montar(); const ids = Array.from({ length: 200 }, (_, i) => `ser-${i}`);
+  for (const id of ids.slice(0, 150)) o.base._db.prepare("insert into series (id, estado, version, json, creada, actualizada) values (?, 'previsto', 1, ?, 1, 1)").run(id, JSON.stringify({ id, estado: 'previsto', titulo: id, escaleta: [], pasos: {}, intentos: {}, fallos: {}, hash: 'h' }));
+  const sql = []; const prep = o.d1.prepare; o.d1.prepare = (q) => { sql.push(q); return prep(q); };
+  const mapa = await o.almacen.variasPorId([...ids, ...ids, 'no valido!']); o.d1.prepare = prep;
+  assert.equal(sql.length, 3, 'tres sentencias para 200 ids (90 + 90 + 20)'); assert.deepEqual(sql.map((q) => (q.match(/\?/g) || []).length), [90, 90, 20]); assert.ok(sql.every((q) => (q.match(/\?/g) || []).length <= 90));
+  assert.equal(mapa.size, 150, 'las que existen, y ninguna de más');
+});
+
+test('N6 estático: cada ruta de series con una acción de dinero pasa `confirmacion` al generador (y la de huérfanas, también)', async () => {
+  const { readFileSync } = await import('node:fs'), src = readFileSync(new URL('../worker/modulos/series.js', import.meta.url), 'utf8');
+  for (const llamada of ['g.generar(', 'g.resolver(', 'resolverHuerfana(']) {
+    const i = src.indexOf(llamada); assert.ok(i > 0, `${llamada} se llama desde la ruta`);
+    const fin = src.indexOf('\n', i), linea = src.slice(i, fin);
+    assert.match(linea, /confirmacion: b\.confirmacion/, `${llamada} descarta la confirmación`);
+  }
+  // y nadie más llama a estas acciones con dinero fuera del módulo de series
+  const { readdirSync } = await import('node:fs'); const dir = new URL('../worker/modulos/', import.meta.url);
+  for (const f of readdirSync(dir)) if (f !== 'series.js') assert.doesNotMatch(readFileSync(new URL(f, dir), 'utf8'), /\.(resolverHuerfana|resolver)\(\{[^}]*clave/, `${f} no debe decidir líneas del libro`);
 });
