@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { manejar } from '../worker/lib/rutas.js';
 import { abrirSesion } from '../worker/lib/sesion.js';
-import { validarHost, tipoDe, mismoDominio, MAX_BYTES, PEDIDOS_POR_MINUTO } from '../worker/lib/icono-conector.js';
+import { validarHost, tipoDe, mismoDominio, obtener, MAX_BYTES, PEDIDOS_POR_MINUTO, NEGATIVA_MS, NEGATIVA_MAX } from '../worker/lib/icono-conector.js';
 import { SALTAR, crearD1, sembrar, envDePrueba } from './d1-memoria.mjs';
 import { crearR2 } from './r2-memoria.mjs';
 
@@ -59,12 +59,11 @@ test('sirve el favicon de un conector guardado: pide solo /favicon.ico de su dom
 test('un ICO también vale; un SVG con script, un HTML, más de 128 KB y un fallo no se sirven ni dejan nada en R2', { skip: SALTAR }, async () => {
   const o = await oficina();
   o.poner(() => new Response(ICO, { status: 200 })); assert.equal((await o.pedir('mi-servicio.example.com')).headers.get('content-type'), 'image/x-icon');
-  const p = await oficina();
-  for (const cuerpo of [SVG, new TextEncoder().encode('<html>hola que tal, esto no es una imagen</html>'), (() => { const g = new Uint8Array(MAX_BYTES + 10); g.set(PNG); return g; })()]) {
-    p.poner(() => new Response(cuerpo, { status: 200 })); assert.equal((await p.pedir('mi-servicio.example.com')).status, 404);
+  for (const cuerpo of [SVG, new TextEncoder().encode('<html>hola que tal, esto no es una imagen</html>'), (() => { const g = new Uint8Array(MAX_BYTES + 10); g.set(PNG); return g; })(), 'no']) {
+    const p = await oficina(); // una oficina por caso: la caché negativa recuerda el fallo anterior de ese host
+    p.poner(() => new Response(cuerpo, { status: cuerpo === 'no' ? 500 : 200 })); assert.equal((await p.pedir('mi-servicio.example.com')).status, 404);
+    assert.equal([...p.MEDIA._m.keys()].length, 0);
   }
-  p.poner(() => new Response('no', { status: 500 })); assert.equal((await p.pedir('mi-servicio.example.com')).status, 404);
-  assert.equal([...p.MEDIA._m.keys()].length, 0);
 });
 
 test('lista blanca: un dominio que no es de ningún conector, uno local o uno que solo se parece, no salen a la red', { skip: SALTAR }, async () => {
@@ -93,6 +92,47 @@ test('sin sesión 401, método distinto de GET 405 y ritmo de bajadas nuevas por
   assert.equal((await o.pedir('mi-servicio.example.com', { metodo: 'POST' })).status, 405);
   assert.equal(o.llamadas.length, 0);
   o.poner(() => new Response('no', { status: 404 }));
-  let ultimo; for (let i = 0; i < PEDIDOS_POR_MINUTO + 1; i++) ultimo = (await o.pedir('mi-servicio.example.com')).status;
+  for (let i = 0; i < PEDIDOS_POR_MINUTO + 1; i++) o.d1._db.prepare("insert into conectores (id, nombre, url, secreto, departamentos, herramientas_lectura, herramientas_envio, activo, created_at) values (?,?,?,null,'[]','[]','[]',1,'2026-01-01T00:00:00Z')").run(`x${i}`, `x${i}`, `https://sitio${i}.example.com/mcp`);
+  let ultimo; for (let i = 0; i < PEDIDOS_POR_MINUTO + 1; i++) ultimo = (await o.pedir(`sitio${i}.example.com`)).status;
   assert.equal(ultimo, 429); assert.equal(o.llamadas.length, PEDIDOS_POR_MINUTO);
+});
+
+const FILA = "insert into conectores (id, nombre, url, secreto, departamentos, herramientas_lectura, herramientas_envio, activo, created_at) values ('c1','mio','https://mi-servicio.example.com/mcp',null,'[]','[]','[]',1,'2026-01-01T00:00:00Z')";
+
+test('un conector APAGADO no pide icono: 403 y nada sale a la red; al encenderlo, sí', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  o.d1._db.prepare("update conectores set activo = 0 where id = 'c1'").run();
+  assert.equal((await o.pedir('mi-servicio.example.com')).status, 403); assert.equal(o.llamadas.length, 0);
+  o.d1._db.prepare("update conectores set activo = 1 where id = 'c1'").run();
+  assert.equal((await o.pedir('mi-servicio.example.com')).status, 200);
+});
+
+test('un hook FETCH_ICONO_CONECTOR que no es una función se ignora (usa fetch), no revienta', { skip: SALTAR }, async () => {
+  const d1 = crearD1(), c = await sembrar(d1, { email: 'ana@panaclaw.test' });
+  d1._db.prepare(FILA).run();
+  const env = envDePrueba(d1, { MEDIA: crearR2(), FETCH_ICONO_CONECTOR: 'no soy una función' });
+  const id = d1._db.prepare('select id from users where email = ?').get(c.email).id;
+  const cookie = `__Host-sesion=${await abrirSesion(d1, id)}`;
+  const orig = globalThis.fetch; let usado = 0; globalThis.fetch = async () => { usado++; return new Response('no', { status: 404 }); };
+  try { const r = await manejar(new Request('https://oficina.test/api/icono-conector?host=mi-servicio.example.com', { headers: { cookie } }), env); assert.equal(r.status, 404); assert.equal(usado, 1); }
+  finally { globalThis.fetch = orig; }
+});
+
+test('caché negativa: un host que falló no se vuelve a pedir hasta que pasa su plazo; el mapa tiene tope', async () => {
+  const neg = new Map(); let t = 1000, pedidos = 0;
+  const base = { registrados: new Set(['a.example.com']), bucket: null, negativa: neg, ahora: () => t, fetchFn: async () => { pedidos++; return new Response('no', { status: 404 }); } };
+  assert.equal((await obtener({ ...base, crudo: 'a.example.com' })).estado, 404); assert.equal(pedidos, 1);
+  assert.equal((await obtener({ ...base, crudo: 'a.example.com' })).estado, 404); assert.equal(pedidos, 1, 'recordado');
+  t += NEGATIVA_MS + 1;
+  assert.equal((await obtener({ ...base, crudo: 'a.example.com' })).estado, 404); assert.equal(pedidos, 2, 'pasado el plazo se vuelve a intentar');
+  const muchos = new Set(Array.from({ length: NEGATIVA_MAX + 50 }, (_, i) => `h${i}.example.com`));
+  for (const h of muchos) await obtener({ ...base, registrados: muchos, crudo: h });
+  assert.ok(neg.size <= NEGATIVA_MAX, `tope ${neg.size}`);
+});
+
+test('sin caché negativa propia, obtener no recuerda nada entre llamadas (no hay mapa global)', async () => {
+  let pedidos = 0;
+  const base = { registrados: new Set(['a.example.com']), bucket: null, crudo: 'a.example.com', fetchFn: async () => { pedidos++; return new Response('no', { status: 404 }); } };
+  await obtener(base); await obtener(base);
+  assert.equal(pedidos, 2);
 });

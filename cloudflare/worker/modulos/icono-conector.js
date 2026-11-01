@@ -4,6 +4,8 @@ import { error } from '../lib/respuesta.js';
 import { obtener, hostsRegistrados, cabecerasDe, PEDIDOS_POR_MINUTO } from '../lib/icono-conector.js';
 import { tasa, relojDe } from '../lib/equipo.js';
 
+const NEGATIVAS = new WeakMap(); // una caché negativa por `env` (por instancia del Worker; en las pruebas, una por oficina)
+
 export const nombre = 'icono-conector';
 export const grupos = ['icono-conector'];
 
@@ -11,8 +13,9 @@ export async function manejar(ctx) {
   const { req, env, db, ruta, url, usuario } = ctx;
   if (ruta !== '/api/icono-conector') return null;
   if (req.method !== 'GET') return error('Método no permitido', 405);
-  const r = await obtener({
-    crudo: url.searchParams.get('host'), registrados: await hostsRegistrados(env.DB), bucket: env.MEDIA, fetchFn: env.FETCH_ICONO_CONECTOR || fetch,
+  if (!NEGATIVAS.has(env)) NEGATIVAS.set(env, new Map());
+  const r = await obtener({ negativa: NEGATIVAS.get(env),
+    crudo: url.searchParams.get('host'), registrados: await hostsRegistrados(env.DB), bucket: env.MEDIA, fetchFn: typeof env.FETCH_ICONO_CONECTOR === 'function' ? env.FETCH_ICONO_CONECTOR : fetch,
     ifNoneMatch: req.headers.get('if-none-match'), cupo: async () => (await tasa(db, `iconoc:${usuario.id}`, PEDIDOS_POR_MINUTO, relojDe(env))).ok,
   });
   if (r.error) return error(r.error, r.estado);

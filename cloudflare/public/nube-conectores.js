@@ -19,7 +19,7 @@
     return { k: 'ok', icono: '✓', txt: 'Listo', que: '' };
   }
   // Un conector sin logo en el registro (el que añadió el usuario) prueba el favicon de su propio dominio por el mismo origen (/api/icono-conector); si no hay, se queda con su monograma.
-  const sinLogo = (c) => !c.plantilla || c.plantilla === 'otro';
+  const sinLogo = (c) => c.activo && (!c.plantilla || c.plantilla === 'otro'); // uno apagado no pide icono
   const hostDe = (u) => { try { return new URL(/^https?:/.test(u) ? u : `https://${u}`).hostname; } catch { return ''; } };
   const afinarIconos = (raiz) => raiz.querySelectorAll('img[data-fav]').forEach((img) => {
     const h = img.dataset.fav; img.removeAttribute('data-fav'); if (!h) return;
