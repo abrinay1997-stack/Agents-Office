@@ -28,7 +28,7 @@ export const grupos = ['series'];
 
 const APAGADO = 'Las series en la nube están apagadas: un administrador las enciende con dimitri.seriesNube. Mientras, siguen en la oficina de tu computadora.';
 // SEG-04: los motivos de una pausa o de un plano pueden llevar cifras del tope del Estudio o precios; quien no es administrador solo ve que hay un motivo, sin cifras ni palabras de dinero.
-const CON_DINERO = /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares/i; // solo cifras de dinero: «plano 2» o «intento 3» se quedan
+const CON_DINERO = /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares|\b(?:tope|presupuesto|cupo|gastad[oa]s?|disponible|reservad[oa]s?|l[ií]mite)\b[^.;\n]{0,30}?\d/i; // solo dinero y topes con número («tope de 12», «cupo 20 imágenes»): «plano 2» o «intento 3» se quedan
 const CORREO = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
 export const sinCifras = (t) => { if (typeof t !== 'string') return t; const x = t.replace(CORREO, 'un administrador'); return CON_DINERO.test(x) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : x; };
 const limpiarMotivos = (v) => (v && typeof v === 'object' ? { ...v, ...('pausa_motivo' in v ? { pausa_motivo: sinCifras(v.pausa_motivo) } : {}), ...(Array.isArray(v.escaleta) ? { escaleta: v.escaleta.map((p) => ({ ...p, motivo: sinCifras(p.motivo) })) } : {}) } : v);

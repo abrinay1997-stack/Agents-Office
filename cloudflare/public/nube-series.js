@@ -65,7 +65,7 @@
     function programar() { // solo se sondea con la pantalla a la vista, la pestaña visible y una serie generando
       clearTimeout(temporizador);
       const vive = S.vista === 'detalle' ? ['muestra', 'corriendo'].includes(S.serie?.estado) : (S.lista || []).some((x) => ['muestra', 'corriendo'].includes(x.estado));
-      if (vive && visible && !document.hidden && !cerrada && aLaVista()) temporizador = setTimeout(() => { if (!vivo()) return cerrar(); if (!aLaVista()) return; /* se reanuda con mostrar() */ if (visible && !document.hidden && !S.conf && !S.resolv) recargar(true); else programar(); }, 10000);
+      if (vive && visible && !document.hidden && !cerrada) temporizador = setTimeout(() => { if (!vivo()) return cerrar(); if (!aLaVista()) return programar(); /* no se ve (otra pestaña de Ajustes, ventana cerrada): ninguna petición, pero el temporizador sigue y se reanuda solo cuando vuelva a verse */ if (visible && !document.hidden && !S.conf && !S.resolv) recargar(true); else programar(); }, 10000);
     }
     function ocultar() { visible = false; clearTimeout(temporizador); seq++; } // lo que venga en vuelo se descarta
     function mostrar() { visible = true; if (cerrada) return; pintar(); if (enVuelo) programar(); else recargar(true); } // con una carga en vuelo (descartada por ocultar) el sondeo se rearma aquí
