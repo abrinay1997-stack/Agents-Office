@@ -152,7 +152,7 @@ export function crearShell() {
     refs.acc.innerHTML = enEsc || hojaAbierta && false ? '' : (c.acciones || []).map((a, i) => `<button type="button" class="mv-ic" data-i="${i}" aria-label="${esc(a.etiqueta)}">${svg(a.icono)}${a.punto ? '<i class="mv-ic-punto" aria-hidden="true"></i>' : ''}</button>`).join('');
     const n = store ? store.aprobaciones.length : 0;
     refs.aprob.hidden = !n || (enEsc && pila.cima().item.ventana); refs.aprob.innerHTML = `${svg('alerta')}<b>${n}</b>`; refs.aprob.setAttribute('aria-label', `${n} ${n === 1 ? 'espera' : 'esperan'} tu visto bueno. Abrir`);
-    const fr = raiz.querySelector('.mv-franja'), hay = n > 0 && !franjaNo && id !== 'aprobaciones' && !enEsc;
+    const fr = raiz.querySelector('.mv-franja'), hay = n > 0 && !franjaNo && id !== 'aprobaciones' && id !== 'inicio' && !enEsc; // en Inicio la tarjeta «Esperan tu OK» ya está arriba: la franja sería lo mismo dos veces
     fr.hidden = !hay; raiz.classList.toggle('con-franja', hay);
     if (hay) fr.querySelector('[data-ver]').innerHTML = `${svg('alerta')}<span><b>${n === 1 ? '1 borrador espera' : n + ' borradores esperan'} tu OK</b> · Ver</span>`;
     const punto = raiz.querySelector('[data-tab="inicio"] .mv-punto'); if (punto) punto.hidden = !n;

@@ -133,6 +133,10 @@ body.movil .cx-b { flex: 1 1 100%; font-size: 16px; min-height: 48px; }
 /* N1 — campanita y hoja «Mientras no estabas» (se añade al final de nube.css). Colores de las notas con texto oscuro (AA); nada se atenúa con opacity; sin animación con «reducir movimiento». */
 .nt-campana { position: fixed; right: 16px; bottom: 16px; z-index: 125; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 body.movil .nt-campana { bottom: calc(76px + env(safe-area-inset-bottom)); }
+/* En la cabecera de la versión móvil (1 nov 2026): no flota, no tapa nada. La medida es suya (44 px) por si `.mv-ic` no estuviera. */
+.nt-campana.nt-en-cab, body.movil .nt-campana.nt-en-cab { position: relative; right: auto; bottom: auto; z-index: auto; width: 44px; height: 44px; min-width: 44px; flex: none; border: 0; border-radius: 12px; background: none; box-shadow: none; color: inherit; }
+.nt-campana.nt-en-cab:active { background: rgba(127,127,127,.18); }
+.nt-campana.nt-en-cab .nt-n, body.movil .mv-bar-der .ch-n { top: 2px; right: 0; }
 .nt-campana:focus-visible, .nt-hoja button:focus-visible, .nt-hoja select:focus-visible, .nt-hoja textarea:focus-visible, .nt-sw input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .nt-n { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #B3261E; color: #fff; font: 700 12px/20px system-ui, sans-serif; text-align: center; }
 .nt-hoja { position: fixed; right: 16px; bottom: 72px; z-index: 126; width: min(400px, calc(100vw - 32px)); max-height: min(78vh, 640px); max-height: min(78dvh, 640px); overflow: auto; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 14px; padding: 12px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.28); }

@@ -317,3 +317,8 @@ Criterio final: **cero scroll horizontal a 320 px**; **ningún objetivo <44 px**
 - Herramienta: `scripts/movil-auditoria.mjs` (`PERFIL=390|360|320`, `PARTE2=1`, `PARTE3=1`).
 - Capturas y medidas: `docs/capturas-movil/antes/`.
 - Maquetas: `docs/diseno-movil/*.svg`.
+
+
+## Inicio del teléfono, segunda vuelta (1 nov 2026)
+
+Pedido del dueño con dos capturas de su iPhone (modo oscuro). Arreglado: ✅ la campanita ya no flota sobre el contenido (vive en la cabecera); ✅ avisos sin repetir y separados en «Hoy» / «Antes de hoy»; ✅ «Lo que viene» sin cosas dobles y por día; ✅ el aviso de la oficina dice qué pasa y a dónde lleva; ✅ las acciones rápidas arriba; ✅ «Lo tuyo hoy · 0» en una sola línea; ✅ lo urgente primero; ✅ el chat del equipo y Dimitri con iconos distintos; ✅ «Actualizado hace…» además de tirar para refrescar. Detalle en CLAUDE.md → «Inicio del teléfono rehecho».

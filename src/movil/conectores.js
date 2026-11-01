@@ -25,5 +25,13 @@ export function tarjetaHTML(mcp) {
     <div class="mv-cxs" role="list" aria-label="Estado de cada conector">${ver.map(s => `<span role="listitem" aria-label="${esc(bonito(s.name))}: ${esc((ESTADO[s.status] || ESTADO.pending)[0])}">${tile(s)}</span>`).join('')}${l.length > ver.length ? `<span class="mv-cx-mas">+${l.length - ver.length}</span>` : ''}</div></section>`;
 }
 
+/** Inicio (1 nov 2026): los conectores en UNA fila compacta (nombre, hasta 5 iconos con su estado y «1 de 1»); el detalle sigue en su pantalla. */
+export function lineaHTML(mcp) {
+  const l = (mcp && mcp.servers || []).filter(sinSistema);
+  if (!l.length) return `<button type="button" class="ini-linea" data-conectores aria-label="Conectores: ninguno conectado. Abrir">${svg('conectores')}<span class="ini-linea-t">Conectores</span><span class="ini-linea-m">Ninguno conectado</span>${svg('der', 'mv-der')}</button>`;
+  const ok = l.filter(s => s.status === 'connected').length, mal = l.length - ok, ver = l.slice().sort((a, b) => (a.status === 'connected') - (b.status === 'connected')).slice(0, 5);
+  return `<button type="button" class="ini-linea" data-conectores aria-label="Conectores: ${ok} de ${l.length} conectados${mal ? ', ' + mal + (mal === 1 ? ' con problema' : ' con problemas') : ''}. Abrir">${svg('conectores')}<span class="ini-linea-t">Conectores</span><span class="mv-cxs mv-cxs-mini" aria-hidden="true">${ver.map(tile).join('')}</span><span class="ini-linea-m ${mal ? 'warn' : ''}">${ok} de ${l.length}</span>${svg('der', 'mv-der')}</button>`;
+}
+
 /** El panel de conectores es una pantalla propia (vistas/conectores.js): la lista, el detalle de cada uno, «Probar conexión» y «+ Añadir». */
 export function abrirConectores(ctx) { ctx.navegar('conectores'); }
