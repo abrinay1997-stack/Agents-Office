@@ -83,7 +83,7 @@ test('informeAnuncios: un mes cerrado con sus totales, por campaña, los mejores
     { at: '2026-09-29T10:01:00Z', quien: 'dueno', que: 'deshacer:pausar', objeto: { id: 'A9', nivel: 'anuncio', nombre: 'Otro' }, antes: { estado: 'PAUSED' }, despues: { estado: 'ACTIVE' } },
     { at: '2026-10-02T10:00:00Z', quien: 'dueno', que: 'activar', objeto: { id: 'C2', nivel: 'campana', nombre: 'Web' }, antes: { estado: 'PAUSED' }, despues: { estado: 'ACTIVE' } }, // octubre: no entra
   ];
-  const r = informeAnuncios({ mes: '2026-09', hoy: '2026-10-09', moneda: 'USD', resumen: resumirMes({ campanas: v.campanas, filas: SEP }), cobertura: { leidos: 30, total: 30 }, historial, sugerencias, topes: { mensual: 300 } });
+  const r = informeAnuncios({ mes: '2026-09', hoy: '2026-10-09', zona: 'America/Panama', moneda: 'USD', resumen: resumirMes({ campanas: v.campanas, filas: SEP }), cobertura: { leidos: 30, total: 30 }, historial, sugerencias, topes: { mensual: 300 } });
   assert.equal(r.titulo, 'Informe de anuncios — septiembre de 2026');
   const t = r.texto;
   assert.match(t, /## El gasto\n- Gastado en el mes: \*\*49,00\sUS\$\*\*\./); assert.doesNotMatch(t, /tope mensual/, 'el tope es el de ahora: solo se cita en el mes en curso');
@@ -175,7 +175,9 @@ async function montar(t, { pixel = '' } = {}) {
   const kpis = { leer: () => JSON.parse(JSON.stringify(kp)), guardar: k => { kp = JSON.parse(JSON.stringify(k)); guardados++; } };
   let ind = null, despues = 0;
   // como serve.mjs: tras cada lectura buena de cifras, los indicadores al día
-  const sync = crearSincronizador({ meta, ads: crearMetaAds({ meta }), dir: path.join(dir, 'anuncios'), ajustes: () => aj, despuesDeCifras: () => { despues++; ind?.llevar(); } });
+  // reloj fijo al mediodía de Panamá de «hoy»: el historial se apunta con la hora UTC y, entre las 19:00 del último día del mes y la medianoche, caía en el mes siguiente y el test fallaba solo a esa hora
+  const AHORA = Date.parse(`${hoy}T12:00:00-05:00`);
+  const sync = crearSincronizador({ meta, ads: crearMetaAds({ meta }), dir: path.join(dir, 'anuncios'), ajustes: () => aj, ahora: () => AHORA, despuesDeCifras: () => { despues++; ind?.llevar(); } });
   ind = crearIndicadoresAnuncios({ sync, kpis, ajustes: () => aj });
   return { g, sync, ind, aj, dir, hoy, ayer, f, kp: () => kp, poner: k => { kp = JSON.parse(JSON.stringify(k)); }, guardados: () => guardados, despues: () => despues };
 }
@@ -283,4 +285,17 @@ test('A7: la nota del informe no viaja por GitHub (`.gitignore` ya ignora brain-
   assert.ok(gi.includes('brain-panaclaw/Agents Office/*'), 'la carpeta de la oficina en el cerebro del equipo está ignorada');
   const vuelta = gi.filter(l => l.startsWith('!brain-panaclaw/Agents Office/'));
   assert.ok(!vuelta.some(l => /informes/.test(l)), 'y ninguna excepción la devuelve: ' + vuelta.join(', '));
+});
+
+test('el informe cuenta el mes en la zona de la cuenta, no en UTC (borde del mes)', () => {
+  const h = (at) => ({ at, quien: 'dueno', que: 'pausar', objeto: { id: 'A1', nivel: 'anuncio', nombre: 'Combo' }, antes: { estado: 'ACTIVE' }, despues: { estado: 'PAUSED' } });
+  const zona = 'America/Panama'; // UTC-5, sin cambio de hora
+  const oct = new Date('2026-10-31T23:30:00-05:00').toISOString(), nov = new Date('2026-11-01T00:30:00-05:00').toISOString(); // = 2026-11-01T04:30Z y 05:30Z: en UTC los dos son noviembre
+  assert.equal(oct, '2026-11-01T04:30:00.000Z');
+  const de = (mes, hoy, at) => informeAnuncios({ mes, hoy, zona, historial: [h(at)] }).texto;
+  const t1 = de('2026-10', '2026-11-05', oct);
+  assert.match(t1, /En total: 1 pausa\./, '31 oct 23:30 Panamá cuenta en octubre'); assert.match(t1, /2026-10-31 · Pausa/, 'y se rotula con su día local');
+  assert.doesNotMatch(de('2026-11', '2026-11-05', oct), /En total: 1 pausa\./, 'y no en noviembre');
+  assert.match(de('2026-11', '2026-11-05', nov), /En total: 1 pausa\./, '1 nov 00:30 Panamá cuenta en noviembre');
+  assert.doesNotMatch(de('2026-10', '2026-11-05', nov), /En total: 1 pausa\./, 'y no en octubre');
 });

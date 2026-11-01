@@ -8,7 +8,7 @@ import { manejar } from '../worker/lib/rutas.js';
 import { cadaMinuto, webhookConversiones, permitido } from '../worker/modulos/anuncios.js';
 import { guardarDoc, leerDoc } from '../worker/lib/almacen.js';
 import { TOKEN_STAND, CUENTA_STAND } from '../../tests/meta-stand.mjs';
-import { etiqueta } from '../../anuncios/modelo.mjs';
+import { etiqueta, fechaEn } from '../../anuncios/modelo.mjs';
 import { SALTAR } from './d1-memoria.mjs';
 import { nube } from './ayuda-meta.mjs';
 import { pedir } from './d1-memoria.mjs';
@@ -212,7 +212,7 @@ test('el freno por uso de Meta cruza las peticiones: si Meta pidió esperar, la 
 
 test('el informe del mes se guarda como nota del Cerebro (en D1) y no como archivo', { skip: SALTAR }, async () => {
   const o = await nube(); await leida(o);
-  const mes = new Date().toISOString().slice(0, 7);
+  const mes = fechaEn('America/Panama').slice(0, 7); // la cuenta del Meta de mentira está en Panamá y el informe cuenta el mes en la zona de la cuenta (el Worker usa el reloj real: no se puede fijar el instante desde aquí)
   const g = await o.api('admin', 'GET', `/api/anuncios/informe?mes=${mes}`); assert.equal(g.status, 200); assert.ok(g.j.titulo && g.j.texto && g.j.cifras);
   assert.equal((await o.api('admin', 'POST', `/api/anuncios/informe?mes=${mes}`, { por: 'agente' })).status, 403);
   const p = await o.api('admin', 'POST', `/api/anuncios/informe?mes=${mes}`, {});

@@ -12,7 +12,7 @@
 // Lo puro (con test, y también lo usa la demo de la página en dist/anuncios-vista.js): informeAnuncios, resumirMes, resumenDeVista,
 // lineaInforme, leerLinea. `crearInforme` lee y guarda con lo que se le pasa (fs, renombrar): este archivo no importa nada de Node.
 // ============================================================
-import { cifras, resultadoDe } from './modelo.mjs';
+import { cifras, resultadoDe, fechaEn } from './modelo.mjs';
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const pad = n => String(n).padStart(2, '0');
@@ -97,13 +97,14 @@ export function mejoresCreativos(anuncios = [], n = 3) {
  * @param {object} o
  * @param {string} o.mes           'AAAA-MM'
  * @param {string} o.hoy           'AAAA-MM-DD' en la zona de la cuenta
+ * @param {string} [o.zona]     zona IANA de la cuenta (para pasar los instantes `at` UTC a su mes y día)
  * @param {object|null} o.resumen resumirMes / resumenDeVista; null = la oficina no tiene cifras de ese mes
  * @param {object} o.cobertura     { leidos, total } — días del mes de los que la oficina tiene cifras (aunque no gastara)
  * @param {Array}  o.historial     data/anuncios/historial.jsonl ({ at, quien, que, objeto, antes, despues })
  * @param {Array}  o.sugerencias   las de GET /api/anuncios/sugerencias (con estado, aplicadaAt, resultado)
  * @param {object} o.topes         { mensual } (solo se cita en el mes en curso: es el de ahora)
  */
-export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobertura = null, historial = [], sugerencias = [], topes = {}, conectado = true } = {}) {
+export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobertura = null, historial = [], sugerencias = [], topes = {}, conectado = true, zona = null } = {}) {
   if (!/^\d{4}-\d{2}$/.test(mes || '')) throw Object.assign(new Error('el mes va como AAAA-MM'), { status: 400 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(hoy || '')) throw Object.assign(new Error('falta hoy (AAAA-MM-DD)'), { status: 400 });
   if (mes > hoy.slice(0, 7)) throw Object.assign(new Error(`${nombreMes(mes)} todavía no empieza`), { status: 400 });
@@ -151,7 +152,9 @@ export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobe
   L.push('');
 
   // ---- las sugerencias aplicadas y qué pasó
-  const delMes = at => String(at || '').slice(0, 7) === mes;
+  // Los instantes (`at`) se apuntan en UTC; el mes y el día del informe son los de la zona de la cuenta (como `hoy`): se convierten antes de comparar.
+  const diaLocal = at => { const ms = Date.parse(at); return Number.isFinite(ms) && /T/.test(String(at)) ? fechaEn(zona, ms) : String(at || '').slice(0, 10); };
+  const delMes = at => diaLocal(at).slice(0, 7) === mes;
   const aplicadas = (sugerencias || []).filter(s => s.estado === 'aplicada' && delMes(s.aplicadaAt));
   const descartadas = (sugerencias || []).filter(s => s.estado === 'descartada' && delMes(s.descartadaAt));
   L.push('## Lo que se aplicó de las sugerencias');
@@ -159,7 +162,7 @@ export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobe
   for (const s of aplicadas.slice(0, 12)) {
     const r = s.resultado, rt = String(typeof r === 'string' ? r : r?.texto || '').trim().replace(/\.$/, ''), mejoro = typeof r === 'object' && r ? r.mejoro : null;
     const despues = r ? `después: ${rt || 'sin datos'}${mejoro === true ? ' (mejoró)' : mejoro === false ? ' (no mejoró)' : ''}` : 'todavía no se sabe qué pasó: se mide 7 días después de aplicarla';
-    L.push(`- ${String(s.aplicadaAt).slice(0, 10)} · «${REGLA[s.regla] || s.regla}» sobre «${s.objeto?.nombre || s.objeto?.id || '?'}»${s.cambio?.tipo ? ` (${String(s.cambio.tipo).replace(/_/g, ' ')})` : ''}, aplicada ${porQuien(s.aplicadaPor || 'dueno')} — ${despues}.`);
+    L.push(`- ${diaLocal(s.aplicadaAt)} · «${REGLA[s.regla] || s.regla}» sobre «${s.objeto?.nombre || s.objeto?.id || '?'}»${s.cambio?.tipo ? ` (${String(s.cambio.tipo).replace(/_/g, ' ')})` : ''}, aplicada ${porQuien(s.aplicadaPor || 'dueno')} — ${despues}.`);
   }
   if (descartadas.length) L.push(`- ${plural(descartadas.length, 'sugerencia descartada', 'sugerencias descartadas')} este mes.`);
   L.push('');
@@ -176,7 +179,7 @@ export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobe
       const que = String(h.que || ''), base = que.startsWith('deshacer:') ? que.slice(9) : que, de = DEL[h.objeto?.nivel] || 'de';
       const q = HIZO[base] ? `${que.startsWith('deshacer:') ? `Deshecha la ${HIZO[base].toLowerCase()}` : HIZO[base]} ${de}` : `${que ? que.charAt(0).toUpperCase() + que.slice(1) : 'Cambio'}:`;
       const ct = cambioTexto(h.antes, h.despues, moneda);
-      L.push(`- ${String(h.at).slice(0, 10)} · ${q} «${h.objeto?.nombre || h.objeto?.id || '?'}»${ct ? ` (${ct})` : ''}, ${porQuien(h.quien)}.`);
+      L.push(`- ${diaLocal(h.at)} · ${q} «${h.objeto?.nombre || h.objeto?.id || '?'}»${ct ? ` (${ct})` : ''}, ${porQuien(h.quien)}.`);
     }
     if (cambios.length > 15) L.push(`- …y ${cambios.length - 15} cambios antes (en Anuncios → Historial).`);
   }
@@ -232,7 +235,7 @@ export function crearInforme({ sync, sugerencias = null, dir, fs, renombrar, aho
     const filas = desde <= hasta ? sync.filas(desde, hasta) : [];
     const resumen = leidos || filas.length ? resumirMes({ campanas: v?.campanas || [], filas }) : null;
     let sug = []; try { sug = sugerencias?.lista() || []; } catch { /* sin sugerencias todavía */ }
-    return informeAnuncios({ mes, hoy, moneda, resumen, cobertura: leidos === null ? null : { leidos, total: diasDelMes(mes) }, historial: sync.historial(), sugerencias: sug, topes: sync.topes?.() || {}, conectado: Boolean(con.configurado || v?.cuenta) });
+    return informeAnuncios({ mes, hoy, zona: sync.zona?.() || null, moneda, resumen, cobertura: leidos === null ? null : { leidos, total: diasDelMes(mes) }, historial: sync.historial(), sugerencias: sug, topes: sync.topes?.() || {}, conectado: Boolean(con.configurado || v?.cuenta) });
   }
   const archivo = mes => unirRuta(dir, `${mes} anuncios.md`);
   /** Lo guarda como nota (escritura a un temporal y renombrar). → { …informe, nota: 'Agents Office/informes/AAAA-MM anuncios.md' } */

@@ -564,7 +564,7 @@ test('A4: el paso 4 de un borrador que impulsa una publicación enseña la publi
   assert.doesNotMatch(h, /data-bgaleria|data-bestudio|data-bmejorar|data-bmejora=|data-bquitar/, 'ni galería, ni Estudio, ni mejoras, ni quitar');
   assert.doesNotMatch(h, /<button[^>]*>[^<]*<button/, 'un botón nunca dentro de otro');
   const rev = pasoRevisionHTML(b, { servida: true });
-  assert.match(rev, /Se impulsa la publicación de Instagram del 5 oct/); assert.doesNotMatch(rev, /data-bmetaver/, 'sin la vista previa de Meta: es la publicación');
+  assert.match(rev, new RegExp(`Se impulsa la publicación de Instagram del ${new Date("2026-10-05T23:00:00.000Z").getDate()} oct`)); /* el día se pinta en la zona de quien mira: no depende de la zona de la máquina */ assert.doesNotMatch(rev, /data-bmetaver/, 'sin la vista previa de Meta: es la publicación');
   // un problema de la publicación lleva al paso 4
   assert.equal(problemasPorPaso({ ...b, validacion: { problemas: [{ campo: 'origen', texto: 'Meta no deja impulsar esta publicación: tiene música con derechos.' }] } })[3], 1);
   // se crea en pausa en la demo y la campaña aparece con la miniatura de la publicación

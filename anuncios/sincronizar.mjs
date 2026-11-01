@@ -202,5 +202,5 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
   /** { id: ms } la última vez que se SUBIÓ el presupuesto de cada objeto desde la oficina (para «como mucho una vez cada 72 h»). */
   function subidas() { const out = {}; for (const e of historial()) if (e?.que === 'subir_presupuesto' && e.objeto?.id && !(e.objeto.id in out)) out[e.objeto.id] = Date.parse(e.at) || 0; return out; }
 
-  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, panelAtAhora: () => panelAt, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde, diasLeidos };
+  return { listo, zona, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, panelAtAhora: () => panelAt, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde, diasLeidos };
 }
