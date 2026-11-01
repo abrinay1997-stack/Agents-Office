@@ -83,7 +83,7 @@ test('informeAnuncios: un mes cerrado con sus totales, por campaña, los mejores
     { at: '2026-09-29T10:01:00Z', quien: 'dueno', que: 'deshacer:pausar', objeto: { id: 'A9', nivel: 'anuncio', nombre: 'Otro' }, antes: { estado: 'PAUSED' }, despues: { estado: 'ACTIVE' } },
     { at: '2026-10-02T10:00:00Z', quien: 'dueno', que: 'activar', objeto: { id: 'C2', nivel: 'campana', nombre: 'Web' }, antes: { estado: 'PAUSED' }, despues: { estado: 'ACTIVE' } }, // octubre: no entra
   ];
-  const r = informeAnuncios({ mes: '2026-09', hoy: '2026-10-09', moneda: 'USD', resumen: resumirMes({ campanas: v.campanas, filas: SEP }), cobertura: { leidos: 30, total: 30 }, historial, sugerencias, topes: { mensual: 300 } });
+  const r = informeAnuncios({ mes: '2026-09', hoy: '2026-10-09', zona: 'America/Panama', moneda: 'USD', resumen: resumirMes({ campanas: v.campanas, filas: SEP }), cobertura: { leidos: 30, total: 30 }, historial, sugerencias, topes: { mensual: 300 } });
   assert.equal(r.titulo, 'Informe de anuncios — septiembre de 2026');
   const t = r.texto;
   assert.match(t, /## El gasto\n- Gastado en el mes: \*\*49,00\sUS\$\*\*\./); assert.doesNotMatch(t, /tope mensual/, 'el tope es el de ahora: solo se cita en el mes en curso');

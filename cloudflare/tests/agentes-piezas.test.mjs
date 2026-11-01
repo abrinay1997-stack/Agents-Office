@@ -131,7 +131,8 @@ test('RUTAS: /api/costs, /api/costs.csv, /api/quality y /api/status contestan co
   for (const k of ['month', 'usd', 'budget', 'runs', 'tasksDone', 'perTask', 'hours', 'prices', 'priceSources', 'config', 'provider', 'subscription', 'publicidad']) assert.ok(k in c, k);
   assert.ok(c.usd > 0 && c.runs === 1 && c.tasksDone === 1);
   const u = (await web.admin('GET', '/api/usage')).j; assert.equal(u.ok, true); assert.equal(u.source, 'nube'); assert.ok(u.today.tokens > 0 && u.today.runs === 1 && u.today.usd > 0, 'el medidor de la esquina cuenta el gasto de HOY (no hay ventana de 5 h en la nube)'); assert.ok(u.month.usd >= u.today.usd); assert.equal(u.month.percent, null, 'sin tope del mes no hay porcentaje'); assert.equal('window' in u, false, 'nada de «se reinicia»');
-  const csv = await web.admin('GET', '/api/costs.csv'); assert.equal(csv.status, 200); assert.match(csv.texto, new RegExp(t.id.slice(0, 4)) || /./);
+  const tc = d1._db.prepare('select min(t) t from costos').get().t, dm = new Date(tc), mesCosto = `${dm.getFullYear()}-${String(dm.getMonth() + 1).padStart(2, '0')}`; // el mes en que se sembró el costo (sin esto, al cambiar de mes entre medias o con otra zona, el CSV salía solo con la cabecera)
+  const csv = await web.admin('GET', `/api/costs.csv?month=${mesCosto}`); assert.equal(csv.status, 200); assert.match(csv.texto, new RegExp(t.id.slice(0, 4)) || /./);
   const q = (await web.admin('GET', '/api/quality')).j; assert.deepEqual(Object.keys(q).sort(), ['agents', 'drops', 'reviews', 'routing']); assert.ok(q.agents.some(a => a.id === 'elead'));
   const s = (await web.admin('GET', '/api/status')).j; assert.deepEqual(Object.keys(s).sort(), ['at', 'checks', 'notices', 'overall', 'unread']);
   assert.deepEqual(s.checks.map(x => x.id).slice(0, 4), ['claude', 'conectores', 'rutinas', 'cola']);
