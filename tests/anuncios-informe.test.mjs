@@ -175,7 +175,9 @@ async function montar(t, { pixel = '' } = {}) {
   const kpis = { leer: () => JSON.parse(JSON.stringify(kp)), guardar: k => { kp = JSON.parse(JSON.stringify(k)); guardados++; } };
   let ind = null, despues = 0;
   // como serve.mjs: tras cada lectura buena de cifras, los indicadores al día
-  const sync = crearSincronizador({ meta, ads: crearMetaAds({ meta }), dir: path.join(dir, 'anuncios'), ajustes: () => aj, despuesDeCifras: () => { despues++; ind?.llevar(); } });
+  // reloj fijo al mediodía de Panamá de «hoy»: el historial se apunta con la hora UTC y, entre las 19:00 del último día del mes y la medianoche, caía en el mes siguiente y el test fallaba solo a esa hora
+  const AHORA = Date.parse(`${hoy}T12:00:00-05:00`);
+  const sync = crearSincronizador({ meta, ads: crearMetaAds({ meta }), dir: path.join(dir, 'anuncios'), ajustes: () => aj, ahora: () => AHORA, despuesDeCifras: () => { despues++; ind?.llevar(); } });
   ind = crearIndicadoresAnuncios({ sync, kpis, ajustes: () => aj });
   return { g, sync, ind, aj, dir, hoy, ayer, f, kp: () => kp, poner: k => { kp = JSON.parse(JSON.stringify(k)); }, guardados: () => guardados, despues: () => despues };
 }
