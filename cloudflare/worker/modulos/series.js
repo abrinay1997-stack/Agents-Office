@@ -28,9 +28,17 @@ export const grupos = ['series'];
 
 const APAGADO = 'Las series en la nube están apagadas: un administrador las enciende con dimitri.seriesNube. Mientras, siguen en la oficina de tu computadora.';
 // SEG-04: los motivos de una pausa o de un plano pueden llevar cifras del tope del Estudio o precios; quien no es administrador solo ve que hay un motivo, sin cifras ni palabras de dinero.
-const CON_DINERO = /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares|\b(?:tope|presupuesto|cupo|gastad[oa]s?|disponible|reservad[oa]s?|l[ií]mite)\b[^.;\n]{0,30}?\d/i; // solo dinero y topes con número («tope de 12», «cupo 20 imágenes»): «plano 2» o «intento 3» se quedan
+// Heurística: el tope del Estudio no es un secreto, el dinero exacto sí. Se enmascara lo que parece una cifra de dinero o de tope (con símbolo, decimales, «tope de 12», «cupo 20 imágenes», «12 imágenes de cupo», «12.5 gastados», «cuesta 4.5»).
+// El número de un «plano 2», «intento 3» o «paso 4» NO cuenta (los lookbehind). LÍMITE CONOCIDO: una cifra escrita en palabras («tope de doce», «tope mil») no se detecta.
+const SIN_PLANO = String.raw`(?<!\b(?:plano|intento|paso)\s+)(?<!\d)`;
+const CON_DINERO = [
+  /(?:US\$|USD|\$)\s*\d|\d+(?:[.,]\d+)?\s*(?:US\$|USD|\$|d[óo]lares)|\d+[.,]\d{2,}|d[óo]lares/i,
+  new RegExp(String.raw`\b(?:tope|presupuesto|cupo|gastad[oa]s?|disponible|reservad[oa]s?|l[ií]mite)\b[^.;\n]{0,30}?` + SIN_PLANO + String.raw`\d`, 'i'), // palabra de tope y, cerca, un número que no sea de un plano
+  new RegExp(SIN_PLANO + String.raw`\d+(?:[.,]\d+)?\s+(?:im[aá]genes\s+)?(?:de\s+)?(?:cupo|presupuesto|tope|gastad[oa]s?|reservad[oa]s?)\b`, 'i'), // el número antes de la palabra: «12 de cupo», «12.5 gastados»
+  /\bcuest\w*\s+(?:US\$|\$)?\s*\d/i,
+];
 const CORREO = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
-export const sinCifras = (t) => { if (typeof t !== 'string') return t; const x = t.replace(CORREO, 'un administrador'); return CON_DINERO.test(x) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : x; };
+export const sinCifras = (t) => { if (typeof t !== 'string') return t; const x = t.replace(CORREO, 'un administrador'); return CON_DINERO.some((r) => r.test(x)) ? 'Pausada por un tope o una revisión: un administrador tiene el detalle.' : x; };
 const limpiarMotivos = (v) => (v && typeof v === 'object' ? { ...v, ...('pausa_motivo' in v ? { pausa_motivo: sinCifras(v.pausa_motivo) } : {}), ...(Array.isArray(v.escaleta) ? { escaleta: v.escaleta.map((p) => ({ ...p, motivo: sinCifras(p.motivo) })) } : {}) } : v);
 const noEsta = (m) => json({ error: m, pendiente: true }, 501);
 const quien = (u) => String(u?.nombre || u?.email || 'alguien').slice(0, 80);

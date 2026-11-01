@@ -398,7 +398,11 @@ test('N6 estático: cada ruta de series con una acción de dinero pasa `confirma
 test('N6 SEG-04 (menores): topes con número sin símbolo («tope de 12», «cupo 20 imágenes») tampoco llegan a editor/lectura; «plano 2» e «intento 3» sí', { skip: SALTAR }, async () => {
   const { sinCifras } = await import('../worker/modulos/series.js');
   const GENERICO = /un administrador tiene el detalle/;
-  for (const t of ['tope de 12', 'el cupo 20 imágenes al día no alcanza', 'Presupuesto diario agotado: 7 de 10', 'gastado 3 en el día', 'quedan disponible 4', 'el límite es 50', 'se pasó de US$5', 'costó 0.45', '12,50 dólares']) assert.match(sinCifras(t), GENERICO, t);
-  for (const t of ['el plano 2 usa una referencia que ya no está', 'intento 3 cancelado', 'la serie se pausó porque el plano 4 falló', 'la pausó un administrador', 'tope alcanzado']) assert.equal(sinCifras(t), t, t);
+  const SI = ['tope de 12', 'el cupo 20 imágenes al día no alcanza', 'Presupuesto diario agotado: 7 de 10', 'gastado 3 en el día', 'quedan disponible 4', 'el límite es 50', 'se pasó de US$5', 'costó 0.45', '12,50 dólares',
+    '12 imágenes de cupo', '3 de cupo', '12.5 gastados', 'cuesta 4.5', 'cuesta $3', 'tope diario 5 y el plano 2 falló', 'plano 12 con el cupo en 40'];
+  for (const t of SI) assert.match(sinCifras(t), GENERICO, `debe enmascararse: ${t}`);
+  const NO = ['el plano 2 usa una referencia que ya no está', 'intento 3 cancelado', 'la serie se pausó porque el plano 4 falló', 'la pausó un administrador', 'tope alcanzado',
+    'cupo agotado, plano 2', 'modelo no disponible: plano 2 falló', 'tope diario alcanzado (plano 3)', 'límite de reintentos alcanzado en el intento 2', 'presupuesto agotado en el paso 4', 'cupo agotado, plano 12', 'plano 2 gastado de más'];
+  for (const t of NO) assert.equal(sinCifras(t), t, `NO debe enmascararse: ${t}`);
   assert.equal(sinCifras(null), null);
 });
