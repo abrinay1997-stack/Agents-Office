@@ -212,7 +212,7 @@ test('el freno por uso de Meta cruza las peticiones: si Meta pidió esperar, la 
 
 test('el informe del mes se guarda como nota del Cerebro (en D1) y no como archivo', { skip: SALTAR }, async () => {
   const o = await nube(); await leida(o);
-  const mes = new Date().toISOString().slice(0, 7);
+  const mes = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 7); // el mes de Panamá (UTC-5), como el informe: en UTC fallaba al final del mes;
   const g = await o.api('admin', 'GET', `/api/anuncios/informe?mes=${mes}`); assert.equal(g.status, 200); assert.ok(g.j.titulo && g.j.texto && g.j.cifras);
   assert.equal((await o.api('admin', 'POST', `/api/anuncios/informe?mes=${mes}`, { por: 'agente' })).status, 403);
   const p = await o.api('admin', 'POST', `/api/anuncios/informe?mes=${mes}`, {});
