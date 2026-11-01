@@ -129,3 +129,10 @@ test('caché negativa: un host que falló no se vuelve a pedir hasta que pasa su
   for (const h of muchos) await obtener({ ...base, registrados: muchos, crudo: h });
   assert.ok(neg.size <= NEGATIVA_MAX, `tope ${neg.size}`);
 });
+
+test('sin caché negativa propia, obtener no recuerda nada entre llamadas (no hay mapa global)', async () => {
+  let pedidos = 0;
+  const base = { registrados: new Set(['a.example.com']), bucket: null, crudo: 'a.example.com', fetchFn: async () => { pedidos++; return new Response('no', { status: 404 }); } };
+  await obtener(base); await obtener(base);
+  assert.equal(pedidos, 2);
+});

@@ -15,7 +15,7 @@ export const RAIZ = 'contenido/icono-conector/';
 export const PEDIDOS_POR_MINUTO = 30; // bajadas NUEVAS por persona y minuto
 export const NEGATIVA_MS = 10 * 60 * 1000; // un host sin favicon (o que falló) no se vuelve a pedir en 10 min
 export const NEGATIVA_MAX = 200; // tope de la caché negativa: nunca crece sin límite (los más viejos salen primero)
-const NEGATIVA = new Map(); // host → hasta cuándo (ms); el módulo pasa una por instancia (`env`)
+// La caché negativa la pone el módulo (una por `env`); sin ella, `obtener` usa un mapa nuevo por llamada (no hay estado global entre pruebas ni entre cuentas).
 const MIME = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', ico: 'image/x-icon' };
 
 /** Un host candidato: dominio completo, en minúsculas, que `urlPermitida` acepta. → { host } | { error, estado } */
@@ -81,7 +81,7 @@ export async function hostsRegistrados(db) {
 }
 
 /** Sirve (o baja y guarda) el favicon de `crudo`. `registrados` = Set de hosts de conectores. → { estado, tipo, bytes|cuerpo, etag } | { estado, error } */
-export async function obtener({ crudo, registrados, bucket, fetchFn, cupo, ifNoneMatch, negativa = NEGATIVA, ahora = Date.now }) {
+export async function obtener({ crudo, registrados, bucket, fetchFn, cupo, ifNoneMatch, negativa = new Map(), ahora = Date.now }) {
   const v = validarHost(crudo); if (v.error) return { estado: v.estado, error: v.error };
   if (!registrados.has(v.host)) return { estado: 403, error: 'Solo se sirve el icono de los conectores que ya están añadidos.' };
   const clave = (await sha256(v.host)).slice(0, 40);
