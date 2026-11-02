@@ -86,7 +86,31 @@ export async function correr({ capturas = false } = {}) {
     const irMas = async (id, espera_) => { await page.locator('.mv-tab[data-tab="mas"]').tap(); await page.waitForSelector('.mv-hoja.mv-mas'); await page.locator(`.mv-lista-b[data-vista="${id}"]`).tap(); await page.waitForSelector(`[data-vista="${id}"]:not([hidden]) ${espera_}`, { timeout: 12000 }); await espera(400); };
 
     // ---- medidas ----
+    // Contraste de TODO botón visible (texto contra el fondo que de verdad se pinta), en claro y oscuro: un primario con el texto del color de su fondo queda «en blanco».
+    const contrasteBotones = async nombre => {
+      for (const tema of ['light', 'dark']) {
+        await page.evaluate(t => { localStorage.setItem('ao.theme', t); if (window.CC?.setDark) window.CC.setDark(t === 'dark'); else document.body.classList.toggle('dark', t === 'dark'); }, tema); await espera(180);
+        const malos = await page.evaluate(() => {
+          const rgba = c => { const m = c.match(/[\d.]+/g).map(Number); return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 }; };
+          const lum = ({ r, g, b }) => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+          const mezcla = (f, b) => ({ r: f.r * f.a + b.r * (1 - f.a), g: f.g * f.a + b.g * (1 - f.a), b: f.b * f.a + b.b * (1 - f.a), a: 1 });
+          const fondo = e => { const capas = []; for (let n = e; n; n = n.parentElement) { const c = rgba(getComputedStyle(n).backgroundColor); if (c.a > 0) { capas.push(c); if (c.a === 1) break; } } let base = { r: 255, g: 255, b: 255, a: 1 }; for (const c of capas.reverse()) base = mezcla(c, base); return base; };
+          const vis = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden' && !e.closest('[hidden],[inert]'); };
+          const out = [];
+          for (const e of document.querySelectorAll('#mvRoot button, #mvRoot a.mv-btn, #mvRoot [role="button"], .mv-hoja button, .mv-hoja a.mv-btn')) {
+            if (!vis(e) || e.disabled || e.getAttribute('aria-disabled') === 'true' || !e.textContent.trim()) continue;
+            const cs = getComputedStyle(e), f = fondo(e), t = rgba(cs.color), tt = mezcla(t, f);
+            const l1 = lum(tt) + .05, l2 = lum(f) + .05, c = Math.max(l1, l2) / Math.min(l1, l2);
+            if (c < 4.5) out.push(`${e.tagName.toLowerCase()}.${(e.className || '').toString().replace(/\s+/g, '.')} «${e.textContent.trim().slice(0, 28)}» ${c.toFixed(2)}:1`);
+          }
+          return out;
+        });
+        paso(!malos.length, `${nombre}: todo botón visible se lee (contraste ≥ 4,5:1) en ${tema === 'dark' ? 'oscuro' : 'claro'}${malos.length ? ' → ' + malos.slice(0, 6).join(' | ') : ''}`);
+      }
+      await page.evaluate(() => { localStorage.setItem('ao.theme', 'light'); if (window.CC?.setDark) window.CC.setDark(false); else document.body.classList.remove('dark'); }); await espera(150);
+    };
     const medir = async nombre => {
+      await contrasteBotones(nombre);
       const r = await page.evaluate(() => {
         const vis = e => { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && !e.closest('[hidden],[inert]'); };
         const malos = [], sinNombre = [], chicos = [];
