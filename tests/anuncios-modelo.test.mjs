@@ -24,7 +24,8 @@ test('las cifras se suman y CTR, CPC, CPM y frecuencia se RECALCULAN; el costo p
   ];
   const c = cifras(filas, 'mensajes', { alcance: 1000 });
   assert.equal(c.gasto, 15); assert.equal(c.impresiones, 1500); assert.equal(c.clics, 25); assert.equal(c.clicsEnlace, 15);
-  assert.equal(c.ctr, 1.67, '25/1500, no el promedio de 2 % y 1 %'); assert.equal(c.cpc, 0.6); assert.equal(c.cpm, 10);
+  assert.equal(c.ctr, 1, 'CTR de ENLACE: 15/1500, no el promedio de los diarios ni los 25 clics de todo tipo'); assert.equal(c.cpc, 1, 'CPC de enlace: 15 de gasto entre 15 clics al enlace');
+  assert.equal(c.ctrTodos, 1.67, 'con todos los clics: 25/1500'); assert.equal(c.cpcTodos, 0.6); assert.equal(c.cpm, 10);
   assert.equal(c.alcance, 1000); assert.equal(c.frecuencia, 1.5);
   assert.equal(c.resultados, 6); assert.equal(c.costoPorResultado, 2.5); assert.equal(c.resultadoTexto, 'conversaciones iniciadas');
   assert.equal(cifras(filas, 'mensajes').alcance, null, 'sin el alcance del rango, no se suma el de cada día: null');
@@ -68,11 +69,38 @@ test('los rangos y la fecha en la zona de la cuenta', () => {
   assert.equal(fechaEn('America/Panama', Date.UTC(2026, 9, 9, 3)), '2026-10-08', 'a las 22:00 de Panamá todavía es el 8');
 });
 
+test('tendencia (auditoría 1 nov 2026): sin DOS semanas completas desde que empezó la campaña no hay porcentaje, y dice por qué', () => {
+  const hoy = '2026-11-01'; // la semana anterior va del 19 al 25 oct, la de ahora del 26 oct al 1 nov
+  const base = camp => ({ cuenta: { id: 'act_1', currency: 'USD', timezone_name: 'America/Panama', account_status: 1 }, campanas: [{ id: 'C1', name: 'M', objective: 'OUTCOME_ENGAGEMENT', effective_status: 'ACTIVE', ...camp }], conjuntos: [{ id: 'S1', campaign_id: 'C1', name: 'S', effective_status: 'ACTIVE', optimization_goal: 'CONVERSATIONS', destination_type: 'WHATSAPP' }], anuncios: [] });
+  const MSG = [{ action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '2' }];
+  const fila = (fecha, spend) => ({ ad_id: 'A1', adset_id: 'S1', campaign_id: 'C1', date_start: fecha, spend: String(spend), impressions: '500', actions: MSG });
+  // una campaña de 2 días: la semana anterior casi no existe (gastó 1 y ahora 11: «sube 1000 %»)
+  const filasNueva = [fila('2026-10-25', 1), ...['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'].map(f => fila(f, 11 / 7))];
+  const nueva = armarVista({ guardado: base({ start_time: '2026-10-25T10:00:00-0500' }), filas: filasNueva, rango: '7d', hoy, hayCifras: true });
+  assert.equal(nueva.resumen.tendencia.gasto, null); assert.equal(nueva.resumen.tendencia.resultados, null);
+  assert.equal(nueva.resumen.tendenciaMotivo, 'campaña nueva: sin con qué comparar');
+  assert.match(textoCuenta(nueva), /sin porcentaje contra la semana anterior \(campaña nueva/);
+  // empezó el 19 oct, justo el primer día de la semana anterior: ya hay dos ventanas completas
+  const filasVieja = ['2026-10-19', '2026-10-21', '2026-10-25', '2026-10-26', '2026-10-30', '2026-11-01'].map(f => fila(f, 5));
+  const vieja = armarVista({ guardado: base({ start_time: '2026-10-19T00:00:00-0500' }), filas: filasVieja, rango: '7d', hoy, hayCifras: true });
+  assert.equal(vieja.resumen.tendenciaMotivo, null); assert.equal(vieja.resumen.tendencia.gasto, 0);
+  // un día más tarde (20 oct): la semana anterior no está completa
+  assert.equal(armarVista({ guardado: base({ start_time: '2026-10-20T00:00:00-0500' }), filas: filasVieja, rango: '7d', hoy, hayCifras: true }).resumen.tendenciaMotivo, 'campaña nueva: sin con qué comparar');
+  // sin start_time, vale created_time; sin ninguno de los dos, no se sabe cuándo empezó y no se inventa
+  assert.equal(armarVista({ guardado: base({ created_time: '2026-09-01T00:00:00-0500' }), filas: filasVieja, rango: '7d', hoy, hayCifras: true }).resumen.tendenciaMotivo, null);
+  assert.match(armarVista({ guardado: base({}), filas: filasVieja, rango: '7d', hoy, hayCifras: true }).resumen.tendenciaMotivo, /sin saber cuándo empezó/);
+  // sin cifras de la semana anterior
+  assert.equal(armarVista({ guardado: base({ created_time: '2026-09-01T00:00:00-0500' }), filas: [fila('2026-11-01', 5)], rango: '7d', hoy, hayCifras: true }).resumen.tendenciaMotivo, 'sin cifras de la semana anterior');
+  // el rango dice exactamente qué días cubre
+  const R = rangos(hoy); assert.deepEqual(R['7d'], ['2026-10-26', '2026-11-01']); assert.deepEqual(R['30d'], ['2026-10-03', '2026-11-01']); assert.deepEqual(R.mes, ['2026-11-01', '2026-11-01']); assert.deepEqual(R.hoy, ['2026-11-01', '2026-11-01']);
+  assert.deepEqual([nueva.desde, nueva.hasta], ['2026-10-26', '2026-11-01']);
+});
+
 test('la vista: estructura, estados, aprendizaje, rechazos con su motivo, cifras por nivel, gasto contra topes y tendencia', () => {
   const hoy = '2026-10-08';
   const guardado = {
     cuenta: { id: 'act_1001', name: 'PanaClaw Ads', account_status: 1, currency: 'USD', timezone_name: 'America/Panama', amount_spent: '12345', spend_cap: '0', balance: '500' },
-    campanas: [{ id: 'C1', name: 'Mensajes · AO:b1', objective: 'OUTCOME_ENGAGEMENT', effective_status: 'ACTIVE', daily_budget: '1500', spend_cap: '15000', issues_info: [{ error_message: 'La campaña tiene un problema de facturación.' }] }, { id: 'C2', name: 'Vieja', objective: 'OUTCOME_TRAFFIC', effective_status: 'PAUSED' }],
+    campanas: [{ id: 'C1', name: 'Mensajes · AO:b1', objective: 'OUTCOME_ENGAGEMENT', effective_status: 'ACTIVE', daily_budget: '1500', spend_cap: '15000', created_time: '2026-09-01T10:00:00-0500', issues_info: [{ error_message: 'La campaña tiene un problema de facturación.' }] }, { id: 'C2', name: 'Vieja', objective: 'OUTCOME_TRAFFIC', effective_status: 'PAUSED' }],
     conjuntos: [{ id: 'S1', campaign_id: 'C1', name: 'Panamá', effective_status: 'ACTIVE', optimization_goal: 'CONVERSATIONS', destination_type: 'WHATSAPP', learning_stage_info: { status: 'LEARNING', conversions: 6 }, targeting: { geo_locations: { countries: ['PA'] }, age_min: 18 } }],
     anuncios: [
       { id: 'A1', adset_id: 'S1', campaign_id: 'C1', name: 'Bueno · AO:b1', effective_status: 'ACTIVE', creative: { id: 'K1' } },

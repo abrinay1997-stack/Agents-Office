@@ -33,7 +33,8 @@ export const REGLAS = ['aprendizaje', 'limitado', 'esperar', 'cortar', 'fatiga',
 export const CAMBIOS = ['pausar', 'bajar_presupuesto', 'archivar', 'activar', 'reanudar', 'subir_presupuesto', 'alargar', 'relanzar', 'borrador', 'creativos', 'revisar', 'impulsar'];
 /** Los que gastan (los DE_GASTO de anuncios/acciones.mjs; tests/anuncios-diagnostico.test.mjs comprueba que son los mismos). */
 export const GASTA = new Set(['activar', 'reanudar', 'subir_presupuesto', 'alargar', 'relanzar']);
-export const UMBRALES_REQUERIDOS = ['aprendizajeResultados', 'aprendizajeDias', 'esperarDias', 'esperarGastoCpa', 'cortarSinResultadoCpa', 'cortarGastoCpa', 'cortarCostoCpa', 'fatigaFrecuencia', 'fatigaFrecuenciaCritica', 'fatigaCaidaCtr', 'fatigaDiasBase', 'fatigaDiasRecientes', 'fatigaMinImpresiones', 'escalarBajoObjetivo', 'escalarDias', 'escalarSubida', 'escalarCadaHoras', 'saltoGrande', 'estructuraConjuntos', 'topeCerca', 'organicoVecesMedia', 'organicoMinPublicaciones', 'organicoDias', 'descartarDias', 'posponerDias', 'resultadoDias'];
+export const UMBRALES_REQUERIDOS = ['aprendizajeResultados', 'aprendizajeDias', 'esperarDias', 'esperarGastoCpa', 'cortarSinResultadoCpa', 'cortarGastoCpa', 'cortarCostoCpa', 'fatigaFrecuencia', 'fatigaFrecuenciaCritica', 'fatigaCaidaCtr', 'fatigaDiasBase', 'fatigaDiasRecientes', 'fatigaMinImpresiones', 'escalarBajoObjetivo', 'escalarDias', 'escalarSubida', 'escalarCadaHoras', 'saltoGrande', 'estructuraConjuntos', 'topeCerca', 'organicoVecesMedia', 'organicoMinPublicaciones', 'organicoDias', 'descartarDias', 'posponerDias', 'resultadoDias', 'creativoMinImpresiones', 'creativoMinResultados'];
+// Los dos últimos solo los usa la pestaña Creativos de la página (src/anuncios/creativos.js), que los recibe en GET /api/anuncios/sugerencias → umbrales.
 const FRACCION = 'fracción';
 
 // ---------------------------------------------------------------- los umbrales

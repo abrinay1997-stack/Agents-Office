@@ -235,7 +235,9 @@ export function crearMetaStand(o = {}) {
     // Como Meta (9 oct 2026, primera prueba con el token real): un time_range que no es JSON con since y until se rechaza; antes se ignoraba
     if (q.has('time_range') && !(rango?.since && rango?.until)) return errorGraph("(#100) For field 'insights': param time_range must be non-empty.", 100);
     const filas = st.cifras.filter(f => (!rango || (f.date_start >= rango.since && f.date_start <= rango.until)) && (nivel === 'account' || f[`${nivel}_id`]));
-    if (q.get('time_increment')) return json({ data: filas, paging: { cursors: { before: 'a', after: 'b' } } });
+    // Como Meta (1 nov 2026, auditoría de anuncios): con clics al enlace, también el CTR de enlace (%) y el costo por clic al enlace, como texto
+    const conEnlace = f => { const c = Number(f.inline_link_clicks), i = Number(f.impressions), g = Number(f.spend); return Number.isFinite(c) && c > 0 ? { ...f, inline_link_click_ctr: i > 0 ? String((c / i) * 100) : '0', cost_per_inline_link_click: String(g / c) } : f; };
+    if (q.get('time_increment')) return json({ data: filas.map(conEnlace), paging: { cursors: { before: 'a', after: 'b' } } });
     // Fase A1: sin `time_increment`, Meta da UNA fila por objeto del nivel para todo el rango. El alcance son personas únicas: no es la
     // suma de los días. Aquí, el mayor de los días (o `reach_rango` si el test lo puso en alguna fila), para que se note si alguien suma.
     const grupos = new Map();
@@ -246,7 +248,7 @@ export function crearMetaStand(o = {}) {
       g.reach = Math.max(g.reach, Number(f.reach_rango ?? f.reach ?? 0));
       grupos.set(k, g);
     }
-    const data = [...grupos.values()].map(g => ({ ...g, spend: String(g.spend), impressions: String(g.impressions), reach: String(g.reach), frequency: g.reach ? String(g.impressions / g.reach) : '0' }));
+    const data = [...grupos.values()].map(g => conEnlace({ ...g, spend: String(g.spend), impressions: String(g.impressions), reach: String(g.reach), frequency: g.reach ? String(g.impressions / g.reach) : '0' }));
     return json({ data, paging: { cursors: { before: 'a', after: 'b' } } });
   }
 

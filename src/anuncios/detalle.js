@@ -10,7 +10,7 @@ const dato = (k, v) => `<div class="anu-dato"><dt>${esc(k)}</dt><dd>${v}</dd></d
 
 export function cifrasHTML(c = {}, moneda) {
   const L = [['Gasto', dinero(c.gasto, moneda)], ['Resultados', resultados(c)], ['Costo por resultado', dinero(c.costoPorResultado, moneda)], ['Impresiones', num(c.impresiones)], ['Alcance', num(c.alcance)],
-    ['Frecuencia', frec(c.frecuencia)], ['Clics', num(c.clics)], ['Clics al enlace', num(c.clicsEnlace)], ['CTR', pct(c.ctr)], ['CPC', dinero(c.cpc, moneda)], ['CPM', dinero(c.cpm, moneda)]];
+    ['Frecuencia', frec(c.frecuencia)], ['Clics (todos)', num(c.clics)], ['Clics al enlace', num(c.clicsEnlace)], ['CTR de enlace', pct(c.ctr)], ['CTR (todos los clics)', pct(c.ctrTodos)], ['CPC de enlace', dinero(c.cpc, moneda)], ['CPC (todos los clics)', dinero(c.cpcTodos, moneda)], ['CPM', dinero(c.cpm, moneda)]];
   return `<dl class="anu-cifras">${L.map(([k, v]) => dato(k, esc(v))).join('')}</dl>`;
 }
 

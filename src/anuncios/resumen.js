@@ -2,7 +2,7 @@
 // (gasto de hoy contra el tope diario, gasto del mes contra el mensual, resultados y costo por resultado de 7 días, cada una con su
 // tendencia); y las campañas activas en tarjetas, con su interruptor y su «⋯» (Fase A2). Sin Meta conectada, cómo conectar.
 import { controlesHTML } from './acciones.js';
-import { esc, dinero, contraTope, tendenciaHTML, estadoDe, chip, resultados, presupuesto, tieneProblemas, esActiva, num, SIN } from './comun.js';
+import { esc, dinero, leyendaRango, contraTope, tendenciaHTML, estadoDe, chip, resultados, presupuesto, tieneProblemas, esActiva, num, SIN } from './comun.js';
 import { nombreRango, buscar } from './campanas.js';
 import { resumenSugerenciasHTML } from './sugerencias.js';
 import { medirHTML } from './informe.js';
@@ -31,9 +31,9 @@ export function cifrasResumenHTML(d) {
   const m = d?.cuenta?.moneda || 'USD', g = d?.gasto || {}, tp = d?.topes || {}, r = d?.resumen || {}, td = r.tendencia || {};
   return `<div class="anu-kpis">
     ${topeHTML('Gasto de hoy', g.hoy, tp.diario, m, 'diario')}
-    ${topeHTML('Gasto del mes', g.mes, tp.mensual, m, 'mensual', `<p class="anu-kp">${tendenciaHTML(td.gasto, false)} <span class="anu-sr">el gasto, contra el periodo anterior</span></p>`)}
-    <div class="anu-kpi"><p class="anu-kt">Resultados · 7 días</p><p class="anu-kv">${esc(r.resultados7d == null ? SIN : num(r.resultados7d))}</p><p class="anu-kp">${tendenciaHTML(td.resultados, true)}</p></div>
-    <div class="anu-kpi"><p class="anu-kt">Costo por resultado · 7 días</p><p class="anu-kv">${esc(dinero(r.costoPorResultado7d, m))}</p><p class="anu-kp">${tendenciaHTML(td.costo, false)}</p></div>
+    ${topeHTML('Gasto del mes', g.mes, tp.mensual, m, 'mensual', `<p class="anu-kp">${tendenciaHTML(td.gasto, false, r.tendenciaMotivo)} <span class="anu-sr">el gasto, contra el periodo anterior</span></p>`)}
+    <div class="anu-kpi"><p class="anu-kt">Resultados · 7 días</p><p class="anu-kv">${esc(r.resultados7d == null ? SIN : num(r.resultados7d))}</p><p class="anu-kp">${tendenciaHTML(td.resultados, true, r.tendenciaMotivo)}</p></div>
+    <div class="anu-kpi"><p class="anu-kt">Costo por resultado · 7 días</p><p class="anu-kv">${esc(dinero(r.costoPorResultado7d, m))}</p><p class="anu-kp">${tendenciaHTML(td.costo, false, r.tendenciaMotivo)}</p></div>
   </div>`;
 }
 
@@ -61,7 +61,7 @@ export function resumenHTML(d, { rango = '7d', ahora = Date.now(), sug = null } 
   if (!d.configurado) return conexionHTML(d);
   const m = d.cuenta?.moneda || 'USD', activas = (d.campanas || []).filter(c => esActiva(c) || tieneProblemas(c));
   const cuenta = d.cuenta ? `<p class="anu-cuenta-l">Cuenta <b>${esc(d.cuenta.nombre || d.cuenta.id)}</b> · ${chip(d.cuenta.estadoTexto || estadoDe(d.cuenta).texto, /activa|active/i.test(d.cuenta.estadoTexto || d.cuenta.estado || '') ? 'verde' : 'ambar')} · ${esc(m)}${d.cuenta.zona ? ' · ' + esc(d.cuenta.zona) : ''}${d.cuenta.saldo != null ? ` · <span title="Lo que Meta ya cobró o va a cobrar y todavía no se pagó. No es crédito disponible.">deuda con Meta / por pagar ${esc(dinero(d.cuenta.porPagar ?? d.cuenta.saldo, m))}</span>` : ''}${d.cuenta.disponible != null ? ` · queda del tope de la cuenta ${esc(dinero(d.cuenta.disponible, m))}` : ''}</p>` : '';
-  return `${avisosHTML(d)}${cuenta}${cifrasResumenHTML(d)}${resumenSugerenciasHTML(sug, { moneda: m, buscarFila: id => buscar(d.campanas || [], id), ahora })}
+  return `${avisosHTML(d)}${cuenta}${cifrasResumenHTML(d)}${leyendaRango(d)}${resumenSugerenciasHTML(sug, { moneda: m, buscarFila: id => buscar(d.campanas || [], id), ahora })}
     <section class="anu-sec" aria-labelledby="anuActT"><div class="anu-bcab"><h2 id="anuActT">Campañas activas <span class="anu-cuenta">${activas.length}</span></h2><button type="button" class="anu-btn pri" data-a="nueva">+ Nueva campaña</button></div>
     ${activas.length ? `<ul class="anu-tarjs">${activas.map(c => tarjetaHTML(c, m, rango, ahora)).join('')}</ul>` : '<div class="anu-vacio"><b>No hay campañas activas</b><span>Las que estén en pausa o terminadas están en Campañas.</span></div>'}</section>${medirHTML(d)}`;
 }

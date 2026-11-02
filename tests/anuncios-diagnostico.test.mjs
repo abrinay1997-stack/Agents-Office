@@ -32,7 +32,7 @@ export function armar(caso, { conjuntos = null, cuenta = {}, campana = {} } = {}
       const n = a.serie.length; let imp7 = 0;
       a.serie.forEach(([gasto, impr, clics, res], i) => {
         const fecha = sumarDias(AYER, -(n - 1 - i));
-        filas.push({ campaign_id: 'C1', adset_id: s.id, ad_id: a.id, date_start: fecha, spend: String(gasto), impressions: String(impr), clicks: String(clics), reach: String(Math.round(impr / 1.2)), ...(res ? { actions: [{ action_type: MSG, value: String(res) }] } : {}) });
+        filas.push({ campaign_id: 'C1', adset_id: s.id, ad_id: a.id, date_start: fecha, spend: String(gasto), impressions: String(impr), clicks: String(clics), inline_link_clicks: String(clics), reach: String(Math.round(impr / 1.2)), ...(res ? { actions: [{ action_type: MSG, value: String(res) }] } : {}) });
         if (fecha >= R[0] && fecha <= R[1]) imp7 += impr;
       });
       if (a.frecuencia7) ad7[a.id] = Math.round(imp7 / a.frecuencia7);
@@ -53,6 +53,7 @@ test('los umbrales de la Biblioteca: todos, con su unidad y su fuente, y la fras
     const u = FABRICA.umbrales[k];
     if (u.fuente.startsWith('referencias/') || u.fuente === 'SKILL.md') assert.ok(fs.readFileSync(path.join(HAB, u.fuente), 'utf8').includes(u.frase), `${k}: la frase no está en ${u.fuente}`);
     else if (u.fuente.startsWith('plan')) assert.ok(plan.includes(u.frase), `${k}: la frase no está en el plan`);
+    else if (u.fuente.startsWith('decisión del dueño')) assert.match(u.fuente, /^decisión del dueño \d{4}-\d{2}-\d{2} \(/, `${k}: la decisión del dueño lleva su fecha`);
     else assert.equal(u.fuente, 'oficina', `${k}: fuente desconocida`);
   }
   assert.ok(validarUmbrales({ umbrales: { ...FABRICA.umbrales, fatigaCaidaCtr: { ...FABRICA.umbrales.fatigaCaidaCtr, valor: 30 } } }).some(p => /fracción/.test(p)), '30 no es una fracción');
@@ -118,6 +119,17 @@ test('fatiga: frecuencia > 3 y el CTR un 30 % por debajo de sus primeros días �
   // la misma caída con la frecuencia baja no es cansancio
   const r2 = correr({ cpa: 2, conjunto: { aprendizaje: 'SUCCESS', presupuesto: 10 }, anuncios: [{ id: 'A1', frecuencia7: 1.8, serie: serie(14, i => [6, 1000, i < 3 ? 20 : 10, 4]) }] });
   assert.ok(!r2.sugerencias.some(x => x.regla === 'fatiga'));
+});
+
+test('fatiga (auditoría 1 nov 2026): el CTR que vigila es el de ENLACE, no el de todos los clics', () => {
+  const caso = { cpa: 2, conjunto: { aprendizaje: 'SUCCESS', presupuesto: 10 }, anuncios: [{ id: 'A1', frecuencia7: 3.8, serie: serie(14, i => [6, 1000, i < 3 ? 20 : 10, 4]) }] };
+  const con = (fn) => { const { vista, filas } = armar(caso); filas.forEach((f, i) => Object.assign(f, fn(f, i))); return diagnosticar({ vista, filas, hoy: HOY, cpa: { valor: 2, texto: 'objetivo' }, umbrales: U, ahora: AHORA }); };
+  // todos los clics caen a la mitad pero los del enlace se mantienen: no hay cansancio
+  const sinCaida = con(f => ({ inline_link_clicks: '12' }));
+  assert.ok(!sinCaida.sugerencias.some(x => x.regla === 'fatiga'), 'si el CTR de enlace no cae, no se cansó aunque otros clics sí caigan');
+  // los clics de todo tipo se mantienen pero los del enlace caen un 50 %: se cansó
+  const cae = con((f, i) => ({ clicks: '20', inline_link_clicks: f.date_start < sumarDias(AYER, -10) ? '20' : '10' }));
+  assert.deepEqual(cae.sugerencias.filter(x => x.regla === 'fatiga').map(s => s.objeto.id), ['A1']);
 });
 
 test('escalar: fuera del aprendizaje, 3 días con el costo un 20 % bajo el objetivo → +20 % (gasta, dos clics), una vez cada 72 h, dentro de los topes', () => {

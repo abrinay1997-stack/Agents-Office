@@ -495,14 +495,25 @@ test('A5 · el estado de cada creativo: funciona, se está cansando, sin datos (
   assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 9000, clics: 90, resultados: 20, frecuencia: 3.5 }, serie(20, 12)), { cpa: 2 }).codigo, 'cansando', 'frecuencia y CTR cayendo un 40 %');
   assert.equal(caidaCtr([{ serie: serie(20, 12) }]), 40);
   assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 0, resultados: 0, frecuencia: 1.2 }), { cpa: 2 }).codigo, 'sin-resultados');
-  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, resultados: 1, frecuencia: 1.2 }), { cpa: null }).codigo, 'funciona', 'sin objetivo, un CTR alto');
-  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, resultados: 1, frecuencia: 3.5 }), { umbrales: { frecuencia: 4 } }).codigo, 'funciona', 'los umbrales del servidor ganan');
+  // AUDITORÍA 1 nov 2026: sin costo objetivo NUNCA «funciona» (ni por un CTR alto): dice «sin costo objetivo»
+  const sinObj = estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, ctr: 5, resultados: 1, frecuencia: 1.2 }), { cpa: null });
+  assert.equal(sinObj.codigo, 'sin-objetivo'); assert.equal(sinObj.texto, 'sin costo objetivo'); assert.notEqual(sinObj.tono, 'verde');
+  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, resultados: 1, frecuencia: 3.5 }), { umbrales: { frecuencia: 4 } }).codigo, 'sin-objetivo', 'los umbrales del servidor ganan (y sin objetivo no hay «funciona»)');
+  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, resultados: 1, frecuencia: 3.5 }), { umbrales: { frecuencia: 3 } }).codigo, 'cansando', 'el cansancio no depende del costo objetivo');
+  // 500 impresiones (no «5 dólares de gasto») para juzgar, y 10 resultados para juzgar el costo
+  assert.equal(estadoCreativo(g({ gasto: 3, impresiones: 499 }), { cpa: 2 }).codigo, 'sin-datos'); assert.match(estadoCreativo(g({ gasto: 3, impresiones: 499 }), { cpa: 2 }).porque, /500/);
+  assert.equal(estadoCreativo(g({ gasto: 3, impresiones: 500, resultados: 0 }), { cpa: 1 }).codigo, 'sin-resultados', '500 impresiones bastan para ver que gastó 3 veces su objetivo sin resultados');
+  const pocos = estadoCreativo(g({ gasto: 52, impresiones: 9000, resultados: 3, costoPorResultado: 17.33, frecuencia: 1.2, resultadoTexto: 'conversaciones' }), { cpa: 20 });
+  assert.equal(pocos.codigo, 'sin-datos'); assert.equal(pocos.texto, 'pocos resultados'); assert.match(pocos.porque, /10/, 'con 3 conversaciones no se dice «funciona» aunque salgan baratas');
+  assert.equal(estadoCreativo(g({ gasto: 52, impresiones: 9000, resultados: 10, costoPorResultado: 5.2, frecuencia: 1.2 }), { cpa: 20 }).codigo, 'funciona', 'con 10 resultados ya se juzga');
+  assert.equal(estadoCreativo(g({ gasto: 520, impresiones: 9000, resultados: 10, costoPorResultado: 52, frecuencia: 1.2 }), { cpa: 20 }).codigo, 'no-destaca');
+  assert.equal(estadoCreativo(g({ gasto: 52, impresiones: 9000, resultados: 3, frecuencia: 1.2 }), { cpa: 20, umbrales: { creativoMinResultados: { valor: 3 } } }).codigo, 'funciona', 'el mínimo de resultados se cambia en umbrales.json');
   const nu = normalizarUmbrales({ fatigaFrecuencia: { valor: 3.5 }, fatigaCaidaCtr: { valor: 0.3 }, fatigaMinImpresiones: 500, esperarGastoCpa: { valor: 2 } });
   assert.equal(nu.frecuencia, 3.5); assert.equal(nu.caidaCtr, 30); assert.equal(nu.impresionesMin, 500); assert.equal(nu.gastoMinVeces, 2, 'los nombres de umbrales.json de la oficina también valen');
   assert.equal(estadoCreativo(g({ gasto: 3, impresiones: 5000, clics: 90, resultados: 2 }), { cpa: 2, umbrales: { esperarGastoCpa: { valor: 2 } } }).codigo, 'sin-datos');
   assert.equal(UMBRALES_DEF.frecuencia, 3); assert.equal(cpaDe({ OUTCOME_TRAFFIC: 0.5 }, { objetivo: 'OUTCOME_TRAFFIC' }), 0.5); assert.equal(cpaDe(null), null);
-  const s = sumar([{ cifras: { gasto: 10, impresiones: 1000, clics: 10, resultados: 2, frecuencia: 2 } }, { cifras: { gasto: 5, impresiones: 3000, clics: 60, resultados: 3, frecuencia: 1.2 } }]);
-  assert.equal(s.ctr, 1.75, 'el CTR se recalcula, no se promedia'); assert.equal(s.costoPorResultado, 3); assert.equal(s.frecuencia, 2);
+  const s = sumar([{ cifras: { gasto: 10, impresiones: 1000, clics: 14, clicsEnlace: 10, resultados: 2, frecuencia: 2 } }, { cifras: { gasto: 5, impresiones: 3000, clics: 70, clicsEnlace: 60, resultados: 3, frecuencia: 1.2 } }]);
+  assert.equal(s.ctr, 1.75, 'el CTR de ENLACE se recalcula (70 de 4.000), no se promedia'); assert.equal(s.ctrTodos, 2.1, 'el de todos los clics va aparte (84 de 4.000)'); assert.equal(s.costoPorResultado, 3); assert.equal(s.frecuencia, 2);
 });
 
 test('A5 · Creativos con la demo: agrupados, cada uno con su estado, sus cifras con moneda; «Pedir variaciones» si hay sugerencia', () => {
@@ -569,6 +580,24 @@ test('A4: el paso 4 de un borrador que impulsa una publicación enseña la publi
   assert.equal(problemasPorPaso({ ...b, validacion: { problemas: [{ campo: 'origen', texto: 'Meta no deja impulsar esta publicación: tiene música con derechos.' }] } })[3], 1);
   // se crea en pausa en la demo y la campaña aparece con la miniatura de la publicación
   const c = B.crearEnMeta(b.id); assert.equal(c.status, 202);
+});
+
+test('auditoría 1 nov 2026: cada rango dice sus fechas y la zona de la cuenta, y CTR dice de qué CTR habla', async () => {
+  const { rangoTexto, leyendaRango } = await import('../src/anuncios/comun.js');
+  const { campanasHTML } = await import('../src/anuncios/campanas.js');
+  const { cifrasHTML } = await import('../src/anuncios/detalle.js');
+  const d = { rango: '7d', desde: '2026-10-26', hasta: '2026-11-01', cuenta: { moneda: 'USD', zona: 'America/Panama' }, campanas: [] };
+  const t = rangoTexto(d);
+  assert.match(t, /^Del 26 oct al 1 nov \(7 días: hoy y los 6 anteriores; hoy va a medias\) · hora de America\/Panama$/);
+  assert.match(rangoTexto({ ...d, rango: '30d', desde: '2026-10-03' }), /^Del 3 oct al 1 nov \(30 días: hoy y los 29 anteriores/);
+  assert.match(rangoTexto({ ...d, rango: 'mes', desde: '2026-11-01' }), /^Hoy, 1 nov \(del día 1 del mes a hoy/);
+  assert.match(rangoTexto({ ...d, rango: 'hoy', desde: '2026-11-01' }), /^Hoy, 1 nov \(solo hoy/);
+  assert.equal(rangoTexto({}), '', 'sin fechas (la demo) no se inventan');
+  assert.match(leyendaRango(d), /data-rango-texto/);
+  assert.match(campanasHTML(d, { rango: '7d' }), /Del 26 oct al 1 nov[^<]*America\/Panama/, 'la pestaña Campañas lo dice');
+  assert.match(campanasHTML(d), /CTR de enlace/);
+  assert.match(cifrasHTML({ gasto: 1, ctr: 1.09, ctrTodos: 1.74, cpc: 1, cpcTodos: 0.7 }, 'USD'), /CTR de enlace.*1,09 %.*CTR \(todos los clics\).*1,74 %/s);
+  assert.doesNotMatch(cifrasHTML({ gasto: 1, ctr: 1 }, 'USD'), /<dt>CTR<\/dt>/, 'nunca un «CTR» a secas');
 });
 
 test('puntos 7 y 19: el detalle de una campaña enseña sus problemas (con esc) y el resumen dice «por pagar», no «saldo»', () => {

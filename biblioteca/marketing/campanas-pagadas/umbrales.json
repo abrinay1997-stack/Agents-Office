@@ -26,6 +26,8 @@
     "organicoDias": { "valor": 30, "unidad": "días", "fuente": "oficina", "frase": "solo se propone impulsar algo publicado en los últimos 30 días" },
     "descartarDias": { "valor": 7, "unidad": "días", "fuente": "plan §5 A5", "frase": "lo descartado no vuelve en 7 días" },
     "posponerDias": { "valor": 3, "unidad": "días", "fuente": "plan §5 A5", "frase": "«Recordármelo en 3 días»" },
+    "creativoMinImpresiones": { "valor": 500, "unidad": "impresiones", "fuente": "decisión del dueño 2026-11-01 (auditoría de anuncios)", "frase": "la pestaña Creativos no juzga un creativo con menos de 500 impresiones: con menos, el CTR es ruido (antes: 5 dólares de gasto)" },
+    "creativoMinResultados": { "valor": 10, "unidad": "resultados", "fuente": "decisión del dueño 2026-11-01 (auditoría de anuncios)", "frase": "la pestaña Creativos no dice «funciona» ni «no destaca» por el costo con menos de 10 resultados (conversaciones, compras…): con menos, un solo mensaje mueve el costo" },
     "resultadoDias": { "valor": 7, "unidad": "días", "fuente": "oficina", "frase": "qué pasó después de aplicar una sugerencia: sus 7 días siguientes contra sus 7 anteriores" }
   }
 }

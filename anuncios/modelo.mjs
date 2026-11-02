@@ -140,7 +140,7 @@ function sumaAcciones(filas) {
  */
 export function cifras(filas = [], clave = null, { alcance = null, hayDatos = true } = {}) {
   const tipo = clave ? RESULTADOS[clave] : null;
-  const vacio = { gasto: null, impresiones: null, alcance: null, frecuencia: null, clics: null, clicsEnlace: null, ctr: null, cpc: null, cpm: null, resultados: null, resultadoTexto: tipo?.texto || 'resultados', costoPorResultado: null, costoPor: tipo?.porMil ? 'mil' : 'resultado' };
+  const vacio = { gasto: null, impresiones: null, alcance: null, frecuencia: null, clics: null, clicsEnlace: null, ctr: null, cpc: null, ctrTodos: null, cpcTodos: null, cpm: null, resultados: null, resultadoTexto: tipo?.texto || 'resultados', costoPorResultado: null, costoPor: tipo?.porMil ? 'mil' : 'resultado' };
   if (!hayDatos) return vacio;
   const suma = k => filas.reduce((s, f) => s + (num(f[k]) || 0), 0);
   const gasto = r2(suma('spend')), impresiones = suma('impressions'), clics = suma('clicks');
@@ -160,7 +160,10 @@ export function cifras(filas = [], clave = null, { alcance = null, hayDatos = tr
   const div = (a, b, k = 1) => (a === null || !b ? null : r2((a / b) * k));
   return {
     gasto, impresiones, alcance: alc, frecuencia: alc ? Math.round((impresiones / alc) * 100) / 100 : null, clics, clicsEnlace,
-    ctr: div(clics, impresiones, 100), cpc: div(gasto, clics), cpm: div(gasto, impresiones, 1000),
+    // AUDITORÍA 1 nov 2026: el CTR y el CPC PRINCIPALES son los de ENLACE (inline_link_clicks: lo que Meta muestra como «CTR (porcentaje de
+    // clics en el enlace)»); `ctrTodos`/`cpcTodos` cuentan todos los clics (`clicks`: reacciones, perfil, «ver más»…) y salen más altos.
+    // Los dos se recalculan de las sumas (nunca el promedio de los diarios). Meta omite el campo cuando fue 0: sin él, 0 clics al enlace.
+    ctr: div(clicsEnlace, impresiones, 100), cpc: div(gasto, clicsEnlace), ctrTodos: div(clics, impresiones, 100), cpcTodos: div(gasto, clics), cpm: div(gasto, impresiones, 1000),
     resultados, resultadoTexto: tipo?.texto || 'resultados', costoPorResultado: resultados ? div(gasto, resultados, tipo?.porMil ? 1000 : 1) : null, costoPor: tipo?.porMil ? 'mil' : 'resultado',
   };
 }
@@ -262,12 +265,22 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
   const dominante = Object.entries(t7).sort((a, b) => b[1].reduce((s, f) => s + (num(f.spend) || 0), 0) - a[1].reduce((s, f) => s + (num(f.spend) || 0), 0))[0]?.[0] || null;
   const c7 = dominante && hayCifras ? cifras(t7[dominante], dominante, { alcance: dominante === 'alcance' ? alc('account') : null }) : null;
   const cPrev = dominante && hayCifras ? cifras(tPrev[dominante] || [], dominante) : null;
+  // AUDITORÍA 1 nov 2026: «sube 1025 %» salía de comparar una semana completa contra los 2 días de una campaña recién creada. La tendencia
+  // solo se da con DOS ventanas completas: toda campaña con cifras en las dos semanas tiene que haber empezado (start_time, o created_time
+  // si no lo trae) ANTES del primer día de la semana anterior. Si no (o no se sabe cuándo empezó), se dice por qué y no hay porcentaje.
+  const zona = cta?.timezone_name || null, [prevDesde] = R.previo7;
+  const inicioDe = camp => { const t = Date.parse(String(camp.start_time || camp.created_time || '').replace(/([+-]\d{2})(\d{2})$/, '$1:$2')); return Number.isFinite(t) ? fechaEn(zona, t) : null; };
+  const conCifras = (g.campanas || []).filter(camp => filas.some(f => f.campaign_id === camp.id && f.date_start >= prevDesde && f.date_start <= hoy));
+  const nuevas = conCifras.filter(camp => { const i = inicioDe(camp); return !i || i > prevDesde; });
   const hayPrevio = entre(...R.previo7).length > 0;
+  const motivoTendencia = !hayPrevio ? 'sin cifras de la semana anterior' : nuevas.length ? (nuevas.some(camp => !inicioDe(camp)) ? 'sin saber cuándo empezó la campaña: sin con qué comparar' : 'campaña nueva: sin con qué comparar') : null;
+  const compara = hayPrevio && !motivoTendencia;
   const gPrev = gastoDe(R.previo7);
   const pct = (a, b) => (a === null || b === null || !b ? null : Math.round(((a - b) / b) * 1000) / 10);
   const resumen = {
     resultados7d: c7?.resultados ?? null, costoPorResultado7d: c7?.costoPorResultado ?? null, resultadoTexto: c7?.resultadoTexto || (dominante ? RESULTADOS[dominante].texto : 'resultados'),
-    tendencia: { gasto: hayPrevio ? pct(gasto.semana, gPrev) : null, resultados: hayPrevio && dominante !== 'alcance' ? pct(c7?.resultados ?? null, cPrev?.resultados ?? null) : null },
+    tendencia: { gasto: compara ? pct(gasto.semana, gPrev) : null, resultados: compara && dominante !== 'alcance' ? pct(c7?.resultados ?? null, cPrev?.resultados ?? null) : null },
+    tendenciaMotivo: motivoTendencia,
   };
 
   // la franja de arriba
@@ -312,7 +325,7 @@ export const RANGO_TEXTO = { hoy: 'hoy', '7d': 'los últimos 7 días', '30d': 'l
 export function resultadoTexto(c, moneda = 'USD') {
   if (!c || c.gasto === null) return 'sin cifras todavía';
   const res = c.resultados === null ? `${c.resultadoTexto}: sin dato` : `${n0(c.resultados)} ${c.resultadoTexto}${c.costoPorResultado !== null ? ` a ${usd(c.costoPorResultado, moneda)}${c.costoPor === 'mil' ? ' cada mil' : ''}` : ''}`;
-  return `gastó ${usd(c.gasto, moneda)} · ${res}${c.ctr !== null ? ` · CTR ${c.ctr} %` : ''}${c.frecuencia !== null ? ` · frecuencia ${c.frecuencia}` : ''}`;
+  return `gastó ${usd(c.gasto, moneda)} · ${res}${c.ctr !== null ? ` · CTR de enlace ${c.ctr} %` : ''}${c.frecuencia !== null ? ` · frecuencia ${c.frecuencia}` : ''}`;
 }
 /** Una línea por objeto, con su id (nunca se adivina un id). */
 export function lineaObjeto(tipo, o, moneda = 'USD') {
@@ -327,7 +340,7 @@ export function textoCuenta(v, { topes = {} } = {}) {
   const m = c.moneda;
   return [`Cuenta publicitaria ${c.id} «${c.nombre || ''}»: ${c.estadoTexto} · ${m} · ${c.zona || 'zona sin dato'}${c.spendCap != null ? ` · límite de gasto en Meta ${usd(c.spendCap, m)}` : ''}`,
     `Gasto: hoy ${usd(v.gasto?.hoy, m)}${topes.diario != null ? ` (tope ${usd(topes.diario, m)})` : ''} · 7 días ${usd(v.gasto?.semana, m)} · este mes ${usd(v.gasto?.mes, m)}${topes.mensual != null ? ` (tope ${usd(topes.mensual, m)})` : ''}`,
-    `Últimos 7 días: ${v.resumen?.resultados7d == null ? `${v.resumen?.resultadoTexto || 'resultados'}: sin dato` : `${n0(v.resumen.resultados7d)} ${v.resumen.resultadoTexto}${v.resumen.costoPorResultado7d != null ? ` a ${usd(v.resumen.costoPorResultado7d, m)}` : ''}`}${v.resumen?.tendencia?.gasto != null ? ` · gasto ${v.resumen.tendencia.gasto > 0 ? '+' : ''}${v.resumen.tendencia.gasto} % frente a la semana anterior` : ''}`,
+    `Últimos 7 días: ${v.resumen?.resultados7d == null ? `${v.resumen?.resultadoTexto || 'resultados'}: sin dato` : `${n0(v.resumen.resultados7d)} ${v.resumen.resultadoTexto}${v.resumen.costoPorResultado7d != null ? ` a ${usd(v.resumen.costoPorResultado7d, m)}` : ''}`}${v.resumen?.tendencia?.gasto != null ? ` · gasto ${v.resumen.tendencia.gasto > 0 ? '+' : ''}${v.resumen.tendencia.gasto} % frente a la semana anterior` : v.resumen?.tendenciaMotivo ? ` · sin porcentaje contra la semana anterior (${v.resumen.tendenciaMotivo})` : ''}`,
     ...(v.avisos || []).map(a => `AVISO (${a.nivel}): ${a.texto}`)].join('\n');
 }
 /** Las campañas (con sus conjuntos y anuncios hasta `nivel`), filtradas por estado: activas · pausadas · problemas · todas. */
@@ -336,7 +349,7 @@ export function textoCampanas(v, { nivel = 'conjunto', estado = 'todas' } = {}) 
   const pasa = c => estado === 'todas' || (estado === 'activas' ? c.estado === 'ACTIVE' : estado === 'pausadas' ? c.estado !== 'ACTIVE' : c.conjuntos.some(s => s.anuncios.some(a => conProblema(a.estado))));
   const sel = (v?.campanas || []).filter(pasa);
   if (!sel.length) return `No hay campañas${estado !== 'todas' ? ` ${estado}` : ''}.`;
-  const out = [`Campañas (${sel.length}), cifras de ${RANGO_TEXTO[v.rango] || v.rango} (${v.desde} a ${v.hasta}):`];
+  const out = [`Campañas (${sel.length}), cifras de ${RANGO_TEXTO[v.rango] || v.rango} (del ${v.desde} al ${v.hasta}, ambos días incluidos, en la hora de ${v?.cuenta?.zona || 'la cuenta'}; el último día va a medias si es hoy):`];
   for (const c of sel.slice(0, 30)) {
     out.push('- CAMPAÑA ' + lineaObjeto('campana', c, m));
     if (nivel === 'campana') continue;
@@ -354,7 +367,7 @@ export function textoObjeto(v, id) {
   const out = [`${r.tipo.toUpperCase()} ${lineaObjeto(r.tipo, o, m)}`];
   if (r.campana && r.tipo !== 'campana') out.push(`En la campaña ${r.campana.id} «${r.campana.nombre}» (${r.campana.objetivoTexto}, ${r.campana.estadoTexto})`);
   if (r.conjunto) out.push(`En el conjunto ${r.conjunto.id} «${r.conjunto.nombre}» (${r.conjunto.aprendizaje.texto}, ${r.conjunto.publico})`);
-  if (c && c.gasto !== null) out.push(`Cifras de ${RANGO_TEXTO[v.rango] || v.rango}: gasto ${usd(c.gasto, m)} · impresiones ${n0(c.impresiones)} · alcance ${n0(c.alcance)} · clics ${n0(c.clics)} (al enlace ${n0(c.clicsEnlace)}) · CTR ${c.ctr ?? 'sin dato'} % · CPC ${usd(c.cpc, m)} · CPM ${usd(c.cpm, m)} · ${c.resultados === null ? 'resultados sin dato' : `${n0(c.resultados)} ${c.resultadoTexto}`}${c.costoPorResultado !== null ? ` a ${usd(c.costoPorResultado, m)}` : ''}`);
+  if (c && c.gasto !== null) out.push(`Cifras de ${RANGO_TEXTO[v.rango] || v.rango}: gasto ${usd(c.gasto, m)} · impresiones ${n0(c.impresiones)} · alcance ${n0(c.alcance)} · clics (todos) ${n0(c.clics)} · clics al enlace ${n0(c.clicsEnlace)} · CTR de enlace ${c.ctr ?? 'sin dato'} % (con todos los clics ${c.ctrTodos ?? 'sin dato'} %) · CPC de enlace ${usd(c.cpc, m)} · CPM ${usd(c.cpm, m)} · ${c.resultados === null ? 'resultados sin dato' : `${n0(c.resultados)} ${c.resultadoTexto}`}${c.costoPorResultado !== null ? ` a ${usd(c.costoPorResultado, m)}` : ''}`);
   if (r.tipo === 'anuncio') { const k = o.creativo || {}; out.push(`Creativo: ${k.titulo ? `«${k.titulo}» · ` : ''}${k.texto ? `texto «${String(k.texto).slice(0, 400)}»` : 'sin texto leído'}${k.llamada ? ` · botón ${k.llamada}` : ''}`); if (o.revision.length) out.push(`Por qué lo rechazó Meta: ${o.revision.join('; ')}`); if (o.problemas.length) out.push(`Problemas: ${o.problemas.join('; ')}`); }
   if (r.tipo === 'campana') for (const s of o.conjuntos) out.push('- CONJUNTO ' + lineaObjeto('conjunto', s, m));
   if (r.tipo === 'conjunto') for (const a of o.anuncios) out.push('- ANUNCIO ' + lineaObjeto('anuncio', a, m));

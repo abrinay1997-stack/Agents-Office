@@ -1,18 +1,21 @@
 // La pestaña CREATIVOS (Fase A5, 9 oct 2026; plan §8.4). Puro: lo usan la vista y tests/anuncios-vista.test.mjs. Junta los anuncios de
 // GET /api/anuncios por su creativo (creativo.id, o su miniatura y su texto si no trae id) y pone sus cifras juntas: CTR, costo por
 // resultado y frecuencia RECALCULADOS (nunca un promedio de promedios: CTR = clics / impresiones; costo = gasto / resultados), y su estado
-// escrito: «funciona», «se está cansando», «sin datos» (y, si no es ninguna, «todavía no destaca» o «gasta sin resultados»).
+// escrito: «funciona», «se está cansando», «sin costo objetivo», «pocos resultados», «sin datos» (y, si no es ninguna, «todavía no destaca»
+// o «gasta sin resultados»). «funciona» SOLO se dice con costo objetivo y por el costo, nunca por el CTR.
 // OJO: estos umbrales son SOLO para pintar la etiqueta. El diagnóstico de verdad es del servidor (anuncios/diagnostico.mjs → las
-// sugerencias); si GET /api/anuncios/sugerencias trae `umbrales`, se usan esos. Si no, los del plan §7: frecuencia por encima de 3 y el
-// CTR cayendo un 30 % contra sus primeros días (§7.4; sin serie diaria, solo la frecuencia), esperar a haber gastado el costo objetivo
-// (§7.2; sin objetivo, 5 de la moneda) y 1.000 impresiones; el «CTR alto» (1,5 %) es de la página, para cuando no hay costo objetivo.
+// sugerencias); si GET /api/anuncios/sugerencias trae `umbrales`, se usan esos. Si no, los del plan §7 y de la auditoría del 1 nov 2026:
+// frecuencia por encima de 3 y el CTR (de enlace) cayendo un 30 % contra sus primeros días (§7.4; sin serie diaria, solo la frecuencia),
+// 500 impresiones para juzgar, haber gastado el costo objetivo (§7.2) y 10 resultados para juzgar el costo.
 // «Pedir variaciones» aplica la sugerencia de `creativos` de ese creativo si la hay; si no, «Nueva campaña con este creativo» abre el
 // asistente de la A3 con el texto puesto (el servidor no tiene una ruta para pedir variaciones sin sugerencia).
-import { esc, dinero, pct, frec, num, chip, estadoDe } from './comun.js';
+import { esc, dinero, pct, frec, num, chip, estadoDe, leyendaRango } from './comun.js';
 import { nombreRango } from './campanas.js';
 import { OBJETIVOS, DESTINOS, LLAMADA, llamadasDe } from './borrador.js';
 
-export const UMBRALES_DEF = { frecuencia: 3, caidaCtr: 30, ctrAlto: 1.5, gastoMin: 5, impresionesMin: 1000 };
+// AUDITORÍA 1 nov 2026: se juzga por IMPRESIONES (500) y, para el costo, por RESULTADOS (10), no por «5 dólares de gasto»; y sin costo
+// objetivo nunca se dice «funciona» (antes caía al CTR y marcaba bueno lo que costaba más).
+export const UMBRALES_DEF = { frecuencia: 3, caidaCtr: 30, impresionesMin: 500, resultadosMin: 10 };
 const n0 = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const nn = v => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 const r2 = v => Math.round(v * 100) / 100;
@@ -26,7 +29,7 @@ export function normalizarUmbrales(x = {}) {
   const v = k => { const y = x?.[k]; const n = y && typeof y === 'object' ? y.valor : y; return Number.isFinite(Number(n)) && n !== null && n !== '' ? Number(n) : undefined; };
   const caida = v('caidaCtr') ?? (v('fatigaCaidaCtr') != null ? (v('fatigaCaidaCtr') <= 1 ? v('fatigaCaidaCtr') * 100 : v('fatigaCaidaCtr')) : undefined);
   const u = { ...UMBRALES_DEF, cortarVeces: 2, gastoMinVeces: 1 };
-  for (const [k, val] of Object.entries({ frecuencia: v('frecuencia') ?? v('fatigaFrecuencia'), caidaCtr: caida, ctrAlto: v('ctrAlto'), gastoMin: v('gastoMin'), impresionesMin: v('impresionesMin') ?? v('fatigaMinImpresiones'), gastoMinVeces: v('gastoMinVeces') ?? v('esperarGastoCpa'), cortarVeces: v('cortarVeces') ?? v('cortarSinResultadoCpa') })) if (val != null) u[k] = val;
+  for (const [k, val] of Object.entries({ frecuencia: v('frecuencia') ?? v('fatigaFrecuencia'), caidaCtr: caida, resultadosMin: v('resultadosMin') ?? v('creativoMinResultados'), impresionesMin: v('impresionesMin') ?? v('creativoMinImpresiones') ?? v('fatigaMinImpresiones'), gastoMinVeces: v('gastoMinVeces') ?? v('esperarGastoCpa'), cortarVeces: v('cortarVeces') ?? v('cortarSinResultadoCpa') })) if (val != null) u[k] = val;
   return u;
 }
 
@@ -52,16 +55,17 @@ export function agruparCreativos(campanas = []) {
 /** Las cifras juntas. La frecuencia es la MAYOR de sus anuncios (el alcance no se suma entre anuncios: se solapan); lo demás, recalculado. */
 export function sumar(anuncios = []) {
   const s = k => anuncios.reduce((t, a) => t + n0(a.cifras?.[k]), 0);
-  const gasto = r2(s('gasto')), impresiones = s('impresiones'), clics = s('clics'), conRes = anuncios.some(a => nn(a.cifras?.resultados) != null), resultados = conRes ? s('resultados') : null;
+  // CTR de ENLACE (clicsEnlace / impresiones), el mismo que el del servidor; `clics` (todos) se guarda aparte como ctrTodos.
+  const gasto = r2(s('gasto')), impresiones = s('impresiones'), clics = s('clicsEnlace'), clicsTodos = s('clics'), conRes = anuncios.some(a => nn(a.cifras?.resultados) != null), resultados = conRes ? s('resultados') : null;
   const fr = anuncios.map(a => nn(a.cifras?.frecuencia)).filter(v => v != null);
-  return { gasto, impresiones, clics, resultados, resultadoTexto: anuncios.find(a => a.cifras?.resultadoTexto)?.cifras.resultadoTexto || '',
-    ctr: impresiones ? r2(clics / impresiones * 100) : null, costoPorResultado: resultados ? r2(gasto / resultados) : null, frecuencia: fr.length ? Math.max(...fr) : null };
+  return { gasto, impresiones, clics: clicsTodos, clicsEnlace: clics, resultados, resultadoTexto: anuncios.find(a => a.cifras?.resultadoTexto)?.cifras.resultadoTexto || '',
+    ctr: impresiones ? r2(clics / impresiones * 100) : null, ctrTodos: impresiones ? r2(clicsTodos / impresiones * 100) : null, costoPorResultado: resultados ? r2(gasto / resultados) : null, frecuencia: fr.length ? Math.max(...fr) : null };
 }
 /** ¿Cuánto cayó el CTR? (%, positivo = cae) de los 3 primeros días a los 3 últimos; sin serie de 6 días o más, null. */
 export function caidaCtr(anuncios = []) {
   const series = anuncios.map(a => (Array.isArray(a.serie) ? a.serie : [])).filter(x => x.length >= 6);
   if (!series.length) return null;
-  const ctrDe = l => { const i = l.reduce((t, d) => t + n0(d.impresiones), 0), c = l.reduce((t, d) => t + n0(d.clics), 0); return i ? c / i * 100 : (l.map(d => nn(d.ctr)).filter(v => v != null).reduce((t, v, _, x) => t + v / x.length, 0) || null); };
+  const ctrDe = l => { const i = l.reduce((t, d) => t + n0(d.impresiones), 0), c = l.reduce((t, d) => t + n0(d.clicsEnlace ?? d.clics), 0); return i ? c / i * 100 : (l.map(d => nn(d.ctr)).filter(v => v != null).reduce((t, v, _, x) => t + v / x.length, 0) || null); };
   const ini = ctrDe(series.flatMap(x => x.slice(0, 3))), fin = ctrDe(series.flatMap(x => x.slice(-3)));
   if (!(ini > 0) || fin == null) return null;
   return r2((ini - fin) / ini * 100);
@@ -73,17 +77,25 @@ export function caidaCtr(anuncios = []) {
  */
 export function estadoCreativo(g, { cpa = null, umbrales = {}, moneda = 'USD' } = {}) {
   const u = normalizarUmbrales(umbrales), c = g?.cifras || sumar(g?.anuncios || []);
-  const gastoMin = cpa > 0 ? cpa * (u.gastoMinVeces || 1) : u.gastoMin;
-  if (n0(c.gasto) < gastoMin || n0(c.impresiones) < u.impresionesMin)
-    return { codigo: 'sin-datos', texto: 'sin datos', tono: 'gris', porque: `Todavía es pronto: ${n0(c.gasto) < gastoMin ? `gastó ${dinero(c.gasto || 0, moneda)} y hace falta llegar a ${dinero(gastoMin, moneda)} para juzgarlo` : `lleva ${num(c.impresiones || 0)} impresiones y hacen falta ${num(u.impresionesMin)}`}.` };
+  const sinDatos = (texto, porque) => ({ codigo: 'sin-datos', texto, tono: 'gris', porque });
+  if (n0(c.impresiones) < u.impresionesMin)
+    return sinDatos('sin datos', `Todavía es pronto: lleva ${num(c.impresiones || 0)} impresiones y hacen falta ${num(u.impresionesMin)} para juzgarlo.`);
   const caida = caidaCtr(g?.anuncios || []);
   if (nn(c.frecuencia) != null && c.frecuencia > u.frecuencia && (caida == null || caida >= u.caidaCtr))
     return { codigo: 'cansando', texto: 'se está cansando', tono: 'ambar', porque: `Frecuencia ${frec(c.frecuencia)} (más de ${frec(u.frecuencia).replace(/,00$/, '')})${caida != null ? ` y el CTR bajó un ${Math.round(caida)} % contra sus primeros días` : '; sin serie diaria no sé si el CTR cae'}: la gente ya lo vio muchas veces.` };
-  if (cpa > 0 && !n0(c.resultados) && n0(c.gasto) >= u.cortarVeces * cpa)
+  // Sin costo objetivo no hay con qué juzgar el costo: nunca «funciona» por el CTR (la auditoría del 1 nov 2026 lo vio marcar bueno lo caro).
+  if (!(cpa > 0))
+    return { codigo: 'sin-objetivo', texto: 'sin costo objetivo', tono: 'gris', porque: `No puedo decir si funciona: no hay un costo por resultado objetivo con qué compararlo. Ponlo en Ajustes → Anuncios. (CTR de enlace: ${pct(c.ctr)}; el CTR solo no dice si el anuncio rinde.)` };
+  const gastoMin = cpa * (u.gastoMinVeces || 1);
+  if (n0(c.gasto) < gastoMin)
+    return sinDatos('sin datos', `Todavía es pronto: gastó ${dinero(c.gasto || 0, moneda)} y hace falta llegar a ${dinero(gastoMin, moneda)} (tu costo objetivo) para juzgarlo.`);
+  if (!n0(c.resultados) && n0(c.gasto) >= u.cortarVeces * cpa)
     return { codigo: 'sin-resultados', texto: 'gasta sin resultados', tono: 'rojo', porque: `Gastó ${dinero(c.gasto, moneda)} (${u.cortarVeces === 2 ? 'más del doble' : `${u.cortarVeces} veces o más`} de tu objetivo de ${dinero(cpa, moneda)}) sin ningún resultado.` };
-  if ((cpa > 0 && nn(c.costoPorResultado) != null && c.costoPorResultado <= cpa) || (nn(c.ctr) != null && c.ctr >= u.ctrAlto))
-    return { codigo: 'funciona', texto: 'funciona', tono: 'verde', porque: cpa > 0 && nn(c.costoPorResultado) != null && c.costoPorResultado <= cpa ? `Cada resultado cuesta ${dinero(c.costoPorResultado, moneda)}, por debajo de tu objetivo de ${dinero(cpa, moneda)}.` : `CTR de ${pct(c.ctr)}: mucha gente lo toca.` };
-  return { codigo: 'no-destaca', texto: 'todavía no destaca', tono: 'gris', porque: cpa > 0 ? `Cada resultado cuesta ${dinero(c.costoPorResultado, moneda)}, por encima de tu objetivo de ${dinero(cpa, moneda)}.` : `CTR de ${pct(c.ctr)} y sin costo objetivo con qué comparar.` };
+  if (n0(c.resultados) < u.resultadosMin)
+    return sinDatos('pocos resultados', `Lleva ${num(n0(c.resultados))} ${c.resultadoTexto || 'resultados'} y hacen falta ${num(u.resultadosMin)} para juzgar su costo: con menos, un solo resultado más o menos lo cambia todo (hoy ${dinero(c.costoPorResultado, moneda)} cada uno).`);
+  if (nn(c.costoPorResultado) != null && c.costoPorResultado <= cpa)
+    return { codigo: 'funciona', texto: 'funciona', tono: 'verde', porque: `Cada resultado cuesta ${dinero(c.costoPorResultado, moneda)}, por debajo de tu objetivo de ${dinero(cpa, moneda)} (con ${num(n0(c.resultados))} ${c.resultadoTexto || 'resultados'}).` };
+  return { codigo: 'no-destaca', texto: 'todavía no destaca', tono: 'gris', porque: `Cada resultado cuesta ${dinero(c.costoPorResultado, moneda)}, por encima de tu objetivo de ${dinero(cpa, moneda)}.` };
 }
 
 /** La sugerencia viva de `creativos` para este creativo (por el id de alguno de sus anuncios), o null. */
@@ -92,7 +104,7 @@ export function sugerenciaDe(g, sugerencias = []) {
   return sugerencias.find(s => (s.estado || 'viva') === 'viva' && s.cambio?.tipo === 'creativos' && (ids.has(s.cambio.id) || ids.has(s.objeto?.id))) || null;
 }
 
-const ORDEN = { cansando: 0, 'sin-resultados': 1, funciona: 2, 'no-destaca': 3, 'sin-datos': 4 };
+const ORDEN = { cansando: 0, 'sin-resultados': 1, funciona: 2, 'no-destaca': 3, 'sin-objetivo': 4, 'sin-datos': 5 };
 /** Los creativos con su estado, ordenados: lo que pide algo (cansándose, sin resultados) primero, luego lo que funciona, por gasto. */
 export function creativosConEstado(campanas = [], { cpaObjetivo = null, umbrales = {}, moneda = 'USD' } = {}) {
   return agruparCreativos(campanas).map(g => ({ ...g, estado: estadoCreativo(g, { cpa: cpaDe(cpaObjetivo, g.campana), umbrales, moneda }) }))
@@ -113,7 +125,7 @@ export function creativoHTML(g, { moneda = 'USD', rango = '7d', sugerencias = []
   return `<li class="anu-cr" data-cr="${i}">${miniHTML(cr)}
     <div class="anu-crc"><h3 id="anuCr${i}">${esc(titulo)}</h3><p class="anu-tchips">${marcas.join('')}</p>
       ${cr.texto ? `<p class="anu-crtexto">${esc(cr.texto)}</p>` : ''}${cr.llamada ? `<p class="anu-tobj">Botón: ${esc(cr.llamada)}</p>` : ''}
-      <dl class="anu-tcif"><div><dt>CTR</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, moneda))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Gasto · ${esc(nombreRango(rango).toLowerCase())}</dt><dd>${esc(dinero(c.gasto, moneda))}</dd></div></dl>
+      <dl class="anu-tcif"><div><dt>CTR de enlace</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, moneda))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Gasto · ${esc(nombreRango(rango).toLowerCase())}</dt><dd>${esc(dinero(c.gasto, moneda))}</dd></div></dl>
       <p class="anu-crpq">${esc(e.porque)}</p>
       <details class="anu-crusos"><summary>En ${g.anuncios.length} ${g.anuncios.length === 1 ? 'anuncio' : 'anuncios'}</summary><ul>${usos}</ul></details>
       <div class="anu-acts">${accion}</div></div></li>`;
@@ -127,7 +139,7 @@ export function creativosHTML(d, sug, { rango = '7d', rangos = [] } = {}) {
   const seg = rangos.length ? `<div class="anu-barra"><div class="anu-seg" role="group" aria-label="Cifras de">${rangos.map(([k, t]) => `<button type="button" data-rango="${k}" aria-pressed="${k === rango}">${esc(t)}</button>`).join('')}</div></div>` : '';
   const cab = `<div class="anu-bcab"><h2 id="anuCrT">Creativos <span class="anu-cuenta">${l.length}</span></h2></div>
     <p class="anu-ayuda">Cada imagen o video con sus cifras juntas, de todos los anuncios que lo usan. La etiqueta es una guía de la página${sug?.umbrales ? ' con los umbrales de la oficina' : ''}; lo que conviene hacer lo dice la pestaña Sugerencias. ${n('funciona')} funcionan, ${n('cansando')} se están cansando y ${n('sin-datos')} todavía no tienen datos. «Pedir variaciones» sale cuando la oficina las sugiere; si no, «Nueva campaña con este creativo» empieza un borrador con su texto.</p>
-    ${sug?.sinObjetivo ? `<p class="anu-ayuda">${esc(sug.sinObjetivo)} Sin ese dato, «funciona» se mide solo por el CTR.</p>` : ''}`;
+    ${sug?.sinObjetivo ? `<p class="anu-ayuda">${esc(sug.sinObjetivo)} Sin ese dato ningún creativo se marca «funciona»: dirá «sin costo objetivo».</p>` : ''}${leyendaRango(d)}`;
   if (!l.length) return `${cab}${seg}<div class="anu-vacio"><b>Todavía no hay creativos con cifras</b><span>Cuando tus anuncios empiecen a salir, aquí ves cuál funciona y cuál se cansa.</span></div>`;
   return `${cab}${seg}<ul class="anu-crs" aria-labelledby="anuCrT">${l.map((g, i) => creativoHTML(g, { moneda, rango, sugerencias: sug?.items || [], i })).join('')}</ul>`;
 }

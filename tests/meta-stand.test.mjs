@@ -189,6 +189,22 @@ test('insights: con time_increment, una fila por día; sin él, una por objeto d
   assert.equal(cuenta.data.length, 1); assert.equal(cuenta.data[0].impressions, '300');
 });
 
+test('insights (auditoría 1 nov 2026): con clics al enlace, también inline_link_click_ctr y cost_per_inline_link_click, distintos de los de todos los clics', async () => {
+  const g = crearMetaStand();
+  g.st.cifras = [
+    { ad_id: 'AD1', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-01', spend: '10', impressions: '1000', clicks: '17', inline_link_clicks: '10' },
+    { ad_id: 'AD1', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-02', spend: '10', impressions: '1000', clicks: '13', inline_link_clicks: '10' },
+    { ad_id: 'AD2', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-02', spend: '5', impressions: '500', clicks: '4' }, // Meta omite el campo cuando fue 0
+  ];
+  const rango = encodeURIComponent(JSON.stringify({ since: '2026-10-01', until: '2026-10-02' }));
+  const diario = await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=ad&time_increment=1&time_range=${rango}`);
+  const d1 = diario.data.find(f => f.ad_id === 'AD1' && f.date_start === '2026-10-01');
+  assert.equal(Number(d1.inline_link_click_ctr), 1); assert.equal(Number(d1.cost_per_inline_link_click), 1);
+  assert.equal(diario.data.find(f => f.ad_id === 'AD2').inline_link_click_ctr, undefined);
+  const rango2 = (await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=ad&time_range=${rango}`)).data.find(f => f.ad_id === 'AD1');
+  assert.equal(Number(rango2.clicks), 30); assert.equal(Number(rango2.inline_link_clicks), 20); assert.equal(Number(rango2.inline_link_click_ctr), 1, '20 clics de enlace en 2.000 impresiones = 1 %, no el 1,5 % de los 30 clics');
+});
+
 test('A2: spend_cap por debajo de US$100 lo rechaza Meta; validate_only al cambiar no cambia nada; lo archivado no se vuelve a encender', async () => {
   const g = crearMetaStand();
   assert.match((await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana({ spend_cap: SPEND_CAP_MINIMO_CENTAVOS - 1 }))).error.error_user_msg, /10000 centavos/);
