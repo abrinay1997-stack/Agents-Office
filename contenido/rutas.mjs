@@ -28,7 +28,6 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 // (9 oct 2026 y 25 oct 2026) Las rutas de Contenido salieron a contenido/rutas-nucleo.mjs (un controlador sin servidor ni disco, que el Worker de Cloudflare
 // usa igual); aquí queda el envoltorio del servidor de la oficina local y la Bandeja, que es de otra fase.
 import { crearControlador } from './rutas-nucleo.mjs';
-
 export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, ahora = Date.now }) {
   const ctl = crearControlador({ almacen, notice, ajustes, programador, metricool, conductorMeta, mejorHora, analiticasTexto, informe, guardados, mejorar, publicadas, encargar, quienLlena, plantillas, alBorrador, cuentas, ahora });
   handle.planLlenar = ctl.planLlenar; handle.llenar = ctl.llenar; handle.redesDe = ctl.redesDe;
@@ -42,7 +41,8 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (!bandeja) return json(res, 200, { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: 'sin bandeja' } }), true;
         const q = url.searchParams; if (q.get('abierta') === '1') bandeja.abierta?.(); // Fase B1: con la Bandeja a la vista, Meta se lee cada 3 min
         const f = ['meta', 'metricool'].includes(q.get('fuente')) ? q.get('fuente') : '';
-        return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '', fuente: f })), true;
+        // 2 nov 2026: ?cuenta= (el id 'instagram:<id>', el @usuario o el nombre de una cuenta que tenga mensajes)
+        return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '', fuente: f, cuenta: q.get('cuenta') || '' })), true;
       }
       if (p === '/api/contenido/bandeja/sincronizar' && req.method === 'POST') { if (!bandeja) return json(res, 404, { error: 'sin bandeja' }), true; return json(res, 200, await bandeja.sincronizar()), true; }
       // Fase B1 (9 oct 2026): DESHACER lo último de ocultar/mostrar (solo el dueño, dentro de approvals.undoSeconds)

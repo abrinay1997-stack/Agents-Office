@@ -164,7 +164,7 @@ export function crearMetaStand(o = {}) {
     if (campos.object_story_id && campos.instagram_user_id && (st.fallar.noIG ?? []).includes(campos.object_story_id)) return errorGraph('(#100) This post is not eligible for Instagram', 100);
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
     const id = nuevo('CRE');
-    st.creativos[id] = { id, name: campos.name, object_story_spec: historia, object_story_id: campos.object_story_id, source_instagram_media_id: campos.source_instagram_media_id, degrees_of_freedom_spec: objeto(campos.degrees_of_freedom_spec), effective_object_story_id: campos.object_story_id || `P1_${nuevo('post')}`, thumbnail_url: 'https://scontent.fbcdn.test/creativo.jpg' };
+    st.creativos[id] = { id, name: campos.name, object_story_spec: historia, object_story_id: campos.object_story_id, source_instagram_media_id: campos.source_instagram_media_id, instagram_user_id: campos.instagram_user_id, degrees_of_freedom_spec: objeto(campos.degrees_of_freedom_spec), effective_object_story_id: campos.object_story_id || `P1_${nuevo('post')}`, thumbnail_url: 'https://scontent.fbcdn.test/creativo.jpg' };
     return json({ id });
   }
   function crearAnuncio(campos) {
@@ -324,6 +324,9 @@ export function crearMetaStand(o = {}) {
       return json({ data: String(q.get('metric')).split(',').map((m, i) => ({ name: m, total_value: { value: 100 * (i + 1) } })) });
     }
     if (metodo === 'GET' && ruta === '/IG1/media') return json({ data: st.media });
+    // 2 nov 2026: más de una marca — el Instagram y la página de las demás cuentas (IG2, P2…) no tienen publicaciones propias salvo que el test las ponga
+    if (metodo === 'GET' && /^\/IG\d+\/media$/.test(ruta)) return json({ data: st.mediaOtras?.[ruta.split('/')[1]] ?? [] });
+    if (metodo === 'GET' && /^\/P\d+\/posts$/.test(ruta) && ruta !== '/P1/posts') return json({ data: st.postsOtras?.[ruta.split('/')[1]] ?? [] });
     if (metodo === 'GET' && /^\/M\d+\/insights$/.test(ruta)) return json({ data: [{ name: 'reach', values: [{ value: 900 }] }, { name: 'saved', values: [{ value: 5 }] }, { name: 'shares', values: [{ value: 3 }] }, { name: 'views', values: [{ value: 1500 }] }, { name: 'total_interactions', values: [{ value: 42 }] }] });
     if (metodo === 'GET' && ruta === '/P1/insights') {
       if (q.get('metric') === 'page_impressions_unique') return errorGraph('(#100) The value must be a valid insights metric', 100); // retirada desde v25
@@ -369,7 +372,9 @@ export function crearMetaStand(o = {}) {
       const listar = l => { const x = filtrar(l); return x === null ? errorGraph('(#100) Filtering field name is not supported', 100) : json({ data: x }); };
       if (sub === '/campaigns') return metodo === 'POST' ? crearCampana(campos) : listar(Object.values(st.campanas).map(vista));
       if (sub === '/adsets') return metodo === 'POST' ? crearConjunto(campos) : listar(Object.values(st.conjuntos).map(vista));
-      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : listar(Object.values(st.anuncios).map(vista));
+      // 2 nov 2026: con `fields=…creative{…}` Graph expande el creativo del anuncio (object_story_spec, effective_object_story_id, instagram_user_id): de ahí sale la cuenta de cada anuncio
+      const expandir = a => (String(q.get('fields') || '').includes('creative{') && a.creative?.id && st.creativos[a.creative.id] ? { ...a, creative: { ...st.creativos[a.creative.id], id: a.creative.id } } : a);
+      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : listar(Object.values(st.anuncios).map(vista).map(expandir));
       if (sub === '/adcreatives') return metodo === 'POST' ? crearCreativo(campos) : listar(Object.values(st.creativos).map(c => ({ ...c, status: c.status || 'ACTIVE' })));
       if (sub === '/adimages' && metodo === 'POST') {
         // A3: los bytes llegan en `bytes` (base64) o como archivo (multipart `source`); el hash es del CONTENIDO, como en Meta (subirla otra vez da el mismo)

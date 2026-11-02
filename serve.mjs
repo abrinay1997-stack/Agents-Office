@@ -1900,7 +1900,7 @@ const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALI
 // hay token, si no Metricool). Responder y ocultar: solo el dueño, una vez, según el modo de Contenido; cada uno queda en data/audit/.
 const bandejaMeta = crearBandejaMeta({ meta, archivo: path.join(ANALITICAS_DIR, 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(ANUNCIOS_DIR, 'cuenta.json'), 'utf8')); } catch { return null; } } });
 const bandeja = crearBandeja({ metricool, meta: bandejaMeta, elegir: () => cfg.contenido?.bandejaFuente || 'auto', archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o),
-  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), avisarMensaje: (t, o) => notice('bandeja-mensaje', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds });
+  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), avisarMensaje: (t, o) => notice('bandeja-mensaje', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds, cuentas: () => { try { return meta.estado()?.cuentas || []; } catch { return []; } } });
 { // cada respuesta y cada ocultar/mostrar que sale de verdad (o de mentira, en simulacro) queda en el registro, como las entregas de Contenido
   const auditar = a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} };
   const { enviar, ocultar, deshacer } = bandeja;

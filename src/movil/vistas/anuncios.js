@@ -12,6 +12,8 @@ import { dinero, pct, num, frec, contraTope, tendencia, rangoTexto, fechaCorta, 
 import { deEstado, topResumen, cuentas as cuentasSug, informativa, botonAplicar, cambioTexto, reglaTexto, FILTROS_SUG } from '../../anuncios/sugerencias.js';
 import { creativosConEstado, borradorDeCreativo } from '../../anuncios/creativos.js';
 import { quienTexto, QUIENES, filtrarHistorial } from '../../anuncios/historial.js';
+import { opcionesCuenta } from '../../anuncios/comun.js';
+import { filtrarVista } from '../../../anuncios/cuentas.mjs';
 import { PASOS, OBJETIVOS, DESTINOS, LLAMADA, llamadasDe, CATEGORIAS, PAISES, LARGO, MAX_CREATIVOS, MIN_RECOMENDADO, pasoDe, costoTexto, avisoSinFin, estadoB, editable, deQuien, poner, creativoNuevo, ajustarLlamadas, formatoDeMedidas, iframeMeta, UBICACIONES_META, objetivoTexto, objetivoDe, origenTexto, RED_ORIGEN } from '../../anuncios/borrador.js';
 import { esc, svg, vacio, esqueleto, falla } from '../ui.js';
 import { con, miniatura, subirArchivo, motivo, iconoRed } from './d-comun.js';
@@ -30,7 +32,7 @@ export function registrar(shell) {
   shell.registrarVista({
     id: 'anuncios', titulo: 'Anuncios', icono: 'anuncios', grupo: 'mas', sec: 'negocio', texto: 'Tus campañas de Meta',
     montar(el, ctx) {
-      const S = { d: null, sug: null, hist: null, bor: null, tab: 'resumen', rango: '7d', filtro: 'todas', orden: 'gasto', abiertos: new Set(), cargado: false, error: null, fsug: 'viva', quien: 'todos', leyendo: false };
+      const S = { cuenta: 'todas', d: null, sug: null, hist: null, bor: null, tab: 'resumen', rango: '7d', filtro: 'todas', orden: 'gasto', abiertos: new Set(), cargado: false, error: null, fsug: 'viva', quien: 'todos', leyendo: false };
       el.innerHTML = `<div class="mv-chips md-tabs" role="group" aria-label="Secciones de Anuncios">${TABS.map(([k, n]) => `<button type="button" class="mv-chip" data-tab="${k}" aria-pressed="false">${n}<b data-n="${k}" hidden></b></button>`).join('')}</div>
         <div class="mv-scroll" data-sc><div class="mv-cuerpo md-an" aria-live="polite"></div></div>`;
       const cuerpo = el.querySelector('.md-an'), sc = el.querySelector('[data-sc]');
@@ -51,6 +53,8 @@ export function registrar(shell) {
       }
 
       // ------------------------------------------------------------------ Resumen
+      /** La cuenta elegida (página/Instagram), si todavía existe entre las que tienen anuncios; si no, todas. */
+      const cuentaSelM = () => (S.cuenta !== 'todas' && S.d && opcionesCuenta(S.d).some(([k]) => k === S.cuenta) ? S.cuenta : 'todas');
       function pintarResumen() {
         const d = S.d, m = moneda();
         if (!d.configurado && !G.ejemplo) return `<div class="md-card"><h2 class="md-q">Conecta tu cuenta publicitaria</h2><p class="mv-texto">${esc(d.motivo || 'Todavía no hay una cuenta de anuncios conectada.')}</p><p class="mv-meta">Se conecta con el token de Meta y el id de la cuenta en Ajustes → Anuncios. Aquí solo se lee hasta que tú actives algo, y todo lo que crees nace en pausa.</p><button type="button" class="mv-btn" data-ejemplo>Ver con datos de ejemplo</button></div>`;
@@ -64,6 +68,7 @@ export function registrar(shell) {
             <p class="mv-meta">${d.sincronizadaAt ? 'Leída ' + esc(haceCuanto(d.sincronizadaAt)) : 'Sin leer todavía'}${d.error ? ' · ' + esc(d.error) : ''}</p>
             <button type="button" class="mv-btn" data-actualizar>${S.leyendo || d.sincronizando ? 'Leyendo Meta…' : 'Actualizar'}</button></div>
           <h3 class="mv-gh">Lo que llevas gastado</h3><div class="md-card">${medidor('Hoy', g.hoy, t.diario)}${medidor('Esta semana', g.semana, null)}${medidor('Este mes', g.mes, t.mensual)}</div>
+          ${(d.porCuenta || []).length ? `<h3 class="mv-gh">Por cuenta <span>${d.porCuenta.length}</span></h3><p class="mv-meta">La cuenta publicitaria es una sola; cada anuncio sale en una página y su Instagram. Un anuncio cuenta una vez, en su marca.</p><ul class="md-lista md-cards" data-por-cuenta>${d.porCuenta.map(x => { const id = x.clave ? (x.cuentas?.[0]?.id || 'facebook:' + x.clave) : 'sin', c = x.cifras || {}; return `<li class="md-card"><b>${esc(x.texto)}</b><p class="mv-meta">${x.anuncios} ${x.anuncios === 1 ? 'anuncio' : 'anuncios'} · ${x.campanas} ${x.campanas === 1 ? 'campaña' : 'campañas'}${x.clave ? '' : ' · no se pudo saber de qué página son'}</p><dl class="md-cif"><div><dt>Gasto</dt><dd>${esc(dinero(x.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}${x.otrosObjetivos ? ' *' : ''}</dd></div><div><dt>Costo/res.</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div></dl><button type="button" class="mv-btn" data-ver-cuenta="${esc(id)}">Ver sus campañas</button></li>`; }).join('')}</ul>` : ''}
           <h3 class="mv-gh">Últimos 7 días</h3><div class="md-kpis"><div class="md-kpi"><small>Resultados</small><b>${esc(num(d.resumen?.resultados7d))}</b><small>${esc(d.resumen?.resultadoTexto || '')}</small>${tr(tend.resultados, true)}</div><div class="md-kpi"><small>Costo por resultado</small><b>${esc(dinero(d.resumen?.costoPorResultado7d, m))}</b>${tr(tend.gasto, false)}</div></div>
           ${top.length ? `<h3 class="mv-gh">Lo que conviene mirar <span>${top.length}</span></h3><ul class="md-lista">${top.map(s => `<li><button type="button" class="md-sug-m" data-ver-sug="${esc(s.id)}"><b>${esc(reglaTexto(s.regla))}</b><small>${esc(s.objeto?.nombre || '')}</small><span>${esc(s.dato || '')}</span></button></li>`).join('')}</ul><button type="button" class="mv-link" data-tab-ir="sugerencias">Ver todas las sugerencias</button>` : ''}
           <div class="md-acciones fin"><button type="button" class="mv-btn primario" data-informe>Informe del mes</button><button type="button" class="mv-btn" data-nueva>Nueva campaña</button></div>`;
@@ -77,13 +82,15 @@ export function registrar(shell) {
         return `<li class="md-camp n-${f.nivel}"><div class="md-camp-c">
           <button type="button" class="md-camp-n" data-det="${esc(f.id)}"><small>${nivel}</small><b>${esc(n.nombre || '(sin nombre)')}</b></button>
           <p class="md-pz-m">${chip(e.texto, e.tono)}${ap && ap.texto !== SIN ? chip(ap.texto, ap.tono) : ''}${n.creadoFuera ? chip('creado fuera') : ''}${tieneProblemas(n) && e.tono !== 'rojo' ? chip('pide atención', 'rojo') : ''}</p>
+          <p class="md-cuenta" data-cuenta-fila>${esc(n.cuentaTexto || 'cuenta no identificada')}</p>
           <dl class="md-cif"><div><dt>Gasto</dt><dd>${esc(dinero(c.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}</dd></div><div><dt>Costo/res.</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div>${f.nivel !== 'anuncio' ? `<div><dt>Presupuesto</dt><dd>${esc(presupuesto(n.presupuesto, m))}</dd></div>` : ''}</dl>
           <div class="md-camp-b">${sinGasto}${acc.length > (sw ? 1 : 0) ? `<button type="button" class="mv-btn" data-mas="${esc(f.id)}" aria-haspopup="dialog" aria-label="Más acciones de ${esc(n.nombre || '')}">Más…</button>` : ''}${f.hijos ? `<button type="button" class="mv-btn" data-tog="${esc(f.id)}" aria-expanded="${f.abierto}">${f.abierto ? 'Ocultar' : f.nivel === 'campana' ? `Conjuntos (${f.hijos})` : `Anuncios (${f.hijos})`}</button>` : ''}</div></div></li>`;
       }
       function pintarCampanas() {
-        const d = S.d, lista = ordenar(filtrar(d.campanas || [], S.filtro), S.orden), filas = aplanar(lista, S.abiertos);
+        const d0 = S.d, sel = cuentaSelM(), d = filtrarVista(d0, sel), lista = ordenar(filtrar(d.campanas || [], S.filtro), S.orden), filas = aplanar(lista, S.abiertos);
         const cnt = Object.fromEntries(FILTROS.map(([k]) => [k, filtrar(d.campanas || [], k).length]));
-        return `<div class="mv-chips md-chips-p" role="group" aria-label="Periodo">${RANGOS.map(([k, n]) => `<button type="button" class="mv-chip" data-rango="${k}" aria-pressed="${S.rango === k}">${n}</button>`).join('')}</div>
+        const ops = opcionesCuenta(d0), selC = ops.length > 2 ? `<label class="mv-lab" for="mdCuenta">Cuenta</label><select id="mdCuenta" data-cuenta>${ops.map(([k, n]) => `<option value="${esc(k)}"${k === sel ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : '';
+        return `${selC}<div class="mv-chips md-chips-p" role="group" aria-label="Periodo">${RANGOS.map(([k, n]) => `<button type="button" class="mv-chip" data-rango="${k}" aria-pressed="${S.rango === k}">${n}</button>`).join('')}</div>
           <div class="mv-chips md-chips-p" role="group" aria-label="Qué campañas">${FILTROS.map(([k, n]) => `<button type="button" class="mv-chip" data-filtro="${k}" aria-pressed="${S.filtro === k}">${n}<b>${cnt[k]}</b></button>`).join('')}</div>
           ${rangoMv(d)}
           ${filas.length ? `<ul class="md-lista">${filas.map(tarjetaFila).join('')}</ul>` : vacio('No hay campañas aquí', S.filtro === 'todas' ? 'Cuando crees una o la cuenta tenga alguna, aparecerá.' : 'Prueba con otro filtro.', { icono: 'anuncios' })}`;
@@ -96,7 +103,7 @@ export function registrar(shell) {
         const card = s => {
           const b = botonAplicar(s), f = S.d && s.cambio?.id ? buscar(S.d.campanas || [], s.cambio.id) : null;
           return `<li class="md-card" data-sug="${esc(s.id)}"><p class="md-pz-m">${chip(reglaTexto(s.regla), s.prioridad === 1 ? 'rojo' : s.prioridad === 2 ? 'ambar' : 'gris')}${s.estado && s.estado !== 'viva' ? chip({ aplicada: 'Aplicada', descartada: 'Descartada', pospuesta: 'Pospuesta' }[s.estado] || s.estado, 'gris') : ''}</p>
-            <h4 class="md-h4">${esc(s.objeto?.nombre || '')}</h4><p class="mv-texto"><b>${esc(s.dato || '')}</b></p><p class="mv-meta">${esc(s.porque || '')}</p>
+            <h4 class="md-h4">${esc(s.objeto?.nombre || '')}</h4>${f?.nodo?.cuentaTexto ? `<p class="md-cuenta" data-cuenta-sug>${esc(f.nodo.cuentaTexto)}</p>` : ''}<p class="mv-texto"><b>${esc(s.dato || '')}</b></p><p class="mv-meta">${esc(s.porque || '')}</p>
             ${!informativa(s) ? `<p class="md-cambio"><b>Cambio:</b> ${esc(cambioTexto(s, { moneda: m, f }))}</p>` : ''}${s.efecto ? `<p class="mv-meta"><b>Efecto:</b> ${esc(s.efecto)}</p>` : ''}${s.riesgo?.texto ? `<p class="mv-meta"><b>Riesgo:</b> ${esc(s.riesgo.texto)}</p>` : ''}
             ${s.estado === 'viva' && !informativa(s) || s.estado === 'viva' ? `<div class="md-sal-b">${b ? `<button type="button" class="mv-btn primario" data-aplicar="${esc(s.id)}">${esc(b.texto)}</button>` : ''}<button type="button" class="mv-btn" data-descartar="${esc(s.id)}">Descartar</button>${!informativa(s) ? `<button type="button" class="mv-btn" data-posponer="${esc(s.id)}">Recordármelo en 3 días</button>` : ''}</div>` : ''}</li>`;
         };
@@ -116,7 +123,7 @@ export function registrar(shell) {
           ${l.length ? `<ul class="md-lista md-cards">${l.map((g, i) => { const cr = g.creativo || {}, c = g.cifras, sug = (S.sug?.items || []).find(s => (s.estado || 'viva') === 'viva' && s.cambio?.tipo === 'creativos' && g.anuncios.some(a => a.id === s.cambio.id));
             return `<li class="md-card"><div class="md-pub-r">${miniatura(cr.miniatura, { clase: 'md-mini grande' })}<span class="md-pz-c"><b>${esc(cr.titulo || g.anuncios[0]?.nombre || '(sin titular)')}</b><span class="md-pz-m">${chip(g.estado.texto, g.estado.tono)}</span>${cr.texto ? `<small>${esc(cr.texto.slice(0, 120))}</small>` : ''}</span></div>
               <dl class="md-cif"><div><dt>CTR de enlace</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>Costo/res.</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Gasto ${esc(nombreRango(S.rango))}</dt><dd>${esc(dinero(c.gasto, m))}</dd></div></dl>
-              <p class="mv-meta">${esc(g.estado.porque || '')}</p><p class="mv-meta">En ${g.anuncios.length} ${g.anuncios.length === 1 ? 'anuncio' : 'anuncios'}.</p>
+              <p class="mv-meta">${esc(g.estado.porque || '')}</p><p class="mv-meta">En ${g.anuncios.length} ${g.anuncios.length === 1 ? 'anuncio' : 'anuncios'}${[...new Set(g.anuncios.map(a => a.cuentaTexto).filter(Boolean))].length ? ' · ' + esc([...new Set(g.anuncios.map(a => a.cuentaTexto).filter(Boolean))].join(' / ')) : ''}.</p>
               <div class="md-sal-b">${sug ? `<button type="button" class="mv-btn primario" data-aplicar="${esc(sug.id)}">Pedir variaciones</button>` : `<button type="button" class="mv-btn" data-cr-nueva="${i}">Nueva campaña con este creativo</button>`}</div></li>`; }).join('')}</ul>` : vacio('Todavía no hay creativos con cifras', 'Cuando tus anuncios empiecen a salir, aquí verás cuál funciona y cuál se cansa.', { icono: 'contenido' })}`;
       }
 
@@ -125,14 +132,14 @@ export function registrar(shell) {
         if (S.bor == null) return esqueleto(3);
         const orden = [...S.bor].sort((a, b) => (a.estado === 'creado') - (b.estado === 'creado') || String(b.actualizadoAt || '').localeCompare(String(a.actualizadoAt || '')));
         return `<button type="button" class="mv-btn primario md-ancho" data-nueva>+ Nueva campaña</button><p class="mv-meta">Un borrador vive en la oficina: no gasta ni sale en Meta hasta que pulses «Crear en Meta (en pausa)». Activarla después te pide los dos toques con la cifra.</p>
-          ${orden.length ? `<ul class="md-lista md-cards">${orden.map(b => { const e = estadoB(b), cm = b.validacion?.costoMax, n = (b.creativos || []).length; return `<li class="md-card"><button type="button" class="md-bor" data-bor="${esc(b.id)}">${b.origen?.miniatura ? miniatura(b.origen.miniatura, { clase: 'md-mini' }) : miniatura(b.creativos?.[0]?.media, { clase: 'md-mini' })}<span class="md-pz-c"><b>${esc(b.nombre || '(sin nombre)')}</b><span class="md-pz-m">${chip(e.texto, e.tono)}${chip('De: ' + deQuien(b.de), b.de === 'dueno' ? 'gris' : 'azul')}</span><small>${esc(objetivoTexto(b))} · ${b.origen ? esc(origenTexto(b)) : `${n} ${n === 1 ? 'creativo' : 'creativos'}`}</small><small>${cm ? 'Costo máximo: ' + esc(costoTexto(cm, moneda())) : 'Costo máximo: se calcula al revisarlo.'}</small>${b.estado === 'fallo' && b.error ? `<small class="rojo">${esc(b.error)}</small>` : ''}</span></button>
+          ${orden.length ? `<ul class="md-lista md-cards">${orden.map(b => { const e = estadoB(b), cm = b.validacion?.costoMax, n = (b.creativos || []).length; return `<li class="md-card"><button type="button" class="md-bor" data-bor="${esc(b.id)}">${b.origen?.miniatura ? miniatura(b.origen.miniatura, { clase: 'md-mini' }) : miniatura(b.creativos?.[0]?.media, { clase: 'md-mini' })}<span class="md-pz-c"><b>${esc(b.nombre || '(sin nombre)')}</b><span class="md-pz-m">${chip(e.texto, e.tono)}${chip('De: ' + deQuien(b.de), b.de === 'dueno' ? 'gris' : 'azul')}</span><small>${esc(objetivoTexto(b))} · ${b.origen ? esc(origenTexto(b)) : `${n} ${n === 1 ? 'creativo' : 'creativos'}`}</small><small data-cuenta-borrador>${b.cuentaTexto ? 'Saldrá en: ' + esc(b.cuentaTexto) : ''}</small><small>${cm ? 'Costo máximo: ' + esc(costoTexto(cm, moneda())) : 'Costo máximo: se calcula al revisarlo.'}</small>${b.estado === 'fallo' && b.error ? `<small class="rojo">${esc(b.error)}</small>` : ''}</span></button>
             <div class="md-sal-b">${b.estado === 'creado' && b.meta?.campana ? `<button type="button" class="mv-btn" data-ver-camp="${esc(b.meta.campana)}">Ver la campaña en pausa</button>` : ''}${b.estado !== 'creando' ? `<button type="button" class="mv-btn peligro" data-bor-borrar="${esc(b.id)}">Borrar</button>` : ''}</div></li>`; }).join('')}</ul>` : vacio('Todavía no hay borradores', 'Empieza una campaña con «+ Nueva campaña»; Dimitri y tu agente de anuncios también pueden dejarte uno.', { icono: 'anuncios' })}`;
       }
       function pintarHist() {
         if (S.hist == null) return esqueleto(3);
         const l = filtrarHistorial(S.hist, S.quien);
         return `<div class="mv-chips md-chips-p" role="group" aria-label="Quién lo hizo">${QUIENES.map(([k, n]) => `<button type="button" class="mv-chip" data-quien="${k}" aria-pressed="${S.quien === k}">${n}</button>`).join('')}</div>
-          ${l.length ? `<ul class="md-lista">${l.map(i => `<li class="md-hist"><b>${esc(i.que || '')}</b><small>${esc(quienTexto(i.quien))} · ${esc(haceCuanto(i.at) || '')}${i.objeto ? ' · ' + esc(i.objeto) : ''}</small>${i.antes != null || i.despues != null ? `<small>${esc(String(i.antes ?? '—'))} → ${esc(String(i.despues ?? '—'))}</small>` : ''}</li>`).join('')}</ul>` : vacio('Sin movimientos', 'Aquí queda cada cambio que se hace en tus campañas, y quién lo hizo.', { icono: 'historial' })}`;
+          ${l.length ? `<ul class="md-lista">${l.map(i => `<li class="md-hist"><b>${esc(i.que || '')}</b><small>${esc(quienTexto(i.quien))} · ${esc(haceCuanto(i.at) || '')}${i.objeto?.cuenta ? ' · en ' + esc(i.objeto.cuenta) : ''}${i.objeto ? ' · ' + esc(i.objeto) : ''}</small>${i.antes != null || i.despues != null ? `<small>${esc(String(i.antes ?? '—'))} → ${esc(String(i.despues ?? '—'))}</small>` : ''}</li>`).join('')}</ul>` : vacio('Sin movimientos', 'Aquí queda cada cambio que se hace en tus campañas, y quién lo hizo.', { icono: 'historial' })}`;
       }
 
       function pintar() {
@@ -148,7 +155,7 @@ export function registrar(shell) {
       function detalle(id) {
         const f = S.d && buscar(S.d.campanas || [], id); if (!f) return;
         const n = f.nodo, c = n.cifras || {}, e = estadoDe(n), m = moneda(), acc = accionesDe(f), cr = n.creativo;
-        const h = ctx.hoja({ titulo: n.nombre || 'Detalle', lleno: true, cuerpo: `<p class="md-pz-m">${chip(e.texto, e.tono)}${n.creadoFuera ? chip('creado fuera de la oficina') : ''}</p>
+        const h = ctx.hoja({ titulo: n.nombre || 'Detalle', lleno: true, cuerpo: `<p class="md-pz-m">${chip(e.texto, e.tono)}${n.creadoFuera ? chip('creado fuera de la oficina') : ''}</p><p class="md-cuenta" data-cuenta-detalle>Cuenta: <b>${esc(n.cuentaTexto || 'cuenta no identificada')}</b></p>
           ${(n.problemas || []).length ? `<ul class="md-prob">${n.problemas.map(p => `<li class="mal">${esc(typeof p === 'string' ? p : p.texto || p.mensaje || '')}</li>`).join('')}</ul>` : ''}
           ${cr ? `<div class="md-pub-r">${miniatura(cr.miniatura, { clase: 'md-mini grande' })}<span class="md-pz-c"><b>${esc(cr.titulo || '')}</b><small>${esc(cr.texto || '')}</small>${cr.llamada ? `<small>Botón: ${esc(cr.llamada)}</small>` : ''}</span></div>` : ''}
           <dl class="md-cif g"><div><dt>Gasto</dt><dd>${esc(dinero(c.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Alcance</dt><dd>${esc(num(c.alcance))}</dd></div><div><dt>Impresiones</dt><dd>${esc(num(c.impresiones))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Clics</dt><dd>${esc(num(c.clics))}</dd></div><div><dt>CTR de enlace</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>CPC</dt><dd>${esc(dinero(c.cpc, m))}</dd></div><div><dt>CPM</dt><dd>${esc(dinero(c.cpm, m))}</dd></div></dl>
@@ -193,7 +200,8 @@ export function registrar(shell) {
           const v = c.vence ? (typeof c.vence === 'number' ? c.vence : Date.parse(c.vence)) : NaN, tiempo = () => (Number.isNaN(v) ? null : Math.max(0, Math.round((v - Date.now()) / 1000)));
           const L = [['dia', 'Al día'], ['semana', 'Esta semana'], ['mes', 'Hasta fin de mes'], ['campana', 'En toda la campaña']].filter(([k]) => c.cifras?.[k] != null);
           const rev = g.f && /PENDING_REVIEW|IN_PROCESS/.test(String(g.f.nodo.estado || '').toUpperCase()) ? '<p class="mv-meta">Está en revisión: se activa igual y empieza a salir cuando Meta lo apruebe.</p>' : '';
-          pon(`¿${TEXTO[g.tipo] || 'Aplicar'}? Esto gasta`, `${obj}<p class="mv-texto"><b>${esc(c.texto || '')}</b></p>${L.length ? `<dl class="md-cif g">${L.map(([k, t]) => `<div><dt>${t}</dt><dd>hasta ${esc(dinero(c.cifras[k], m))}</dd></div>`).join('')}</dl>` : ''}${aviso ? `<p class="md-aviso" role="note"><b>Antes de decir que sí:</b> ${esc(aviso)}</p>` : ''}${rev}
+          const cuentaL = c.cuenta || g.f?.nodo?.cuentaTexto || '';
+          pon(`¿${TEXTO[g.tipo] || 'Aplicar'}? Esto gasta`, `${obj}${cuentaL ? `<p class="mv-meta" data-cuenta-confirmar>En: <b>${esc(cuentaL)}</b></p>` : ''}<p class="mv-texto"><b>${esc(c.texto || '')}</b></p>${L.length ? `<dl class="md-cif g">${L.map(([k, t]) => `<div><dt>${t}</dt><dd>hasta ${esc(dinero(c.cifras[k], m))}</dd></div>`).join('')}</dl>` : ''}${aviso ? `<p class="md-aviso" role="note"><b>Antes de decir que sí:</b> ${esc(aviso)}</p>` : ''}${rev}
             ${botones(`<button type="button" class="mv-btn primario si" data-d="si">${esc(botonSi(g.tipo, c, m))}</button>`, cancelar)}<p class="mv-meta" data-vence>${tiempo() == null ? '' : `Esta confirmación vale ${Math.floor(tiempo() / 60)} min ${String(tiempo() % 60).padStart(2, '0')} s; luego hay que volver a pedirla.`}</p>`);
           h._conf = c;
           clearInterval(h._t); h._t = setInterval(() => { const q = tiempo(); const n = h.cuerpo.querySelector('[data-vence]'); if (!n || !h.cuerpo.isConnected) return clearInterval(h._t); if (q != null && q <= 0) { clearInterval(h._t); const si = h.cuerpo.querySelector('[data-d="si"]'); if (si) si.outerHTML = '<button type="button" class="mv-btn primario" data-d="otra">Venció: pedirlo otra vez</button>'; n.textContent = ''; } else if (q != null) n.textContent = `Esta confirmación vale ${Math.floor(q / 60)} min ${String(q % 60).padStart(2, '0')} s; luego hay que volver a pedirla.`; }, 1000);
@@ -253,11 +261,13 @@ export function registrar(shell) {
       // ------------------------------------------------------------------ eventos
       async function irTab(t) { S.tab = t; sc.scrollTop = 0; if (t === 'historial' && S.hist == null) cargarHist(); if (t === 'borradores') cargarBor(); if (t === 'sugerencias' || t === 'creativos') cargarSug(); pintar(); }
       el.querySelector('.md-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) irTab(b.dataset.tab); });
+      cuerpo.addEventListener('change', e => { if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; pintar(); } });
       cuerpo.addEventListener('click', async e => {
         const t = e.target.closest('button'); if (!t) return; const dt = t.dataset;
         if (t.matches('[data-reintentar]')) return cargar();
         if (dt.tabIr) return irTab(dt.tabIr);
         if (dt.rango) { S.rango = dt.rango; await cargar({ silencioso: true }); return; }
+        if (dt.verCuenta) { S.cuenta = dt.verCuenta; S.filtro = 'todas'; return irTab('campanas'); }
         if (dt.filtro) { S.filtro = dt.filtro; return pintar(); }
         if (dt.fsug) { S.fsug = dt.fsug; return pintar(); }
         if (dt.quien) { S.quien = dt.quien; return pintar(); }

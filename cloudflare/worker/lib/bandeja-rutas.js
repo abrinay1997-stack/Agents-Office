@@ -31,7 +31,7 @@ export async function resolverBandeja({ bandeja, metodo, ruta, url, b = {}, aseg
   if (r.raiz && metodo === 'GET') {
     const q = url.searchParams; if (q.get('abierta') === '1') bandeja.abierta?.();
     const f = ['meta', 'metricool'].includes(q.get('fuente')) ? q.get('fuente') : '';
-    return ok(bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '', fuente: f }));
+    return ok(bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '', fuente: f, cuenta: q.get('cuenta') || '' }));
   }
   if (r.sincronizar && metodo === 'POST') { await asegurar(); return ok(await bandeja.sincronizar()); }
   if (r.deshacer && metodo === 'POST') {

@@ -16,6 +16,9 @@
 // Lo que no se sabe no se inventa: una cifra sin datos es null.
 // ============================================================
 
+import { refsDeAnuncio, atribuir, unirCuentas, textoCuentas, filtrarVista, deLaCuenta, textoPorCuenta } from './cuentas.mjs';
+export { filtrarVista, deLaCuenta };
+
 // ---------------------------------------------------------------- fechas (en la zona de la cuenta)
 
 /** 'AAAA-MM-DD' de un instante en una zona horaria IANA (la de la cuenta publicitaria: Meta cuenta los días en ella). */
@@ -227,7 +230,7 @@ export function avisoCredito(disponible, topeDiario, moneda = 'USD') {
   const m = moneda === 'USD' ? 'US$' : moneda + ' ';
   return `Al tope de gasto de la cuenta le quedan ${m}${disponible.toFixed(2)}, menos que un día del tope diario (${m}${topeDiario.toFixed(2)}): Meta puede dejar de entregar. Súbelo o revisa la facturación en el Administrador de anuncios.`;
 }
-export function armarVista({ guardado = null, filas = [], alcances = {}, rango = '7d', hoy, topes = {}, hayCifras = false } = {}) {
+export function armarVista({ guardado = null, filas = [], alcances = {}, rango = '7d', hoy, topes = {}, hayCifras = false, cuentas = [] } = {}) {
   const R = rangos(hoy), [desde, hasta] = R[rango] || R['7d'];
   const g = guardado || {}, cta = g.cuenta || null, moneda = cta?.currency || 'USD';
   const entre = (a, b) => filas.filter(f => f.date_start >= a && f.date_start <= b);
@@ -238,22 +241,39 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
   const tipoConjunto = (s, camp) => resultadoDe(camp?.objective, { optimizacion: s.optimization_goal, destino: s.destination_type });
   const tipoCampana = camp => { const ts = [...new Set(conjuntosDe(camp.id).map(s => tipoConjunto(s, camp)))]; return ts.length === 1 ? ts[0] : resultadoDe(camp.objective); };
 
+  const porAnuncio = []; // 2 nov 2026: { id, ts, atr } de cada anuncio, para el reparto por cuenta
   const campanas = (g.campanas || []).map(camp => {
     const e = etiqueta(camp.name), tc = tipoCampana(camp);
     const conjuntos = conjuntosDe(camp.id).map(s => {
       const ts = tipoConjunto(s, camp), es = etiqueta(s.name);
       const anuncios = (g.anuncios || []).filter(a => a.adset_id === s.id).map(a => {
         const ea = etiqueta(a.name), cre = a.creative?.id ? { ...creativos.get(a.creative.id), ...a.creative } : null;
-        return { id: a.id, nombre: ea.nombre, creadoFuera: ea.creadoFuera, estado: a.effective_status || a.status || null, estadoTexto: estadoTexto(a.effective_status || a.status), revision: motivosRevision(a.ad_review_feedback), problemas: problemas(a.issues_info), creativo: creativoDe(cre), cifras: cifras(delRango.filter(f => f.ad_id === a.id), ts, { alcance: alc('ad', a.id), hayDatos: hayCifras }) };
+        const atr = atribuir(refsDeAnuncio(cre, s), cuentas); porAnuncio.push({ id: a.id, ts, atr });
+        return { id: a.id, cuentas: atr.cuentas, cuentaClave: atr.clave, cuentaTexto: atr.texto, nombre: ea.nombre, creadoFuera: ea.creadoFuera, estado: a.effective_status || a.status || null, estadoTexto: estadoTexto(a.effective_status || a.status), revision: motivosRevision(a.ad_review_feedback), problemas: problemas(a.issues_info), creativo: creativoDe(cre), cifras: cifras(delRango.filter(f => f.ad_id === a.id), ts, { alcance: alc('ad', a.id), hayDatos: hayCifras }) };
       });
-      return { id: s.id, nombre: es.nombre, creadoFuera: es.creadoFuera, optimizacion: s.optimization_goal || null, destino: s.destination_type || null, estado: s.effective_status || s.status || null, estadoTexto: estadoTexto(s.effective_status || s.status), aprendizaje: aprendizaje(s.learning_stage_info), presupuesto: presupuesto(s, moneda), publico: publicoTexto(s.targeting), inicio: s.start_time || null, fin: s.end_time || null, problemas: problemas(s.issues_info), cifras: cifras(delRango.filter(f => f.adset_id === s.id), ts, { alcance: alc('adset', s.id), hayDatos: hayCifras }), anuncios };
+      const cs = anuncios.length ? unirCuentas(anuncios.map(a => a.cuentas)) : atribuir(refsDeAnuncio(null, s), cuentas).cuentas;
+      return { id: s.id, cuentas: cs, cuentaTexto: textoCuentas(cs), nombre: es.nombre, creadoFuera: es.creadoFuera, optimizacion: s.optimization_goal || null, destino: s.destination_type || null, estado: s.effective_status || s.status || null, estadoTexto: estadoTexto(s.effective_status || s.status), aprendizaje: aprendizaje(s.learning_stage_info), presupuesto: presupuesto(s, moneda), publico: publicoTexto(s.targeting), inicio: s.start_time || null, fin: s.end_time || null, problemas: problemas(s.issues_info), cifras: cifras(delRango.filter(f => f.adset_id === s.id), ts, { alcance: alc('adset', s.id), hayDatos: hayCifras }), anuncios };
     });
-    return { id: camp.id, nombre: e.nombre, objetivo: camp.objective || null, objetivoTexto: objetivoTexto(camp.objective), estado: camp.effective_status || camp.status || null, estadoTexto: estadoTexto(camp.effective_status || camp.status), creadoFuera: e.creadoFuera, presupuesto: presupuesto(camp, moneda), spendCap: deMeta(camp.spend_cap, moneda, { ceroEsNada: true }), estrategia: camp.bid_strategy || null, inicio: camp.start_time || null, fin: camp.stop_time || null, problemas: problemas(camp.issues_info), resultado: tc, cifras: cifras(delRango.filter(f => f.campaign_id === camp.id), tc, { alcance: alc('campaign', camp.id), hayDatos: hayCifras }), conjuntos };
+    const csC = unirCuentas(conjuntos.map(s => s.cuentas));
+    return { id: camp.id, cuentas: csC, cuentaTexto: textoCuentas(csC), nombre: e.nombre, objetivo: camp.objective || null, objetivoTexto: objetivoTexto(camp.objective), estado: camp.effective_status || camp.status || null, estadoTexto: estadoTexto(camp.effective_status || camp.status), creadoFuera: e.creadoFuera, presupuesto: presupuesto(camp, moneda), spendCap: deMeta(camp.spend_cap, moneda, { ceroEsNada: true }), estrategia: camp.bid_strategy || null, inicio: camp.start_time || null, fin: camp.stop_time || null, problemas: problemas(camp.issues_info), resultado: tc, cifras: cifras(delRango.filter(f => f.campaign_id === camp.id), tc, { alcance: alc('campaign', camp.id), hayDatos: hayCifras }), conjuntos };
   });
 
   // lo gastado (de las filas, que ya vienen en la moneda)
   const gastoDe = ([a, b]) => (hayCifras ? r2(entre(a, b).reduce((s, f) => s + (num(f.spend) || 0), 0)) : null);
   const gasto = { hoy: gastoDe(R.hoy), semana: gastoDe(R['7d']), mes: gastoDe(R.mes) };
+
+  // 2 nov 2026: EL REPARTO POR CUENTA (marca = página + su Instagram): gasto y resultados de los anuncios de cada una, sobre el rango.
+  // Un anuncio cuenta una sola vez (en su marca): sumar «Facebook» e «Instagram» por separado doblaría el gasto. Sin pista = «cuenta no identificada».
+  const grupos = new Map();
+  for (const x of porAnuncio) { const k = x.atr.clave || '~sin'; if (!grupos.has(k)) grupos.set(k, { clave: x.atr.clave, cuentas: [], items: [] }); const gr = grupos.get(k); gr.cuentas = unirCuentas([gr.cuentas, x.atr.cuentas]); gr.items.push(x); }
+  const porCuenta = [...grupos.values()].map(gr => {
+    const filasG = delRango.filter(f => gr.items.some(i => i.id === f.ad_id));
+    const tipos = {}; for (const i of gr.items) (tipos[i.ts] ||= []).push(...delRango.filter(f => f.ad_id === i.id));
+    const tk = Object.keys(tipos).filter(Boolean), gastoT = k => tipos[k].reduce((s, f) => s + (num(f.spend) || 0), 0);
+    const dom = tk.sort((a, b) => gastoT(b) - gastoT(a))[0] || null;
+    return { clave: gr.clave, cuentas: gr.cuentas, texto: textoCuentas(gr.cuentas), anuncios: gr.items.length, campanas: new Set(campanas.filter(c => c.conjuntos.some(s => s.anuncios.some(a => gr.items.some(i => i.id === a.id)))).map(c => c.id)).size,
+      gasto: hayCifras ? r2(filasG.reduce((s, f) => s + (num(f.spend) || 0), 0)) : null, cifras: dom && hayCifras ? cifras(tipos[dom], dom, { hayDatos: hayCifras }) : null, otrosObjetivos: tk.length > 1 };
+  }).sort((a, b) => (b.gasto ?? -1) - (a.gasto ?? -1) || (a.clave ? 0 : 1) - (b.clave ? 0 : 1));
 
   // el resumen de 7 días: los resultados del tipo con más gasto (sumar conversaciones con clics no dice nada)
   const porTipo = filasR => {
@@ -300,7 +320,7 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
 
   return {
     cuenta: cta ? { id: cta.id || null, nombre: cta.name || null, estado: num(cta.account_status), estadoTexto: cuentaEstado(cta.account_status).texto, moneda, zona: cta.timezone_name || null, gastado: deMeta(cta.amount_spent, moneda), spendCap: deMeta(cta.spend_cap, moneda, { ceroEsNada: true }), saldo: deMeta(cta.balance, moneda), porPagar: deMeta(cta.balance, moneda), disponible: creditoDisponible(deMeta(cta.amount_spent, moneda), deMeta(cta.spend_cap, moneda, { ceroEsNada: true })) } : null,
-    rango, desde, hasta, gasto, avisos, resumen, campanas,
+    rango, desde, hasta, gasto, avisos, resumen, campanas, porCuenta,
   };
 }
 
@@ -332,7 +352,7 @@ export function lineaObjeto(tipo, o, moneda = 'USD') {
   const pres = o.presupuesto?.usd != null ? ` · presupuesto ${o.presupuesto.tipo} ${usd(o.presupuesto.usd, moneda)}` : '';
   const extra = tipo === 'conjunto' ? ` · ${o.aprendizaje?.texto || 'sin dato de aprendizaje'}${o.aprendizaje?.conversiones != null ? ` (${o.aprendizaje.conversiones} conversiones)` : ''} · público: ${o.publico}` : tipo === 'campana' ? ` · objetivo ${o.objetivoTexto}${o.spendCap != null ? ` · tope en Meta ${usd(o.spendCap, moneda)}` : ''}` : '';
   const prob = [...(o.revision || []), ...(o.problemas || [])];
-  return `${o.id} · «${o.nombre}»${o.creadoFuera ? ' (creado fuera de la oficina)' : ''} · ${o.estadoTexto}${pres}${extra} · ${resultadoTexto(o.cifras, moneda)}${prob.length ? ` · PROBLEMA: ${prob.slice(0, 2).join('; ')}` : ''}`;
+  return `${o.id} · «${o.nombre}»${o.creadoFuera ? ' (creado fuera de la oficina)' : ''} · ${o.estadoTexto}${pres}${extra} · ${resultadoTexto(o.cifras, moneda)}${o.cuentaTexto ? ` · CUENTA: ${o.cuentaTexto}` : ''}${prob.length ? ` · PROBLEMA: ${prob.slice(0, 2).join('; ')}` : ''}`;
 }
 /** La cuenta, el gasto contra los topes y el resumen. */
 export function textoCuenta(v, { topes = {} } = {}) {
@@ -341,15 +361,17 @@ export function textoCuenta(v, { topes = {} } = {}) {
   return [`Cuenta publicitaria ${c.id} «${c.nombre || ''}»: ${c.estadoTexto} · ${m} · ${c.zona || 'zona sin dato'}${c.spendCap != null ? ` · límite de gasto en Meta ${usd(c.spendCap, m)}` : ''}`,
     `Gasto: hoy ${usd(v.gasto?.hoy, m)}${topes.diario != null ? ` (tope ${usd(topes.diario, m)})` : ''} · 7 días ${usd(v.gasto?.semana, m)} · este mes ${usd(v.gasto?.mes, m)}${topes.mensual != null ? ` (tope ${usd(topes.mensual, m)})` : ''}`,
     `Últimos 7 días: ${v.resumen?.resultados7d == null ? `${v.resumen?.resultadoTexto || 'resultados'}: sin dato` : `${n0(v.resumen.resultados7d)} ${v.resumen.resultadoTexto}${v.resumen.costoPorResultado7d != null ? ` a ${usd(v.resumen.costoPorResultado7d, m)}` : ''}`}${v.resumen?.tendencia?.gasto != null ? ` · gasto ${v.resumen.tendencia.gasto > 0 ? '+' : ''}${v.resumen.tendencia.gasto} % frente a la semana anterior` : v.resumen?.tendenciaMotivo ? ` · sin porcentaje contra la semana anterior (${v.resumen.tendenciaMotivo})` : ''}`,
+    ...(v.porCuenta?.length ? [textoPorCuenta(v, usd)] : []),
     ...(v.avisos || []).map(a => `AVISO (${a.nivel}): ${a.texto}`)].join('\n');
 }
 /** Las campañas (con sus conjuntos y anuncios hasta `nivel`), filtradas por estado: activas · pausadas · problemas · todas. */
-export function textoCampanas(v, { nivel = 'conjunto', estado = 'todas' } = {}) {
-  const m = v?.cuenta?.moneda || 'USD';
+export function textoCampanas(v0, { nivel = 'conjunto', estado = 'todas', cuenta = 'todas' } = {}) {
+  const v = filtrarVista(v0, cuenta), m = v?.cuenta?.moneda || 'USD';
   const pasa = c => estado === 'todas' || (estado === 'activas' ? c.estado === 'ACTIVE' : estado === 'pausadas' ? c.estado !== 'ACTIVE' : c.conjuntos.some(s => s.anuncios.some(a => conProblema(a.estado))));
   const sel = (v?.campanas || []).filter(pasa);
   if (!sel.length) return `No hay campañas${estado !== 'todas' ? ` ${estado}` : ''}.`;
   const out = [`Campañas (${sel.length}), cifras de ${RANGO_TEXTO[v.rango] || v.rango} (del ${v.desde} al ${v.hasta}, ambos días incluidos, en la hora de ${v?.cuenta?.zona || 'la cuenta'}; el último día va a medias si es hoy):`];
+  if (v.cuentaFiltro && v.cuentaFiltro !== 'todas') out.push(`(Solo los anuncios de la cuenta ${v.cuentaFiltro === 'sin' ? 'no identificada' : textoCuentas((v.porCuenta || []).flatMap(g => g.cuentas).filter(c => c.id === v.cuentaFiltro))}; las cifras de una campaña que mezcla cuentas son de la campaña entera${sel.some(c => c.parcial) ? ' (alguna aparece como parcial)' : ''}.)`);
   for (const c of sel.slice(0, 30)) {
     out.push('- CAMPAÑA ' + lineaObjeto('campana', c, m));
     if (nivel === 'campana') continue;
@@ -647,5 +669,5 @@ function validarOrigen(b, comb, cuentas, err, aviso) {
 export function lineaBorrador(b) {
   const q = b.presupuesto?.usd ? `US$${b.presupuesto.usd} ${b.presupuesto.tipo === 'diario' ? 'al día' : 'en total'}` : 'sin presupuesto';
   const est = { borrador: 'borrador', creando: 'creándose en Meta', creado: `creado EN PAUSA en Meta${b.meta?.campana ? ` (campaña ${b.meta.campana})` : ''}`, fallo: `falló al crearse: ${b.error || ''}` }[b.estado] || b.estado;
-  return `${b.id} · «${b.nombre}» (${OBJETIVO_BORRADOR_TEXTO[b.objetivo] || b.objetivo}${b.destino ? ' por ' + DESTINO_TEXTO[b.destino] : ''}) · ${q} · ${b.origen ? `impulsa la publicación de ${b.origen.red === 'instagram' ? 'Instagram' : 'Facebook'} ${b.origen.id}` : `${(b.creativos || []).length} creativo(s)`} · de ${b.de} · ${est}${b.validacion ? ` · ${b.validacion.ok ? 'valida' : 'NO valida: ' + b.validacion.problemas.filter(x => x.nivel === 'error').map(x => x.texto).slice(0, 2).join(' ')}` : ''}`;
+  return `${b.id} · «${b.nombre}» (${OBJETIVO_BORRADOR_TEXTO[b.objetivo] || b.objetivo}${b.destino ? ' por ' + DESTINO_TEXTO[b.destino] : ''}) · ${q} · ${b.origen ? `impulsa la publicación de ${b.origen.red === 'instagram' ? 'Instagram' : 'Facebook'} ${b.origen.id}` : `${(b.creativos || []).length} creativo(s)`} · de ${b.de} · ${est}${b.validacion ? ` · ${b.validacion.ok ? 'valida' : 'NO valida: ' + b.validacion.problemas.filter(x => x.nivel === 'error').map(x => x.texto).slice(0, 2).join(' ')}` : ''}${b.cuentaTexto ? ` · saldrá en ${b.cuentaTexto}` : ''}`;
 }

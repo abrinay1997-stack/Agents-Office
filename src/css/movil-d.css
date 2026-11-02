@@ -155,3 +155,7 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 @media (prefers-reduced-motion: reduce) { .md-sw-i::after { transition: none; } }
 
 #mvRoot a.mv-link, #mvRoot .md-pub a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* 2 nov 2026: la cuenta de cada objeto */
+.md-cuenta{margin:2px 0 6px;font-size:13px;color:var(--mv-tx2,inherit)}
+.md-bj-cta{display:block;font-size:13px;color:var(--mv-tx2,inherit)}

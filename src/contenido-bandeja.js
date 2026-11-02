@@ -10,6 +10,7 @@
 // conversación abierta (el hilo, las imágenes, el contador de 1.000) viaja con el editor de piezas: src/contenido-conversacion.js.
 //   initBandeja({ host, datos, esc, note, onCount, paquete }) → { load(), render(), pendientes() } · paquete() → window.AO_PIEZA
 import { RED, nbRed } from './pieza-base.js';
+import { cuentaDeItem, cuentaLinea, comoCuenta, opcionesCuentaBandeja } from './bandeja-cuenta.js';
 
 const TIPO = { conversaciones: 'Mensaje', comentarios: 'Comentario', resenas: 'Reseña' };
 const EST = { nuevo: ['SIN RESPONDER', '#8A6414', '#E8B44A'], borrador: ['CON BORRADOR', '#2158CC', '#8FB0FF'], respondido: ['RESPONDIDO', '#13705A', '#4FD1A5'], descartado: ['DESCARTADO', '#5A5A5A', '#B9B6AE'], fallo: ['FALLÓ', '#B3261E', '#FF8A80'] };
@@ -75,7 +76,7 @@ const ls = { get(k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); 
 
 export function initBandeja({ host, datos, esc, note = () => {}, onCount = () => {}, paquete = null }) {
   let r = { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: '' } }, filtro = 'pendiente', tipo = '', abierto = '', armado = '', armT = null, cargando = false;
-  let fuente = '', soloAnuncios = false, undo = null, undoT = null;
+  let fuente = '', soloAnuncios = false, undo = null, undoT = null, cuentaSel = '';
   const vistas = new Set(), timers = new Map(), noSugerir = new Set(ls.get('ao.bj.nosug'));
   let hayAnuncios = false, conv = null, convPedida = false, desde = Date.now();
   function traerConv() { /* B2: la conversación abierta viaja con el editor de piezas */
@@ -99,7 +100,7 @@ export function initBandeja({ host, datos, esc, note = () => {}, onCount = () =>
     await null; // quien la abre pinta antes: así se sabe si está a la vista (el servidor mira más seguido mientras lo está)
     const aLaVista = !host.hidden && host.isConnected && !host.closest('[inert]');
     try {
-      r = await datos.bandeja({ estado: filtro, tipo, fuente, abierta: aLaVista ? 1 : '' }); desde = Date.now(); onCount(r.pendientes || 0);
+      r = await datos.bandeja({ estado: filtro, tipo, fuente, cuenta: cuentaSel, abierta: aLaVista ? 1 : '' }); desde = Date.now(); onCount(r.pendientes || 0);
       for (const m of r.items || []) { vistas.add(fuenteDe(m)); if (m.enAnuncio) hayAnuncios = true; }
     } catch (e) { r = { ...r, error: e.message }; }
     finally { cargando = false; }
@@ -120,7 +121,8 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
       <div class="bj-filtros">${seg('Qué mensajes', 'data-bjf', [['pendiente', `Por responder${r.pendientes ? ` (${r.pendientes})` : ''}`], ['respondido', 'Respondidos'], ['descartado', 'Descartados']], filtro)}
       ${seg('De qué tipo', 'data-bjt', [['', 'Todo'], ['comentarios', 'Comentarios'], ['conversaciones', 'Mensajes'], ['resenas', 'Reseñas']], tipo)}
       ${vistas.size > 1 ? seg('De dónde', 'data-bjs', [['', 'Todas'], ['meta', 'Meta'], ['metricool', 'Metricool']], fuente) : ''}
-      ${hayAnuncios ? `<button type="button" class="pz-btn bj-anf" data-bjan aria-pressed="${soloAnuncios}">En anuncios</button>` : ''}</div>`;
+      ${hayAnuncios ? `<button type="button" class="pz-btn bj-anf" data-bjan aria-pressed="${soloAnuncios}">En anuncios</button>` : ''}
+      ${(() => { const o = opcionesCuentaBandeja(r); return o.length ? `<label class="bj-cuentasel">Cuenta <select data-bjc>${o.map(([k, n]) => `<option value="${esc(k)}"${k === cuentaSel ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''; })()}</div>`;
   }
 
   function undoHTML() {
@@ -142,7 +144,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
         ${m.estado === 'fallo' && m.error ? `<p class="pz-inline err">${esc(m.error)}</p>` : ''}
         <div class="bj-row">${m.estado === 'descartado' ? `<button type="button" class="pz-btn" data-bja="reabrir" data-id="${esc(m.id)}">Reabrir</button>`
           : a.oculto ? `<button type="button" class="pz-go" aria-disabled="true" aria-describedby="${id}-no" data-bjno="${esc(m.id)}">Enviar respuesta</button><span class="bj-no" id="${id}-no">${OCULTO_NO_RESPONDE}</span>`
-          : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}">${armado === m.id ? '¿Seguro? Pulsa otra vez para enviarla' : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`}${ocultarBtn}</div>`;
+          : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}">${armado === m.id ? `¿Seguro? Pulsa otra vez ${comoCuenta(m) ? `para responder como ${esc(comoCuenta(m))}` : 'para enviarla'}` : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`}${ocultarBtn}</div>${m.estado !== 'descartado' && comoCuenta(m) ? `<p class="bj-como" data-bj-como>Responderás como <b>${esc(comoCuenta(m))}</b>.</p>` : ''}`;
     const cv = esConversacion(m), ult = cv ? ultimoMensaje(m) : null;
     if (cv && open) traerConv();
     if (open && cv && conv?.traerHechas) conv.traerHechas(m.id, render);
@@ -156,7 +158,8 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
         ${responder}
       </div>`;
     const sug = !a.sugerencia ? '' : `<div class="bj-sug" role="note"><span><b>${esc(a.sugerencia.quien)}</b> sugiere ocultarlo${a.sugerencia.motivo ? `: ${esc(a.sugerencia.motivo)}` : '.'}</span><span class="bj-row"><button type="button" class="pz-btn" data-bjh="ocultar" data-id="${esc(m.id)}">Ocultar</button><button type="button" class="pz-btn" data-bjnosug="${esc(m.id)}">No</button></span></div>`;
-    const tags = `${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
+    const cta = cuentaDeItem(m), ctaTag = cta ? `<span class="bj-tag bj-cta" data-bj-cuenta title="Cuenta desde la que se lee y se responde">${cta.foto ? `<img src="${esc(cta.foto)}" alt="" width="14" height="14" loading="lazy" referrerpolicy="no-referrer"> ` : ''}${esc(cuentaLinea(cta))}</span>` : '';
+    const tags = `${ctaTag}${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
     return `<article class="bj-it${open ? ' on' : ''}${m.sospecha ? ' sos' : ''}${a.oculto ? ' oc' : ''}" data-it="${esc(m.id)}"><button type="button" class="bj-h" data-bjo="${esc(m.id)}" aria-expanded="${open}" aria-controls="${id}-d">
         ${nbRed(String(m.red || ''))}<span class="bj-who"><b>${esc(m.autor)}</b> <small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${cv && m.red === 'facebook' ? 'Messenger' : esc(red.name)}${vistas.size > 1 ? ` · ${FUENTE[fuenteDe(m)]}` : ''} · ${esc(hace(m.cuando))}</small>${tags ? `<span class="bj-tags">${tags}</span>` : ''}<span class="bj-ex">${m.sospecha ? '🛡 ' : ''}${ult?.de === 'tu' ? 'Tú: ' : ''}${esc(((ult ? ult.texto || (ult.adjuntos?.length ? 'Envió una imagen' : '') : m.texto) || '').replace(/\s+/g, ' ').slice(0, 140))}</span></span>
         <span class="bj-est pz-tone" style="--c:${c};--cd:${cd}">${en}</span></button>${sug}${det}</article>`;
@@ -196,6 +199,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
   });
   async function guardar(id, texto) { try { const x = await datos.bandejaBorrador(id, texto); Object.assign(r.items.find(i => i.id === id) || {}, x.item || {}); } catch (e) { note('No se pudo guardar el borrador: ' + e.message, true); } }
 
+  host.addEventListener('change', async e => { if (e.target.matches?.('[data-bjc]')) { cuentaSel = e.target.value; abierto = ''; await load(); foco('[data-bjc]'); } });
   host.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.bjo) { abierto = abierto === b.dataset.bjo ? '' : b.dataset.bjo; render(); foco(`[data-bjo="${CSS.escape(b.dataset.bjo)}"]`); return; }

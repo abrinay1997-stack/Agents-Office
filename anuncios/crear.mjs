@@ -255,5 +255,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
     } catch (e) { return R(422, { error: 'meta', motivo: motivoMeta(e) }); }
   }
 
-  return { validar, crear, alArrancar, vistaPrevia, enMarcha: () => [...enMarcha.keys()], esperar: id => enMarcha.get(id) || Promise.resolve(), local, diario };
+  /** 2 nov 2026: la página y el Instagram sobre los que crearía ahora (solo para mostrarlo; la regla de crear no cambia). */
+  const cuentaAnuncios = () => { const c = cuentas() || {}; return { pagina: c.pagina || null, instagram: c.instagram || null }; };
+  return { validar, crear, alArrancar, vistaPrevia, cuentaAnuncios, enMarcha: () => [...enMarcha.keys()], esperar: id => enMarcha.get(id) || Promise.resolve(), local, diario };
 }

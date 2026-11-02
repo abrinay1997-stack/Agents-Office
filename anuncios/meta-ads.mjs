@@ -24,8 +24,10 @@ export const CAMPOS = {
   campanas: 'id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,bid_strategy,spend_cap,start_time,stop_time,special_ad_categories,created_time,updated_time,issues_info',
   conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
   // VERIFICADO el 9 oct 2026 con la cuenta real: `effective_instagram_media_id` existe en el creativo (la Fase B1 lo usará para los comentarios de los anuncios).
-  anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
-  creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
+  anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id,instagram_user_id}',
+  // 2 nov 2026: `instagram_user_id` (AdCreative, v26) dice de qué Instagram es el anuncio; con `object_story_spec.page_id` y el `promoted_object` del
+  // conjunto da la cuenta de cada anuncio sin llamadas nuevas (anuncios/cuentas.mjs). POR VERIFICAR con la cuenta real que v26 lo devuelve.
+  creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id,instagram_user_id',
   // las cifras diarias por anuncio (plan §5 A1). `purchase_roas` solo tiene sentido con píxel: se añade si hay uno en Ajustes.
   cifras: 'ad_id,adset_id,campaign_id,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,ctr,cpc,cpm,actions,cost_per_action_type',
   alcance: 'campaign_id,adset_id,ad_id,reach,impressions,frequency',

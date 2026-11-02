@@ -506,3 +506,8 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
   #anuOv .anu-inf-barra .anu-sel { flex: 1 1 100%; }
   #anuOv .anu-inf-barra .anu-sel select { width: 100%; }
 }
+
+/* 2 nov 2026: la cuenta (página/Instagram) de cada objeto */
+.anu-cta{max-width:100%;white-space:normal}
+.anu-dcuenta{margin:4px 0 0;font-size:var(--fs-sm,13px)}
+.anu-cta-h{color:var(--tx2,inherit)}

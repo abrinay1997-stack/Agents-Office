@@ -2,7 +2,7 @@
 // (gasto de hoy contra el tope diario, gasto del mes contra el mensual, resultados y costo por resultado de 7 días, cada una con su
 // tendencia); y las campañas activas en tarjetas, con su interruptor y su «⋯» (Fase A2). Sin Meta conectada, cómo conectar.
 import { controlesHTML } from './acciones.js';
-import { esc, dinero, leyendaRango, contraTope, tendenciaHTML, estadoDe, chip, resultados, presupuesto, tieneProblemas, esActiva, num, SIN } from './comun.js';
+import { esc, dinero, leyendaRango, contraTope, tendenciaHTML, estadoDe, chip, resultados, presupuesto, tieneProblemas, esActiva, num, SIN, cuentaChip, porCuentaHTML, selectorCuentaHTML } from './comun.js';
 import { nombreRango, buscar } from './campanas.js';
 import { resumenSugerenciasHTML } from './sugerencias.js';
 import { medirHTML } from './informe.js';
@@ -40,7 +40,7 @@ export function cifrasResumenHTML(d) {
 export function tarjetaHTML(c, moneda, rango, ahora = Date.now()) {
   const e = estadoDe(c), k = c.cifras || {}, js = c.conjuntos || [], apr = js.filter(j => j.aprendizaje?.estado === 'LEARNING').length;
   return `<li class="anu-tarj"><h3><button type="button" class="anu-abrir" data-abrircamp="${esc(c.id)}">${esc(c.nombre || '(sin nombre)')}</button></h3>
-    <p class="anu-tchips">${chip(e.texto, e.tono)}${apr ? chip(apr === js.length ? 'Aprendiendo' : `${apr} de ${js.length} aprendiendo`, 'ambar') : ''}${tieneProblemas(c) && e.tono !== 'rojo' ? chip('pide atención', 'rojo') : ''}${c.creadoFuera ? chip('creada fuera', 'gris') : ''}</p>
+    <p class="anu-tchips">${chip(e.texto, e.tono)}${apr ? chip(apr === js.length ? 'Aprendiendo' : `${apr} de ${js.length} aprendiendo`, 'ambar') : ''}${tieneProblemas(c) && e.tono !== 'rojo' ? chip('pide atención', 'rojo') : ''}${c.creadoFuera ? chip('creada fuera', 'gris') : ''}${cuentaChip(c)}</p>
     <p class="anu-tobj">${esc(c.objetivoTexto || c.objetivo || '')}${c.presupuesto ? ` · ${esc(presupuesto(c.presupuesto, moneda))}` : ''}</p>
     <dl class="anu-tcif"><div><dt>Gasto · ${esc(nombreRango(rango).toLowerCase())}</dt><dd>${esc(dinero(k.gasto, moneda))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(k))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(k.costoPorResultado, moneda))}</dd></div></dl>
     <div class="anu-tctl">${controlesHTML({ nivel: 'campana', id: c.id, nodo: c, campana: c }, ahora)}</div></li>`;
@@ -56,12 +56,12 @@ export function conexionHTML(d) {
     <div class="anu-acts"><button type="button" class="anu-btn pri" data-a="ajustes">Abrir Ajustes → Anuncios</button><button type="button" class="anu-btn" data-a="ejemplo">Ver con datos de ejemplo</button></div></section>`;
 }
 
-export function resumenHTML(d, { rango = '7d', ahora = Date.now(), sug = null } = {}) {
+export function resumenHTML(d, { rango = '7d', ahora = Date.now(), sug = null, cuenta = 'todas' } = {}) {
   if (!d) return '<p class="anu-cargando">Cargando…</p>';
   if (!d.configurado) return conexionHTML(d);
   const m = d.cuenta?.moneda || 'USD', activas = (d.campanas || []).filter(c => esActiva(c) || tieneProblemas(c));
-  const cuenta = d.cuenta ? `<p class="anu-cuenta-l">Cuenta <b>${esc(d.cuenta.nombre || d.cuenta.id)}</b> · ${chip(d.cuenta.estadoTexto || estadoDe(d.cuenta).texto, /activa|active/i.test(d.cuenta.estadoTexto || d.cuenta.estado || '') ? 'verde' : 'ambar')} · ${esc(m)}${d.cuenta.zona ? ' · ' + esc(d.cuenta.zona) : ''}${d.cuenta.saldo != null ? ` · <span title="Lo que Meta ya cobró o va a cobrar y todavía no se pagó. No es crédito disponible.">deuda con Meta / por pagar ${esc(dinero(d.cuenta.porPagar ?? d.cuenta.saldo, m))}</span>` : ''}${d.cuenta.disponible != null ? ` · queda del tope de la cuenta ${esc(dinero(d.cuenta.disponible, m))}` : ''}</p>` : '';
-  return `${avisosHTML(d)}${cuenta}${cifrasResumenHTML(d)}${leyendaRango(d)}${resumenSugerenciasHTML(sug, { moneda: m, buscarFila: id => buscar(d.campanas || [], id), ahora })}
+  const cuentaPub = d.cuenta ? `<p class="anu-cuenta-l">Cuenta <b>${esc(d.cuenta.nombre || d.cuenta.id)}</b> · ${chip(d.cuenta.estadoTexto || estadoDe(d.cuenta).texto, /activa|active/i.test(d.cuenta.estadoTexto || d.cuenta.estado || '') ? 'verde' : 'ambar')} · ${esc(m)}${d.cuenta.zona ? ' · ' + esc(d.cuenta.zona) : ''}${d.cuenta.saldo != null ? ` · <span title="Lo que Meta ya cobró o va a cobrar y todavía no se pagó. No es crédito disponible.">deuda con Meta / por pagar ${esc(dinero(d.cuenta.porPagar ?? d.cuenta.saldo, m))}</span>` : ''}${d.cuenta.disponible != null ? ` · queda del tope de la cuenta ${esc(dinero(d.cuenta.disponible, m))}` : ''}</p>` : '';
+  return `${avisosHTML(d)}${cuentaPub}${selectorCuentaHTML(d, cuenta) ? `<div class="anu-barra">${selectorCuentaHTML(d, cuenta)}</div>` : ''}${cifrasResumenHTML(d)}${leyendaRango(d)}${porCuentaHTML(d, { cuenta })}${resumenSugerenciasHTML(sug, { moneda: m, buscarFila: id => buscar(d.campanas || [], id), ahora })}
     <section class="anu-sec" aria-labelledby="anuActT"><div class="anu-bcab"><h2 id="anuActT">Campañas activas <span class="anu-cuenta">${activas.length}</span></h2><button type="button" class="anu-btn pri" data-a="nueva">+ Nueva campaña</button></div>
     ${activas.length ? `<ul class="anu-tarjs">${activas.map(c => tarjetaHTML(c, m, rango, ahora)).join('')}</ul>` : '<div class="anu-vacio"><b>No hay campañas activas</b><span>Las que estén en pausa o terminadas están en Campañas.</span></div>'}</section>${medirHTML(d)}`;
 }

@@ -167,7 +167,7 @@ export function confirmarHTML(f, tipo, confirmar, { moneda = 'USD', aviso = '', 
   const v = confirmar?.vence ? (typeof confirmar.vence === 'number' ? confirmar.vence : Date.parse(confirmar.vence)) : NaN;
   const vencido = !Number.isNaN(v) && v <= ahora, quedan = Number.isNaN(v) ? null : Math.max(0, Math.round((v - ahora) / 1000));
   const rev = f && /PENDING_REVIEW|IN_PROCESS/.test(clave(f.nodo)) ? '<p class="anu-ayuda">Está en revisión: se activa igual y empieza a salir cuando Meta lo apruebe.</p>' : '';
-  return `<h2 id="anuDlgT">¿${esc(TEXTO[tipo] || 'Aplicar')}? Esto gasta</h2>${f ? `<p class="anu-dobj">«${esc(nombre(f))}»</p>` : ''}
+  return `<h2 id="anuDlgT">¿${esc(TEXTO[tipo] || 'Aplicar')}? Esto gasta</h2>${f ? `<p class="anu-dobj">«${esc(nombre(f))}»</p>` : ''}${confirmar?.cuenta || f?.nodo?.cuentaTexto ? `<p class="anu-dcuenta" data-cuenta-confirmar>En: <b>${esc(confirmar?.cuenta || f.nodo.cuentaTexto)}</b></p>` : ''}
     <p class="anu-dtexto">${esc(confirmar?.texto || '')}</p>${cifrasConfirmarHTML(confirmar?.cifras, moneda)}
     ${aviso ? `<p class="anu-daviso" role="note"><b>Antes de decir que sí</b><span>${esc(aviso)}</span></p>` : ''}${rev}
     ${vencido ? '<p class="anu-derr" role="alert">Venció: vuelve a pedirlo.</p><div class="anu-acts"><button type="button" class="anu-btn pri" data-dlg="otra">Pedirlo otra vez</button><button type="button" class="anu-btn" data-dlg="cancelar">Cancelar</button></div>'

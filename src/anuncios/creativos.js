@@ -48,7 +48,7 @@ export function agruparCreativos(campanas = []) {
     if (!a.creativo) continue;
     const k = clave(a.creativo);
     if (!m.has(k)) m.set(k, { clave: k, creativo: a.creativo, anuncios: [], campana: c });
-    m.get(k).anuncios.push({ id: a.id, nombre: a.nombre, estado: a.estado, estadoTexto: a.estadoTexto, campana: c, conjunto: j, cifras: a.cifras || {}, serie: a.serie || a.diario || null, revision: a.revision || [], problemas: a.problemas || [] });
+    m.get(k).anuncios.push({ id: a.id, cuentaTexto: a.cuentaTexto || '', nombre: a.nombre, estado: a.estado, estadoTexto: a.estadoTexto, campana: c, conjunto: j, cifras: a.cifras || {}, serie: a.serie || a.diario || null, revision: a.revision || [], problemas: a.problemas || [] });
   }
   return [...m.values()].map(g => ({ ...g, cifras: sumar(g.anuncios) }));
 }
@@ -119,7 +119,7 @@ export function creativoHTML(g, { moneda = 'USD', rango = '7d', sugerencias = []
   const cr = g.creativo || {}, c = g.cifras, e = g.estado, sug = sugerenciaDe(g, sugerencias), a0 = g.anuncios[0];
   const titulo = cr.titulo || a0?.nombre || '(sin titular)';
   const marcas = [chip(e.texto, e.tono), ...g.anuncios.filter(a => /DISAPPROVED/.test(String(a.estado))).slice(0, 1).map(() => chip('rechazado', 'rojo')), ...g.anuncios.filter(a => /WITH_ISSUES/.test(String(a.estado))).slice(0, 1).map(() => chip('con problemas', 'rojo'))];
-  const usos = g.anuncios.map(a => `<li><button type="button" class="anu-abrir" data-sobj="${esc(a.id)}">${esc(a.nombre || a.id)}</button> <span>· ${esc(estadoDe(a).texto)}</span></li>`).join('');
+  const usos = g.anuncios.map(a => `<li><button type="button" class="anu-abrir" data-sobj="${esc(a.id)}">${esc(a.nombre || a.id)}</button> <span>· ${esc(estadoDe(a).texto)}</span>${a.cuentaTexto ? ` <span class="anu-cta-h" data-cuenta-creativo>· en ${esc(a.cuentaTexto)}</span>` : ''}</li>`).join('');
   const accion = sug ? `<button type="button" class="anu-btn pri" data-crvar="${esc(sug.id)}" aria-label="Pedir variaciones del creativo «${esc(titulo)}»">Pedir variaciones</button>`
     : `<button type="button" class="anu-btn" data-crnueva="${esc(a0?.id || '')}" aria-label="Nueva campaña con el creativo «${esc(titulo)}»">Nueva campaña con este creativo</button>`;
   return `<li class="anu-cr" data-cr="${i}">${miniHTML(cr)}

@@ -30,7 +30,7 @@ function publicoHTML(p) {
 export function detalleHTML(f, { moneda = 'USD', rango = '7d', ahora = Date.now() } = {}) {
   if (!f) return '<p class="anu-vacio">No encuentro eso: puede que Meta ya no lo devuelva.</p>';
   const n = f.nodo, e = estadoDe(n), ruta = [f.nivel !== 'campana' ? `Campaña «${esc(f.campana.nombre)}»` : '', f.nivel === 'anuncio' ? `Conjunto «${esc(f.conjunto.nombre)}»` : ''].filter(Boolean).join(' › ');
-  const datos = [dato('Estado', chip(e.texto, e.tono))];
+  const datos = [dato('Estado', chip(e.texto, e.tono)), dato('Cuenta', esc(n.cuentaTexto || 'cuenta no identificada'))];
   if (f.nivel === 'campana') {
     datos.push(dato('Objetivo', esc(n.objetivoTexto || n.objetivo || SIN)), dato('Presupuesto', esc(presupuesto(n.presupuesto, moneda))), dato('Tope de la campaña', esc(n.spendCap != null ? dinero(n.spendCap, moneda) : 'sin tope')),
       dato('Empieza', esc(fechaCorta(n.inicio))), dato('Termina', esc(fechaCorta(n.fin, 'sin fin'))), dato('Conjuntos', esc(String((n.conjuntos || []).length))));

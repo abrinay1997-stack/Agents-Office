@@ -21,6 +21,19 @@ test('un token que no es el suyo da 190; sin token, las cuentas no se leen', asy
   const ok = await g.fetchFn(`${G}/me/accounts?access_token=${TOKEN_STAND}`); assert.equal((await ok.json()).data[0].id, 'P1');
 });
 
+test('2 nov 2026 · la cuenta de cada anuncio: el creativo guarda page_id e instagram_user_id y la lista de anuncios lo expande con `creative{…}`', async () => {
+  const g = crearMetaStand();
+  const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());
+  const s = await pedir(g, 'POST', `/${CUENTA_STAND}/adsets`, { campaign_id: c.id, name: 'Panamá', optimization_goal: 'CONVERSATIONS', billing_event: 'IMPRESSIONS', destination_type: 'MESSENGER', targeting: segmentacion, status: 'PAUSED' });
+  const cr = await pedir(g, 'POST', `/${CUENTA_STAND}/adcreatives`, { name: 'Creativo', instagram_user_id: 'IG1', object_story_spec: { page_id: 'P1', instagram_user_id: 'IG1', link_data: { message: 'Hola' } } });
+  const a = await pedir(g, 'POST', `/${CUENTA_STAND}/ads`, { adset_id: s.id, name: 'Anuncio', creative: { creative_id: cr.id }, status: 'PAUSED' });
+  const sin = await pedir(g, 'GET', `/${CUENTA_STAND}/ads?fields=id,name`);
+  assert.deepEqual(sin.data[0].creative, { id: cr.id }, 'sin `creative{…}` en los campos, solo el id (como Graph)');
+  const con = await pedir(g, 'GET', `/${CUENTA_STAND}/ads?fields=id,name,creative{id,object_story_spec,effective_object_story_id,instagram_user_id}`);
+  const x = con.data.find(d => d.id === a.id).creative;
+  assert.equal(x.object_story_spec.page_id, 'P1'); assert.equal(x.object_story_spec.instagram_user_id, 'IG1'); assert.equal(x.instagram_user_id, 'IG1'); assert.match(x.effective_object_story_id, /^P1_/);
+});
+
 test('Marketing API: crear en orden, en pausa, y leerlo con su estado efectivo', async () => {
   const g = crearMetaStand();
   const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());

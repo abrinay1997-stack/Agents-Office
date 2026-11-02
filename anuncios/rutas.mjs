@@ -93,7 +93,8 @@
 //   POST /api/anuncios/conversiones/probar { codigo? } → 200 { ok, texto } un evento de prueba con test_event_code (solo el dueño) · 409 sin código
 //   POST /api/anuncios/conversiones/webhook (X-Office-Token = AO_HOOK_TOKEN) { evento: 'Purchase'|'Lead', valor, moneda, email, telefono,
 //          url, event_id, at, id } → 200 { ok, ya?, resumen } · 401 sin token. Para tu tienda, Zapier o n8n; `event_id` = el `eventID` de tu píxel.
-import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
+import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador, filtrarVista } from './modelo.mjs';
+import { resolverFiltro, atribuir } from './cuentas.mjs';
 import { quienDe } from './acciones.mjs';
 import { deConversacion as deConversacionE } from './conversiones.mjs';
 
@@ -104,6 +105,21 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
+  /**
+   * 2 nov 2026: sobre QUÉ cuenta saldrá (o salió) cada borrador, solo para mostrarlo. Uno ya creado en Meta dice la de su campaña (la que leyó
+   * Meta); uno por crear, la página y el Instagram de Ajustes → Anuncios (los que usará anuncios/crear.mjs). Sin ninguna: «cuenta no identificada».
+   */
+  function conCuentas(lista) {
+    let cuentasMeta = []; try { cuentasMeta = meta.estado?.()?.cuentas || []; } catch { /* sin Meta: solo ids */ }
+    let v = null; try { v = sync.vista('7d'); } catch { /* sin lectura */ }
+    let por = { pagina: '', instagram: '' }; try { const c = creador?.cuentaAnuncios?.() || {}; por = { pagina: c.pagina || '', instagram: c.instagram || '' }; } catch { /* sin Ajustes */ }
+    return lista.map(b => {
+      const camp = b.estado === 'creado' && b.meta?.campana && v ? buscar(v, b.meta.campana)?.objeto : null;
+      const a = camp?.cuentas ? { cuentas: camp.cuentas, texto: camp.cuentaTexto } : atribuir({ paginaId: por.pagina, instagramId: por.instagram }, cuentasMeta);
+      return { ...b, cuentas: a.cuentas, cuentaTexto: a.texto };
+    });
+  }
+
   /** Fase A3: /api/anuncios/borradores[/<id>[/validar|crear|vista-previa|mejorar]]. */
   async function rutaBorradores(req, res, url, id, sub) {
     const M = req.method;
@@ -113,22 +129,22 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     const no = (code, error, extra = {}) => json(res, code, { error, motivo: error, ...extra }); // siempre con «motivo» en palabras (la página lo enseña)
     if (quien === 'otro') return no(403, 'quién pide no se reconoce');
     if (!id) {
-      if (M === 'GET') return json(res, 200, { items: borradores.lista() });
+      if (M === 'GET') return json(res, 200, { items: conCuentas(borradores.lista()) });
       if (M !== 'POST') return no(405, 'método no admitido');
       if (deAgente && !/^[A-Za-z0-9_-]{1,30}$/.test(agente)) return no(403, 'un agente deja borradores con su id (agente)');
       if (deAgente && borradores.lista().filter(x => x.de === `agente:${agente}` && x.estado === 'borrador').length >= MAX_AGENTE) return no(429, `ya tienes ${MAX_AGENTE} borradores sin crear: mejora uno de los tuyos en vez de hacer otro`);
       const { por: _p, agente: _a, ...campos } = b || {};
       const de = deAgente ? `agente:${agente}` : quien;
-      return json(res, 200, { borrador: borradores.crear(campos, { de }) });
+      return json(res, 200, { borrador: conCuentas([borradores.crear(campos, { de })])[0] });
     }
     const actual = borradores.leer(id);
     if (!actual) return no(404, 'ese borrador no existe (¿se quitó?)');
     if (!sub) {
-      if (M === 'GET') return json(res, 200, { borrador: actual });
+      if (M === 'GET') return json(res, 200, { borrador: conCuentas([actual])[0] });
       if (M === 'PATCH') {
         if (quien === 'asistente') return no(403, 'el asistente deja borradores nuevos; cambiarlos es del dueño (o de Dimitri con su clic)');
         const { por: _p, agente: _a, ...campos } = b || {};
-        return json(res, 200, { borrador: borradores.cambiar(id, campos, { quien, agente }) });
+        return json(res, 200, { borrador: conCuentas([borradores.cambiar(id, campos, { quien, agente })])[0] });
       }
       if (M === 'DELETE') {
         if (quien !== 'dueno') return no(403, 'quitar un borrador lo hace el dueño');
@@ -165,7 +181,11 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
   /** Fase A5: /api/anuncios/sugerencias[/<id>/aplicar|descartar|posponer]. */
   async function rutaSugerencias(req, res, url, id, sub) {
     if (!id) {
-      if (req.method === 'GET') return json(res, 200, { items: sugerencias.lista(), ...sugerencias.estado() });
+      if (req.method === 'GET') { // 2 nov 2026: sobre qué cuenta es el objeto de cada sugerencia (de la vista leída; sin ella, no se dice)
+        let v = null; try { v = sync.vista('7d'); } catch { /* sin lectura */ }
+        const items = sugerencias.lista().map(s => { const o = v && s.objeto?.id ? buscar(v, s.objeto.id)?.objeto : null; return o?.cuentaTexto ? { ...s, cuentaTexto: o.cuentaTexto } : s; });
+        return json(res, 200, { items, ...sugerencias.estado() });
+      }
       if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' });
       const b = await body(req).catch(() => ({}));
       const r = aplicador.crear({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined }); return json(res, r.status, r.cuerpo);
@@ -264,13 +284,17 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
       if (req.method === 'GET') {
         if (p === '/api/anuncios') {
           if (url.searchParams.get('abierto') === '1' && url.searchParams.get('por') !== 'agente') sync.abierto();
-          return json(res, 200, completa(rangoDe(url))), true;
+          const v = completa(rangoDe(url)), q = url.searchParams.get('cuenta'); // 2 nov 2026: ?cuenta= (id, @usuario, nombre, 'sin'): solo lo de esa cuenta; `porCuenta` queda entero
+          if (!q) return json(res, 200, v), true;
+          const f = resolverFiltro(v, q); if (f.error) return json(res, 400, { error: f.error, motivo: f.error }), true;
+          return json(res, 200, filtrarVista(v, f.filtro)), true;
         }
         if (p === '/api/anuncios/historial') return json(res, 200, { items: sync.historial() }), true;
         if (p === '/api/anuncios/texto') {
           const v = completa(rangoDe(url)), que = url.searchParams.get('que') || 'cuenta';
           if (!v.configurado && !v.cuenta) return json(res, 200, { texto: `Anuncios: ${v.motivo}`, configurado: false }), true;
-          const texto = que === 'campanas' || que === 'resultados' ? textoCampanas(v, { nivel: url.searchParams.get('nivel') || (que === 'resultados' ? 'anuncio' : 'conjunto'), estado: url.searchParams.get('estado') || 'todas' }) : textoCuenta(v, { topes: v.topes });
+          const fc = resolverFiltro(v, url.searchParams.get('cuenta')); if (fc.error) return json(res, 200, { texto: fc.error, configurado: v.configurado, cuentaNoEncontrada: true }), true;
+          const texto = que === 'campanas' || que === 'resultados' ? textoCampanas(v, { cuenta: fc.filtro, nivel: url.searchParams.get('nivel') || (que === 'resultados' ? 'anuncio' : 'conjunto'), estado: url.searchParams.get('estado') || 'todas' }) : textoCuenta(v, { topes: v.topes });
           return json(res, 200, { texto: `${texto}${v.sincronizadaAt ? `\n(Leído de Meta: estructura ${v.sincronizadaAt}${v.cifrasAt ? `, cifras ${v.cifrasAt}` : ', cifras todavía no'})` : '\n(Todavía no se ha leído de Meta.)'}${v.error ? `\nÚltimo error al leer: ${v.error}` : ''}`, configurado: v.configurado }), true;
         }
         const m = /^\/api\/anuncios\/objeto\/([A-Za-z0-9_]{1,40})$/.exec(p);

@@ -78,7 +78,7 @@ test('pausar es un clic y se deshace (solo el dueño, dentro de los topes); todo
   assert.equal((await acc.deshacer({ token: r.cuerpo.deshacer.token })).status, 409, 'una vez');
   const h = sync.historial();
   assert.deepEqual(h.map(x => x.que), ['deshacer:pausar', 'pausar'], 'lo más nuevo primero');
-  assert.deepEqual(h[1].objeto, { id: ids.activa.c, nivel: 'campana', nombre: 'Mensajes' }); assert.equal(h[1].quien, 'dueno');
+  assert.deepEqual(h[1].objeto, { id: ids.activa.c, nivel: 'campana', nombre: 'Mensajes', cuenta: 'Facebook página P1' }, '2 nov 2026: el historial apunta sobre qué cuenta se hizo (aquí el Meta de mentira sin nombres cargados: solo el id de la página)'); assert.equal(h[1].quien, 'dueno');
   assert.ok(audit.filter(a => a.ok).length >= 2);
   // el asistente pausa, pero no recibe con qué deshacer; un agente, nada
   const as = await acc.accion({ tipo: 'pausar', id: ids.activa.c, por: 'asistente' });

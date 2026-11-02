@@ -21,6 +21,6 @@ export function historialHTML(items, { quien = 'todos' } = {}) {
   const l = filtrarHistorial(items, quien).sort((a, b) => (Date.parse(b.at) || b.at || 0) - (Date.parse(a.at) || a.at || 0));
   if (!l.length) return `${barra}<div class="anu-vacio"><b>Nada de ${esc(quienTexto(quien))}</b><span>Prueba con «Todos».</span></div>`;
   return `${barra}<ol class="anu-hist">${l.map(i => `<li><time datetime="${esc(iso(i.at))}">${esc(cuando(i.at))}</time>
-    <p><b>${esc(quienTexto(i.quien))}</b> ${esc(i.que || 'cambió algo')}${i.objeto ? ` · <span>${esc(typeof i.objeto === 'object' ? i.objeto.nombre || i.objeto.id : i.objeto)}</span>` : ''}</p>
+    <p><b>${esc(quienTexto(i.quien))}</b> ${esc(i.que || 'cambió algo')}${i.objeto ? ` · <span>${esc(typeof i.objeto === 'object' ? i.objeto.nombre || i.objeto.id : i.objeto)}</span>` : ''}${i.objeto?.cuenta ? ` · <span class="anu-cta-h" data-cuenta-hist>en ${esc(i.objeto.cuenta)}</span>` : ''}</p>
     ${i.antes != null || i.despues != null ? `<p class="anu-antes">Antes: ${esc(val(i.antes))} → Después: ${esc(val(i.despues))}</p>` : ''}</li>`).join('')}</ol>`;
 }

@@ -136,7 +136,7 @@ export function pasoRevisionHTML(b, { moneda = 'USD', validando = false, ubic = 
   const puede = editable(b);
   const boton = !puede ? '' : `<div class="anu-bcrear"><button type="button" class="anu-btn si" data-bcrear${!v || probs.length || validando ? ' aria-disabled="true"' : ''}>${b.estado === 'fallo' ? 'Reintentar: crear en Meta (en pausa)' : 'Crear en Meta (en pausa)'}</button><p class="anu-bayuda">${!v ? 'Primero se revisa.' : probs.length ? `Arregla ${probs.length === 1 ? 'lo de arriba' : `las ${probs.length} cosas de arriba`} para poder crearla.` : 'Un clic: se crea EN PAUSA y no gasta. Activarla es otro paso, con la cifra y los dos clics.'}</p></div>`;
   return `${e === 'fallo' && b.error ? `<p class="anu-aviso-error" role="alert">No se pudo crear: ${esc(b.error)}</p>` : ''}
-    <div class="anu-bbloque"><div class="anu-bcab"><h3>La revisión</h3>${puede ? `<button type="button" class="anu-btn" data-bvalidar${validando ? ' aria-busy="true"' : ''}>${validando ? 'Revisando…' : 'Revisar otra vez'}</button>` : ''}</div>${estado}
+    ${b.cuentaTexto ? `<p class="anu-bayuda" data-cuenta-revision>Saldrá en: <b>${esc(b.cuentaTexto)}</b></p>` : ''}<div class="anu-bbloque"><div class="anu-bcab"><h3>La revisión</h3>${puede ? `<button type="button" class="anu-btn" data-bvalidar${validando ? ' aria-busy="true"' : ''}>${validando ? 'Revisando…' : 'Revisar otra vez'}</button>` : ''}</div>${estado}
       ${o ? `<p class="anu-costo anu-borig-rev">${esc(origenTexto(b).replace(/^s/, 'S'))}: la misma imagen o video y el mismo texto.</p>` : ''}
       ${v?.costoMax ? `<p class="anu-costo">Costo máximo: <b>${esc(costoTexto(v.costoMax, moneda))}</b>.</p>` : ''}</div>
     ${boton}

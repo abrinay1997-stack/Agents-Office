@@ -91,7 +91,7 @@ export function anunciosTexto(v) {
   const activas = (v.campanas || []).filter(c => c.estado === 'ACTIVE'), t = v.topes || {};
   return `📣 <b>Anuncios</b> · hoy ${esc(usdTG(v.gasto?.hoy))}${t.diario != null ? ` de un tope de ${esc(usdTG(t.diario))}` : ''} · este mes ${esc(usdTG(v.gasto?.mes))}${t.mensual != null ? ` de ${esc(usdTG(t.mensual))}` : ''}${(v.avisos || []).length ? '\n' + v.avisos.slice(0, 3).map(a => `⚠ ${esc(a.texto)}`).join('\n') : ''}\n${activas.length ? `${activas.length} ${activas.length === 1 ? 'campaña activa' : 'campañas activas'}:` : 'Ninguna campaña activa ahora mismo.'}`;
 }
-export const campanaTexto = c => `<b>${esc(c.nombre)}</b> · ${esc(c.estadoTexto)}${c.presupuesto?.usd != null ? ' · ' + esc(presTG(c.presupuesto)) : ''}${c.cifras?.gasto != null ? ` · hoy ${esc(usdTG(c.cifras.gasto))}` : ''}${c.cifras?.resultados != null ? ` · ${c.cifras.resultados} ${esc(c.cifras.resultadoTexto)}` : ''}`;
+export const campanaTexto = c => `<b>${esc(c.nombre)}</b> · ${esc(c.estadoTexto)}${c.cuentaTexto ? ` · ${esc(c.cuentaTexto)}` : ''}${c.presupuesto?.usd != null ? ' · ' + esc(presTG(c.presupuesto)) : ''}${c.cifras?.gasto != null ? ` · hoy ${esc(usdTG(c.cifras.gasto))}` : ''}${c.cifras?.resultados != null ? ` · ${c.cifras.resultados} ${esc(c.cifras.resultadoTexto)}` : ''}`;
 /** ⏸ Pausar (libre, un toque) para lo activo; «✅ Activar — gasta hasta US$X/día» (el PRIMER toque: pide la cifra) para lo pausado. */
 export const campanaBotones = c => ({ inline_keyboard: [[c.estado === 'ACTIVE' ? { text: '⏸ Pausar', callback_data: 'xp:' + c.id } : { text: `✅ Activar${c.presupuesto?.tipo === 'diario' ? ` — gasta hasta ${usdTG(c.presupuesto.usd)}/día` : ''}`, callback_data: 'xa:' + c.id }]] });
 /** El aviso de un anuncio rechazado o con problemas (sincronizar.mjs: key «anuncios-rechazado:<id>»): trae ⏸ Pausar. */
@@ -238,7 +238,7 @@ export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, s
         const r = k === 'sx' ? await local('POST', `/api/anuncios/sugerencias/${id}/aplicar`, { por: 'dueno' }, by) : await local('POST', '/api/anuncios/accion', { tipo: k === 'xr' ? 'reanudar' : 'activar', id, por: 'dueno' }, by), c = r.confirmar; await done('');
         if (!c) { await strip(); return send(chat, `✓ ${esc(r.hecho?.texto || 'Hecho.')}`); }
         gastos.recordar(c.token, { tipo: c.tipo, id: c.id, ...(c.valor !== undefined ? { valor: c.valor } : {}), ...(c.fin ? { fin: c.fin } : {}), ...(k === 'sx' ? { sugerencia: id } : {}), vence: Date.parse(c.vence) || Date.now() + 120e3 });
-        return send(chat, `💸 <b>${esc(c.texto)}</b>${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}\n¿Seguro? Tienes 2 minutos.`, { reply_markup: { inline_keyboard: [[{ text: SI[c.tipo] || '✅ Sí', callback_data: 'xc:' + c.token }, { text: '✗ No', callback_data: 'xn:' + c.token }]] } });
+        return send(chat, `💸 <b>${esc(c.texto)}</b>${c.cuenta ? `\n📣 En: ${esc(c.cuenta)}` : ''}${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}\n¿Seguro? Tienes 2 minutos.`, { reply_markup: { inline_keyboard: [[{ text: SI[c.tipo] || '✅ Sí', callback_data: 'xc:' + c.token }, { text: '✗ No', callback_data: 'xn:' + c.token }]] } });
       }
       if (k === 'sq') { await local('POST', `/api/anuncios/sugerencias/${id}/descartar`, { por: 'dueno' }, by); await strip(); await done('Descartada'); return send(chat, 'Vale: descartada. No vuelve en 7 días.'); }
       if (k === 'xc') {

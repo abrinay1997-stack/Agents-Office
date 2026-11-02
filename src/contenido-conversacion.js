@@ -7,6 +7,7 @@
 //   - el cuadro de la respuesta con su contador contra 1.000 caracteres (y los bytes, si pasan): Meta pide MENOS de 1.000 caracteres
 //     y 1.000 bytes UTF-8 como mucho (§13.10 del plan).
 import { accionesDe, ventanaDe } from './contenido-bandeja.js';
+import { cuentaDeItem, cuentaLinea, comoCuenta } from './bandeja-cuenta.js';
 
 export const LIMITE = 1000;
 export const DOMINIOS_META = ['cdninstagram.com', 'fbcdn.net'];
@@ -56,14 +57,15 @@ export function htmlConversacion(m, { esc, id, armado = false, desde = Date.now(
     const tu = x.de === 'tu', de = tu ? 'Tú' : quien;
     return `<li class="bj-msg ${tu ? 'tu' : 'cli'}"><span class="bj-quien">${de}${x.at ? ` · <time datetime="${esc(x.at)}">${esc(hora(x.at))}</time>` : ''}</span>${x.texto ? `<p>${esc(x.texto)}</p>` : ''}${(x.adjuntos || []).map(z => adj(z, tu ? 'tú' : quien)).join('')}</li>`;
   }).join('');
-  const vent = `<p class="bj-vent${v.abierta ? '' : ' cerr'}" role="status" data-bjv="${esc(m.id)}" data-forma="largo" data-ab="${v.abierta ? 1 : 0}">${esc(v.texto)}</p>`;
+  const cta = cuentaDeItem(m), cuentaP = cta ? `<p class="bj-cuenta" data-bj-cuenta>Conversación de <b>${esc(cuentaLinea(cta))}</b>. Tu respuesta saldrá desde esa cuenta.</p>` : '';
+  const vent = `${cuentaP}<p class="bj-vent${v.abierta ? '' : ' cerr'}" role="status" data-bjv="${esc(m.id)}" data-forma="largo" data-ab="${v.abierta ? 1 : 0}">${esc(v.texto)}</p>`;
   let resp;
   if (m.estado === 'respondido') resp = `<p class="bj-resp"><b>Respondido${m.respuesta?.simulada ? ' (simulacro: no salió)' : ''}:</b> ${esc(m.respuesta?.texto || '')}</p>`;
   else {
     const txt = m.borrador?.texto || '', c = medir(txt);
     const enviar = m.estado === 'descartado' ? `<button type="button" class="pz-btn" data-bja="reabrir" data-id="${esc(m.id)}">Reabrir</button>`
       : !v.abierta ? `<span class="bj-no">No se ofrece «Enviar»: la ventana de 24 h está cerrada.</span><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`
-      : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}"${c.ok ? '' : ` aria-disabled="true"`} aria-describedby="${id}-cc">${armado ? '¿Seguro? Pulsa otra vez para enviarla' : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`;
+      : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}"${c.ok ? '' : ` aria-disabled="true"`} aria-describedby="${id}-cc">${armado ? `¿Seguro? Pulsa otra vez ${comoCuenta(m) ? `para responder como ${esc(comoCuenta(m))}` : 'para enviarla'}` : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`;
     resp = `<label class="pz-lab" for="${id}-t">Tu respuesta a ${quien}${m.borrador?.por?.startsWith('agente:') ? ' <small class="pz-hn">borrador de un agente: léelo antes de enviarlo</small>' : ''}</label>
       <textarea id="${id}-t" class="pz-ta" rows="3" data-bjtxt="${esc(m.id)}" data-bjconv aria-describedby="${id}-cc" placeholder="Escribe la respuesta, o pide borradores a Marketing.">${esc(txt)}</textarea>
       <p class="bj-cc${c.ok ? '' : ' mal'}" id="${id}-cc" aria-live="polite">${esc(c.texto)}${c.ok ? '' : ` · ${esc(c.motivo)}`}</p>

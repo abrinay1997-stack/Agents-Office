@@ -22,6 +22,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { redDeMetricool } from './metricool.mjs';
+import { buscarCuenta } from '../src/contenido-cifras.js';
 import { renombrar } from '../fs-seguro.mjs';
 import { ventanaDe, motivoVentana, revisarTextoMensaje, quedaTexto, GUARDAR_MENSAJES } from './bandeja-meta.mjs'; // B2: la ventana de 24 h y el largo // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
@@ -105,7 +106,7 @@ export function mismoMensaje(a = {}, b = {}) {
  * @param o.tokens      Cloudflare (fase 7): dónde viven los tokens de DESHACER (D1; la misma interfaz que `tokensEnMemoria` de anuncios/acciones.mjs, tipo 'bandeja'). En local, en memoria.
  * @param o.abiertaAtInicial Cloudflare: cuándo se miró la Bandeja por última vez (el Worker no lo recuerda entre peticiones; se devuelve con `abiertaAtAhora`)
  */
-export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, almacen = null, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30, tokens = null, abiertaAtInicial = 0 } = {}) {
+export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, almacen = null, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30, tokens = null, abiertaAtInicial = 0, cuentas = () => [] } = {}) {
   const F = { ...(meta ? { meta } : {}), ...(metricool ? { metricool: fuenteMetricool(metricool) } : {}) };
   // CON-11 paso 2: el estado se lee y se escribe por un ALMACÉN `{ leer(): objeto, escribir(objeto) }`. Sin `almacen`, el de siempre: el archivo `archivo`.
   const alm = almacen || { leer: () => leerJSON(archivo, {}), escribir: d => escribirJSON(archivo, d) };
@@ -270,13 +271,30 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
   }
 
   /** B2: la ventana se calcula al leer (cambia con el reloj, no con Meta). */
-  const conVentana = x => (esConversacionMeta(x) ? { ...x, ventana: ventanaDe(x.ultimoCliente, ahora()) } : x);
-  function listar({ estado = '', red = '', tipo = '', fuente = '' } = {}) {
+  /**
+   * 2 nov 2026: DE QUÉ CUENTA es cada comentario o mensaje (la página o el Instagram desde donde se lee y se responde): `deCuenta` = { id, red,
+   * nombre, usuario, foto, paginaId, conocida }. Sale del `cuentaId` que apunta la fuente de Meta; lo de Metricool (una sola marca, sin id de cuenta)
+   * no lo lleva, y la pantalla lo dice. Solo para mostrar y filtrar: responder y ocultar siguen usando `cuentaId` como siempre.
+   */
+  const cuentaDeId = id => {
+    if (!id) return null; let l = []; try { l = cuentas() || []; } catch { /* sin Meta */ }
+    const c = l.find(x => x.id === id);
+    return c ? { id: c.id, red: c.red, nombre: String(c.nombre || ''), usuario: String(c.usuario || ''), foto: /^https:\/\//.test(c.foto || '') ? c.foto : '', paginaId: String(c.paginaId || ''), conocida: true } : { id, red: String(id).split(':')[0], nombre: '', usuario: '', foto: '', paginaId: '', conocida: false };
+  };
+  const conCuenta = x => (x.cuentaId ? { ...x, deCuenta: cuentaDeId(x.cuentaId) } : x);
+  const conVentana = x => conCuenta(esConversacionMeta(x) ? { ...x, ventana: ventanaDe(x.ultimoCliente, ahora()) } : x);
+  function listar({ estado = '', red = '', tipo = '', fuente = '', cuenta: cuentaQ = '' } = {}) {
     const d = leer(), todos = Object.values(d.items).map(conVentana);
-    const items = todos.filter(x => (!estado || (estado === 'pendiente' ? ['nuevo', 'borrador', 'fallo'].includes(x.estado) : x.estado === estado)) && (!red || x.red === red) && (!tipo || x.tipo === tipo) && (!fuente || (x.fuente || 'metricool') === fuente))
+    // `cuenta`: el id, el @usuario o el nombre de una cuenta con mensajes; una que no existe da una lista vacía y `cuentaNoEncontrada` (nunca «todas»)
+    let cuentaId = '', cuentaNoEncontrada = false;
+    if (cuentaQ) { const c = buscarCuenta([...new Map(todos.filter(x => x.deCuenta).map(x => [x.cuentaId, x.deCuenta])).values()], cuentaQ); if (c) cuentaId = c.id; else cuentaNoEncontrada = true; }
+    const items = todos.filter(x => (!estado || (estado === 'pendiente' ? ['nuevo', 'borrador', 'fallo'].includes(x.estado) : x.estado === estado)) && (!red || x.red === red) && (!tipo || x.tipo === tipo) && (!fuente || (x.fuente || 'metricool') === fuente) && !cuentaNoEncontrada && (!cuentaId || x.cuentaId === cuentaId))
       .sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
     const cuenta = Object.fromEntries(ESTADOS.map(e => [e, todos.filter(x => x.estado === e).length]));
-    return { items, cuenta, pendientes: cuenta.nuevo + cuenta.borrador + cuenta.fallo, ultimo: d.ultimo, error: d.error, fuente: listo(), modo: modo(), bandejaFuente: elegida(), fuentes: estadoFuentes(d) };
+    // las cuentas que tienen mensajes (para el filtro), con cuántos esperan respuesta
+    const por = new Map();
+    for (const x of todos) if (x.deCuenta) { const g = por.get(x.cuentaId) || { ...x.deCuenta, total: 0, pendientes: 0 }; g.total++; if (['nuevo', 'borrador', 'fallo'].includes(x.estado)) g.pendientes++; por.set(x.cuentaId, g); }
+    return { items, cuenta, ...(cuentaNoEncontrada ? { cuentaNoEncontrada: true } : {}), cuentasBandeja: [...por.values()].sort((a, b) => b.pendientes - a.pendientes || String(a.nombre || a.usuario).localeCompare(String(b.nombre || b.usuario))), pendientes: cuenta.nuevo + cuenta.borrador + cuenta.fallo, ultimo: d.ultimo, error: d.error, fuente: listo(), modo: modo(), bandejaFuente: elegida(), fuentes: estadoFuentes(d) };
   }
   const uno = id => { const d = leer(), x = d.items[resolver(d, id)]; return x ? conVentana(x) : null; };
   function estado() {

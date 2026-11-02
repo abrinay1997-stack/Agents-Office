@@ -481,3 +481,9 @@ body.dark .bj-it.sos { border-left-color: #FF8A80; }
 .ct-selmv { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .ct-selbar .pz-sel { background: var(--cream); color: var(--ink); }
 body.dark .ct-selbar .pz-btn.warn { color: #8C1D18; border-color: #8C1D18; } body.dark .ct-selbar .pz-btn, body.dark .ct-selbar .pz-lk { border-color: rgba(21,20,20,.4); }
+
+/* 2 nov 2026: de qué cuenta es cada mensaje de la Bandeja */
+.bj-cta{font-weight:600}
+.bj-cta img{border-radius:50%;vertical-align:-2px}
+.bj-como,.bj-cuenta{margin:6px 0;font-size:13px}
+.bj-cuentasel{display:inline-flex;gap:6px;align-items:center;font-size:13px}

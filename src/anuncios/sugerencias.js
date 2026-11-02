@@ -5,7 +5,7 @@
 // tus dos clics»: el servidor devuelve { confirmar } y la ventana del segundo clic de la A2 dice la cifra), «Descartar» (no vuelve en 7
 // días) y «Recordármelo en 3 días». «Está aprendiendo: no tocar» es una tarjeta informativa, sin «Aplicar». Lo descartado se ESCRIBE
 // («Descartada»), nunca se atenúa. En el Resumen van las 3 vivas más importantes (resumenSugerenciasHTML).
-import { esc, dinero, chip, fechaCorta, haceCuanto } from './comun.js';
+import { esc, dinero, chip, fechaCorta, haceCuanto, cuentaChip } from './comun.js';
 import { GASTO } from './acciones.js';
 
 export const REGLA = {
@@ -110,7 +110,7 @@ export function botonesSugHTML(s, { compacto = false } = {}) {
 export function tarjetaSugHTML(s, { moneda = 'USD', buscarFila = () => null, compacto = false, ahora = Date.now() } = {}) {
   const info = informativa(s), [pt, pc] = PRIO[s.prioridad] || PRIO[3], f = buscarFila(s.cambio?.id || s.objeto?.id), e = s.estado || 'viva';
   const cab = `<p class="anu-sug-regla"><span class="anu-sug-prio t-${info ? 'azul' : pc}">${info ? 'Para saber' : esc(pt)}</span><b>${esc(reglaTexto(s.regla))}</b></p>`;
-  const obj = `<h3 class="anu-sug-obj">${objetoHTML(s, id => !!buscarFila(id))}</h3>`;
+  const obj = `<h3 class="anu-sug-obj">${objetoHTML(s, id => !!buscarFila(id))}</h3>${f?.nodo ? cuentaChip(f.nodo) : ''}`;
   const est = estadoChip(s, ahora);
   if (compacto) return `<li class="anu-sug${info ? ' info' : ''}" data-sug="${esc(s.id)}">${cab}${obj}<dl class="anu-sug-dl">${dl('El dato', esc(s.dato))}${dl('El cambio', esc(cambioTexto(s, { moneda, f })))}</dl>${botonesSugHTML(s, { compacto: true })}</li>`;
   const despues = e === 'aplicada' ? dl('Qué pasó después', esc(s.resultado || 'Todavía no se sabe: se mide en los 7 días siguientes a aplicarla.')) : '';
