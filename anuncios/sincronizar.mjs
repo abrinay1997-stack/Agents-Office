@@ -87,7 +87,7 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
   /** La vista del panel para un rango (el contrato de /api/anuncios, sin lo de la conexión: lo pone rutas.mjs). */
   function vista(rango = '7d') {
     const h = hoy(), r = RANGOS.includes(rango) ? rango : '7d';
-    return armarVista({ guardado: guardado(), filas: filasDesde(sumarDias(h, -DIAS_NOCHE + 1), h), alcances: leerJSON(F.alcance, {}), rango: r, hoy: h, topes: topes(), hayCifras: Boolean(estado().cifrasAt) });
+    return armarVista({ guardado: guardado(), filas: filasDesde(sumarDias(h, -DIAS_NOCHE + 1), h), alcances: leerJSON(F.alcance, {}), rango: r, hoy: h, topes: topes(), hayCifras: Boolean(estado().cifrasAt), cuentas: (() => { try { return meta.estado?.()?.cuentas || []; } catch { return []; } })() });
   }
 
   // ------------------------------------------------------------ los avisos (una vez cada uno)

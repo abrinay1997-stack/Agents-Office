@@ -10,6 +10,7 @@
 // conversación abierta (el hilo, las imágenes, el contador de 1.000) viaja con el editor de piezas: src/contenido-conversacion.js.
 //   initBandeja({ host, datos, esc, note, onCount, paquete }) → { load(), render(), pendientes() } · paquete() → window.AO_PIEZA
 import { RED, nbRed } from './pieza-base.js';
+import { fotoMeta, cuentaDeItem, cuentaLinea, comoCuenta, opcionesCuentaBandeja, bloqueoCuenta } from './bandeja-cuenta.js';
 
 const TIPO = { conversaciones: 'Mensaje', comentarios: 'Comentario', resenas: 'Reseña' };
 const EST = { nuevo: ['SIN RESPONDER', '#8A6414', '#E8B44A'], borrador: ['CON BORRADOR', '#2158CC', '#8FB0FF'], respondido: ['RESPONDIDO', '#13705A', '#4FD1A5'], descartado: ['DESCARTADO', '#5A5A5A', '#B9B6AE'], fallo: ['FALLÓ', '#B3261E', '#FF8A80'] };
@@ -54,13 +55,14 @@ export function publicacionDe(m) {
 export function accionesDe(m = {}, { noSugerir = new Set() } = {}) {
   const ocultable = m.tipo === 'comentarios' && fuenteDe(m) === 'meta', oculto = ocultable && !!m.oculto;
   const cerrado = m.estado === 'respondido' || m.estado === 'descartado';
-  const s = m.sugerirOcultar, v = esConversacion(m) ? ventanaDe(m.ventana) : null;
+  const s = m.sugerirOcultar, v = esConversacion(m) ? ventanaDe(m.ventana) : null, bq = bloqueoCuenta(m); // 2 nov 2026: sin cuenta conocida no se responde ni se oculta
   return {
     ventana: v,
-    ocultar: ocultable ? (oculto ? 'mostrar' : 'ocultar') : null,
+    bloqueo: bq,
+    ocultar: ocultable && !bq ? (oculto ? 'mostrar' : 'ocultar') : null,
     oculto,
-    responder: oculto ? { puede: false, motivo: OCULTO_NO_RESPONDE } : v && !v.abierta && !cerrado ? { puede: false, motivo: VENTANA_CERRADA } : { puede: !cerrado, motivo: cerrado ? (m.estado === 'respondido' ? 'Ya está respondido.' : 'Lo descartaste: reábrelo para responder.') : '' },
-    sugerencia: ocultable && !oculto && s && !noSugerir.has(m.id) ? { quien: String(s.quien || (m.enAnuncio ? 'ANUNCIOS' : 'MARKETING')).toUpperCase(), motivo: String(s.motivo || '') } : null,
+    responder: bq ? { puede: false, motivo: bq } : oculto ? { puede: false, motivo: OCULTO_NO_RESPONDE } : v && !v.abierta && !cerrado ? { puede: false, motivo: VENTANA_CERRADA } : { puede: !cerrado, motivo: cerrado ? (m.estado === 'respondido' ? 'Ya está respondido.' : 'Lo descartaste: reábrelo para responder.') : '' },
+    sugerencia: ocultable && !bq && !oculto && s && !noSugerir.has(m.id) ? { quien: String(s.quien || (m.enAnuncio ? 'ANUNCIOS' : 'MARKETING')).toUpperCase(), motivo: String(s.motivo || '') } : null,
     anuncio: m.enAnuncio ? { campana: m.enAnuncio.campana || '', anuncio: m.enAnuncio.anuncio || '', nombre: String(m.enAnuncio.nombre || 'sin nombre') } : null,
     padre: m.padre || null,
     publicacion: publicacionDe(m),
@@ -75,7 +77,7 @@ const ls = { get(k) { try { return JSON.parse(localStorage.getItem(k) || '[]'); 
 
 export function initBandeja({ host, datos, esc, note = () => {}, onCount = () => {}, paquete = null }) {
   let r = { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: '' } }, filtro = 'pendiente', tipo = '', abierto = '', armado = '', armT = null, cargando = false;
-  let fuente = '', soloAnuncios = false, undo = null, undoT = null;
+  let fuente = '', soloAnuncios = false, undo = null, undoT = null, cuentaSel = '';
   const vistas = new Set(), timers = new Map(), noSugerir = new Set(ls.get('ao.bj.nosug'));
   let hayAnuncios = false, conv = null, convPedida = false, desde = Date.now();
   function traerConv() { /* B2: la conversación abierta viaja con el editor de piezas */
@@ -99,7 +101,10 @@ export function initBandeja({ host, datos, esc, note = () => {}, onCount = () =>
     await null; // quien la abre pinta antes: así se sabe si está a la vista (el servidor mira más seguido mientras lo está)
     const aLaVista = !host.hidden && host.isConnected && !host.closest('[inert]');
     try {
-      r = await datos.bandeja({ estado: filtro, tipo, fuente, abierta: aLaVista ? 1 : '' }); desde = Date.now(); onCount(r.pendientes || 0);
+      r = await datos.bandeja({ estado: filtro, tipo, fuente, cuenta: cuentaSel, abierta: aLaVista ? 1 : '' }); desde = Date.now();
+      // si la cuenta ya no existe se avisa y se muestran todas: nunca una lista vacía sin explicación
+      if (r.cuentaNoEncontrada) { cuentaSel = ''; r = { ...r, ...(await datos.bandeja({ estado: filtro, tipo, fuente, abierta: aLaVista ? 1 : '' })), cuentaNoEncontrada: true }; }
+      onCount(r.pendientes || 0);
       for (const m of r.items || []) { vistas.add(fuenteDe(m)); if (m.enAnuncio) hayAnuncios = true; }
     } catch (e) { r = { ...r, error: e.message }; }
     finally { cargando = false; }
@@ -116,11 +121,14 @@ export function initBandeja({ host, datos, esc, note = () => {}, onCount = () =>
       : `Conectada a ${esc(de)}${r.ultimo ? ` · lo último, ${esc(hace(r.ultimo))}` : ''}.`;
     const seg = (lab, attr, opts, cur) => `<div class="pz-seg" role="group" aria-label="${lab}">${opts.map(([k, l]) => `<button type="button" ${attr}="${k}" aria-pressed="${cur === k}">${l}</button>`).join('')}</div>`;
     return `<div class="ct-banner${f.ok || modo === 'demo' ? '' : ' bad'}" role="note"><span>${aviso}${r.error ? ` <b>Ojo:</b> ${esc(r.error)}` : ''}</span><span class="bj-acts"><button type="button" class="pz-btn" data-bj="traer">Traer lo nuevo</button><button type="button" class="pz-btn" data-bj="pedir">Pedir borradores a Marketing</button></span></div>
+${r.fuentes?.meta?.saltados ? `<div class="ct-banner bad bj-saltados" role="note" data-bj-saltados><span><b>${r.fuentes.meta.saltados} ${r.fuentes.meta.saltados === 1 ? 'anuncio tiene comentarios sin leer' : 'anuncios tienen comentarios sin leer'}:</b> no se sabe de qué cuenta (página o Instagram) son y no se adivina. Si tienes varios Instagram, el creativo del anuncio tiene que decir el suyo.</span></div>` : ''}
+${r.cuentaNoEncontrada ? '<div class="ct-banner bad" role="note" data-bj-cuenta-aviso><span><b>Esa cuenta ya no tiene mensajes en la Bandeja.</b> Se muestran todas las cuentas.</span></div>' : ''}
 ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg" role="note"><span><b>Los mensajes privados no llegan:</b> ${esc(r.fuentes.meta.mensajes.motivo || 'Meta no da acceso a los mensajes.')} Los comentarios siguen llegando. <a class="pz-lk" href="${GUIA_META}" target="_blank" rel="noopener noreferrer">Cómo conectarlos (docs/conectar-meta.md)</a></span></div>` : ''}
       <div class="bj-filtros">${seg('Qué mensajes', 'data-bjf', [['pendiente', `Por responder${r.pendientes ? ` (${r.pendientes})` : ''}`], ['respondido', 'Respondidos'], ['descartado', 'Descartados']], filtro)}
       ${seg('De qué tipo', 'data-bjt', [['', 'Todo'], ['comentarios', 'Comentarios'], ['conversaciones', 'Mensajes'], ['resenas', 'Reseñas']], tipo)}
       ${vistas.size > 1 ? seg('De dónde', 'data-bjs', [['', 'Todas'], ['meta', 'Meta'], ['metricool', 'Metricool']], fuente) : ''}
-      ${hayAnuncios ? `<button type="button" class="pz-btn bj-anf" data-bjan aria-pressed="${soloAnuncios}">En anuncios</button>` : ''}</div>`;
+      ${hayAnuncios ? `<button type="button" class="pz-btn bj-anf" data-bjan aria-pressed="${soloAnuncios}">En anuncios</button>` : ''}
+      ${(() => { const o = opcionesCuentaBandeja(r); return o.length ? `<label class="bj-cuentasel">Cuenta <select data-bjc>${o.map(([k, n]) => `<option value="${esc(k)}"${k === cuentaSel ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>` : ''; })()}</div>`;
   }
 
   function undoHTML() {
@@ -141,8 +149,9 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
         <textarea id="${id}-t" class="pz-ta" rows="3" data-bjtxt="${esc(m.id)}" placeholder="Escribe la respuesta, o pide borradores a Marketing.">${esc(m.borrador?.texto || '')}</textarea>
         ${m.estado === 'fallo' && m.error ? `<p class="pz-inline err">${esc(m.error)}</p>` : ''}
         <div class="bj-row">${m.estado === 'descartado' ? `<button type="button" class="pz-btn" data-bja="reabrir" data-id="${esc(m.id)}">Reabrir</button>`
+          : a.bloqueo ? `<button type="button" class="pz-go" aria-disabled="true" aria-describedby="${id}-no" data-bjno="${esc(m.id)}" data-bjmotivo="${esc(a.bloqueo)}">Enviar respuesta</button><span class="bj-no" id="${id}-no" data-bj-bloqueo>${esc(a.bloqueo)}</span>`
           : a.oculto ? `<button type="button" class="pz-go" aria-disabled="true" aria-describedby="${id}-no" data-bjno="${esc(m.id)}">Enviar respuesta</button><span class="bj-no" id="${id}-no">${OCULTO_NO_RESPONDE}</span>`
-          : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}">${armado === m.id ? '¿Seguro? Pulsa otra vez para enviarla' : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`}${ocultarBtn}</div>`;
+          : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}">${armado === m.id ? `¿Seguro? Pulsa otra vez ${comoCuenta(m) ? `para responder como ${esc(comoCuenta(m))}` : 'para enviarla'}` : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`}${ocultarBtn}</div>${m.estado !== 'descartado' && !a.bloqueo && comoCuenta(m) ? `<p class="bj-como" data-bj-como>Responderás como <b>${esc(comoCuenta(m))}</b>.</p>` : ''}`;
     const cv = esConversacion(m), ult = cv ? ultimoMensaje(m) : null;
     if (cv && open) traerConv();
     if (open && cv && conv?.traerHechas) conv.traerHechas(m.id, render);
@@ -156,7 +165,8 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
         ${responder}
       </div>`;
     const sug = !a.sugerencia ? '' : `<div class="bj-sug" role="note"><span><b>${esc(a.sugerencia.quien)}</b> sugiere ocultarlo${a.sugerencia.motivo ? `: ${esc(a.sugerencia.motivo)}` : '.'}</span><span class="bj-row"><button type="button" class="pz-btn" data-bjh="ocultar" data-id="${esc(m.id)}">Ocultar</button><button type="button" class="pz-btn" data-bjnosug="${esc(m.id)}">No</button></span></div>`;
-    const tags = `${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
+    const cta = cuentaDeItem(m), ctaTag = cta ? `<span class="bj-tag bj-cta" data-bj-cuenta title="Cuenta desde la que se lee y se responde">${fotoMeta(cta.foto) ? `<img src="${esc(fotoMeta(cta.foto))}" alt="" width="14" height="14" loading="lazy" referrerpolicy="no-referrer"> ` : ''}${esc(cuentaLinea(cta))}</span>` : '';
+    const tags = `${ctaTag}${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
     return `<article class="bj-it${open ? ' on' : ''}${m.sospecha ? ' sos' : ''}${a.oculto ? ' oc' : ''}" data-it="${esc(m.id)}"><button type="button" class="bj-h" data-bjo="${esc(m.id)}" aria-expanded="${open}" aria-controls="${id}-d">
         ${nbRed(String(m.red || ''))}<span class="bj-who"><b>${esc(m.autor)}</b> <small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${cv && m.red === 'facebook' ? 'Messenger' : esc(red.name)}${vistas.size > 1 ? ` · ${FUENTE[fuenteDe(m)]}` : ''} · ${esc(hace(m.cuando))}</small>${tags ? `<span class="bj-tags">${tags}</span>` : ''}<span class="bj-ex">${m.sospecha ? '🛡 ' : ''}${ult?.de === 'tu' ? 'Tú: ' : ''}${esc(((ult ? ult.texto || (ult.adjuntos?.length ? 'Envió una imagen' : '') : m.texto) || '').replace(/\s+/g, ' ').slice(0, 140))}</span></span>
         <span class="bj-est pz-tone" style="--c:${c};--cd:${cd}">${en}</span></button>${sug}${det}</article>`;
@@ -196,6 +206,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
   });
   async function guardar(id, texto) { try { const x = await datos.bandejaBorrador(id, texto); Object.assign(r.items.find(i => i.id === id) || {}, x.item || {}); } catch (e) { note('No se pudo guardar el borrador: ' + e.message, true); } }
 
+  host.addEventListener('change', async e => { if (e.target.matches?.('[data-bjc]')) { cuentaSel = e.target.value; abierto = ''; await load(); foco('[data-bjc]'); } });
   host.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.bjo) { abierto = abierto === b.dataset.bjo ? '' : b.dataset.bjo; render(); foco(`[data-bjo="${CSS.escape(b.dataset.bjo)}"]`); return; }
@@ -210,7 +221,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
     }
     if (b.dataset.bjh) return ocultar(b.dataset.id, b.dataset.bjh === 'ocultar');
     if (b.dataset.bjnosug) { const id = b.dataset.bjnosug; noSugerir.add(id); ls.set('ao.bj.nosug', [...noSugerir].slice(-200)); render(); foco(`[data-bjo="${CSS.escape(id)}"]`); note('Hecho: se queda a la vista.'); return; }
-    if (b.dataset.bjno) { note(OCULTO_NO_RESPONDE, true); return; }
+    if (b.dataset.bjno) { note(b.dataset.bjmotivo || OCULTO_NO_RESPONDE, true); return; }
     if (b.dataset.bjcamp) {
       const ev = new CustomEvent('ao:abrir-anuncios', { cancelable: true, detail: { campana: b.dataset.bjcamp, anuncio: b.dataset.anuncio || '' } });
       if (window.dispatchEvent(ev)) { const t = document.getElementById('topAnuncios'); if (t) t.click(); else note('Anuncios no está en esta oficina.', true); }

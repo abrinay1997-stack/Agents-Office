@@ -164,7 +164,7 @@ export function crearMetaStand(o = {}) {
     if (campos.object_story_id && campos.instagram_user_id && (st.fallar.noIG ?? []).includes(campos.object_story_id)) return errorGraph('(#100) This post is not eligible for Instagram', 100);
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
     const id = nuevo('CRE');
-    st.creativos[id] = { id, name: campos.name, object_story_spec: historia, object_story_id: campos.object_story_id, source_instagram_media_id: campos.source_instagram_media_id, degrees_of_freedom_spec: objeto(campos.degrees_of_freedom_spec), effective_object_story_id: campos.object_story_id || `P1_${nuevo('post')}`, thumbnail_url: 'https://scontent.fbcdn.test/creativo.jpg' };
+    st.creativos[id] = { id, name: campos.name, object_story_spec: historia, object_story_id: campos.object_story_id, source_instagram_media_id: campos.source_instagram_media_id, instagram_user_id: campos.instagram_user_id, degrees_of_freedom_spec: objeto(campos.degrees_of_freedom_spec), effective_object_story_id: campos.object_story_id || `P1_${nuevo('post')}`, thumbnail_url: 'https://scontent.fbcdn.test/creativo.jpg' };
     return json({ id });
   }
   function crearAnuncio(campos) {
@@ -308,6 +308,9 @@ export function crearMetaStand(o = {}) {
     const dado = q.get('access_token') || String(h.authorization || '').replace(/^(Bearer|OAuth)\s+/i, '');
     if (dado === 'CADUCADO' || (dado && ![token, tokenPagina, ...paginas.map(p => p.access_token)].includes(dado))) return errorGraph('Error validating access token: Session has expired', 190, {}, 400);
 
+    const paginaDelToken = paginas.find(p => p.access_token === dado)?.id ?? null; // 2 nov 2026: el token de una página (o de su Instagram) solo sirve en lo suyo
+    const noEsDeEsaPagina = pg => (paginaDelToken && pg && paginaDelToken !== pg ? errorGraph('(#200) The token does not belong to this page or Instagram account', 200) : null);
+
     if (metodo === 'POST' && ruta === '/') return lote(campos);
 
     // ---- las cuentas
@@ -324,6 +327,9 @@ export function crearMetaStand(o = {}) {
       return json({ data: String(q.get('metric')).split(',').map((m, i) => ({ name: m, total_value: { value: 100 * (i + 1) } })) });
     }
     if (metodo === 'GET' && ruta === '/IG1/media') return json({ data: st.media });
+    // 2 nov 2026: más de una marca — el Instagram y la página de las demás cuentas (IG2, P2…) no tienen publicaciones propias salvo que el test las ponga
+    if (metodo === 'GET' && /^\/IG\d+\/media$/.test(ruta)) return json({ data: st.mediaOtras?.[ruta.split('/')[1]] ?? [] });
+    if (metodo === 'GET' && /^\/P\d+\/posts$/.test(ruta) && ruta !== '/P1/posts') return json({ data: st.postsOtras?.[ruta.split('/')[1]] ?? [] });
     if (metodo === 'GET' && /^\/M\d+\/insights$/.test(ruta)) return json({ data: [{ name: 'reach', values: [{ value: 900 }] }, { name: 'saved', values: [{ value: 5 }] }, { name: 'shares', values: [{ value: 3 }] }, { name: 'views', values: [{ value: 1500 }] }, { name: 'total_interactions', values: [{ value: 42 }] }] });
     if (metodo === 'GET' && ruta === '/P1/insights') {
       if (q.get('metric') === 'page_impressions_unique') return errorGraph('(#100) The value must be a valid insights metric', 100); // retirada desde v25
@@ -369,7 +375,12 @@ export function crearMetaStand(o = {}) {
       const listar = l => { const x = filtrar(l); return x === null ? errorGraph('(#100) Filtering field name is not supported', 100) : json({ data: x }); };
       if (sub === '/campaigns') return metodo === 'POST' ? crearCampana(campos) : listar(Object.values(st.campanas).map(vista));
       if (sub === '/adsets') return metodo === 'POST' ? crearConjunto(campos) : listar(Object.values(st.conjuntos).map(vista));
-      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : listar(Object.values(st.anuncios).map(vista));
+      // 2 nov 2026: con `fields=…creative{…}` Graph expande el creativo del anuncio (object_story_spec, effective_object_story_id, instagram_user_id): de ahí sale la cuenta de cada anuncio
+      const expandir = a => (String(q.get('fields') || '').includes('creative{') && a.creative?.id && st.creativos[a.creative.id] ? { ...a, creative: { ...st.creativos[a.creative.id], id: a.creative.id } } : a);
+      // con `fallar.sinCampoInstagram` Meta no conoce el campo `instagram_user_id` del creativo (error 100 de campo): la lectura debe reintentar sin él
+      const campoMalo = metodo === 'GET' && st.fallar.sinCampoInstagram && String(q.get('fields') || '').includes('instagram_user_id');
+      if (campoMalo && (sub === '/ads' || sub === '/adcreatives')) return errorGraph('(#100) Tried accessing nonexisting field (instagram_user_id) on node type (AdCreative)', 100);
+      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : listar(Object.values(st.anuncios).map(vista).map(expandir));
       if (sub === '/adcreatives') return metodo === 'POST' ? crearCreativo(campos) : listar(Object.values(st.creativos).map(c => ({ ...c, status: c.status || 'ACTIVE' })));
       if (sub === '/adimages' && metodo === 'POST') {
         // A3: los bytes llegan en `bytes` (base64) o como archivo (multipart `source`); el hash es del CONTENIDO, como en Meta (subirla otra vez da el mismo)
@@ -399,7 +410,11 @@ export function crearMetaStand(o = {}) {
       if (st.fallar.isHidden && f.includes('is_hidden')) return errorGraph('(#100) Tried accessing nonexisting field (is_hidden)', 100);
       return json({ data: (st.comentarios[com[1]] ?? []).map(c => (anidar ? { ...c, [anidar]: { data: st.comentarios[c.id] ?? [] } } : { ...c })) });
     }
+    // 2 nov 2026: de qué cuenta es cada publicación (`st.duenoDe`: id de la publicación o del medio → 'P2'…): el token de otra página no responde ni oculta
+    const duenoDeComentario = cid => { const k = Object.keys(st.comentarios).find(k => st.comentarios[k].some?.(c => c.id === cid)); return k ? st.duenoDe?.[k] ?? null : null; };
     if (com && metodo === 'POST') {
+      const mal = noEsDeEsaPagina(st.duenoDe?.[com[1]] ?? duenoDeComentario(com[1])); if (mal) return mal;
+      st.respuestasConToken = [...(st.respuestasConToken || []), { a: com[1], token: dado }];
       const arriba = comentario(com[1]);
       if (com[2] === 'replies' && arriba?.hidden) return errorGraph('(#100) Cannot reply to a hidden comment', 100);
       if (com[2] === 'replies' && arriba && comentario(arriba.parent_id || '')) return errorGraph('(#100) Cannot reply to a reply', 100);
@@ -408,22 +423,26 @@ export function crearMetaStand(o = {}) {
       return json({ id });
     }
     // B2 (verificado el 9 oct 2026, §13.10): la lista da id y updated_time; los mensajes, en /<conversación>?fields=messages{…} (los 20 últimos)
-    if (metodo === 'GET' && ruta === '/P1/conversations') {
+    // 2 nov 2026: con más de una marca, cada página tiene sus conversaciones (`conv.pagina`, por defecto P1) y el token de una página NO sirve en la de otra
+    // (Graph: error 200): así un test prueba con qué token se respondió, no solo que respondió.
+    const convPg = metodo === 'GET' ? ruta.match(/^\/(P\d+)\/conversations$/) : null, msgPg = metodo === 'POST' ? ruta.match(/^\/(P\d+)\/messages$/) : null;
+    if (convPg || msgPg) { const mal = noEsDeEsaPagina((convPg || msgPg)[1]); if (mal) return mal; }
+    if (convPg) {
       if (st.fallar.sinAccesoMensajes) return errorGraph('(#10) Application does not have permission for this action', 10); // POR VERIFICAR: el código exacto
       const plataforma = q.get('platform') || 'messenger';
       const ultima = c => c.updated_time ?? new Date(Math.max(0, ...(c.messages?.data ?? []).map(m => Date.parse(m.created_time) || 0))).toISOString();
-      return json({ data: st.conversaciones.filter(c => (c.platform ?? 'messenger') === plataforma).map(c => ({ id: c.id, updated_time: ultima(c) })) });
+      return json({ data: st.conversaciones.filter(c => (c.pagina ?? 'P1') === convPg[1] && (c.platform ?? 'messenger') === plataforma).map(c => ({ id: c.id, updated_time: ultima(c) })) });
     }
-    if (metodo === 'POST' && ruta === '/P1/messages') {
-      const participa = (c, id) => c.participants?.data?.some(p => p.id === id) || (c.messages?.data ?? []).some(m => m.from?.id === id || m.to?.data?.some(t => t.id === id));
-      const para = objeto(campos.recipient)?.id, conv = st.conversaciones.find(c => participa(c, para));
+    if (msgPg) {
+      const pgM = msgPg[1], participa = (c, id) => c.participants?.data?.some(p => p.id === id) || (c.messages?.data ?? []).some(m => m.from?.id === id || m.to?.data?.some(t => t.id === id));
+      const para = objeto(campos.recipient)?.id, conv = st.conversaciones.find(c => (c.pagina ?? 'P1') === pgM && participa(c, para));
       if (!conv) return errorGraph('(#100) No matching user found', 100, { error_subcode: 2018001 });
       const texto = objeto(campos.message)?.text;
       if (typeof texto === 'string' && (texto.length >= 1000 || Buffer.byteLength(texto, 'utf8') > 1000)) return errorGraph('(#100) Length of param message[text] must be less than or equal to 1000', 100);
       const delCliente = (conv.messages?.data ?? []).filter(m => m.from?.id === para).map(m => Date.parse(m.created_time)).sort((a, b) => b - a)[0] ?? 0;
       if (st.reloj - delCliente > 24 * 3600e3 && objeto(campos.message) && campos.tag !== 'HUMAN_AGENT') return errorGraph('(#10) This message is sent outside of allowed window.', 10, { error_subcode: 2018278 });
-      const mid = nuevo('mid'); st.enviados.push({ mid, para, texto, tipo: campos.messaging_type, tag: campos.tag });
-      const cuando = new Date(st.reloj).toISOString(), propio = (conv.platform ?? 'messenger') === 'instagram' ? { id: 'IG1', username: 'panaclaw' } : { id: 'P1', name: 'PanaClaw' };
+      const mid = nuevo('mid'); st.enviados.push({ mid, para, texto, tipo: campos.messaging_type, tag: campos.tag }); (st.mensajesConToken ??= []).push({ mid, para, pagina: pgM, token: dado });
+      const pgd = paginas.find(p => p.id === pgM), cuando = new Date(st.reloj).toISOString(), propio = (conv.platform ?? 'messenger') === 'instagram' ? { id: pgd?.instagram_business_account?.id ?? 'IG1', username: pgd?.instagram_business_account?.username ?? 'panaclaw' } : { id: pgM, name: pgd?.name ?? 'PanaClaw' };
       (conv.messages ??= { data: [] }).data.push({ id: mid, message: texto, from: propio, to: { data: [{ id: para }] }, created_time: cuando }); // vuelve en la siguiente lectura (y cambia el updated_time de la lista)
       return json({ recipient_id: para, message_id: mid });
     }
@@ -459,7 +478,7 @@ export function crearMetaStand(o = {}) {
     if (metodo === 'POST') {
       const e = editar(id, campos); if (e) return e;
       const coment = Object.values(st.comentarios).flat().find(c => c.id === id);
-      if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; if (campos.hide !== undefined) coment.hidden = ocultar; else coment.is_hidden = ocultar; if (ocultar) st.ocultos.push(id); else st.mostrados = [...(st.mostrados || []), id]; return json({ success: true }); }
+      if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const mal = noEsDeEsaPagina(duenoDeComentario(id)); if (mal) return mal; (st.ocultarConToken ??= []).push({ id, token: dado }); const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; if (campos.hide !== undefined) coment.hidden = ocultar; else coment.is_hidden = ocultar; if (ocultar) st.ocultos.push(id); else st.mostrados = [...(st.mostrados || []), id]; return json({ success: true }); }
     }
     if (metodo === 'GET') {
       const conv = st.conversaciones.find(c => c.id === id);

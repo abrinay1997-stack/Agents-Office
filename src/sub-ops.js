@@ -124,7 +124,7 @@ export function opsHTML(m, v) {
     const e = ed.get(o.k) || {}, on = e.include !== false, label = opLabel({ ...o, ...e, when: o.when }, v);
     if (o.confirmar && o.state !== 'done' && o.state !== 'undone' && o.state !== 'failed') { // A2: what spends — the second click, with its figure
       const vence = typeof o.confirmar.vence === 'number' ? o.confirmar.vence : Date.parse(o.confirmar.vence), fuera = !(vence > now);
-      return `<div class="so-card sent gasto"><div class="sc-body"><div class="sc-t">${label}</div><div class="so-gt">${esc(o.confirmar.texto || '')}</div>
+      return `<div class="so-card sent gasto"><div class="sc-body"><div class="sc-t">${label}</div><div class="so-gt">${esc(o.confirmar.texto || '')}${o.confirmar.cuenta ? ` · en ${esc(o.confirmar.cuenta)}` : ''}</div>
         ${o.aviso ? `<div class="sc-note"><b>Antes de decir que sí:</b> ${esc(o.aviso)}</div>` : ''}${o.error ? `<div class="sc-meta"><b>no se pudo</b> — ${esc(o.error)}</div>` : ''}
         ${fuera ? '<div class="sc-meta"><b>Venció:</b> vuelve a pedírselo a Dimitri.</div>' : `<div class="sb-acts"><button type="button" class="so-gasto" data-msg="${esc(m.id)}" data-k="${o.k}"${busy ? ' disabled' : ''}>${esc(gastoBoton(o))}</button><button type="button" class="so-gasto-no" data-msg="${esc(m.id)}" data-k="${o.k}">Cancelar</button></div><div class="sc-note">Gasta de verdad: solo con este segundo clic. Vale 2 minutos.</div>`}</div></div>`;
     }

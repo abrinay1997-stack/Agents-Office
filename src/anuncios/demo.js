@@ -72,7 +72,17 @@ export function datosDeEjemplo(rango = '7d', ahora = Date.now()) {
   c4.cifras = suma([j4], re);
 
   const campanas = [c1, c2, c3, c4], hoy = +(c1.presupuesto.usd * 0.9 + j2.presupuesto.usd * 0.95).toFixed(2);
+  // 2 nov 2026: dos marcas de ejemplo sobre la MISMA cuenta publicitaria (página + Instagram cada una), para ver «Por cuenta» y el filtro
+  const MARCAS = { a: [{ id: 'facebook:900001', red: 'facebook', nombre: 'Óptica Vista (ejemplo)', usuario: '', foto: '', paginaId: '900001', conocida: true }, { id: 'instagram:900002', red: 'instagram', nombre: 'Óptica Vista', usuario: 'opticavista', foto: '', paginaId: '900001', conocida: true }],
+    b: [{ id: 'facebook:900003', red: 'facebook', nombre: 'Vista Kids (ejemplo)', usuario: '', foto: '', paginaId: '900003', conocida: true }] };
+  const marcaDe = c => (c === c3 ? null : c === c4 ? MARCAS.b : MARCAS.a);
+  const T = l => (l || []).map(x => `${x.red === 'facebook' ? 'Facebook' : 'Instagram'} ${x.red === 'facebook' ? '«' + x.nombre + '»' : '@' + x.usuario}`).join(' + ') || 'cuenta no identificada';
+  const sello = (o, l) => { o.cuentas = l || []; o.cuentaTexto = T(l); o.cuentaClave = l?.[0]?.paginaId || null; };
+  for (const c of campanas) { const l = marcaDe(c); sello(c, l); for (const j of c.conjuntos) { sello(j, l); for (const a of j.anuncios) sello(a, l); } }
+  const grupo = (l, cs) => { const ans = cs.flatMap(c => c.conjuntos.flatMap(j => j.anuncios)); const g =r2(ans.reduce((s, a) => s + (a.cifras?.gasto || 0), 0)); return { clave: l?.[0]?.paginaId || null, cuentas: l || [], texto: T(l), anuncios: ans.length, campanas: cs.length, gasto: g, cifras: cs[0]?.cifras || null, otrosObjetivos: false }; };
+  const porCuenta = [grupo(MARCAS.a, [c1, c2, c3].filter(c => marcaDe(c))), grupo(MARCAS.b, [c4]), grupo(null, [c3])].filter(g => g.anuncios);
   return {
+    porCuenta,
     configurado: true, motivo: '', ejemplo: true,
     cuenta: { id: 'act_000000000', nombre: 'PanaClaw (ejemplo)', estado: 'ACTIVE', estadoTexto: 'Activa', moneda: 'USD', zona: 'America/Panama', gastado: 1240.55, spendCap: null, saldo: 0 },
     topes: { ...TOPES_DEMO },

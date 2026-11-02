@@ -142,7 +142,12 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
     return { ...ok(`${ps.length} ${ps.length === 1 ? 'pieza' : 'piezas'} entre ${desde} y ${hasta}:\n${ps.slice(0, 30).map(lineaPieza).join('\n')}${ps.length > 30 ? '\n… hay más: acota el rango.' : ''}`, `${ps.length} piezas`), externo: ps.map((p) => p.titulo).join(' ') };
   }
   async function verAnuncios(e) {
-    const rango = ['hoy', '7d', '30d', 'mes'].includes(e.rango) ? e.rango : '7d', v = await office(`/api/anuncios?rango=${rango}`);
+    const rango = ['hoy', '7d', '30d', 'mes'].includes(e.rango) ? e.rango : '7d';
+    if (!e.id && e.cuenta && cadena(e.cuenta, 80)) { // 2 nov 2026: solo los anuncios de UNA cuenta (la página/Instagram sobre la que corren)
+      const r = await office(`/api/anuncios/texto?rango=${rango}&que=campanas&nivel=anuncio&cuenta=${encodeURIComponent(cadena(e.cuenta, 80))}`);
+      return ok(String(r.texto || 'Anuncios no está conectado o no hay datos todavía.'), `cuenta ${cadena(e.cuenta, 30)}`);
+    }
+    const v = await office(`/api/anuncios?rango=${rango}`);
     if (e.id) { const id = cadena(e.id, 80); return buscarAnuncio(v, id) ? ok(textoAnuncio(v, id), 'detalle') : falla('Ese id no está en lo que se leyó de Meta (puede ser de otra cuenta o ya no existir).'); }
     let top = []; try { top = (await office('/api/anuncios/sugerencias')).sugerencias?.slice(0, 3) || []; } catch { /* sin sugerencias */ }
     return ok(sub.anunciosText(v, top) || 'Anuncios no está conectado o no hay datos todavía.', `rango ${rango}`);

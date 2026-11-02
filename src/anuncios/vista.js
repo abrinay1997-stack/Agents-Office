@@ -9,7 +9,8 @@
 // cifra, las cifras del día, la semana, el mes y la campaña, y el aviso (aprendizaje) ANTES del «Sí, activar — hasta 15,00 US$ al día»;
 // la confirmación vence a los 2 min. Un tope que no cabe o un rechazo de Meta se dicen con su cifra, y no hay atajo.
 import { crearDatos } from './datos.js';
-import { esc, svg, haceCuanto } from './comun.js';
+import { esc, svg, haceCuanto, opcionesCuenta } from './comun.js';
+import { filtrarVista } from '../../anuncios/cuentas.mjs';
 import { resumenHTML } from './resumen.js';
 import { campanasHTML, buscar, RANGOS, FILTROS, ORDENES } from './campanas.js';
 import { detalleHTML } from './detalle.js';
@@ -38,7 +39,7 @@ const sinModal = { open() {}, close() {} };
 
 function init(ov, ctx) {
   const datos = crearDatos({ servida: ctx.servida }), modal = ctx.modal || sinModal;
-  const S = { tab: vale(TABS, guarda.get('tab', 'resumen'), 'resumen'), rango: vale(RANGOS, guarda.get('rango', '7d'), '7d'), filtro: vale(FILTROS, guarda.get('filtro', 'todas'), 'todas'), orden: vale(ORDENES, guarda.get('orden', 'gasto'), 'gasto'),
+  const S = { cuenta: String(guarda.get('cuenta', 'todas') || 'todas'), tab: vale(TABS, guarda.get('tab', 'resumen'), 'resumen'), rango: vale(RANGOS, guarda.get('rango', '7d'), '7d'), filtro: vale(FILTROS, guarda.get('filtro', 'todas'), 'todas'), orden: vale(ORDENES, guarda.get('orden', 'gasto'), 'gasto'),
     quien: vale(QUIENES, guarda.get('quien', 'todos'), 'todos'), sfiltro: vale(FILTROS_SUG, guarda.get('sfiltro', 'viva'), 'viva'), sug: null, sugErr: '', ordenSug: [], abiertos: new Set(), sel: null, d: null, hist: null, error: '', ejemplo: false, abierta: false, leyendo: false, dlg: null };
   ov.innerHTML = `<div class="anu">
     <div class="anu-top"><h1 class="anu-h1">Anuncios</h1>
@@ -95,15 +96,17 @@ function init(ov, ctx) {
     lectura.textContent = S.leyendo ? 'Leyendo Meta…' : !S.d ? '' : !S.d.configurado ? 'Meta no está conectada para anuncios.' : h ? `Última lectura de Meta: ${h}.` : 'Todavía no se ha leído Meta.';
     bAct.disabled = S.leyendo || (!!S.d && !S.d.configurado && !enEjemplo());
   }
+  /** La cuenta elegida, si todavía existe entre las que tienen anuncios (si no, todas). */
+  const cuentaSel = () => (S.cuenta !== 'todas' && S.d && opcionesCuenta(S.d).some(([k]) => k === S.cuenta) ? S.cuenta : 'todas');
   function pintar() {
     pintarCabecera();
     const foco = clavFoco(), scroll = main.scrollTop, ahora = Date.now();
     if (S.tab === 'borradores') main.innerHTML = ctl.html();
     else if (!S.d) main.innerHTML = S.error ? `<div class="anu-vacio" role="alert"><b>No se pudieron traer los anuncios</b><span>${esc(S.error)}</span><button type="button" class="anu-btn" data-a="reintentar">Reintentar</button></div>` : '<p class="anu-cargando">Cargando…</p>';
-    else if (S.tab === 'resumen') main.innerHTML = resumenHTML(S.d, { rango: S.rango, ahora, sug: S.sug });
+    else if (S.tab === 'resumen') main.innerHTML = resumenHTML(filtrarVista(S.d, cuentaSel()), { rango: S.rango, ahora, sug: S.sug, cuenta: cuentaSel() });
     else if (S.tab === 'sugerencias') main.innerHTML = S.d.configurado ? sugerenciasHTML(S.sug, { filtro: S.sfiltro, moneda: moneda(), buscarFila: id => buscar(S.d.campanas || [], id), error: S.sug ? '' : S.sugErr, ahora }) : resumenHTML(S.d);
-    else if (S.tab === 'creativos') main.innerHTML = S.d.configurado ? creativosHTML(S.d, S.sug, { rango: S.rango, rangos: RANGOS }) : resumenHTML(S.d);
-    else if (S.tab === 'campanas') main.innerHTML = S.d.configurado ? campanasHTML(S.d, { rango: S.rango, filtro: S.filtro, orden: S.orden, abiertos: S.abiertos, sel: S.sel, ahora }) : resumenHTML(S.d);
+    else if (S.tab === 'creativos') main.innerHTML = S.d.configurado ? creativosHTML(filtrarVista(S.d, cuentaSel()), S.sug, { rango: S.rango, rangos: RANGOS }) : resumenHTML(S.d);
+    else if (S.tab === 'campanas') main.innerHTML = S.d.configurado ? campanasHTML(S.d, { rango: S.rango, filtro: S.filtro, orden: S.orden, abiertos: S.abiertos, sel: S.sel, ahora, cuenta: cuentaSel() }) : resumenHTML(S.d);
     else main.innerHTML = historialHTML(S.hist, { quien: S.quien });
     ov.classList.toggle('conAsis', S.tab === 'borradores' && !!ctl.abierto);
     if (S.error && S.d && S.tab !== 'borradores') main.insertAdjacentHTML('afterbegin', `<p class="anu-aviso-error" role="alert">No se pudo actualizar: ${esc(S.error)}. Lo que ves es la lectura anterior.</p>`);
@@ -435,6 +438,7 @@ function init(ov, ctx) {
     if (b.dataset.filtro) { S.filtro = b.dataset.filtro; guarda.set('filtro', S.filtro); return pintar(); }
     if (b.dataset.quien) { S.quien = b.dataset.quien; guarda.set('quien', S.quien); return pintar(); }
     if (b.dataset.tog) { const id = b.dataset.tog; if (S.abiertos.has(id)) S.abiertos.delete(id); else S.abiertos.add(id); return pintar(); }
+    if (b.dataset.vercuenta) { S.cuenta = b.dataset.vercuenta; guarda.set('cuenta', S.cuenta); S.tab = 'campanas'; guarda.set('tab', S.tab); pintar(); decir('Campañas de esa cuenta.'); return; }
     if (b.dataset.abrir) return abrirDetalle(b.dataset.abrir, b);
     if (b.dataset.abrircamp) return abrirDetalle(b.dataset.abrircamp, b);
     const a = b.dataset.a;
@@ -461,7 +465,7 @@ function init(ov, ctx) {
     return primerClic(S.dlg);
   });
   ov.addEventListener('input', e => { if (S.tab === 'borradores' && main.contains(e.target)) ctl.input(e); });
-  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
+  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; guarda.set('cuenta', S.cuenta); pintar(); return; } if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
   ov.addEventListener('keydown', e => {
     const el = e.target;
     if (S.tab === 'borradores' && main.contains(el) && ctl.keydown(e)) return;

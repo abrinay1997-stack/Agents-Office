@@ -233,7 +233,8 @@ const meta = crearMeta({ dir: ANALITICAS_DIR });
 const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
 const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
 const anunciosAds = crearMetaAds({ meta });
-const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => { try { anunciosInd.llevar(); } catch (e) { console.warn('anuncios (indicadores):', e.message); } return anunciosTrasSondeo(); } }); // A5: el diagnóstico tras cada lectura de cifras · A6: los indicadores del dueño al día
+const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ahora: (process.env.AO_TEST === '1' || process.env.NODE_ENV === 'test') && process.env.AO_RELOJ_ANUNCIOS && Number.isFinite(Date.parse(process.env.AO_RELOJ_ANUNCIOS)) ? () => Date.parse(process.env.AO_RELOJ_ANUNCIOS) : () => Date.now(), // AO_RELOJ_ANUNCIOS (ISO): solo para los tests, que fijan el día de las cifras
+ ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => { try { anunciosInd.llevar(); } catch (e) { console.warn('anuncios (indicadores):', e.message); } return anunciosTrasSondeo(); } }); // A5: el diagnóstico tras cada lectura de cifras · A6: los indicadores del dueño al día
 const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
   refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} } });
@@ -1900,7 +1901,7 @@ const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALI
 // hay token, si no Metricool). Responder y ocultar: solo el dueño, una vez, según el modo de Contenido; cada uno queda en data/audit/.
 const bandejaMeta = crearBandejaMeta({ meta, archivo: path.join(ANALITICAS_DIR, 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(ANUNCIOS_DIR, 'cuenta.json'), 'utf8')); } catch { return null; } } });
 const bandeja = crearBandeja({ metricool, meta: bandejaMeta, elegir: () => cfg.contenido?.bandejaFuente || 'auto', archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o),
-  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), avisarMensaje: (t, o) => notice('bandeja-mensaje', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds });
+  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), avisarMensaje: (t, o) => notice('bandeja-mensaje', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds, cuentas: () => { try { return meta.estado()?.cuentas || []; } catch { return []; } } });
 { // cada respuesta y cada ocultar/mostrar que sale de verdad (o de mentira, en simulacro) queda en el registro, como las entregas de Contenido
   const auditar = a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} };
   const { enviar, ocultar, deshacer } = bandeja;

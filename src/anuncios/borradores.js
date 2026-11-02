@@ -2,7 +2,7 @@
 // Dimitri, un agente), su objetivo y su costo máximo; «+ Nueva campaña»; un borrador creado enlaza a su campaña en Campañas. Puro.
 // Borrar pide un segundo clic EN LA FILA (no hay DESHACER: el servidor lo manda a su papelera). Un botón nunca va dentro de otro: el
 // nombre es el botón que abre el asistente; lo demás va al lado.
-import { esc, chip, haceCuanto } from './comun.js';
+import { esc, chip, haceCuanto, cuentaChip } from './comun.js';
 import { deQuien, estadoB, objetivoTexto, costoTexto, origenTexto } from './borrador.js';
 import { srcDemo } from './demo-borradores.js';
 
@@ -25,7 +25,7 @@ export function filaBorradorHTML(b, { moneda = 'USD', confirmar = null, agentNam
   const mini = b.origen?.miniatura ? `<span class="anu-bmini" aria-hidden="true"><img src="${esc(b.origen.miniatura)}" alt="" loading="lazy" decoding="async"></span>` : miniHTML(b.creativos?.[0]?.media); // A4: la publicación que impulsa
   return `<li class="anu-bfila" data-bfila="${esc(b.id)}">${mini}
     <div class="anu-bcuerpo"><h3><button type="button" class="anu-abrir" data-babrir="${esc(b.id)}">${esc(b.nombre || '(sin nombre)')}</button></h3>
-      <p class="anu-tchips">${chip(e.texto, e.tono)}${chip('De: ' + deQuien(b.de, agentName), b.de === 'dueno' ? 'gris' : 'azul')}</p>
+      <p class="anu-tchips">${chip(e.texto, e.tono)}${chip('De: ' + deQuien(b.de, agentName), b.de === 'dueno' ? 'gris' : 'azul')}${cuentaChip(b)}</p>
       <p class="anu-tobj">${esc(objetivoTexto(b))} · ${b.origen ? esc(origenTexto(b)) : `${n} ${n === 1 ? 'creativo' : 'creativos'}`}${cuando ? ` · cambiado ${esc(cuando)}` : ''}</p>
       <p class="anu-bcosto">${costo ? `Costo máximo: ${esc(costo)}` : 'Costo máximo: se calcula al revisarlo.'}</p>
       ${b.estado === 'fallo' && b.error ? `<p class="anu-derr">${esc(b.error)}</p>` : ''}</div>

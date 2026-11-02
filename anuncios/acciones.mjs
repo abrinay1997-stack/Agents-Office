@@ -214,7 +214,8 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
   async function releer(writes) {
     for (const w of writes) { try { sync.ponerObjeto(w.nivel, await ads.leer(w.id, w.nivel)); } catch { /* la próxima lectura lo trae */ } }
   }
-  const objetoDe = r => ({ id: r.objeto.id, nivel: r.tipo, nombre: r.objeto.nombre });
+  // 2 nov 2026: la cuenta (página/Instagram) del objeto, solo para que la hoja de confirmación y el historial la digan. No decide nada.
+  const objetoDe = r => ({ id: r.objeto.id, nivel: r.tipo, nombre: r.objeto.nombre, ...(r.objeto.cuentas?.length ? { cuenta: r.objeto.cuentaTexto } : {}) });
 
   /** La copia de una campaña, entera o por partes. `validar`: solo la primera llamada, con validate_only (no crea nada). */
   async function copiarCampana(r, copia, { validar = false, rid = '' } = {}) {
@@ -310,7 +311,7 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
       const k = token(), vence = ahora() + confirmarMs;
       await T.poner('conf', k, { firma: firmaDe(b), vence, pidio: b.quien, tipo: b.tipo, id: b.id }, vence + 10 * 60e3);
       const cifras = p.copia ? { dia: 0, semana: 0, mes: 0, campana: 0, alActivar: p.diarioCopia } : t.cifras;
-      return R(200, { confirmar: { token: k, texto: textoConfirmar(b.tipo, p, r, t, moneda, zona), cifras, vence: new Date(vence).toISOString(), tipo: b.tipo, id: b.id, ...(p.valorUsd !== undefined ? { valor: p.valorUsd } : {}), ...(p.finIso ? { fin: p.finIso } : {}), objeto, moneda }, ...(avisos.length ? { aviso: avisos.join(' ') } : {}) });
+      return R(200, { confirmar: { token: k, texto: textoConfirmar(b.tipo, p, r, t, moneda, zona), cifras, vence: new Date(vence).toISOString(), tipo: b.tipo, id: b.id, ...(p.valorUsd !== undefined ? { valor: p.valorUsd } : {}), ...(p.finIso ? { fin: p.finIso } : {}), objeto, ...(r.objeto.cuentaTexto ? { cuenta: r.objeto.cuentaTexto } : {}), moneda }, ...(avisos.length ? { aviso: avisos.join(' ') } : {}) });
     }
 
     // aplicar

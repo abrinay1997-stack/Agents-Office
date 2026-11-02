@@ -276,7 +276,8 @@ export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avi
   const av = (kind) => (t, o) => (avisos ? avisos.avisar(kind, t, o) : undefined);
   return crearBandeja({ metricool: null, meta: fuente, elegir: () => cfg.contenido?.bandejaFuente || 'auto', almacen: tabla || almacenEnMemoria(path.join(esp.ruta(DIR_ANALITICAS), 'bandeja.json')),
     modo: () => cfg.contenido?.modo || 'simulacro', ahora, avisar: av('contenido'), avisarComentario: av('bandeja-comentario'), avisarMensaje: av('bandeja-mensaje'),
-    injectionIn, undoSeconds: () => Number(cfg.approvals?.undoSeconds ?? 30), tokens, abiertaAtInicial: abiertaAt });
+    injectionIn, undoSeconds: () => Number(cfg.approvals?.undoSeconds ?? 30), tokens, abiertaAtInicial: abiertaAt,
+    cuentas: () => { try { return meta?.estado?.()?.cuentas || []; } catch { return []; } } }); // 2 nov 2026: de qué cuenta es cada comentario/mensaje (solo para mostrarlo)
 }
 
 // ------------------------------------------------------------ el estado que recuerda D1 entre peticiones

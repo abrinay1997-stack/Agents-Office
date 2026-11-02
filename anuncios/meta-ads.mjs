@@ -24,8 +24,10 @@ export const CAMPOS = {
   campanas: 'id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,bid_strategy,spend_cap,start_time,stop_time,special_ad_categories,created_time,updated_time,issues_info',
   conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
   // VERIFICADO el 9 oct 2026 con la cuenta real: `effective_instagram_media_id` existe en el creativo (la Fase B1 lo usará para los comentarios de los anuncios).
-  anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
-  creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
+  anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id,instagram_user_id}',
+  // 2 nov 2026: `instagram_user_id` (AdCreative, v26) dice de qué Instagram es el anuncio; con `object_story_spec.page_id` y el `promoted_object` del
+  // conjunto da la cuenta de cada anuncio sin llamadas nuevas (anuncios/cuentas.mjs). POR VERIFICAR con la cuenta real que v26 lo devuelve.
+  creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id,instagram_user_id',
   // las cifras diarias por anuncio (plan §5 A1). `purchase_roas` solo tiene sentido con píxel: se añade si hay uno en Ajustes.
   cifras: 'ad_id,adset_id,campaign_id,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,ctr,cpc,cpm,actions,cost_per_action_type',
   alcance: 'campaign_id,adset_id,ad_id,reach,impressions,frequency',
@@ -84,7 +86,15 @@ export function crearMetaAds({ meta }) {
     const out = { cuenta: rc.datos, avisos: [] };
     const claves = Object.keys(listas);
     for (let i = 0; i < claves.length; i++) {
-      const k = claves[i], r = rl[i];
+      const k = claves[i];
+      let r = rl[i];
+      // 2 nov 2026: si Meta no conoce el subcampo `instagram_user_id` del creativo (error 100 de campo), NO se pierde la lectura entera: se repite
+      // esa lista una vez sin él y se apunta «sin cuenta de Instagram» (la cuenta sale entonces solo de la página, si hay).
+      if (!r.ok && (k === 'anuncios' || k === 'creativos') && r.error?.codigo === 100 && /instagram_user_id/.test(CAMPOS[k])) {
+        const params = { ...pet[i + 1].params, fields: CAMPOS[k].replace(/,instagram_user_id/g, '') };
+        try { const d = await meta.graph(await token(), pet[i + 1].ruta, { params }); r = { ok: true, datos: d }; pet[i + 1].params = params; out.avisos.push('sin cuenta de Instagram: Meta no devolvió el campo instagram_user_id del creativo; la cuenta de cada anuncio sale solo de su página'); out.sinInstagram = true; }
+        catch { /* si el reintento falla se queda el error ORIGINAL de Meta (r) */ }
+      }
       if (!r.ok) { if (k === 'creativos') { out.creativos = []; out.avisos.push(`no se pudieron leer los creativos: ${r.error.message}`); continue; } throw r.error; }
       out[k] = await resto(pet[i + 1].ruta, pet[i + 1].params, r.datos);
     }

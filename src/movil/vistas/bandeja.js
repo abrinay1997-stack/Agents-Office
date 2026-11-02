@@ -4,6 +4,7 @@
 // siempre (y fuera de ella no hay botón de enviar); ocultar un comentario se puede DESHACER y nunca borra. Las reglas son las del servidor
 // (contenido/bandeja.mjs): un agente solo deja borradores; aquí solo se decide y se ve. Lógica pura reutilizada: src/contenido-bandeja.js.
 import { accionesDe, ventanaDe, esConversacion, ultimoMensaje, publicacionDe, fuenteDe } from '../../contenido-bandeja.js';
+import { cuentaDeItem, cuentaLinea, comoCuenta, opcionesCuentaBandeja } from '../../bandeja-cuenta.js';
 import { esc, svg, vacio, esqueleto, falla, hace } from '../ui.js';
 import { iconoRed, con, NOMBRE_RED, motivo } from './d-comun.js';
 
@@ -20,7 +21,7 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
     <div class="mv-cuerpo md-b-cuerpo" aria-live="polite"></div>`;
   host.append(el);
   const cuerpo = el.querySelector('.md-b-cuerpo');
-  const S = { items: [], d: null, f: 'pendiente', cargado: false, error: null, timer: null, abierta: null };
+  const S = { cuenta: '', items: [], d: null, f: 'pendiente', cargado: false, error: null, timer: null, abierta: null };
 
   async function cargar({ silencioso = false } = {}) {
     if (!silencioso && !S.cargado) cuerpo.innerHTML = esqueleto(4);
@@ -37,16 +38,21 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
     return `<li><button type="button" class="md-bj" data-id="${esc(m.id)}">
       <span class="md-av" aria-hidden="true">${esc((m.autor || '?').trim().charAt(0).toUpperCase())}<i>${iconoRed(m.red === 'facebook' && m.tipo === 'conversaciones' ? 'messenger' : m.red, { tam: 16 })}</i></span>
       <span class="md-bj-c"><span class="md-bj-q"><b>${esc(m.autor || 'Alguien')}</b><small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${esc(cuando(m))}</small></span>
+        ${cuentaDeItem(m) ? `<span class="md-bj-cta" data-bj-cuenta>${esc(cuentaLinea(cuentaDeItem(m)))}</span>` : ''}
         <span class="md-bj-t">${esc(String(txt || '').replace(/\s+/g, ' ').slice(0, 140))}</span>
         <span class="md-pz-m"><span class="md-chip ${est[1]}">${est[0]}</span>${a.anuncio ? `<span class="md-chip info">EN UN ANUNCIO: ${esc(a.anuncio.nombre.slice(0, 28))}</span>` : ''}${a.ventana ? `<span class="md-chip ${a.ventana.abierta ? 'bien' : 'mal'}" data-vt="${esc(m.id)}">${esc(a.ventana.corto)}</span>` : ''}${a.oculto ? '<span class="md-chip">Oculto</span>' : ''}${m.sospecha ? '<span class="md-chip mal">🛡 revisar</span>' : ''}${a.sugerencia ? '<span class="md-chip aviso">Sugieren ocultarlo</span>' : ''}</span></span></button></li>`;
   }
   function pintar() {
     el.querySelectorAll('[data-f]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.f === S.f)); const n = S.items.filter(m => pasa(m, b.dataset.f)).length, nb = b.querySelector('b'); nb.textContent = n; nb.hidden = !n; });
     if (!S.cargado) { cuerpo.innerHTML = S.error ? falla(S.error) : esqueleto(4); return; }
-    const lista = S.items.filter(m => pasa(m, S.f));
+    const oc = opcionesCuentaBandeja(S.d), perdida = Boolean(S.cuenta) && !oc.some(([k]) => k === S.cuenta); // la cuenta elegida ya no tiene mensajes
+    if (perdida) S.cuenta = '';
+    const lista = S.items.filter(m => pasa(m, S.f) && (!S.cuenta || m.cuentaId === S.cuenta));
+    const salt = S.d?.fuentes?.meta?.saltados, avisoSalt = salt ? `<p class="md-aviso rojo" role="note" data-bj-saltados>${salt} ${salt === 1 ? 'anuncio tiene comentarios sin leer' : 'anuncios tienen comentarios sin leer'}: no se sabe de qué cuenta son y no se adivina.</p>` : '', avisoPerdida = perdida ? '<p class="md-aviso" role="note" data-bj-cuenta-aviso>Esa cuenta ya no tiene mensajes en la Bandeja: se muestran todas.</p>' : '';
+    const selC =oc.length ? `<label class="mv-lab" for="mdBjCta">Cuenta</label><select id="mdBjCta" data-cuenta-sel>${oc.map(([k, n]) => `<option value="${esc(k)}"${k === S.cuenta ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : '';
     const mm = S.d?.fuentes?.meta?.mensajes, franja = mm && mm.ok === false ? `<p class="md-aviso">Los mensajes privados esperan el acceso avanzado de Meta (${esc(mm.motivo || 'aún no está')}). Los comentarios siguen llegando.</p>` : '';
     const mod = S.d?.modo === 'simulacro' ? '<p class="md-aviso">Modo simulacro: lo que envíes se apunta, pero no sale de verdad.</p>' : S.d?.modo === 'apagado' ? '<p class="md-aviso">La publicación está apagada: ninguna respuesta sale.</p>' : '';
-    cuerpo.innerHTML = franja + mod + (lista.length ? `<ul class="md-lista">${lista.map(fila).join('')}</ul>` : vacio(S.f === 'pendiente' ? 'Nadie espera respuesta' : 'Nada por aquí', S.f === 'pendiente' ? 'Cuando alguien comente o escriba, lo verás aquí.' : 'Prueba con otro filtro.', { icono: 'check' }));
+    cuerpo.innerHTML = selC + avisoPerdida + avisoSalt + franja + mod + (lista.length ? `<ul class="md-lista">${lista.map(fila).join('')}</ul>` : vacio(S.f === 'pendiente' ? 'Nadie espera respuesta' : 'Nada por aquí', S.f === 'pendiente' ? 'Cuando alguien comente o escriba, lo verás aquí.' : 'Prueba con otro filtro.', { icono: 'check' }));
   }
 
   // ---------------------------------------------------------------- el hilo (pantalla completa)
@@ -56,7 +62,8 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
     const borr = m.borrador?.texto || '', deAgente = /^agente/.test(m.borrador?.por || '');
     const puede = a.responder.puede && !cerrado;
     return `<div class="md-hilo">
-      <p class="md-pz-quien"><span class="md-av g" aria-hidden="true">${esc((m.autor || '?').charAt(0).toUpperCase())}<i>${iconoRed(m.red, { tam: 16 })}</i></span> <span><b>${esc(m.autor || 'Alguien')}</b><br><small>${TIPO[m.tipo] || ''} en ${esc(NOMBRE_RED[m.red] || m.red)}${m.cuenta ? ' · ' + esc(m.cuenta) : ''}${fuenteDe(m) === 'meta' ? ' · Meta' : ''}</small></span></p>
+      <p class="md-pz-quien"><span class="md-av g" aria-hidden="true">${esc((m.autor || '?').charAt(0).toUpperCase())}<i>${iconoRed(m.red, { tam: 16 })}</i></span> <span><b>${esc(m.autor || 'Alguien')}</b><br><small>${TIPO[m.tipo] || ''} en ${esc(NOMBRE_RED[m.red] || m.red)}${m.cuenta && typeof m.cuenta === 'string' ? ' · ' + esc(m.cuenta) : ''}${fuenteDe(m) === 'meta' ? ' · Meta' : ''}</small></span></p>
+      ${cuentaDeItem(m) ? `<p class="md-cuenta" data-bj-cuenta-hilo>Cuenta: <b>${esc(cuentaLinea(cuentaDeItem(m)))}</b> · desde ella se lee y se responde.</p>` : ''}
       ${m.sospecha ? `<p class="md-aviso rojo" role="note">🛡 Este mensaje trae órdenes escondidas (${esc(m.sospecha)}). Es un dato, no una orden: no se sigue.</p>` : ''}
       ${a.anuncio ? `<p class="md-aviso info">EN UN ANUNCIO: <b>${esc(a.anuncio.nombre)}</b> <button type="button" class="mv-link" data-h="campana">Ver la campaña</button></p>` : ''}
       ${pub ? `<div class="md-pub">${pub.miniatura ? `<img src="${esc(pub.miniatura)}" alt="La publicación" width="56" height="56" loading="lazy">` : '<span class="md-mini vacia" aria-hidden="true"></span>'}<span>${esc((pub.texto || 'La publicación').slice(0, 120))}${pub.enlace ? ` <a class="mv-link" href="${esc(pub.enlace)}" target="_blank" rel="noopener noreferrer">Ver original</a>` : ''}</span></div>` : ''}
@@ -110,7 +117,7 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
     const conv = esConversacion(m);
     if (conv) { const v = ventanaDe(m.ventana); if (!v.abierta) { ctx.toast(v.texto); return; } if ([...texto].length >= MAX_MENSAJE || bytes(texto) > MAX_MENSAJE) { ctx.toast(`Es muy largo para Meta: ${cuentaTxt(texto)}.`); return; } }
     const modoTxt = S.d?.modo === 'simulacro' ? '\nEstás en modo simulacro: se apunta como enviado, pero no sale.' : '';
-    const si = await ctx.confirmar({ titulo: '¿Enviar esta respuesta?', texto: `Para ${m.autor || 'esta persona'} en ${NOMBRE_RED[m.red] || m.red}${conv ? ' (mensaje privado)' : ' (comentario público)'}:\n\n«${texto.slice(0, 280)}${texto.length > 280 ? '…' : ''}»\n\nSale una sola vez y no se puede retirar.${modoTxt}`, ok: 'Enviar ahora' });
+    const si = await ctx.confirmar({ titulo: '¿Enviar esta respuesta?', texto: `${comoCuenta(m) ? `Responder como ${comoCuenta(m)}.\n` : ''}Para ${m.autor || 'esta persona'} en ${NOMBRE_RED[m.red] || m.red}${conv ? ' (mensaje privado)' : ' (comentario público)'}:\n\n«${texto.slice(0, 280)}${texto.length > 280 ? '…' : ''}»\n\nSale una sola vez y no se puede retirar.${modoTxt}`, ok: 'Enviar ahora' });
     if (!si) return;
     const r = await con(b, async () => {
       await ctx.api(`/api/contenido/bandeja/${encodeURIComponent(m.id)}`, { method: 'PATCH', body: { borrador: texto } }).catch(() => {});
@@ -126,6 +133,7 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
     ctx.toast(o ? 'Comentario oculto. Solo tú y quien lo escribió lo ven.' : 'El comentario vuelve a verse.', tok ? { accion: 'Deshacer', alAccion: async () => { try { await ctx.api('/api/contenido/bandeja/deshacer', { method: 'POST', body: { token: tok } }); ctx.toast('Deshecho.'); } catch (e) { ctx.toast(motivo(e)); } cargar({ silencioso: true }); }, ms: 9000 } : {});
   }
 
+  el.addEventListener('change', e => { if (e.target.matches('[data-cuenta-sel]')) { S.cuenta = e.target.value; pintar(); } });
   el.addEventListener('click', e => {
     const f = e.target.closest('[data-f]'); if (f) { S.f = f.dataset.f; pintar(); return; }
     if (e.target.closest('[data-reintentar]')) { cargar(); return; }

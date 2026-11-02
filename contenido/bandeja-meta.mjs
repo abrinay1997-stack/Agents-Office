@@ -26,8 +26,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { mensajeMeta } from './meta.mjs';
+import { refsDeAnuncio } from '../anuncios/cuentas.mjs';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
+/** Versión de la atribución de cuentas (2 nov 2026): antes, un comentario de un anuncio se guardaba con la primera página/Instagram que se encontró. */
+export const ATRIBUCION = 2;
 export const DIAS = 30; // las publicaciones de los últimos 30 días
 export const MAX_PUBLICACIONES = 25, LIMITE_COMENTARIOS = 50, MAX_ANUNCIOS = 20;
 export const DIAS_RECIENTE = 3; // lo publicado hace menos de 3 días se relee siempre (el recuento de Facebook no cuenta las respuestas)
@@ -211,7 +214,9 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
       const info = { campana: campanas.get(String(a.campaign_id)) || String(a.campaign_id || ''), campanaId: String(a.campaign_id || ''), anuncio: String(a.id || ''), nombre: a.name || 'sin nombre' };
       const story = a.creative?.effective_object_story_id; if (story) fb.set(String(story), info);
       const igDirecto = a.creative?.effective_instagram_media_id; // si un día Anuncios lo pide en su estructura
-      if (a.creative?.id || igDirecto) ig.push({ creativo: String(a.creative?.id || ''), igMedia: igDirecto ? String(igDirecto) : null, info });
+      // 2 nov 2026: de qué Instagram es el anuncio (para leer y responder con ESA cuenta, no con la primera): la pista del creativo, sin adivinar
+      const igId = refsDeAnuncio(a.creative, (g.conjuntos || []).find(c => c.id === a.adset_id)).instagramId || '';
+      if (a.creative?.id || igDirecto) ig.push({ creativo: String(a.creative?.id || ''), igMedia: igDirecto ? String(igDirecto) : null, info, igId });
     }
     return { fb, ig };
   }
@@ -290,6 +295,8 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
   async function traer() {
     const l = listo(); if (!l.ok) return { mensajes: [], error: l.motivo };
     const s = leer(), primera = !s.ultimaAt, mensajes = [], errores = [], vistas = new Set();
+    if (s.atribucion !== ATRIBUCION) { s.pubs = {}; s.atribucion = ATRIBUCION; } // 2 nov 2026: se vuelve a leer todo UNA vez para que cada comentario quede con la cuenta que le toca
+    let saltados = 0; // anuncios cuyos comentarios no se leen por no saber de qué cuenta son (se dice, no se esconde)
     const { fb: anunciosFB, ig: anunciosIG } = anunciosVivos();
     const porRed = { instagram: null, facebook: null };
     for (const cuenta of cuentas()) {
@@ -323,15 +330,21 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
     }
 
     // ---- los anuncios: su publicación (la de Facebook la da el creativo; la de Instagram, POR VERIFICAR)
+    // 2 nov 2026: con varias páginas, el comentario de un anuncio es de la página DEL ANUNCIO (el prefijo «<página>_<post>» de su historia), no de la
+    // primera que se encontró: se lee con el token de esa página y queda con su `cuentaId`. Una historia de una página que el token no ve se salta y se dice.
     if (porRed.facebook) {
-      try {
-        const cuenta = porRed.facebook, token = await meta.tokenDe(cuenta);
-        for (const [story, info] of anunciosFB) {
-          if (vistas.has(story)) continue; // una publicación impulsada ya se leyó arriba (y ya va marcada)
-          const publicacion = { id: story, enlace: `https://www.facebook.com/${story}`, texto: '', miniatura: '' };
+      const sinPagina = new Set();
+      for (const [story, info] of anunciosFB) {
+        if (vistas.has(story)) continue; // una publicación impulsada ya se leyó arriba (y ya va marcada)
+        const pid = String(story).split('_')[0], cuenta = cuentas().find(c => c.red === 'facebook' && String(c.paginaId || c.externoId) === pid);
+        if (!cuenta) { sinPagina.add(pid); continue; }
+        try {
+          const token = await meta.tokenDe(cuenta), publicacion = { id: story, enlace: `https://www.facebook.com/${story}`, texto: '', miniatura: '' };
           mensajes.push(...aplanar(await comentariosFB(token, story, s), { cuenta, publicacion, enAnuncio: info }));
-        }
-      } catch (e) { errores.push(`Anuncios en Facebook: ${mensajeMeta(e)}`); }
+        } catch (e) { errores.push(`Anuncios en Facebook (${cuenta.nombre || pid}): ${mensajeMeta(e)}`); if (e?.frenado) break; }
+      }
+      saltados += sinPagina.size;
+      if (sinPagina.size) errores.push(`Anuncios en Facebook: ${sinPagina.size === 1 ? 'una página con anuncios que el token no ve' : sinPagina.size + ' páginas con anuncios que el token no ve'}; sus comentarios no se leen.`);
     }
     const igAnuncio = new Map();
     if (porRed.instagram && anunciosIG.length) {
@@ -344,16 +357,19 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
             try { mid = String((await meta.graph(tokenU, `/${a.creativo}`, { params: { fields: 'effective_instagram_media_id' } }))?.effective_instagram_media_id || ''); s.creativos[a.creativo] = mid; s.campoIG = true; }
             catch (e) { if (e?.codigo === 100) { s.campoIG = false; s.campoIGAt = new Date(ahora()).toJSON(); break; } errores.push(`Anuncios en Instagram: ${mensajeMeta(e)}`); break; }
           }
-          if (mid) igAnuncio.set(mid, a.info);
+          if (mid) igAnuncio.set(mid, { info: a.info, igId: a.igId || '' });
         }
       }
-      try {
-        const cuenta = porRed.instagram, token = await meta.tokenDe(cuenta);
-        for (const [mid, info] of igAnuncio) {
-          if (vistas.has(mid)) { for (const m of mensajes) if (m.publicacion?.id === mid) m.enAnuncio = info; continue; }
-          mensajes.push(...aplanar(await comentariosIG(token, mid), { cuenta, publicacion: { id: mid, enlace: '', texto: '', miniatura: '' }, enAnuncio: info }));
-        }
-      } catch (e) { errores.push(`Anuncios en Instagram: ${mensajeMeta(e)}`); }
+      // 2 nov 2026: el Instagram del anuncio lo dice su creativo; con un solo Instagram conectado, es ese; con varios y sin pista, NO se adivina (se salta y se dice)
+      const igs = cuentas().filter(c => c.red === 'instagram'), sinIg = new Set();
+      for (const [mid, { info, igId }] of igAnuncio) {
+        if (vistas.has(mid)) { for (const m of mensajes) if (m.publicacion?.id === mid) m.enAnuncio = info; continue; }
+        const cuenta = igId ? igs.find(c => String(c.externoId) === igId) : igs.length === 1 ? igs[0] : null;
+        if (!cuenta) { sinIg.add(igId || '?'); saltados++; continue; }
+        try { const token = await meta.tokenDe(cuenta); mensajes.push(...aplanar(await comentariosIG(token, mid), { cuenta, publicacion: { id: mid, enlace: '', texto: '', miniatura: '' }, enAnuncio: info })); }
+        catch (e) { errores.push(`Anuncios en Instagram (${cuenta.nombre || cuenta.externoId}): ${mensajeMeta(e)}`); if (e?.frenado) break; }
+      }
+      if (sinIg.size) errores.push('Anuncios en Instagram: ' + (sinIg.has('?') ? 'hay anuncios con varios Instagram conectados y sin saber de cuál es (el creativo no lo dice)' : 'hay anuncios de un Instagram que el token no ve') + '; sus comentarios no se leen.');
     }
     // ---- B2: los mensajes privados (solo con los permisos y el acceso avanzado; sin ellos, los comentarios siguen)
     let primeraMensajes = false;
@@ -362,16 +378,25 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
     { const k = Object.keys(s.convs); if (k.length > 500) for (const x of k.slice(0, k.length - 500)) delete s.convs[x]; }
     // lo que ya no está en los últimos 30 días se olvida
     for (const id of Object.keys(s.pubs)) if (!vistas.has(id) && !reciente(s.pubs[id].at, dias + 5)) delete s.pubs[id];
-    s.ultimaAt = new Date(ahora()).toJSON(); s.error = errores.join(' · ');
+    s.ultimaAt = new Date(ahora()).toJSON(); s.error = errores.join(' · '); s.saltados = saltados;
     escribirJSON(archivo, s);
     return { mensajes, error: s.error, primera, primeraMensajes };
   }
 
   /** Responder: Instagram a /replies, Facebook a /comments; siempre en el comentario de primer nivel. → { id }
    *  B2: a una conversación, POST /<página>/messages (messaging_type RESPONSE, sin etiquetas). La Bandeja ya miró la ventana y el largo. */
+  /**
+   * LA cuenta de un mensaje: la suya, o un error. Con varias marcas, caer en «la primera de esa red» respondería u ocultaría con el token de OTRA
+   * marca. Solo sin `cuentaId` y con EXACTAMENTE una cuenta de esa red se usa esa; un mensaje «por confirmar» (atribución vieja) nunca.
+   */
+  function cuentaDelMensaje(m) {
+    const c = cuentaDe(m.cuentaId); if (c) return c;
+    if (!m.cuentaId && !m.cuentaPorConfirmar) { const l = cuentas().filter(x => x.red === m.red && (!m.paginaId || x.paginaId === m.paginaId)); if (l.length === 1) return l[0]; }
+    throw Object.assign(new Error(m.cuentaPorConfirmar ? 'No sé desde qué cuenta es este mensaje (se guardó antes de que la oficina supiera distinguir las cuentas): vuelve a leer la Bandeja («Traer lo nuevo») y se confirma sola.' : 'No sé desde qué cuenta es este mensaje, o esa cuenta ya no la ve Meta: vuelve a leer la Bandeja («Traer lo nuevo») o abre Analíticas → «Comprobar conexión». No se envía nada para no responder desde otra marca.'), { conflicto: true, cuentaDesconocida: true });
+  }
   async function responder(m, texto) {
     if (m.tipo === 'conversaciones') {
-      const cuenta = cuentaDe(m.cuentaId) || cuentas().find(c => c.red === m.red && (!m.paginaId || c.paginaId === m.paginaId));
+      const cuenta = cuentaDelMensaje(m);
       if (!cuenta?.paginaId) throw new Error('Meta ya no dice qué página tiene esa conversación: abre Analíticas → «Comprobar conexión».');
       if (!m.autorId) throw new Error('no se sabe a quién responder en esa conversación (Meta no dio el id del cliente)');
       const token = await meta.tokenDe(cuenta);
@@ -380,14 +405,14 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
       return { id: String(r?.message_id || r?.id || '') };
     }
     if (m.oculto) throw Object.assign(new Error('está oculto: vuélvelo a mostrar para responder'), { conflicto: true });
-    const cuenta = cuentaDe(m.cuentaId) || cuentas().find(c => c.red === m.red); if (!cuenta) throw new Error('Meta ya no dice qué cuenta tiene ese comentario: abre Analíticas → «Comprobar conexión».');
+    const cuenta = cuentaDelMensaje(m);
     const destino = m.padreRemoto || m.idRemoto, token = await meta.tokenDe(cuenta);
     let r; try { r = await meta.enviar(token, `/${encodeURIComponent(destino)}/${m.red === 'instagram' ? 'replies' : 'comments'}`, { campos: { message: texto } }); } catch (e) { throw new Error(mensajeMeta(e)); }
     return { id: String(r?.id || '') };
   }
   /** Ocultar o mostrar (nunca borrar): Instagram { hide }, Facebook { is_hidden }. */
   async function ocultar(m, si = true) {
-    const cuenta = cuentaDe(m.cuentaId) || cuentas().find(c => c.red === m.red); if (!cuenta) throw new Error('Meta ya no dice qué cuenta tiene ese comentario: abre Analíticas → «Comprobar conexión».');
+    const cuenta = cuentaDelMensaje(m);
     const token = await meta.tokenDe(cuenta);
     try { await meta.enviar(token, `/${encodeURIComponent(m.idRemoto)}`, { campos: m.red === 'instagram' ? { hide: si } : { is_hidden: si } }); } catch (e) { throw new Error(mensajeMeta(e)); }
     return true;
@@ -395,7 +420,9 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
 
   function estado() {
     const l = listo(), s = leer();
-    return { ok: l.ok, motivo: l.motivo, ultimaAt: s.ultimaAt || null, error: s.error || '', avisos: avisos(), anunciosInstagram: s.campoIG === false ? 'Meta no da la publicación de Instagram de los anuncios (effective_instagram_media_id): sus comentarios no llegan; se vuelve a probar en 7 días.' : '', mensajes: mensajesEstado(s) };
+    return { ok: l.ok, motivo: l.motivo, ultimaAt: s.ultimaAt || null, error: s.error || '', saltados: Number(s.saltados) || 0, avisos: avisos(), anunciosInstagram: s.campoIG === false ? 'Meta no da la publicación de Instagram de los anuncios (effective_instagram_media_id): sus comentarios no llegan; se vuelve a probar en 7 días.' : '', mensajes: mensajesEstado(s) };
   }
-  return { id: 'meta', configurado: () => Boolean(meta?.configurado?.()), uso: () => meta?.uso?.() || {}, listo, traer, responder, ocultar, estado, ocultable: true };
+  /** '' si se sabe desde qué cuenta se respondería u ocultaría; si no, el motivo (se mira ANTES de apuntar nada: no es un fallo del envío). */
+  const verificarCuenta = m => { try { cuentaDelMensaje(m); return ''; } catch (e) { return e.message; } };
+  return { id: 'meta', verificarCuenta, configurado: () => Boolean(meta?.configurado?.()), uso: () => meta?.uso?.() || {}, listo, traer, responder, ocultar, estado, ocultable: true };
 }

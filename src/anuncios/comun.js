@@ -1,6 +1,7 @@
 // Lo común de la vista ANUNCIOS (Fase A1): escapar, los formatos (dinero SIEMPRE con la moneda de la cuenta, %, cifras, fechas, «hace X»),
 // el tono de cada estado y del aprendizaje, y los iconos. Puro: lo usan la vista y tests/anuncios-vista.test.mjs.
 // Una cifra que no se sabe (null) se escribe «—», nunca 0.
+import { textoCuentas } from '../../anuncios/cuentas.mjs';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const nulo = v => v == null || v === '' || (typeof v === 'number' && !Number.isFinite(v)) || (typeof v === 'string' && !Number.isFinite(Number(v)));
@@ -96,6 +97,37 @@ export function aprendizajeDe(a) {
   return { texto: (a.texto || def) + extra, tono };
 }
 export const chip = (texto, tono = 'gris') => `<span class="anu-chip t-${tono}">${esc(texto)}</span>`;
+/**
+ * 2 nov 2026: LA CUENTA de un objeto (página de Facebook + su Instagram) como chip legible: «Facebook «X» + Instagram @y». Sin pista,
+ * «cuenta no identificada» (nunca se adivina). Las fotos de las cuentas no se pintan aquí: la fila ya es densa y lleva el nombre.
+ */
+export function cuentaChip(n) {
+  const l = n?.cuentas || [];
+  if (!l.length && !n?.cuentaTexto) return '';
+  return `<span class="anu-chip anu-cta t-${l.length ? 'azul' : 'gris'}" data-cuenta-chip title="La cuenta (página e Instagram) sobre la que corre">${esc(n.cuentaTexto || textoCuentas(l))}</span>`;
+}
+/** Las opciones del filtro «Cuenta»: Todas, cada marca con anuncios (con cuántos) y «cuenta no identificada» si la hay. */
+export function opcionesCuenta(d) {
+  const g = d?.porCuenta || [], out = [['todas', 'Todas las cuentas']];
+  for (const x of g) { const c = (x.cuentas || [])[0]; out.push([x.clave ? (c?.id || 'facebook:' + x.clave) : 'sin', `${x.texto} (${x.anuncios})`]); }
+  return out;
+}
+export function selectorCuentaHTML(d, actual = 'todas') {
+  const o = opcionesCuenta(d); if (o.length < 3) return ''; // con una sola cuenta no hay nada que filtrar
+  return `<label class="anu-sel"><span>Cuenta</span><select data-cuenta>${o.map(([k, n]) => `<option value="${esc(k)}"${k === actual ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>`;
+}
+/** El reparto del gasto y los resultados por cuenta (la cuenta publicitaria es una sola: aquí se ve de cuál página es cada anuncio). */
+export function porCuentaHTML(d, { cuenta = 'todas' } = {}) {
+  const g = d?.porCuenta || [], m = d?.cuenta?.moneda || 'USD';
+  if (!g.length || (g.length === 1 && g[0].clave && !(g[0].cuentas || []).length)) return '';
+  return `<section class="anu-sec" aria-labelledby="anuPcT" data-por-cuenta><h2 id="anuPcT">Por cuenta</h2>
+    <p class="anu-ayuda">La cuenta publicitaria es una sola; cada anuncio sale en una página y su Instagram. Un anuncio cuenta una vez, en su marca.</p>
+    <ul class="anu-tarjs">${g.map(x => { const c = x.cifras || {}, id = x.clave ? (x.cuentas?.[0]?.id || 'facebook:' + x.clave) : 'sin';
+      return `<li class="anu-tarj" data-pc="${esc(id)}"><h3><button type="button" class="anu-abrir" data-vercuenta="${esc(id)}"${cuenta === id ? ' aria-current="true"' : ''}>${esc(x.texto)}</button></h3>
+      <p class="anu-tobj">${x.anuncios} anuncio${x.anuncios === 1 ? '' : 's'} · ${x.campanas} campaña${x.campanas === 1 ? '' : 's'}${x.clave ? '' : ' · no se pudo saber de qué página son'}</p>
+      <dl class="anu-tcif"><div><dt>Gasto</dt><dd>${esc(dinero(x.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}${x.otrosObjetivos ? ' *' : ''}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div></dl>
+      ${x.otrosObjetivos ? '<p class="anu-ayuda">* Solo del objetivo con más gasto: esta cuenta tiene campañas de más de un tipo.</p>' : ''}</li>`; }).join('')}</ul></section>`;
+}
 /** «12 conversaciones» con el nombre del resultado; sin datos, «—». */
 export function resultados(c = {}) { const n = nro(c.resultados); if (n == null) return SIN; return c.resultadoTexto ? `${num(n)} ${c.resultadoTexto}` : num(n); }
 export function presupuesto(p, moneda) {
