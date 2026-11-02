@@ -5,6 +5,7 @@ import { esc } from '../ui.js';
 import { iconoRed } from '../../redes-iconos.js';
 import { conEstado } from '../../accion.js';
 import { mediaUrl } from '../../pieza-base.js';
+import { srcSeguro } from '../contenido-agenda-puro.js';
 import { AVISO_YA, motivoNoYa } from '../../contenido-ya.js'; // CON-04: «Publicar ahora»
 export { motivoNoYa };
 
@@ -29,14 +30,16 @@ export const horaTexto = h => (h ? h : 'sin hora');
 /** Los iconos de las redes de una pieza (los reales), con su nombre para el lector de pantalla. */
 export const redes = (lista = [], tam = 18) => `<span class="md-redes" role="img" aria-label="${esc(lista.map(r => NOMBRE_RED[r] || r).join(', '))}">${lista.map(r => iconoRed(r, { tam })).join('')}</span>`;
 
-/** Una miniatura cuadrada: la imagen de la galería, o la del video (un cuadro con ▶), o un hueco con el icono de la red. */
-export function miniatura(src, { clase = 'md-mini', alt = '' } = {}) {
-  if (!src) return `<span class="${clase} vacia" aria-hidden="true"></span>`;
-  const u = /^(https?:)?\/\/|^\//.test(String(src)) ? String(src) : mediaUrl(src);
+/** Una miniatura cuadrada: la imagen de la galería, o la del video (un cuadro con ▶), o un hueco. La dirección pasa por `srcSeguro`: solo claves del Estudio y rutas /media/ o /api/media/ de esta oficina; un http(s):// ajeno no se carga (`externa: true` lo permite para las fotos de Meta, solo https). */
+export function miniatura(src, { clase = 'md-mini', alt = '', externa = false } = {}) {
+  const u = srcSeguro(src, { externa });
   if (!u) return `<span class="${clase} vacia" aria-hidden="true"></span>`;
   if (/\.(mp4|webm|mov)(\?|$)/i.test(u)) return `<span class="${clase} video" aria-hidden="true"><video src="${esc(u)}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video><i>▶</i></span>`;
   return `<span class="${clase}"><img src="${esc(u)}" alt="${esc(alt)}" loading="lazy" decoding="async"></span>`;
 }
+
+/** Espera a que una hoja cerrada se haya ido de verdad (una hoja a la vez: dos que cambian a la vez se pisan en el historial). */
+export const esperarHoja = (h, ms = 1500) => new Promise(r => { const t0 = Date.now(); (function ver() { if (!h.capa || !h.capa.isConnected || Date.now() - t0 > ms) setTimeout(r, 40); else setTimeout(ver, 40); })(); });
 
 /** Un botón con estado (src/accion.js): `await con(b, () => api(...), { hecho: 'Listo' })`. Devuelve { ok, valor } | { ok:false, error }. */
 export const con = (b, fn, o = {}) => conEstado(b, fn, { ms: 900, ...o });
