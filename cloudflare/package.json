@@ -11,5 +11,5 @@
     "deploy": "wrangler deploy",
     "humo": "node scripts/prueba-viva.mjs"
   },
-  "devDependencies": { "wrangler": "^4.45.0" }
+  "devDependencies": { "wrangler": "^4.156.0" }
 }
