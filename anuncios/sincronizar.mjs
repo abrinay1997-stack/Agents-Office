@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { mensajeMeta } from '../contenido/meta.mjs';
 import { idCuenta } from './meta-ads.mjs';
-import { armarVista, fechaEn, horaEn, sumarDias, diasEntre, rangos, RANGOS, estadoTexto, cuentaEstado } from './modelo.mjs';
+import { armarVista, fechaEn, horaEn, sumarDias, diasEntre, rangos, RANGOS, estadoTexto, cuentaEstado, avisoCredito } from './modelo.mjs';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const DIAS_NOCHE = 37, DIAS_GUARDADOS = 60, HORA_NOCHE = 6;
@@ -102,8 +102,9 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
     if (st !== null && ce.nivel !== 'ok') una(`cuenta:${st}`, `📣 La cuenta publicitaria ${cuenta()} está: ${ce.texto.toLowerCase()}. Meta no entrega anuncios hasta que se arregle (Administrador de anuncios → Facturación).`, 'warn');
     const t = topes().diario, gh = v.gasto.hoy, dia = hoy();
     if (gh !== null && t !== null && (t > 0 ? gh > 0.9 * t : gh > 0)) una(`tope:${dia}`, `📣 El gasto de anuncios de hoy va en US$${gh.toFixed(2)}, más del 90 % del tope diario (US$${t.toFixed(2)}). Revisa Anuncios (J).`, 'warn');
+    const ac = avisoCredito(v.cuenta?.disponible, t, v.cuenta?.moneda); if (ac) una(`credito:${dia}`, `📣 ${ac}`, 'warn');
     // un anuncio que dejó de estar rechazado (o la cuenta que se arregló) se puede volver a avisar si recae; los topes de otros días se olvidan
-    for (const k of Object.keys(av)) if (!vivos.has(k) && (!k.startsWith('tope:') || k !== `tope:${dia}`)) delete av[k];
+    for (const k of Object.keys(av)) if (!vivos.has(k) && (!(k.startsWith('tope:') || k.startsWith('credito:')) || (k !== `tope:${dia}` && k !== `credito:${dia}`))) delete av[k];
     escribirJSON(F.avisados, av);
   }
 

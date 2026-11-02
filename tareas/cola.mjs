@@ -46,3 +46,41 @@ export function planear(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinP
   }
   return { arrancar, puestos };
 }
+
+// ---------------------------------------------------------------- por qué espera cada una (punto 17 de la auditoría de Anuncios)
+// «12 esperando; 0 en marcha» asustaba cuando casi todas eran del dueño, de personas o bloqueadas: la cola nunca las arranca, así que
+// no «esperan a la oficina». Esta función solo MIRA (usa planear tal cual, sin cambiar qué arranca) y dice en palabras por qué espera cada una.
+const RAZONES = ['persona', 'bloqueada', 'reintento', 'agente', 'oficina', 'presupuesto', 'llave', 'turno'];
+const REAL = ['reintento', 'agente', 'oficina', 'presupuesto', 'llave', 'turno']; // lo que SÍ espera a la oficina (persona y bloqueada, no)
+const FRASE = {
+  persona: n => `${n} ${n === 1 ? 'es tuya o de una persona' : 'son tuyas o de personas'} (la oficina no las arranca sola)`,
+  bloqueada: n => `${n} ${n === 1 ? 'espera' : 'esperan'} a que termine otra tarea de la que dependen`,
+  reintento: n => `${n} con reintento programado`,
+  agente: n => `${n} ${n === 1 ? 'espera' : 'esperan'} a que su agente termine lo que está haciendo`,
+  oficina: (n, o) => `${n} ${n === 1 ? 'espera' : 'esperan'} sitio (la oficina hace ${o.max} a la vez)`,
+  presupuesto: n => `${n} ${n === 1 ? 'parada' : 'paradas'} porque se acabó el presupuesto del mes`,
+  llave: n => `${n} sin poder arrancar: falta la llave de IA`,
+  turno: n => `${n} ${n === 1 ? 'arranca' : 'arrancan'} en el próximo minuto`,
+};
+/**
+ * → { total, razones: { persona, bloqueada, reintento, agente, oficina, presupuesto, llave, turno }, esperando (las que sí esperan a la
+ * oficina: todas menos persona y bloqueada), okPendiente (esperan tu OK), masViejaMs (de las que esperan a la oficina), texto }.
+ * `texto` es null si no hay nada en la lista.
+ */
+export function explicarCola(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinPresupuesto = false, sinLlave = false } = {}) {
+  const { puestos } = planear(tareas, { enVuelo, max, ahora, sinPresupuesto });
+  const razones = Object.fromEntries(RAZONES.map(r => [r, 0])); let masViejaMs = 0, total = 0;
+  for (const t of tareas) {
+    if (t.state !== 'next' || t.archived) continue;
+    const p = puestos[t.id]; if (!p) continue;
+    total++;
+    const why = sinLlave && p.why === 'turno' ? 'llave' : p.why;
+    razones[why]++;
+    if (REAL.includes(why)) masViejaMs = Math.max(masViejaMs, ahora - (t.addedAt || ahora));
+  }
+  const esperando = REAL.reduce((n, r) => n + razones[r], 0);
+  const okPendiente = tareas.filter(t => t.state === 'waiting' && !t.archived).length;
+  const partes = RAZONES.filter(r => razones[r]).map(r => FRASE[r](razones[r], { max }));
+  const texto = total || okPendiente ? [total ? `${total} en la lista${partes.length ? ': ' + partes.join('; ') : ''}` : '', okPendiente ? `${okPendiente} ${okPendiente === 1 ? 'espera' : 'esperan'} tu OK` : ''].filter(Boolean).join('. ') + '.' : null;
+  return { total, razones, esperando, okPendiente, masViejaMs, texto };
+}

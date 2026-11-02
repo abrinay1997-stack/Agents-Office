@@ -44,7 +44,7 @@ export const FIELDS = [
   { path: 'anuncios.pagina', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'la de Contenido', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id de la página de Facebook)', label: 'Página de Facebook de los anuncios', help: 'Vacío = la misma página que usa Contenido.' },
   { path: 'anuncios.instagram', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'el de la página', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id de la cuenta de Instagram de empresa)', label: 'Cuenta de Instagram de los anuncios', help: 'Vacío = la cuenta de Instagram unida a esa página.' },
   { path: 'anuncios.pixel', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'sin píxel', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id del píxel o conjunto de datos)', label: 'Píxel o conjunto de datos', help: 'Si vendes en una web (o quieres mandar a Meta las ventas de los mensajes con la API de conversiones: el conjunto de datos ligado a tu página). Sin píxel, las campañas van a mensajes, WhatsApp o visitas al perfil.' },
-  { path: 'anuncios.whatsapp', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'sin WhatsApp', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id del número de WhatsApp Business)', label: 'Número de WhatsApp Business', help: 'Para anuncios que abren WhatsApp. Tiene que estar vinculado a la página.' },
+  { path: 'anuncios.whatsapp', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: '50765310721', normalize: normalizarWhatsapp, check: revisarWhatsapp, pattern: /^\d{8,15}$/, patternHelp: 'el número con el código de país y sin signos, entre 8 y 15 dígitos (Panamá: 507 y los 8 dígitos, p. ej. 50765310721); puedes escribirlo con +, espacios o guiones', label: 'Número de WhatsApp Business', help: 'Para anuncios que abren WhatsApp. Solo sirve para saber que hay WhatsApp: a Meta no se le manda; el número del anuncio es el que está vinculado a la página en Meta (Administrador de WhatsApp). Cambiarlo aquí no cambia ningún anuncio.' },
   { path: 'anuncios.topeDiario', group: 'anuncios', type: 'number', label: 'Tope de gasto al día (US$)', min: 0, max: 100000, step: 1, default: 20, help: 'La suma de los presupuestos diarios activos más lo que se activa. Nada que lo pase se activa ni se sube. 0 = no se puede gastar.' },
   { path: 'anuncios.topeMensual', group: 'anuncios', type: 'number', label: 'Tope de gasto al mes (US$)', min: 0, max: 1000000, step: 1, default: 300, help: 'Lo gastado este mes más lo comprometido hasta fin de mes.' },
   { path: 'anuncios.topeCampana', group: 'anuncios', type: 'number', label: 'Tope por campaña (US$)', min: 0, max: 1000000, step: 1, default: 150, help: 'Cada campaña lo lleva también en Meta (spend_cap): aunque la oficina esté cerrada, Meta no gasta más.' },
@@ -77,6 +77,14 @@ export const FIELDS = [
   { path: 'quality.review.departments', group: 'calidad', type: 'depts', label: 'Departamentos que siempre pasan por su jefe' },
   { path: 'team.people', group: 'equipo', type: 'people', label: 'Personas del equipo', help: 'Para asignarles tareas, mencionarlas en comentarios y pasarles trabajo. El id de Telegram es opcional: si lo pones, les llegan sus avisos.' },
 ];
+/** Del número que escribe la persona («+507 6531-0721») deja solo los dígitos. */
+export function normalizarWhatsapp(s) { return String(s ?? '').replace(/[\s+\-().]/g, ''); }
+/** Con el código de país: un número de 8 dígitos (local de Panamá) o que empiece por 0 no lo lleva. → texto del error o null. */
+export function revisarWhatsapp(d) {
+  if (/^507/.test(d) && d.length !== 11) return 'los números de Panamá son 507 y 8 dígitos más (11 en total)';
+  if (d.length === 8 || /^0/.test(d)) return 'falta el código de país: para Panamá es 507 delante de los 8 dígitos (p. ej. 50765310721)';
+  return null;
+}
 export const get = (o, p) => p.split('.').reduce((x, k) => (x == null ? undefined : x[k]), o);
 export function set(o, p, v) { const ks = p.split('.'); let x = o; for (const k of ks.slice(0, -1)) { if (typeof x[k] !== 'object' || x[k] === null || Array.isArray(x[k])) x[k] = {}; x = x[k]; } x[ks.at(-1)] = v; return o; }
 
@@ -88,6 +96,7 @@ export function clean(f, v) {
       if (!s) return f.optional ? { value: '' } : { error: `${f.label}: no puede quedar vacío` };
       if (f.normalize) s = f.normalize(s);
       if (f.pattern && !f.pattern.test(s)) return { error: `${f.label}: ${f.patternHelp || 'no tiene el formato esperado'}` };
+      if (f.check) { const e = f.check(s); if (e) return { error: `${f.label}: ${e}` }; }
       return { value: s.slice(0, f.max || 200) };
     }
     case 'number': { const n = Number(v); if (!Number.isFinite(n)) return { error: `${f.label}: tiene que ser un número` }; if (n < f.min || n > f.max) return { error: `${f.label}: entre ${f.min} y ${f.max}` }; return { value: n }; }

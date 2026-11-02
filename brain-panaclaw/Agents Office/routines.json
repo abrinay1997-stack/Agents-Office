@@ -28,6 +28,19 @@
       },
       "needsOk": false,
       "paused": false
+    },
+    {
+      "id": "lectura-anuncios-diaria",
+      "dept": "marketing",
+      "agent": "ada",
+      "title": "Lectura diaria de anuncios: qué pausar, mantener o escalar",
+      "text": "Lectura diaria de los anuncios de Meta con la habilidad campanas-pagadas (lee antes su referencia meta-sistema-de-decisiones). Mira la cuenta (ver_cuenta_anuncios), las campañas y sus cifras de ayer y de 7 días (ver_campanas, ver_resultados_anuncios) y las sugerencias de la oficina (ver_sugerencias_anuncios). Deja un resumen corto, de unas 8 líneas: gasto de ayer contra el tope diario, resultados y costo por resultado, y avisos (rechazados, con problemas, cuenta). Termina con una tabla de decisión, una fila por anuncio o conjunto que importe: nombre · dato con su cifra · pausar, mantener o escalar · porqué. Un conjunto que aprende no se toca; con pocos datos, mantener. Si propones algo que la oficina no sugirió, déjalo con sugerir_mejora_anuncio. No cambias nada en Meta. Si Anuncios no está conectado, dilo en una línea y termina. Solo lectura.",
+      "when": {
+        "kind": "daily",
+        "at": "07:30"
+      },
+      "needsOk": false,
+      "paused": false
     }
   ]
 }

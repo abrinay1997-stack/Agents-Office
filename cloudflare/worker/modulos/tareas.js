@@ -23,7 +23,8 @@ import { planear } from '../../../tareas/cola.mjs';
 import { dia, DUENO } from '../../../tareas/dueno.mjs';
 import { normModel, normEffort } from '../../../src/models.js';
 import { valid as validWhen } from '../../../src/when.js';
-import { mutarDoc } from '../lib/almacen.js';
+import { mutarDoc, guardarFilas } from '../lib/almacen.js';
+import { equipoSemilla } from '../lib/semilla.js';
 import { skillsDe, leccionesDe } from '../lib/agentes/contexto.js';
 import { olvidarLeccion } from '../lib/agentes/lecciones.js';
 
@@ -193,6 +194,18 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     const enrutar = crearEnrutador({ env, agents: C.agents, depts: C.depts, nombre: C.nombre, fetchFn: env.__pruebas?.fetchIA });
     const r = await RT.crearRutina(db, { agents: C.agents, enrutar }, { dept: b.dept, text: b.text, when: when ?? undefined, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort, team: b.team === true });
     return json(r, r.error ? 400 : 200);
+  }
+  if (ruta === '/api/routines/fabrica') { // las rutinas de fábrica (semilla del despliegue) que esta oficina todavía no tiene: ver cuáles faltan y añadirlas SIN tocar ninguna que ya exista (a diferencia de «Restablecer oficina»)
+    if (usuario.rol !== 'admin') return prohibido('Solo un administrador añade las rutinas de fábrica.');
+    if (req.method !== 'GET' && req.method !== 'POST') return json({ error: 'GET o POST' }, 405);
+    const eq = await equipoSemilla(env), de = (eq?.routines?.routines || []).filter(r => r && typeof r === 'object' && /^[a-z0-9][a-z0-9-]{0,60}$/i.test(String(r.id)));
+    if (!de.length) return json({ error: 'Esta instalación no trae las rutinas de fábrica (la semilla se genera en cada despliegue).' }, 409);
+    const { routines: hay, crudas } = await RT.cargarRutinas(db, C.agents), ids = new Set([...hay.map(x => x.id), ...crudas.map(x => String(x?.id))]);
+    const faltan = de.filter(r => !ids.has(String(r.id))), buenas = [], malas = [];
+    for (const r of faltan) { const v = R.validate(r, C.agents, [...hay, ...buenas]); if (v.problems.length) malas.push({ id: r.id, problemas: v.problems }); else buenas.push(r); }
+    if (req.method === 'GET') return json({ faltan: faltan.map(r => ({ id: r.id, title: r.title, dept: r.dept, agent: r.agent, valida: !malas.some(x => x.id === r.id) })), yaEstaban: de.length - faltan.length });
+    const n = buenas.length ? await guardarFilas(db, RT.COLECCION, buenas.map((r, i) => ({ id: String(r.id), valor: r, orden: crudas.length + i })), { soloNuevas: true }) : 0;
+    return json({ ok: true, añadidas: buenas.slice(0, n).map(r => r.id), yaEstaban: de.length - faltan.length, invalidas: malas }, 200);
   }
   const m = ruta.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
   if (!m) return null;
