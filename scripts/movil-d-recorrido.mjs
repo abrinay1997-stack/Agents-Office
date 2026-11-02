@@ -52,6 +52,8 @@ export async function correr({ capturas = false } = {}) {
     const pCar = await crear({ titulo: 'Carrusel de la semana', texto: 'Tres ideas para tu mesa.', redes: ['instagram'], formato: 'carrusel', medios: [f1, f2, f3], fecha: dia(1), hora: '10:00', estado: 'borrador' });
     const pHis = await crear({ titulo: 'Historia del día', texto: 'Hoy abrimos temprano.', redes: ['instagram'], formato: 'historia', medios: [f3], fecha: dia(1), hora: '08:00', estado: 'borrador' });
     const pIdea = await crear({ titulo: 'Lanzamos la colección de verano con sorpresas', texto: '', redes: ['instagram'], formato: 'post', medios: [], fecha: dia(1), hora: '11:00', estado: 'idea' });
+    const pVieja = await crear({ titulo: 'Se quedó atrás', texto: 'Esta ya pasó de hora.', redes: ['instagram'], formato: 'post', medios: [], fecha: dia(-3), hora: '10:00', estado: 'revision' });
+    const pSinDia = await crear({ titulo: 'Idea para cuando haya día', texto: 'Sin fecha todavía.', redes: ['instagram'], formato: 'post', medios: [], estado: 'idea' });
     const pVideo = await crear({ titulo: 'Reel del taller', texto: 'Un día en el taller.', redes: ['instagram'], formato: 'reel', medios: [], fecha: dia(6), hora: '19:00', estado: 'borrador' });
 
     // ---- la Meta de mentira de la Bandeja (la oficina de prueba no tiene token) ----
@@ -96,7 +98,7 @@ export async function correr({ capturas = false } = {}) {
         for (const e of document.getElementById('mvRoot').querySelectorAll('button, [role="button"], input:not([type="hidden"]), select, textarea, summary, a[href]')) {
           if (!vis(e)) continue; const r = e.getBoundingClientRect();
           if (e.closest('.mv-tirar')) continue;
-          if (r.height < 43.5 || (r.width < 43.5 && !e.closest('.md-mes, .md-sem'))) malos.push(`${e.tagName.toLowerCase()}.${(e.className || '').toString().split(' ')[0]} ${Math.round(r.width)}×${Math.round(r.height)} «${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 22)}»`);
+          if (r.height < 43.5 || (r.width < 43.5 && !e.closest('.md-mes'))) malos.push(`${e.tagName.toLowerCase()}.${(e.className || '').toString().split(' ')[0]} ${Math.round(r.width)}×${Math.round(r.height)} «${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 22)}»`);
           if (/INPUT|TEXTAREA|SELECT/.test(e.tagName) && e.type !== 'checkbox' && parseFloat(getComputedStyle(e).fontSize) < 16) chicos.push(e.id || e.className);
           const n = (e.getAttribute('aria-label') || e.textContent || '').trim() || (e.id && document.querySelector(`label[for="${e.id}"]`)?.textContent.trim()) || e.getAttribute('placeholder'); if (!n) sinNombre.push(e.className || e.tagName);
         }
@@ -150,6 +152,16 @@ export async function correr({ capturas = false } = {}) {
     paso(hoyOk, 'Mes + lista: la celda del día es un botón de 44 px o más aunque la miniatura sea chica');
     await tocar(celdaCon); await espera(200);
     paso(await page.locator(`${V} .md-pz`).count() >= 1, 'Mes + lista: tocar un día abre su lista debajo');
+    // ---- rendimiento y regresiones del modo predeterminado
+    paso(await page.locator(`${V} .md-celda img`).count() <= 60, 'Mes + lista: nunca más de 60 imágenes en la cuadrícula');
+    paso(await page.locator(`${V} video`).count() === 0, 'Mes + lista: ningún <video> en la cuadrícula ni en las tarjetas (los videos son un recuadro con ▶)');
+    paso(/pieza ya pasó|piezas ya pasaron/.test(await page.locator(V).innerText()), 'Mes + lista: avisa de lo que ya pasó de hora sin salir (como el modo lista)');
+    paso(await page.locator(`${V} .mv-dia h3`, { hasText: 'Sin día' }).count() === 1 && /Idea para cuando haya día/.test(await page.locator(V).innerText()), 'Mes + lista: las piezas SIN FECHA siguen a la vista');
+    paso(await page.locator(`${V} .md-th-celda .md-th-e`).count() >= 4, 'Mes + lista: cada miniatura lleva también el glifo de su estado');
+    await page.locator(`${V} [data-dia]`).first().evaluate(c => { window.__celda0 = c; });
+    await tocar(`${V} .md-celda:has(.md-th) >> nth=1`);
+    paso(await page.evaluate(() => window.__celda0 === document.querySelector('[data-vista="contenido"] [data-dia]')), 'Tocar un día NO repinta el mes (las celdas son las mismas) y cambia la selección');
+    paso(await page.locator(`${V} [data-dia][aria-pressed="true"]`).count() === 1, 'Tocar un día deja exactamente una celda seleccionada');
     paso(await page.locator(`${V} .md-pz .md-th-lista img, ${V} .md-pz .md-th-lista .md-th-t`).count() >= 1, 'Agenda: las tarjetas usan la misma miniatura (imagen, o icono del formato con sus palabras)');
     await foto('agenda-miniaturas-mes-lista-claro'); await medir('Contenido · Mes + lista'); await anchos('Contenido · Mes + lista'); await axe('Contenido · Mes + lista');
     await oscuro(true); await foto('agenda-miniaturas-mes-lista-oscuro'); await oscuro(false);
@@ -162,9 +174,10 @@ export async function correr({ capturas = false } = {}) {
     paso(await page.locator(`${V} .md-pz .md-th-t small`).evaluateAll(ns => ns.some(n => /Lanzamos/.test(n.textContent))), 'Tarjeta: una idea sin archivo enseña el icono del formato y sus primeras palabras');
     // ---- Miniaturas: la cuadrícula sola; el día se abre en una hoja
     await tocar(`${V} [data-agv="miniaturas"]`);
-    paso(await page.locator(`${V} .md-pz`).count() === 0, 'Miniaturas: la lista NO va debajo');
+    paso(await page.locator(`${V} [data-lista]`).count() === 0, 'Miniaturas: la lista del día NO va debajo (solo las piezas sin día)');
     await tocar(`${V} [data-dia="${diaMuchas}"]`); await hojaAbierta();
     paso(await page.locator('.mv-hoja .md-pz').count() >= 4, 'Miniaturas: tocar un día abre una hoja con sus piezas');
+    paso(await page.locator('.mv-capa').count() === 1, 'Miniaturas: hay una sola hoja del día abierta');
     await foto('agenda-miniaturas-miniaturas-claro'); await medir('Contenido · hoja del día');
     await tocar('.mv-hoja .md-pz'); await espera(700); await hojaAbierta();
     paso(await page.locator('.mv-hoja [data-a="editar"]').count() === 1, 'Miniaturas: tocar una pieza de esa hoja abre la hoja de la pieza (una hoja a la vez)');

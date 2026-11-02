@@ -55,7 +55,6 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 .mv-fab[hidden] { display: none; }
 
 /* ---- la semana y el mes ---- */
-.md-semana { position: static; padding-left: 0; padding-right: 0; } .md-semana .mv-chip { flex-direction: column; justify-content: center; min-width: 56px; gap: 0; padding: 0 10px; } .md-semana .mv-chip b { margin-top: -2px; }
 .md-chips-p { position: static; padding-left: 0; padding-right: 0; }
 .md-mes { margin-left: -2px; margin-right: -2px; }
 @media (max-width: 340px) { .md-mes { margin-left: -10px; margin-right: -10px; } }
@@ -167,7 +166,7 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 .md-th-i img, .md-th-i video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .md-th-i.video i { position: absolute; right: 3px; bottom: 3px; font-style: normal; font-size: 11px; background: rgba(0,0,0,.66); color: #fff; border-radius: 6px; padding: 0 4px; }
 .md-th-i.vacia { background: var(--mv-surf2); }
-.md-th-v { display: grid; place-items: center; background: var(--mv-ink); color: var(--mv-bg); } .md-th-v i { font-style: normal; font-size: 11px; }
+.md-th-v { display: grid; place-items: center; background: var(--mv-ink); color: var(--mv-bg); } .md-th-v i { font-style: normal; font-size: 11px; } .md-th-lista .md-th-v i { font-size: 20px; }
 .md-th-t { display: block; } .md-th-t small { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 11px; line-height: 1.2; padding: 3px 4px 0; }
 .md-th.t-punteado { border-style: dashed; border-color: var(--mv-grey); } .md-th.e-borrador { border-color: var(--mv-ambar); }
 .md-th.t-raya { border-style: dotted; border-color: var(--mv-azul); }
@@ -179,6 +178,7 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 .md-th-semana .md-th-f { width: 14px; height: 14px; border-radius: 4px; } .md-th-semana .md-th-f .pz-fi { width: 10px; height: 10px; }
 .md-th-e { position: absolute; right: 2px; top: 2px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 3px; box-sizing: border-box; text-align: center; font-style: normal; font-size: 11px; font-weight: 800; border-radius: 8px; background: var(--mv-ink); color: var(--mv-bg); }
 .md-th-semana .md-th-e { min-width: 14px; height: 14px; line-height: 14px; padding: 0 1px; }
+.md-th-celda .md-th-e { right: 0; top: 0; min-width: 12px; height: 12px; line-height: 12px; padding: 0; font-size: 11px; border-radius: 0 3px 0 6px; }
 .md-th-n { position: absolute; right: 2px; bottom: 2px; font-size: 11px; font-weight: 800; line-height: 15px; padding: 0 4px; border-radius: 7px; background: rgba(0,0,0,.66); color: #fff; }
 .md-th-lista .md-th-n { right: auto; left: 2px; top: 2px; bottom: auto; }
 .md-cel .md-th-n { right: 4px; bottom: 4px; }
@@ -190,7 +190,7 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 .md-th-slot { flex: none; width: 68px; display: grid; place-items: center; }
 .md-celda.sel { background: var(--mv-surf2); box-shadow: inset 0 0 0 2px var(--mv-ink); } .md-celda.sel b { background: var(--mv-ink); color: var(--mv-bg); }
 .md-celda-g { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; padding: 0 2px; width: 100%; box-sizing: border-box; } .md-celda-g[data-n="1"] { grid-template-columns: 1fr; padding: 0 5px; }
-.md-sem { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-left: -2px; margin-right: -2px; }
+.md-sem { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); gap: 0; margin-left: -2px; margin-right: -2px; overflow-x: auto; overscroll-behavior-x: contain; } /* cada columna mide 44 px o más: si no caben, la fila se desplaza DENTRO de su caja, nunca la página */
 @media (max-width: 340px) { .md-sem { margin-left: -10px; margin-right: -10px; } }
 .md-sem-col { min-width: 0; min-height: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: 0; border-radius: 10px; background: none; color: inherit; }
 .md-sem-d { font-size: 12px; font-weight: 800; color: var(--mv-grey); } .md-sem-col b { font-size: 15px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }

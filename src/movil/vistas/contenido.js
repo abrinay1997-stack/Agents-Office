@@ -10,9 +10,9 @@ import { colaPorDia, requiereAccion, textoSalida, momentoDe, cuentaAtras } from 
 import { ESTADO, FORMATO, FICON } from '../../pieza-base.js';
 import { formatoDe, nombreFormato } from '../../contenido-reglas.js';
 import { mesGrid, cabeceraSemana } from '../agenda.js';
-import { VISTAS, LLAVE_VISTA, normalizarVista, miniaturaDe, estadoVisual, piezasPorDia, resumenDia, diasDeSemana, frasePiezas, formatoPieza, LEYENDA, MAX_COLUMNA } from '../contenido-agenda-puro.js';
+import { VISTAS, LLAVE_VISTA, normalizarVista, miniaturaDe, estadoVisual, piezasPorDia, resumenDia, diasDeSemana, frasePiezas, formatoPieza, planMes, LEYENDA, MAX_COLUMNA } from '../contenido-agenda-puro.js';
 import { esc, svg, vacio, esqueleto, falla } from '../ui.js';
-import { redes, miniatura, con, diaTexto, diaLargo, hoyYmd, sumaDias, aprobarPieza, publicarAhora, motivoNoYa, resumenSalida, motivo, NOMBRE_RED } from './d-comun.js';
+import { redes, miniatura, con, diaTexto, diaLargo, hoyYmd, sumaDias, aprobarPieza, publicarAhora, motivoNoYa, resumenSalida, motivo, esperarHoja, NOMBRE_RED } from './d-comun.js';
 import { montarBandeja } from './bandeja.js';
 
 const TABS = [['agenda', 'Agenda'], ['cola', 'Cola'], ['bandeja', 'Bandeja'], ['perfil', 'Perfil']];
@@ -27,12 +27,12 @@ const guardarVista = v => { try { localStorage.setItem(LLAVE_VISTA, v); } catch 
 
 /** La miniatura de una pieza: su archivo (o, sin archivo, el icono del formato y sus primeras palabras), con el borde de su estado, el glifo del formato y —en grande— el glifo del estado y el «1/N» de un carrusel. `modo`: celda (mes) · semana · lista · perfil. */
 function thumb(p, modo = 'lista') {
-  const m = miniaturaDe(p), ev = estadoVisual(p, textoSalida(p)), chica = modo === 'celda' || modo === 'semana';
+  const m = miniaturaDe(p), ev = estadoVisual(p, textoSalida(p));
   const fi = FICON[m.formato] || FICON.post;
   const dentro = m.tipo === 'imagen' ? miniatura(m.src, { clase: 'md-th-i' })
-    : m.tipo === 'video' ? (modo === 'celda' ? '<span class="md-th-i md-th-v" aria-hidden="true"><i>▶</i></span>' : miniatura(m.src, { clase: 'md-th-i' }))
+    : m.tipo === 'video' ? '<span class="md-th-i md-th-v" aria-hidden="true"><i>▶</i></span>' // un recuadro con ▶: ningún <video> en cuadrículas ni tarjetas (el primer cuadro solo se ve en la hoja de la pieza)
       : `<span class="md-th-i md-th-t" aria-hidden="true">${modo === 'lista' ? `<small>${esc(m.texto)}</small>` : ''}</span>`;
-  return `<span class="md-th md-th-${modo} t-${ev.trazo} e-${ev.clave} r-${m.ratio.replace(':', 'x')}" data-e="${ev.clave}" data-formato="${esc(m.formato)}">${dentro}<span class="md-th-f" aria-hidden="true">${fi}</span>${modo === 'celda' ? '' : `<span class="md-th-e" aria-hidden="true">${ev.glifo}</span>`}${m.indicador && modo === 'lista' ? `<span class="md-th-n" aria-hidden="true">${esc(m.indicador)}</span>` : ''}</span>`;
+  return `<span class="md-th md-th-${modo} t-${ev.trazo} e-${ev.clave} r-${m.ratio.replace(':', 'x')}" data-e="${ev.clave}" data-formato="${esc(m.formato)}">${dentro}<span class="md-th-f" aria-hidden="true">${fi}</span><span class="md-th-e" aria-hidden="true">${ev.glifo}</span>${m.indicador && modo === 'lista' ? `<span class="md-th-n" aria-hidden="true">${esc(m.indicador)}</span>` : ''}</span>`;
 }
 const leyenda = () => `<p class="md-ley" aria-label="Qué significa cada marca">${LEYENDA.map(([g, n]) => `<span><b aria-hidden="true">${g}</b>${n}</span>`).join('')}</p>`;
 const formatosTxt = p => { const set = new Set((p.redes || []).map(r => nombreFormato(r, formatoDe(p, r)))); return [...set].join(' · '); };
@@ -60,7 +60,9 @@ export function registrar(shell) {
           const nC = el.querySelector('[data-n="cola"]'); nC.textContent = sinOk; nC.hidden = !sinOk;
         } catch (e) { E.error = motivo(e); }
         pintar();
+        if (hojaDia?.capa?.isConnected) hojaDia.cuerpo.innerHTML = cuerpoDia(diaDeHoja); // con la hoja del día abierta, que no se quede con datos viejos
       }
+      let hojaDia = null, diaDeHoja = '';
       const porId = id => E.piezas.find(p => p.id === id);
 
       // ---------------------------------------------------------------- tarjetas
@@ -79,44 +81,54 @@ export function registrar(shell) {
       // ---------------------------------------------------------------- AGENDA
       function dias(rango) { const m = new Map(); for (const p of E.piezas.filter(rango)) { if (!m.has(p.fecha)) m.set(p.fecha, []); m.get(p.fecha).push(p); } for (const v of m.values()) v.sort((a, b) => (a.hora || '').localeCompare(b.hora || '')); return m; }
       const listaDelDia = f => { const del = (piezasPorDia(E.piezas).get(f) || []); return `<h3 class="mv-gh">${esc(diaTexto(f))} <span>${del.length}</span></h3>${del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>`}`; };
+      const bloqueLista = f => `<div class="md-dia-lista" data-lista>${listaDelDia(f)}</div>`; // tocar un día cambia solo esto (seleccionarDia), no repinta el mes
+      // Lo que NO está en el calendario y no debe perderse de vista en ningún modo: lo aprobado que ya pasó de hora sin salir, y las piezas sin día.
+      const vencidasHTML = () => { const hoy = hoyYmd(), atras = E.piezas.filter(p => p.fecha && p.fecha < hoy && !['publicada'].includes(p.salida?.estado) && (p.estado === 'aprobada' || p.estado === 'revision')).length; return atras ? `<p class="md-aviso rojo">${atras} ${atras === 1 ? 'pieza ya pasó' : 'piezas ya pasaron'} de hora sin salir. <button type="button" class="mv-link" data-tab-ir="cola">Verlas</button></p>` : ''; };
+      const sinFechaHTML = () => { const sf = E.piezas.filter(p => !p.fecha); return sf.length ? `<section class="mv-dia"><h3>Sin día<small>${sf.length}</small></h3><ul class="md-lista">${sf.map(p => tarjeta(p, { hora: false })).join('')}</ul></section>` : ''; };
       function pintarAgenda() {
         const seg = `<div class="mv-seg md-vistas" role="group" aria-label="Cómo ver la agenda">${VISTAS.map(([k, n]) => `<button type="button" data-agv="${k}" aria-pressed="${E.vista === k}">${n}</button>`).join('')}</div>`;
         const modoTxt = E.ajustes.modo === 'simulacro' ? '<p class="md-aviso">Modo simulacro: lo aprobado no se publica de verdad.</p>' : E.ajustes.modo === 'apagado' ? '<p class="md-aviso">La publicación está apagada: lo aprobado no sale.</p>' : '';
-        if (E.vista === 'puntos') return seg + modoTxt + pintarMes({ miniaturas: false, lista: true });
-        if (E.vista === 'miniaturas') return seg + modoTxt + pintarMes({ miniaturas: true, lista: false });
-        if (E.vista === 'mes-lista') return seg + modoTxt + pintarMes({ miniaturas: true, lista: true });
-        if (E.vista === 'semana') return seg + modoTxt + pintarSemana();
+        const cab = seg + modoTxt + vencidasHTML();
+        if (E.vista === 'puntos') return cab + pintarMes({ miniaturas: false, lista: true }) + sinFechaHTML();
+        if (E.vista === 'miniaturas') return cab + pintarMes({ miniaturas: true, lista: false }) + sinFechaHTML();
+        if (E.vista === 'mes-lista') return cab + pintarMes({ miniaturas: true, lista: true }) + sinFechaHTML();
+        if (E.vista === 'semana') return cab + pintarSemana() + sinFechaHTML();
         const hoy = hoyYmd(), fin = sumaDias(hoy, 45), m = dias(p => p.fecha && p.fecha >= hoy && p.fecha <= fin);
-        const sinFecha = E.piezas.filter(p => !p.fecha);
         const lista = [...m.keys()].sort();
         if (!m.has(hoy)) lista.unshift(hoy);
         const html = lista.map(f => { const l = m.get(f) || []; return `<section class="mv-dia${f === hoy ? ' hoy' : ''}"><h3>${esc(diaTexto(f))}<small>${esc(diaLargo(f))}</small></h3>${l.length ? `<ul class="md-lista">${l.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada programado. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>`}</section>`; }).join('');
-        const sf = sinFecha.length ? `<section class="mv-dia"><h3>Sin día<small>${sinFecha.length}</small></h3><ul class="md-lista">${sinFecha.map(p => tarjeta(p, { hora: false })).join('')}</ul></section>` : '';
-        const atras = E.piezas.filter(p => p.fecha && p.fecha < hoy && !['publicada'].includes(p.salida?.estado) && (p.estado === 'aprobada' || p.estado === 'revision')).length;
-        const vencidas = atras ? `<p class="md-aviso rojo">${atras} ${atras === 1 ? 'pieza ya pasó' : 'piezas ya pasaron'} de hora sin salir. <button type="button" class="mv-link" data-tab-ir="cola">Verlas</button></p>` : '';
-        return seg + modoTxt + vencidas + (E.piezas.length ? html + sf : vacio('Todavía no hay piezas', 'Crea la primera publicación con el botón «+».', { icono: 'contenido', boton: 'Crear publicación', accion: 'data-nueva-dia=""' }));
+        return cab + (E.piezas.length ? html + sinFechaHTML() : vacio('Todavía no hay piezas', 'Crea la primera publicación con el botón «+».', { icono: 'contenido', boton: 'Crear publicación', accion: 'data-nueva-dia=""' }));
       }
       // SEMANA: siete columnas; cada una es UN botón (el día) con sus miniaturas apiladas, más grandes que en el mes. La lista del día elegido va debajo.
       function pintarSemana() {
         const dd = diasDeSemana(E.diaSel), porDia = piezasPorDia(E.piezas), hoy = hoyYmd();
         return `<div class="mv-mes-cab"><button type="button" class="mv-ic" data-sem="-1" aria-label="Semana anterior">${svg('izq')}</button><h3>${esc(diaLargo(dd[0]).replace(/^\w+ /, ''))} – ${esc(diaLargo(dd[6]).replace(/^\w+ /, ''))}</h3><button type="button" class="mv-ic" data-sem="1" aria-label="Semana siguiente">${svg('der')}</button></div>
           <div class="md-sem" role="group" aria-label="Días de la semana">${dd.map((f, i) => { const ps = porDia.get(f) || [], r = resumenDia(ps, MAX_COLUMNA); return `<button type="button" class="md-sem-col${f === E.diaSel ? ' sel' : ''}${f === hoy ? ' hoy' : ''}" data-dia="${f}" aria-pressed="${f === E.diaSel}" aria-label="${esc(diaLargo(f))}${ps.length ? ', ' + esc(frasePiezas(ps, p => estadoVisual(p, textoSalida(p)))) : ', sin piezas'}"><span class="md-sem-d">${cabeceraSemana[i]}</span><b>${+f.slice(8)}</b><span class="md-sem-g" aria-hidden="true">${r.mostrar.map(p => thumb(p, 'semana')).join('')}${r.mas ? `<span class="md-mas">+${r.mas}</span>` : ''}</span></button>`; }).join('')}</div>
-          ${leyenda()}${listaDelDia(E.diaSel)}`;
+          ${leyenda()}${bloqueLista(E.diaSel)}`;
       }
-      // MES: la cuadrícula con PUNTOS (como antes) o con MINIATURAS (hasta 3 por día y «+N»); la lista del día elegido, debajo o —en «Miniaturas»— en una hoja al tocar el día.
+      // MES: la cuadrícula con PUNTOS (como antes) o con MINIATURAS (hasta 3 por día y «+N»; con muchas imágenes en el mes, una por día: `planMes`); la lista del día elegido, debajo o —en «Miniaturas»— en una hoja al tocar el día.
       function pintarMes({ miniaturas, lista }) {
         const porDia = piezasPorDia(E.piezas), evs = E.piezas.filter(p => p.fecha).map(p => ({ at: momentoDe(p) ?? new Date(`${p.fecha}T12:00`).getTime(), tipo: 'p' })), m = mesGrid(E.ancla, evs), hoy = hoyYmd();
+        const plan = miniaturas ? planMes(m.semanas.flat().map(c => c.dia), porDia) : null;
         const celda = c => {
-          const ps = porDia.get(c.dia) || [], r = resumenDia(ps), frase = ps.length ? ', ' + frasePiezas(ps, p => estadoVisual(p, textoSalida(p))) : '';
+          const ps = porDia.get(c.dia) || [], r = plan?.get(c.dia), frase = ps.length ? ', ' + frasePiezas(ps, p => estadoVisual(p, textoSalida(p))) : '';
           const g = !ps.length ? '' : miniaturas
-            ? `<span class="md-celda-g" data-n="${Math.min(ps.length, 4)}" aria-hidden="true">${r.mostrar.map(p => thumb(p, 'celda')).join('')}${r.mas ? `<span class="md-mas">+${r.mas}</span>` : ''}</span>`
+            ? `<span class="md-celda-g" data-n="${Math.min(r.mostrar.length + (r.mas ? 1 : 0), 4)}" aria-hidden="true">${r.mostrar.map(p => thumb(p, 'celda')).join('')}${r.mas ? `<span class="md-mas">+${r.mas}</span>` : ''}</span>`
             : `<i>${'<u></u>'.repeat(Math.min(3, ps.length))}</i>`;
           return `<button type="button" role="gridcell" class="mv-celda${miniaturas ? (ps.length ? ' md-celda' : ' md-celda sin') : ''}${c.delMes ? '' : ' fuera'}${c.dia === E.diaSel ? ' sel' : ''}${c.dia === hoy ? ' hoy' : ''}" data-dia="${c.dia}" aria-label="${esc(diaLargo(c.dia))}${esc(frase)}" aria-pressed="${c.dia === E.diaSel}"><b>${c.num}</b>${g}</button>`;
         };
         return `<div class="mv-mes-cab"><button type="button" class="mv-ic" data-mes="-1" aria-label="Mes anterior">${svg('izq')}</button><h3>${esc(m.titulo)}</h3><button type="button" class="mv-ic" data-mes="1" aria-label="Mes siguiente">${svg('der')}</button></div>
           <div class="mv-mes md-mes" role="grid" aria-label="${esc(m.titulo)}"><div class="mv-mes-sem" role="row">${cabeceraSemana.map(c => `<span role="columnheader">${c}</span>`).join('')}</div>
           ${m.semanas.map(w => `<div class="mv-mes-fila" role="row">${w.map(celda).join('')}</div>`).join('')}</div>
-          ${miniaturas ? leyenda() : ''}${lista ? listaDelDia(E.diaSel) : '<p class="mv-intro">Toca un día para ver sus piezas.</p>'}`;
+          ${miniaturas ? leyenda() : ''}${lista ? bloqueLista(E.diaSel) : '<p class="mv-intro">Toca un día para ver sus piezas.</p>'}`;
+      }
+      // Tocar un día NO repinta el mes: cambia la marca de selección y la lista de abajo.
+      function seleccionarDia(f) {
+        E.diaSel = f;
+        const botones = [...cuerpo.querySelectorAll('[data-dia]')];
+        if (!botones.some(b => b.dataset.dia === f)) return pintar();
+        for (const b of botones) { const on = b.dataset.dia === f; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', String(on)); }
+        const l = cuerpo.querySelector('[data-lista]'); if (l) l.innerHTML = listaDelDia(f);
       }
 
       // ---------------------------------------------------------------- COLA (Programación)
@@ -155,7 +167,7 @@ export function registrar(shell) {
         const pub = ig.filter(p => p.fecha < hoy).sort((a, b) => (momentoDe(b) || 0) - (momentoDe(a) || 0));
         const sueltas = (E.publicadas || []).filter(x => x.red === 'instagram');
         const celda = (p, programada) => `<button type="button" class="md-cel${programada ? ' prog' : ''}" data-pz="${esc(p.id)}" aria-label="${esc(titulo(p))}, ${esc(programada ? 'programada para ' + diaTexto(p.fecha) : 'del ' + diaTexto(p.fecha))}">${miniatura(p.medios[0], { clase: 'md-cel-i' })}${programada ? `<i class="md-cel-p">${esc(diaTexto(p.fecha))}</i>` : ''}<span class="md-th-f" aria-hidden="true">${FICON[formatoPieza(p)] || FICON.post}</span>${p.medios.length > 1 ? `<span class="md-th-n" aria-hidden="true">1/${p.medios.length}</span>` : ''}</button>`;
-        const celdaFuera = x => `<a class="md-cel" href="${esc(x.enlace || '#')}" target="_blank" rel="noopener noreferrer" aria-label="Publicada fuera de la oficina">${miniatura(x.miniatura, { clase: 'md-cel-i' })}<i class="md-cel-t" aria-hidden="true">↗</i></a>`;
+        const celdaFuera = x => `<a class="md-cel" href="${esc(x.enlace || '#')}" target="_blank" rel="noopener noreferrer" aria-label="Publicada fuera de la oficina">${miniatura(x.miniatura, { externa: true, clase: 'md-cel-i' })}<i class="md-cel-t" aria-hidden="true">↗</i></a>`;
         if (!prog.length && !pub.length && !sueltas.length) return vacio('Tu cuadrícula está vacía', 'Aquí verás cómo se verá tu Instagram: lo programado encima de lo ya publicado. Crea una pieza con imagen o video.', { icono: 'contenido', boton: 'Crear publicación', accion: 'data-nueva-dia=""' });
         return `<p class="mv-intro">Así se ve tu Instagram. Lo programado va marcado con su día; toca una pieza para verla o cambiarla.</p>
           <div class="md-grid">${prog.map(p => celda(p, true)).join('')}${pub.map(p => celda(p, false)).join('')}${sueltas.slice(0, 18).map(celdaFuera).join('')}</div>`;
@@ -201,14 +213,18 @@ export function registrar(shell) {
         });
         return h;
       }
-      // «Miniaturas» no pone la lista debajo: el día se abre en una hoja. Tocar una pieza cierra esta hoja y abre la de la pieza (una hoja a la vez).
+      // «Miniaturas» no pone la lista debajo: el día se abre en una hoja. Tocar una pieza cierra esta hoja, ESPERA a que se haya ido y abre la de la pieza (una hoja a la vez).
+      const cuerpoDia = f => { const del = piezasPorDia(E.piezas).get(f) || []; return del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>`; };
       function abrirDia(f) {
-        const del = piezasPorDia(E.piezas).get(f) || [];
-        const h = ctx.hoja({ titulo: `${diaTexto(f)} · ${diaLargo(f)}`, lleno: true, clase: 'md-hoja-dia', cuerpo: del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>` });
-        h.cuerpo.addEventListener('click', e => {
-          const t = e.target.closest('button'); if (!t) return;
-          if (t.hasAttribute('data-nueva-dia')) { h.cerrar(); setTimeout(() => ctx.navegar('crear', { fecha: t.dataset.nuevaDia || '' }), 200); return; }
-          const pz = t.closest('[data-pz]'); const p = pz && porId(pz.dataset.pz); if (p) { h.cerrar(); setTimeout(() => abrirPieza(p), 250); }
+        if (hojaDia?.capa?.isConnected) return hojaDia; // un doble toque no abre dos hojas del día
+        diaDeHoja = f;
+        const h = hojaDia = ctx.hoja({ titulo: `${diaTexto(f)} · ${diaLargo(f)}`, lleno: true, clase: 'md-hoja-dia', cuerpo: cuerpoDia(f) });
+        h.cuerpo.addEventListener('click', async e => {
+          const t = e.target.closest('button'); if (!t || h.pasando) return;
+          const pz = t.closest('[data-pz]'), p = pz && porId(pz.dataset.pz);
+          if (!t.hasAttribute('data-nueva-dia') && !p) return;
+          h.pasando = true; h.cerrar(); await esperarHoja(h);
+          if (t.hasAttribute('data-nueva-dia')) ctx.navegar('crear', { fecha: t.dataset.nuevaDia || '' }); else abrirPieza(porId(p.id) || p);
         });
         return h;
       }
@@ -249,10 +265,10 @@ export function registrar(shell) {
         const t = e.target.closest('button, a'); if (!t) return;
         if (t.matches('[data-reintentar]')) return cargar();
         if (t.dataset.tabIr) { E.tab = t.dataset.tabIr; return pintar(); }
-        if (t.dataset.agv) { E.vista = normalizarVista(t.dataset.agv); guardarVista(E.vista); return pintar(); }
+        if (t.dataset.agv) { E.vista = normalizarVista(t.dataset.agv); guardarVista(E.vista); E.ancla = new Date(`${E.diaSel}T12:00:00`).getTime(); return pintar(); } // el mes de la cuadrícula siempre contiene el día elegido
         if (t.dataset.mes) { const d = new Date(E.ancla); d.setMonth(d.getMonth() + +t.dataset.mes, 1); E.ancla = d.getTime(); E.diaSel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; return pintar(); }
-        if (t.dataset.sem) { E.diaSel = sumaDias(E.diaSel, 7 * +t.dataset.sem); return pintar(); }
-        if (t.dataset.dia) { E.diaSel = t.dataset.dia; pintar(); if (E.vista === 'miniaturas') abrirDia(E.diaSel); return; }
+        if (t.dataset.sem) { E.diaSel = sumaDias(E.diaSel, 7 * +t.dataset.sem); E.ancla = new Date(`${E.diaSel}T12:00:00`).getTime(); return pintar(); }
+        if (t.dataset.dia) { seleccionarDia(t.dataset.dia); if (E.vista === 'miniaturas') abrirDia(E.diaSel); return; }
         if (t.hasAttribute('data-nueva-dia')) return ctx.navegar('crear', { fecha: t.dataset.nuevaDia || '' });
         if (t.hasAttribute('data-seleccionar')) { E.seleccionando = !E.seleccionando; E.sel.clear(); return pintar(); }
         if (t.dataset.sal) { const r = await con(t, () => (t.dataset.sal === 'quitar' ? ctx.confirmar({ titulo: '¿Quitarla de la cola?', texto: 'No saldrá en las redes. La pieza se queda como la dejaste.', ok: 'Quitar de la cola' }).then(si => { if (!si) throw new Error('Cancelado'); return accionSalida('quitar', t.dataset.id); }) : accionSalida(t.dataset.sal, t.dataset.id)), { hecho: 'Hecho' }); if (r.ok) await cargar({ silencioso: true }); return; }

@@ -90,10 +90,61 @@ export function diasDeSemana(dia) {
   return [...Array(7)].map((_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return ymdDe(x); });
 }
 
-/** La frase que lee un lector de pantalla de una celda: el día, cuántas piezas y de qué estado ('3 piezas: 1 aprobada, 2 borradores'). */
+/** El nombre de un estado según cuántas piezas hay: «1 aprobada», «2 borradores», «3 a revisar», «2 fallaron». */
+const PLURAL = { 'idea': 'ideas', 'borrador': 'borradores', 'a revisar': 'a revisar', 'aprobada': 'aprobadas', 'programada': 'programadas', 'publicada': 'publicadas', 'falló': 'fallaron' };
+export const nombreN = (nombre, n) => { const b = String(nombre || '').toLowerCase(); return n === 1 ? b : (PLURAL[b] || b); };
+
+/** La frase que lee un lector de pantalla de una celda: cuántas piezas y de qué estado («3 piezas: 2 borradores, 1 aprobada»). */
 export function frasePiezas(piezas = [], estadoDe = p => estadoVisual(p)) {
   if (!piezas.length) return '';
   const cuenta = new Map();
   for (const p of piezas) { const e = estadoDe(p).nombre.toLowerCase(); cuenta.set(e, (cuenta.get(e) || 0) + 1); }
-  return `${piezas.length} ${piezas.length === 1 ? 'pieza' : 'piezas'}: ${[...cuenta].map(([e, c]) => `${c} ${e}`).join(', ')}`;
+  return `${piezas.length} ${piezas.length === 1 ? 'pieza' : 'piezas'}: ${[...cuenta].map(([e, c]) => `${c} ${nombreN(e, c)}`).join(', ')}`;
+}
+
+/** Cuántas imágenes caben a la vez en la cuadrícula de un mes: con más de UMBRAL_IMG en pantalla, una sola por celda (y el «+N» dice cuántas más hay, que se ven en la lista). */
+export const UMBRAL_IMG = 40;
+export const TOPE_IMG = 60;
+/**
+ * Qué enseña cada celda del mes. `dias` son los días de la cuadrícula; `porDia` sale de piezasPorDia.
+ * Nunca más de TOPE_IMG imágenes (<img>) en total: lo que no cabe se cuenta en el «+N».
+ * @returns {Map<string, { mostrar: object[], mas: number, n: number }>}
+ */
+export function planMes(dias = [], porDia = new Map()) {
+  const conImg = ps => ps.slice(0, MAX_CELDA).filter(p => miniaturaDe(p).tipo === 'imagen').length;
+  const total = dias.reduce((a, d) => a + conImg(porDia.get(d) || []), 0);
+  const max = total > UMBRAL_IMG ? 1 : MAX_CELDA, out = new Map();
+  let imgs = 0;
+  for (const d of dias) {
+    const ps = porDia.get(d) || []; if (!ps.length) continue;
+    const mostrar = [];
+    for (const p of ps) {
+      if (mostrar.length >= max) break;
+      if (miniaturaDe(p).tipo === 'imagen') { if (imgs >= TOPE_IMG) continue; imgs++; }
+      mostrar.push(p);
+    }
+    out.set(d, { mostrar, mas: ps.length - mostrar.length, n: ps.length });
+  }
+  return out;
+}
+
+/**
+ * La dirección de una miniatura, o null si no es de fiar. Solo se acepta lo que sirve esta misma oficina: una clave del Estudio (→ /media/…) o una ruta
+ * /media/… o /api/media/… del mismo origen. Cualquier otro http(s):// (o //host) NO se carga: la miniatura cae en el recuadro con icono.
+ * `externa: true` (las miniaturas de Meta de Anuncios y Analíticas) admite además https://.
+ */
+/** Las rutas de esta oficina que sirven imágenes: la galería del Estudio y la copia local de las miniaturas de Analíticas. */
+const RUTA_PROPIA = /^\/(?:media\/|api\/media\/|api\/contenido\/miniatura\/)/;
+export function srcSeguro(src, { origen = typeof location !== 'undefined' ? location.origin : '', externa = false } = {}) {
+  if (typeof src !== 'string' || !src.trim()) return null;
+  const t = src.trim();
+  if (/^\/\//.test(t) || /^[a-z][a-z0-9+.-]*:/i.test(t)) {
+    let u; try { u = new URL(t, origen || undefined); } catch { return null; }
+    if (origen && u.origin === origen && RUTA_PROPIA.test(u.pathname)) return u.pathname + u.search;
+    if (externa && u.protocol === 'https:') return u.href;
+    return null;
+  }
+  if (t.startsWith('/')) { let u; try { u = new URL(t, 'http://x'); } catch { return null; } return RUTA_PROPIA.test(u.pathname) ? u.pathname + u.search : null; }
+  if (t.startsWith('demo/') || t.split('/').includes('..')) return null;
+  return '/media/' + t.split('/').map(encodeURIComponent).join('/');
 }
