@@ -27,7 +27,7 @@ export const CAMPOS = {
   anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
   creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
   // las cifras diarias por anuncio (plan §5 A1). `purchase_roas` solo tiene sentido con píxel: se añade si hay uno en Ajustes.
-  cifras: 'ad_id,adset_id,campaign_id,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,ctr,cpc,cpm,actions,cost_per_action_type',
+  cifras: 'ad_id,adset_id,campaign_id,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,inline_link_click_ctr,cost_per_inline_link_click,ctr,cpc,cpm,actions,cost_per_action_type',
   alcance: 'campaign_id,adset_id,ad_id,reach,impressions,frequency',
 };
 export const NIVELES_ALCANCE = ['account', 'campaign', 'adset', 'ad'];

@@ -26,15 +26,15 @@ export function contraTope(gastado, tope) {
   const p = g / t * 100; return { pct: p, tono: p >= 100 ? 'rojo' : p >= 90 ? 'ambar' : 'verde' };
 }
 /** La tendencia en % contra el periodo anterior (12 = sube un 12 %). null → «sin con qué comparar». */
-export function tendencia(v, mejorSube = true) {
+export function tendencia(v, mejorSube = true, motivo = null) {
   const n = nro(v);
-  if (n == null) return { texto: 'sin con qué comparar', tono: 'gris', flecha: '' };
+  if (n == null) return { texto: motivo || 'sin con qué comparar', tono: 'gris', flecha: '' };
   if (Math.abs(n) < 0.05) return { texto: 'igual que antes', tono: 'gris', flecha: '=' };
   const sube = n > 0, bien = sube === mejorSube;
   return { texto: `${sube ? 'sube' : 'baja'} ${Math.abs(n).toLocaleString('es', { maximumFractionDigits: 1 })} %`, tono: bien ? 'verde' : 'rojo', flecha: sube ? '▲' : '▼' };
 }
-export function tendenciaHTML(v, mejorSube = true) {
-  const t = tendencia(v, mejorSube);
+export function tendenciaHTML(v, mejorSube = true, motivo = null) {
+  const t = tendencia(v, mejorSube, motivo);
   return `<span class="anu-tend t-${t.tono}">${t.flecha ? `<span aria-hidden="true">${t.flecha}</span> ` : ''}${esc(t.texto)}</span>`;
 }
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -45,6 +45,20 @@ export function fechaCorta(v, vacio = SIN, ahora = Date.now()) {
   if (Number.isNaN(d.getTime())) return vacio;
   return `${d.getDate()} ${MES[d.getMonth()]}${d.getFullYear() !== new Date(ahora).getFullYear() ? ' ' + d.getFullYear() : ''}`;
 }
+/**
+ * Qué días cubre el rango que se está mirando, en palabras (auditoría 1 nov 2026: «7 días» no se podía reconciliar con Meta).
+ * Hoy = el día de hoy; 7 días = hoy y los 6 anteriores; 30 días = hoy y los 29 anteriores; Este mes = del día 1 a hoy. Los días van
+ * completos en la hora de la cuenta publicitaria (no en la tuya) y el de hoy a medias. `d` es GET /api/anuncios (desde, hasta, cuenta.zona).
+ * → «Del 25 oct al 1 nov (7 días, hoy incluido a medias) · hora de America/Panama» o '' si no se sabe.
+ */
+export function rangoTexto(d, rango = d?.rango) {
+  if (!d?.desde || !d?.hasta) return '';
+  const a = fechaCorta(d.desde, '', Date.parse(`${d.hasta}T12:00:00`)), b = fechaCorta(d.hasta, '', Date.parse(`${d.hasta}T12:00:00`));
+  const fechas = d.desde === d.hasta ? `Hoy, ${b}` : `Del ${a} al ${b}`;
+  const que = { hoy: 'solo hoy', '7d': '7 días: hoy y los 6 anteriores', '30d': '30 días: hoy y los 29 anteriores', mes: 'del día 1 del mes a hoy' }[rango] || '';
+  return `${fechas}${que ? ` (${que}; hoy va a medias)` : ''} · hora de ${d?.cuenta?.zona || 'la cuenta publicitaria'}`;
+}
+export const leyendaRango = d => { const t = rangoTexto(d); return t ? `<p class="anu-ayuda anu-rango" data-rango-texto>${esc(t)}</p>` : ''; };
 /** → «hace un momento», «hace 5 min», «hace 2 h», «hace 3 días» */
 export function haceCuanto(at, ahora = Date.now()) {
   const t = typeof at === 'number' ? at : Date.parse(at); if (!at || Number.isNaN(t)) return null;

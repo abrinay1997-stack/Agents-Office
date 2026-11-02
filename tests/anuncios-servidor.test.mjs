@@ -85,7 +85,7 @@ test('Anuncios A1: sin cuenta no se lee; con cuenta, estructura, estados, aprend
   assert.equal(a2.estadoTexto, 'Rechazado por Meta'); assert.match(a2.revision[0], /Texto engañoso/);
   assert.equal(a1.creativo.texto, 'Escríbenos por WhatsApp'); assert.equal(a1.creativo.titulo, 'Combo del mes'); assert.equal(a1.creativo.llamada, 'WHATSAPP_MESSAGE');
   assert.equal(a1.cifras.gasto, 6.8); assert.equal(a1.cifras.resultados, 4); assert.equal(a1.cifras.resultadoTexto, 'conversaciones iniciadas'); assert.equal(a1.cifras.costoPorResultado, 1.7);
-  assert.equal(a1.cifras.alcance, 700, 'el alcance del rango llega aparte (personas únicas), no 700 + 600'); assert.equal(a1.cifras.ctr, 2);
+  assert.equal(a1.cifras.alcance, 700, 'el alcance del rango llega aparte (personas únicas), no 700 + 600'); assert.equal(a1.cifras.ctr, 1.5, 'CTR de enlace: 15 clics al enlace de 1.000, no los 20 clics de todo tipo'); assert.equal(a1.cifras.ctrTodos, 2);
   assert.deepEqual(v.gasto, { hoy: 4.8, semana: 6.8, mes: v.gasto.mes }); assert.ok(v.gasto.mes >= 4.8);
   assert.equal(v.resumen.resultados7d, 4); assert.equal(v.resumen.costoPorResultado7d, 1.7);
   assert.ok(v.avisos.some(a => a.nivel === 'bad' && /rechazó un anuncio/.test(a.texto)), JSON.stringify(v.avisos));

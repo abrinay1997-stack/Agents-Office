@@ -2,12 +2,12 @@
 // cada fila es el botón que abre su detalle al lado; el triángulo de al lado (otro botón, nunca uno dentro de otro) la despliega. En una
 // vista estrecha la tabla se lee como tarjetas (src/css/anuncios.css, @container): cada celda lleva su rótulo en data-l.
 // Fase A2 (9 oct 2026): la columna «Acción» con el interruptor (Pausar un clic; Activar/Reanudar con los dos clics) y el «⋯» del menú.
-import { esc, dinero, pct, frec, fechaCorta, estadoDe, aprendizajeDe, chip, resultados, presupuesto, tieneProblemas, esActiva, esPausada, svg, SIN } from './comun.js';
+import { esc, dinero, pct, frec, fechaCorta, leyendaRango, estadoDe, aprendizajeDe, chip, resultados, presupuesto, tieneProblemas, esActiva, esPausada, svg, SIN } from './comun.js';
 import { controlesHTML } from './acciones.js';
 
 export const RANGOS = [['hoy', 'Hoy'], ['7d', '7 días'], ['30d', '30 días'], ['mes', 'Este mes']];
 export const FILTROS = [['todas', 'Todas'], ['activas', 'Activas'], ['pausa', 'En pausa'], ['problemas', 'Con problemas']];
-export const ORDENES = [['gasto', 'Más gasto'], ['resultados', 'Más resultados'], ['costo', 'Menor costo por resultado'], ['ctr', 'Mayor CTR'], ['frecuencia', 'Mayor frecuencia'], ['nombre', 'Nombre'], ['fin', 'Termina antes']];
+export const ORDENES = [['gasto', 'Más gasto'], ['resultados', 'Más resultados'], ['costo', 'Menor costo por resultado'], ['ctr', 'Mayor CTR de enlace'], ['frecuencia', 'Mayor frecuencia'], ['nombre', 'Nombre'], ['fin', 'Termina antes']];
 export const nombreRango = r => (RANGOS.find(([k]) => k === r) || RANGOS[1])[1];
 
 export function filtrar(campanas = [], filtro = 'todas') {
@@ -91,7 +91,7 @@ export function filaHTML(f, moneda, { sel, ahora = Date.now() } = {}) {
     <td data-l="Gasto" class="anu-n">${esc(dinero(c.gasto, moneda))}</td>
     <td data-l="Resultados" class="anu-n">${esc(resultados(c))}</td>
     <td data-l="Costo por resultado" class="anu-n">${esc(dinero(c.costoPorResultado, moneda))}</td>
-    <td data-l="CTR" class="anu-n">${esc(pct(c.ctr))}</td>
+    <td data-l="CTR de enlace" class="anu-n">${esc(pct(c.ctr))}</td>
     <td data-l="Frecuencia" class="anu-n">${esc(frec(c.frecuencia))}</td>
     <td data-l="Fin">${esc(fin)}</td></tr>`;
 }
@@ -109,8 +109,9 @@ export function campanasHTML(d, { rango = '7d', filtro = 'todas', orden = 'gasto
   const vacio = !todas.length ? '<div class="anu-vacio"><b>No hay campañas en esta cuenta</b><span>Cuando haya alguna (creada aquí o en el Administrador de anuncios de Meta), aparece aquí con sus cifras.</span></div>'
     : !lista.length ? `<div class="anu-vacio"><b>Ninguna campaña ${esc((FILTROS.find(([k]) => k === filtro) || [])[1]?.toLowerCase() || '')}</b><span>Prueba con otro filtro.</span></div>` : '';
   return `${barraHTML({ rango, filtro, orden, cuentas })}
+    ${leyendaRango(d)}
     <p class="anu-ayuda">Cifras de ${esc(nombreRango(rango).toLowerCase())}, en ${esc(moneda)}. Pulsa el nombre para ver el detalle; el triángulo despliega lo de dentro. Pausar es de un clic; lo que gasta te pide un segundo clic con la cifra.</p>
     ${vacio || `<div class="anu-tabla-caja"><table class="anu-tabla"><caption class="anu-sr">Campañas, conjuntos y anuncios con sus cifras de ${esc(nombreRango(rango).toLowerCase())}</caption>
-      <thead><tr><th scope="col">Nombre</th><th scope="col">Acción</th><th scope="col">Estado</th><th scope="col">Aprendizaje</th><th scope="col" class="anu-n">Presupuesto</th><th scope="col" class="anu-n">Gasto</th><th scope="col" class="anu-n">Resultados</th><th scope="col" class="anu-n">Costo por resultado</th><th scope="col" class="anu-n">CTR</th><th scope="col" class="anu-n">Frecuencia</th><th scope="col">Fin</th></tr></thead>
+      <thead><tr><th scope="col">Nombre</th><th scope="col">Acción</th><th scope="col">Estado</th><th scope="col">Aprendizaje</th><th scope="col" class="anu-n">Presupuesto</th><th scope="col" class="anu-n">Gasto</th><th scope="col" class="anu-n">Resultados</th><th scope="col" class="anu-n">Costo por resultado</th><th scope="col" class="anu-n">CTR de enlace</th><th scope="col" class="anu-n">Frecuencia</th><th scope="col">Fin</th></tr></thead>
       <tbody>${filas.map(f => filaHTML(f, moneda, { sel, ahora })).join('')}</tbody></table></div>`}`;
 }

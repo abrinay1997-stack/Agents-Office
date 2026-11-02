@@ -8,13 +8,14 @@
 import { crearDatos } from '../../anuncios/datos.js';
 import { accionesDe, interruptorDe, menuDe, GASTO, LIBRES, TEXTO, presupuestoDe, reiniciaAprendizaje, AVISO_APRENDIZAJE, errorImporte, importe, botonSi, pideDatos, terminada } from '../../anuncios/acciones.js';
 import { filtrar, ordenar, aplanar, buscar, RANGOS, FILTROS, nombreRango } from '../../anuncios/campanas.js';
-import { dinero, pct, num, frec, contraTope, tendencia, fechaCorta, haceCuanto, estadoDe, aprendizajeDe, resultados, presupuesto, tieneProblemas, SIN } from '../../anuncios/comun.js';
+import { dinero, pct, num, frec, contraTope, tendencia, rangoTexto, fechaCorta, haceCuanto, estadoDe, aprendizajeDe, resultados, presupuesto, tieneProblemas, SIN } from '../../anuncios/comun.js';
 import { deEstado, topResumen, cuentas as cuentasSug, informativa, botonAplicar, cambioTexto, reglaTexto, FILTROS_SUG } from '../../anuncios/sugerencias.js';
 import { creativosConEstado, borradorDeCreativo } from '../../anuncios/creativos.js';
 import { quienTexto, QUIENES, filtrarHistorial } from '../../anuncios/historial.js';
 import { PASOS, OBJETIVOS, DESTINOS, LLAMADA, llamadasDe, CATEGORIAS, PAISES, LARGO, MAX_CREATIVOS, MIN_RECOMENDADO, pasoDe, costoTexto, avisoSinFin, estadoB, editable, deQuien, poner, creativoNuevo, ajustarLlamadas, formatoDeMedidas, iframeMeta, UBICACIONES_META, objetivoTexto, objetivoDe, origenTexto, RED_ORIGEN } from '../../anuncios/borrador.js';
 import { esc, svg, vacio, esqueleto, falla } from '../ui.js';
 import { con, miniatura, subirArchivo, motivo, iconoRed } from './d-comun.js';
+const rangoMv = d => { const t = rangoTexto(d); return t ? `<p class="mv-meta" data-rango-texto>${esc(t)}</p>` : ''; };
 
 // en el ejemplo los datos contestan al instante (sin promesa): aquí todos son promesas, para tratarlos igual
 const crudos = crearDatos({ servida: true });
@@ -55,7 +56,7 @@ export function registrar(shell) {
         if (!d.configurado && !G.ejemplo) return `<div class="md-card"><h2 class="md-q">Conecta tu cuenta publicitaria</h2><p class="mv-texto">${esc(d.motivo || 'Todavía no hay una cuenta de anuncios conectada.')}</p><p class="mv-meta">Se conecta con el token de Meta y el id de la cuenta en Ajustes → Anuncios. Aquí solo se lee hasta que tú actives algo, y todo lo que crees nace en pausa.</p><button type="button" class="mv-btn" data-ejemplo>Ver con datos de ejemplo</button></div>`;
         const g = d.gasto || {}, t = d.topes || {}, tend = d.resumen?.tendencia || {};
         const medidor = (txt, gastado, tope) => { const c = contraTope(gastado, tope), p = c && c.pct != null ? Math.min(100, c.pct) : 0; return `<div class="md-med"><p><span>${txt}</span><b>${esc(dinero(gastado, m))}</b>${tope > 0 ? `<small>de ${esc(dinero(tope, m))}</small>` : '<small>sin tope</small>'}</p>${tope > 0 ? `<div class="md-barra ${tono(c?.tono)}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p)}" aria-label="${txt}: ${Math.round(p)} % del tope"><i style="width:${p}%"></i></div>` : ''}</div>`; };
-        const tr = (v, mejorSube) => { const x = tendencia(v, mejorSube); return `<small class="md-d ${x.tono === 'verde' ? 'bien' : x.tono === 'rojo' ? 'mal' : 'nd'}">${x.flecha ? `<span aria-hidden="true">${x.flecha}</span> ` : ''}${esc(x.texto)}</small>`; };
+        const tr = (v, mejorSube) => { const x = tendencia(v, mejorSube, d.resumen?.tendenciaMotivo); return `<small class="md-d ${x.tono === 'verde' ? 'bien' : x.tono === 'rojo' ? 'mal' : 'nd'}">${x.flecha ? `<span aria-hidden="true">${x.flecha}</span> ` : ''}${esc(x.texto)}</small>`; };
         const avisos = (d.avisos || []).map(a => `<p class="md-aviso ${a.nivel === 'error' || a.nivel === 'alta' ? 'rojo' : a.nivel === 'info' ? 'info' : ''}" role="${a.nivel === 'error' ? 'alert' : 'status'}">${esc(a.texto)}</p>`).join('');
         const top = topResumen(S.sug?.items || [], 3);
         return `${G.ejemplo ? '<p class="md-aviso info" role="status"><b>DATOS DE EJEMPLO.</b> No son de ninguna cuenta; nada que hagas sale a Meta. <button type="button" class="mv-link" data-salir-ej>Salir del ejemplo</button></p>' : ''}${avisos}
@@ -84,6 +85,7 @@ export function registrar(shell) {
         const cnt = Object.fromEntries(FILTROS.map(([k]) => [k, filtrar(d.campanas || [], k).length]));
         return `<div class="mv-chips md-chips-p" role="group" aria-label="Periodo">${RANGOS.map(([k, n]) => `<button type="button" class="mv-chip" data-rango="${k}" aria-pressed="${S.rango === k}">${n}</button>`).join('')}</div>
           <div class="mv-chips md-chips-p" role="group" aria-label="Qué campañas">${FILTROS.map(([k, n]) => `<button type="button" class="mv-chip" data-filtro="${k}" aria-pressed="${S.filtro === k}">${n}<b>${cnt[k]}</b></button>`).join('')}</div>
+          ${rangoMv(d)}
           ${filas.length ? `<ul class="md-lista">${filas.map(tarjetaFila).join('')}</ul>` : vacio('No hay campañas aquí', S.filtro === 'todas' ? 'Cuando crees una o la cuenta tenga alguna, aparecerá.' : 'Prueba con otro filtro.', { icono: 'anuncios' })}`;
       }
 
@@ -110,9 +112,10 @@ export function registrar(shell) {
         const l = creativosConEstado(S.d.campanas || [], { cpaObjetivo: S.sug?.cpaObjetivo ?? null, umbrales: S.sug?.umbrales || {}, moneda: moneda() }), m = moneda();
         S._creativos = l;
         return `<div class="mv-chips md-chips-p" role="group" aria-label="Periodo">${RANGOS.map(([k, n]) => `<button type="button" class="mv-chip" data-rango="${k}" aria-pressed="${S.rango === k}">${n}</button>`).join('')}</div>
+          ${rangoMv(S.d)}
           ${l.length ? `<ul class="md-lista md-cards">${l.map((g, i) => { const cr = g.creativo || {}, c = g.cifras, sug = (S.sug?.items || []).find(s => (s.estado || 'viva') === 'viva' && s.cambio?.tipo === 'creativos' && g.anuncios.some(a => a.id === s.cambio.id));
             return `<li class="md-card"><div class="md-pub-r">${miniatura(cr.miniatura, { clase: 'md-mini grande' })}<span class="md-pz-c"><b>${esc(cr.titulo || g.anuncios[0]?.nombre || '(sin titular)')}</b><span class="md-pz-m">${chip(g.estado.texto, g.estado.tono)}</span>${cr.texto ? `<small>${esc(cr.texto.slice(0, 120))}</small>` : ''}</span></div>
-              <dl class="md-cif"><div><dt>CTR</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>Costo/res.</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Gasto ${esc(nombreRango(S.rango))}</dt><dd>${esc(dinero(c.gasto, m))}</dd></div></dl>
+              <dl class="md-cif"><div><dt>CTR de enlace</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>Costo/res.</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Gasto ${esc(nombreRango(S.rango))}</dt><dd>${esc(dinero(c.gasto, m))}</dd></div></dl>
               <p class="mv-meta">${esc(g.estado.porque || '')}</p><p class="mv-meta">En ${g.anuncios.length} ${g.anuncios.length === 1 ? 'anuncio' : 'anuncios'}.</p>
               <div class="md-sal-b">${sug ? `<button type="button" class="mv-btn primario" data-aplicar="${esc(sug.id)}">Pedir variaciones</button>` : `<button type="button" class="mv-btn" data-cr-nueva="${i}">Nueva campaña con este creativo</button>`}</div></li>`; }).join('')}</ul>` : vacio('Todavía no hay creativos con cifras', 'Cuando tus anuncios empiecen a salir, aquí verás cuál funciona y cuál se cansa.', { icono: 'contenido' })}`;
       }
@@ -148,7 +151,7 @@ export function registrar(shell) {
         const h = ctx.hoja({ titulo: n.nombre || 'Detalle', lleno: true, cuerpo: `<p class="md-pz-m">${chip(e.texto, e.tono)}${n.creadoFuera ? chip('creado fuera de la oficina') : ''}</p>
           ${(n.problemas || []).length ? `<ul class="md-prob">${n.problemas.map(p => `<li class="mal">${esc(typeof p === 'string' ? p : p.texto || p.mensaje || '')}</li>`).join('')}</ul>` : ''}
           ${cr ? `<div class="md-pub-r">${miniatura(cr.miniatura, { clase: 'md-mini grande' })}<span class="md-pz-c"><b>${esc(cr.titulo || '')}</b><small>${esc(cr.texto || '')}</small>${cr.llamada ? `<small>Botón: ${esc(cr.llamada)}</small>` : ''}</span></div>` : ''}
-          <dl class="md-cif g"><div><dt>Gasto</dt><dd>${esc(dinero(c.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Alcance</dt><dd>${esc(num(c.alcance))}</dd></div><div><dt>Impresiones</dt><dd>${esc(num(c.impresiones))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Clics</dt><dd>${esc(num(c.clics))}</dd></div><div><dt>CTR</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>CPC</dt><dd>${esc(dinero(c.cpc, m))}</dd></div><div><dt>CPM</dt><dd>${esc(dinero(c.cpm, m))}</dd></div></dl>
+          <dl class="md-cif g"><div><dt>Gasto</dt><dd>${esc(dinero(c.gasto, m))}</dd></div><div><dt>Resultados</dt><dd>${esc(resultados(c))}</dd></div><div><dt>Costo por resultado</dt><dd>${esc(dinero(c.costoPorResultado, m))}</dd></div><div><dt>Alcance</dt><dd>${esc(num(c.alcance))}</dd></div><div><dt>Impresiones</dt><dd>${esc(num(c.impresiones))}</dd></div><div><dt>Frecuencia</dt><dd>${esc(frec(c.frecuencia))}</dd></div><div><dt>Clics</dt><dd>${esc(num(c.clics))}</dd></div><div><dt>CTR de enlace</dt><dd>${esc(pct(c.ctr))}</dd></div><div><dt>CPC</dt><dd>${esc(dinero(c.cpc, m))}</dd></div><div><dt>CPM</dt><dd>${esc(dinero(c.cpm, m))}</dd></div></dl>
           ${f.nivel !== 'anuncio' ? `<p class="mv-meta">Presupuesto: <b>${esc(presupuesto(n.presupuesto, m))}</b>${n.fin ? ` · termina ${esc(fechaCorta(n.fin))}` : ''}</p>` : ''}
           <h3 class="mv-gh">Qué puedes hacer</h3><div class="md-acciones col">${acc.map(a => `<button type="button" class="mv-btn ${a.gasto ? '' : ''}" data-act="${a.tipo}" data-id="${esc(f.id)}">${esc(a.texto)}${a.gasto ? ' — gasta, pide tus dos toques' : ''}</button>${a.nota ? `<small class="mv-meta">${esc(a.nota)}</small>` : ''}`).join('') || '<p class="mv-nada">No hay acciones para esto ahora.</p>'}</div>` });
         h.cuerpo.addEventListener('click', e2 => { const b = e2.target.closest('[data-act]'); if (!b) return; h.cerrar(); setTimeout(() => accionar(b.dataset.act, b.dataset.id), 250); });

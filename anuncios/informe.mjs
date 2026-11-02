@@ -133,7 +133,7 @@ export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobe
   else if (!camps.length) L.push('- Ninguna campaña gastó este mes.');
   for (const c of camps.slice(0, 15)) {
     const k = c.cifras, res = num(k.resultados) === null ? `${k.resultadoTexto || 'resultados'}: sin datos` : `${cifra(k.resultados)} ${k.resultadoTexto}${num(k.costoPorResultado) !== null ? ` a ${d(k.costoPorResultado)}${k.costoPor === 'mil' ? ' cada mil' : ' cada uno'}` : ''}`;
-    L.push(`- **${c.nombre}**${c.objetivoTexto ? ` (${c.objetivoTexto})` : ''}: gastó ${d(k.gasto)} · ${res} · CTR ${pct(k.ctr)}.`);
+    L.push(`- **${c.nombre}**${c.objetivoTexto ? ` (${c.objetivoTexto})` : ''}: gastó ${d(k.gasto)} · ${res} · CTR de enlace ${pct(k.ctr)}.`);
   }
   if (camps.length > 15) L.push(`- …y ${camps.length - 15} más.`);
   L.push('');
@@ -143,10 +143,10 @@ export function informeAnuncios({ mes, hoy, moneda = 'USD', resumen = null, cobe
   L.push('## Los mejores creativos');
   if (!mej.lista.length) L.push(sinCifras ? '- Sin datos.' : '- Sin datos suficientes: ningún anuncio trajo resultados ni llegó a 300 impresiones este mes.');
   else {
-    L.push(mej.por === 'costo' ? `_Por costo por resultado (${mej.resultadoTexto}): el más barato primero._` : '_Ninguno trajo resultados medibles: van por CTR (el que más clics consiguió por impresión)._');
+    L.push(mej.por === 'costo' ? `_Por costo por resultado (${mej.resultadoTexto}): el más barato primero._` : '_Ninguno trajo resultados medibles: van por CTR de enlace (el que más clics consiguió por impresión)._');
     for (const a of mej.lista) {
       const k = a.cifras, txt = corto(a.creativo?.titulo || a.creativo?.texto || '', 70);
-      L.push(`- **${a.nombre}**${a.campana ? ` (campaña «${a.campana}»)` : ''}: ${mej.por === 'costo' ? `${cifra(k.resultados)} ${k.resultadoTexto} a ${d(k.costoPorResultado)} cada uno` : `CTR ${pct(k.ctr)} con ${cifra(k.impresiones)} impresiones`} · gastó ${d(k.gasto)}${txt ? ` · «${txt}»` : ''}.`);
+      L.push(`- **${a.nombre}**${a.campana ? ` (campaña «${a.campana}»)` : ''}: ${mej.por === 'costo' ? `${cifra(k.resultados)} ${k.resultadoTexto} a ${d(k.costoPorResultado)} cada uno` : `CTR de enlace ${pct(k.ctr)} con ${cifra(k.impresiones)} impresiones`} · gastó ${d(k.gasto)}${txt ? ` · «${txt}»` : ''}.`);
     }
   }
   L.push('');
