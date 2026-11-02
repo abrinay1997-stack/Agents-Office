@@ -139,7 +139,7 @@ export function registrar(shell) {
         if (S.hist == null) return esqueleto(3);
         const l = filtrarHistorial(S.hist, S.quien);
         return `<div class="mv-chips md-chips-p" role="group" aria-label="Quién lo hizo">${QUIENES.map(([k, n]) => `<button type="button" class="mv-chip" data-quien="${k}" aria-pressed="${S.quien === k}">${n}</button>`).join('')}</div>
-          ${l.length ? `<ul class="md-lista">${l.map(i => `<li class="md-hist"><b>${esc(i.que || '')}</b><small>${esc(quienTexto(i.quien))} · ${esc(haceCuanto(i.at) || '')}${i.objeto?.cuenta ? ' · en ' + esc(i.objeto.cuenta) : ''}${i.objeto ? ' · ' + esc(i.objeto) : ''}</small>${i.antes != null || i.despues != null ? `<small>${esc(String(i.antes ?? '—'))} → ${esc(String(i.despues ?? '—'))}</small>` : ''}</li>`).join('')}</ul>` : vacio('Sin movimientos', 'Aquí queda cada cambio que se hace en tus campañas, y quién lo hizo.', { icono: 'historial' })}`;
+          ${l.length ? `<ul class="md-lista">${l.map(i => `<li class="md-hist"><b>${esc(i.que || '')}</b><small>${esc(quienTexto(i.quien))} · ${esc(haceCuanto(i.at) || '')}${i.objeto?.cuenta ? ' · en ' + esc(i.objeto.cuenta) : ''}${i.objeto ? ' · ' + esc(typeof i.objeto === 'object' ? (i.objeto.nombre || i.objeto.id || '') : i.objeto) : ''}</small>${i.antes != null || i.despues != null ? `<small>${esc(String(i.antes ?? '—'))} → ${esc(String(i.despues ?? '—'))}</small>` : ''}</li>`).join('')}</ul>` : vacio('Sin movimientos', 'Aquí queda cada cambio que se hace en tus campañas, y quién lo hizo.', { icono: 'historial' })}`;
       }
 
       function pintar() {

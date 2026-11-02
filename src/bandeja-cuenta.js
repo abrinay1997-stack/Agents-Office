@@ -39,3 +39,8 @@ export function opcionesCuentaBandeja(r) {
   if (l.length < 2) return [];
   return [['', 'Todas las cuentas'], ...l.map(c => [c.id, `${cuentaLinea(c)}${c.pendientes ? ` (${c.pendientes} por responder)` : ''}`])];
 }
+
+/** La foto de una cuenta: solo https de los hosts de Meta (la nube los reescribe a /api/imagen-meta; la CSP no abre ninguno más). */
+export function fotoMeta(u) {
+  try { const x = new URL(String(u || '')); return x.protocol === 'https:' && x.href.length <= 600 && ['fbcdn.net', 'cdninstagram.com', 'fbsbx.com'].some(d => x.hostname === d || x.hostname.endsWith('.' + d)) ? x.href : ''; } catch { return ''; }
+}

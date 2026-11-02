@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { redDeMetricool } from './metricool.mjs';
 import { buscarCuenta } from '../src/contenido-cifras.js';
+import { textoSeguro, fotoMeta } from '../anuncios/cuentas.mjs';
 import { renombrar } from '../fs-seguro.mjs';
 import { ventanaDe, motivoVentana, revisarTextoMensaje, quedaTexto, GUARDAR_MENSAJES, ATRIBUCION } from './bandeja-meta.mjs'; // B2: la ventana de 24 h y el largo // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
@@ -288,7 +289,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
   const cuentaDeId = id => {
     if (!id) return null; let l = []; try { l = cuentas() || []; } catch { /* sin Meta */ }
     const c = l.find(x => x.id === id);
-    return c ? { id: c.id, red: c.red, nombre: String(c.nombre || ''), usuario: String(c.usuario || ''), foto: /^https:\/\//.test(c.foto || '') ? c.foto : '', paginaId: String(c.paginaId || ''), conocida: true } : { id, red: String(id).split(':')[0], nombre: '', usuario: '', foto: '', paginaId: '', conocida: false };
+    return c ? { id: c.id, red: c.red, nombre: textoSeguro(c.nombre), usuario: textoSeguro(c.usuario, 40).replace(/^@/, ''), foto: fotoMeta(c.foto), paginaId: String(c.paginaId || ''), conocida: true } : { id, red: String(id).split(':')[0], nombre: '', usuario: '', foto: '', paginaId: '', conocida: false };
   };
   const conCuenta = x => (x.cuentaId ? { ...x, deCuenta: cuentaDeId(x.cuentaId) } : x.cuentaPorConfirmar ? { ...x, deCuenta: { id: '', red: x.red, nombre: '', usuario: '', foto: '', paginaId: '', conocida: false, porConfirmar: true } } : x);
   const conVentana = x => conCuenta(esConversacionMeta(x) ? { ...x, ventana: ventanaDe(x.ultimoCliente, ahora()) } : x);

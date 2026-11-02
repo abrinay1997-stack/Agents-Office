@@ -223,6 +223,7 @@ test('el servidor: de qué cuenta es cada anuncio, el reparto, el filtro (?cuent
   fs.writeFileSync(local, JSON.stringify({ anuncios: { cuenta: CUENTA_STAND, topeDiario: 100, topeMensual: 2000, topeCampana: 2000, pagina: 'P2' } }));
   const probe = http.createServer(), port = await listen(probe); await new Promise(r => probe.close(r));
   const env = { ...process.env, PORT: String(port), AO_DATA: path.join(dir, 'data'), AO_BRAIN: brain, AO_LOCAL_CONFIG: local, ANTHROPIC_API_KEY: 'test-key-not-real', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9', CLAUDE_BIN: path.join(dir, 'no-claude.exe'),
+    AO_TEST: '1',
     AO_RELOJ_ANUNCIOS: '2026-06-10T15:00:00Z', // el día de las cifras es fijo: el test no depende de la fecha de hoy
     META_ACCESS_TOKEN: TOKEN_STAND, META_APP_SECRET: '', META_GRAPH_HOST: graph.url, META_GRAPH_VERSION: '', TELEGRAM_BOT_TOKEN: '', METRICOOL_USER_TOKEN: '', GEMINI_API_KEY: '', HF_KEY: '', HF_API_KEY: '', FAL_KEY: '', OPENAI_API_KEY: '', XAI_API_KEY: '', META_API_KEY: '', MODEL_API_KEY: '', MINIMAX_API_KEY: '', VOYAGE_API_KEY: '' };
   const srv = spawn(process.execPath, ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -265,4 +266,9 @@ test('el servidor: de qué cuenta es cada anuncio, el reparto, el filtro (?cuent
   // los borradores dicen sobre qué página saldrán (la de Ajustes → Anuncios: P2)
   const b = (await call('/api/anuncios/borradores', { nombre: 'Prueba', por: 'dueno' })).j.borrador; assert.match(b.cuentaTexto, /BukoFlow/);
   assert.match((await call('/api/anuncios/borradores')).j.items.find(x => x.id === b.id).cuentaTexto, /BukoFlow/);
+});
+
+test('AO_RELOJ_ANUNCIOS solo se respeta con AO_TEST=1 o NODE_ENV=test', () => {
+  const s = fs.readFileSync(new URL('../serve.mjs', import.meta.url), 'utf8');
+  assert.match(s, /AO_TEST === '1' \|\| process\.env\.NODE_ENV === 'test'\) && process\.env\.AO_RELOJ_ANUNCIOS/);
 });

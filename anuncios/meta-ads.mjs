@@ -93,7 +93,7 @@ export function crearMetaAds({ meta }) {
       if (!r.ok && (k === 'anuncios' || k === 'creativos') && r.error?.codigo === 100 && /instagram_user_id/.test(CAMPOS[k])) {
         const params = { ...pet[i + 1].params, fields: CAMPOS[k].replace(/,instagram_user_id/g, '') };
         try { const d = await meta.graph(await token(), pet[i + 1].ruta, { params }); r = { ok: true, datos: d }; pet[i + 1].params = params; out.avisos.push('sin cuenta de Instagram: Meta no devolvió el campo instagram_user_id del creativo; la cuenta de cada anuncio sale solo de su página'); out.sinInstagram = true; }
-        catch (e) { r = { ok: false, error: e }; }
+        catch { /* si el reintento falla se queda el error ORIGINAL de Meta (r) */ }
       }
       if (!r.ok) { if (k === 'creativos') { out.creativos = []; out.avisos.push(`no se pudieron leer los creativos: ${r.error.message}`); continue; } throw r.error; }
       out[k] = await resto(pet[i + 1].ruta, pet[i + 1].params, r.datos);

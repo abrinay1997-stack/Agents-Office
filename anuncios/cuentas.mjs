@@ -20,6 +20,7 @@
 // ============================================================
 import { buscarCuenta, nombreCuenta } from '../src/contenido-cifras.js';
 import { injectionIn } from '../safety.mjs';
+import { fotoMeta } from '../src/bandeja-cuenta.js';
 
 export const SIN_CUENTA = 'cuenta no identificada';
 // un id de Meta es un número (el Meta de mentira de los tests usa P1 / IG1: hasta 3 letras delante); cualquier otra cosa no es una pista
@@ -42,10 +43,7 @@ export function textoSeguro(v, max = 80) {
   const t = String(v ?? '').replace(/[\u0000-\u001f\u007f\u2028\u2029\u200b-\u200f\u202a-\u202e\u2066-\u2069]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
   return t && injectionIn(t) ? '(nombre omitido)' : t;
 }
-/** La foto de una cuenta: solo https de los hosts de Meta (la nube los reescribe a /api/imagen-meta; la CSP no abre ninguno más). */
-export function fotoMeta(u) {
-  try { const x = new URL(String(u || '')); return x.protocol === 'https:' && x.href.length <= 600 && ['fbcdn.net', 'cdninstagram.com', 'fbsbx.com'].some(d => x.hostname === d || x.hostname.endsWith('.' + d)) ? x.href : ''; } catch { return ''; }
-}
+export { fotoMeta };
 const limpia = c => ({ id: c.id, red: c.red, nombre: textoSeguro(c.nombre), usuario: textoSeguro(c.usuario, 40).replace(/^@/, ''), foto: fotoMeta(c.foto), paginaId: String(c.paginaId || ''), conocida: true });
 /** Una cuenta que la oficina no conoce (el token ya no la ve): solo su id, rotulado. */
 const desconocida = (red, id) => ({ id: `${red}:${id}`, red, nombre: '', usuario: '', foto: '', paginaId: red === 'facebook' ? id : '', conocida: false });

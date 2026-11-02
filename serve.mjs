@@ -233,7 +233,7 @@ const meta = crearMeta({ dir: ANALITICAS_DIR });
 const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
 const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
 const anunciosAds = crearMetaAds({ meta });
-const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ahora: process.env.AO_RELOJ_ANUNCIOS && Number.isFinite(Date.parse(process.env.AO_RELOJ_ANUNCIOS)) ? () => Date.parse(process.env.AO_RELOJ_ANUNCIOS) : () => Date.now(), // AO_RELOJ_ANUNCIOS (ISO): solo para los tests, que fijan el día de las cifras
+const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ahora: (process.env.AO_TEST === '1' || process.env.NODE_ENV === 'test') && process.env.AO_RELOJ_ANUNCIOS && Number.isFinite(Date.parse(process.env.AO_RELOJ_ANUNCIOS)) ? () => Date.parse(process.env.AO_RELOJ_ANUNCIOS) : () => Date.now(), // AO_RELOJ_ANUNCIOS (ISO): solo para los tests, que fijan el día de las cifras
  ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => { try { anunciosInd.llevar(); } catch (e) { console.warn('anuncios (indicadores):', e.message); } return anunciosTrasSondeo(); } }); // A5: el diagnóstico tras cada lectura de cifras · A6: los indicadores del dueño al día
 const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
   refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },

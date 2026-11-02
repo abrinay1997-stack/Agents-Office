@@ -10,7 +10,7 @@
 // conversación abierta (el hilo, las imágenes, el contador de 1.000) viaja con el editor de piezas: src/contenido-conversacion.js.
 //   initBandeja({ host, datos, esc, note, onCount, paquete }) → { load(), render(), pendientes() } · paquete() → window.AO_PIEZA
 import { RED, nbRed } from './pieza-base.js';
-import { cuentaDeItem, cuentaLinea, comoCuenta, opcionesCuentaBandeja, bloqueoCuenta } from './bandeja-cuenta.js';
+import { fotoMeta, cuentaDeItem, cuentaLinea, comoCuenta, opcionesCuentaBandeja, bloqueoCuenta } from './bandeja-cuenta.js';
 
 const TIPO = { conversaciones: 'Mensaje', comentarios: 'Comentario', resenas: 'Reseña' };
 const EST = { nuevo: ['SIN RESPONDER', '#8A6414', '#E8B44A'], borrador: ['CON BORRADOR', '#2158CC', '#8FB0FF'], respondido: ['RESPONDIDO', '#13705A', '#4FD1A5'], descartado: ['DESCARTADO', '#5A5A5A', '#B9B6AE'], fallo: ['FALLÓ', '#B3261E', '#FF8A80'] };
@@ -102,7 +102,9 @@ export function initBandeja({ host, datos, esc, note = () => {}, onCount = () =>
     const aLaVista = !host.hidden && host.isConnected && !host.closest('[inert]');
     try {
       r = await datos.bandeja({ estado: filtro, tipo, fuente, cuenta: cuentaSel, abierta: aLaVista ? 1 : '' }); desde = Date.now();
-      if (r.cuentaNoEncontrada) { cuentaSel = ''; r = { ...r, ...(await datos.bandeja({ estado: filtro, tipo, fuente, abierta: aLaVista ? 1 : '' })), cuentaNoEncontrada: true }; } // se avisa y se muestran todas: nunca una lista vacía sin explicación onCount(r.pendientes || 0);
+      // si la cuenta ya no existe se avisa y se muestran todas: nunca una lista vacía sin explicación
+      if (r.cuentaNoEncontrada) { cuentaSel = ''; r = { ...r, ...(await datos.bandeja({ estado: filtro, tipo, fuente, abierta: aLaVista ? 1 : '' })), cuentaNoEncontrada: true }; }
+      onCount(r.pendientes || 0);
       for (const m of r.items || []) { vistas.add(fuenteDe(m)); if (m.enAnuncio) hayAnuncios = true; }
     } catch (e) { r = { ...r, error: e.message }; }
     finally { cargando = false; }
@@ -163,7 +165,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
         ${responder}
       </div>`;
     const sug = !a.sugerencia ? '' : `<div class="bj-sug" role="note"><span><b>${esc(a.sugerencia.quien)}</b> sugiere ocultarlo${a.sugerencia.motivo ? `: ${esc(a.sugerencia.motivo)}` : '.'}</span><span class="bj-row"><button type="button" class="pz-btn" data-bjh="ocultar" data-id="${esc(m.id)}">Ocultar</button><button type="button" class="pz-btn" data-bjnosug="${esc(m.id)}">No</button></span></div>`;
-    const cta = cuentaDeItem(m), ctaTag = cta ? `<span class="bj-tag bj-cta" data-bj-cuenta title="Cuenta desde la que se lee y se responde">${cta.foto ? `<img src="${esc(cta.foto)}" alt="" width="14" height="14" loading="lazy" referrerpolicy="no-referrer"> ` : ''}${esc(cuentaLinea(cta))}</span>` : '';
+    const cta = cuentaDeItem(m), ctaTag = cta ? `<span class="bj-tag bj-cta" data-bj-cuenta title="Cuenta desde la que se lee y se responde">${fotoMeta(cta.foto) ? `<img src="${esc(fotoMeta(cta.foto))}" alt="" width="14" height="14" loading="lazy" referrerpolicy="no-referrer"> ` : ''}${esc(cuentaLinea(cta))}</span>` : '';
     const tags = `${ctaTag}${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
     return `<article class="bj-it${open ? ' on' : ''}${m.sospecha ? ' sos' : ''}${a.oculto ? ' oc' : ''}" data-it="${esc(m.id)}"><button type="button" class="bj-h" data-bjo="${esc(m.id)}" aria-expanded="${open}" aria-controls="${id}-d">
         ${nbRed(String(m.red || ''))}<span class="bj-who"><b>${esc(m.autor)}</b> <small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${cv && m.red === 'facebook' ? 'Messenger' : esc(red.name)}${vistas.size > 1 ? ` · ${FUENTE[fuenteDe(m)]}` : ''} · ${esc(hace(m.cuando))}</small>${tags ? `<span class="bj-tags">${tags}</span>` : ''}<span class="bj-ex">${m.sospecha ? '🛡 ' : ''}${ult?.de === 'tu' ? 'Tú: ' : ''}${esc(((ult ? ult.texto || (ult.adjuntos?.length ? 'Envió una imagen' : '') : m.texto) || '').replace(/\s+/g, ' ').slice(0, 140))}</span></span>
