@@ -41,6 +41,13 @@ test('Dimitri (nube): ver_anuncios acepta `cuenta` y la pide a la API de solo le
   assert.ok(pedidos.every(p => p.startsWith('/api/anuncios')), 'solo lee');
 });
 
+test('las fotos de las cuentas: solo hosts de Meta que la nube ya reescribe por /api/imagen-meta; la CSP no abre ninguno nuevo', async () => {
+  const { fotoMeta } = await import('../../anuncios/cuentas.mjs');
+  assert.equal(fotoMeta('https://scontent.xx.fbcdn.net/a.jpg'), 'https://scontent.xx.fbcdn.net/a.jpg'); assert.equal(fotoMeta('http://scontent.xx.fbcdn.net/a.jpg'), ''); assert.equal(fotoMeta('https://evil.example/a.jpg'), ''); assert.equal(fotoMeta('https://fbcdn.net.evil.example/a.jpg'), ''); assert.equal(fotoMeta('javascript:alert(1)'), '');
+  const nube = leer('../public/nube.js'); for (const h of ['fbcdn.net', 'cdninstagram.com', 'fbsbx.com']) assert.ok(nube.includes(h), `nube.js reescribe ${h}`); assert.ok(nube.includes('/api/imagen-meta?u='));
+  assert.match(leer('../worker/lib/imagen-meta.js'), /img-src 'self' data: blob:/, 'la CSP sigue sin abrir hosts de terceros (la vigila csp-oficina.test.mjs); la foto va por el mismo origen');
+});
+
 test('los agentes (nube y local comparten anuncios-tools.mjs): ver_campanas y ver_resultados_anuncios aceptan `cuenta` y no hay herramienta que gaste', () => {
   for (const n of ['ver_campanas', 'ver_resultados_anuncios']) assert.ok(TOOLS.find(t => t.name === n).inputSchema.properties.cuenta);
   assert.ok(!TOOLS.some(t => /^(activar|pausar|crear_en_meta|gastar|subir)/.test(t.name)), 'sigue sin haber una herramienta que cambie o gaste');

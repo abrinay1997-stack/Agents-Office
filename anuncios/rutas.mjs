@@ -15,6 +15,13 @@
 //   GET  /api/anuncios/texto?rango=&que=cuenta|campanas|resultados&nivel=&estado=   → { texto } (Dimitri, los agentes, el asistente)
 //   GET  /api/anuncios/objeto/<id>?rango=               → { tipo, objeto, texto } (una campaña, un conjunto o un anuncio)
 //
+// 2 nov 2026 · CUENTAS: cada campaña/conjunto/anuncio lleva `cuentas`, `cuentaTexto` y `cuentaClave` (la página y el Instagram sobre los que corre;
+//   «cuenta no identificada» si no se sabe) y la vista trae `porCuenta` (gasto y resultados por marca, que SUMAN el gasto total; los anuncios con gasto
+//   que ya no están en lo leído van a «sin identificar»). `?cuenta=` (id, @usuario, nombre o `sin`) filtra:
+//   · GET /api/anuncios?cuenta=zzz → 400 { error, motivo } (la página, que elige de una lista, nunca manda una que no existe);
+//   · GET /api/anuncios/texto?cuenta=zzz → 200 { texto: «No encuentro la cuenta…», cuentaNoEncontrada: true } — DECISIÓN DELIBERADA: lo leen Dimitri, los
+//     agentes y el asistente, a quienes un error HTTP les corta la herramienta; un texto que lo dice (y lista las cuentas que hay) les deja corregirse. En
+//     ningún caso devuelve «todas» en lugar de la pedida.
 // QUIÉN: un agente (`por: 'agente'`, en la dirección o en el cuerpo, como en contenido/rutas.mjs) LEE lo mismo que el dueño. De los POST
 // solo puede `sincronizar` (leer de Meta no cambia nada allá), y como mucho una vez cada 10 minutos: la cuota de Meta es del negocio
 // entero. Cualquier otro POST de /api/anuncios le da 403 — también `accion` y `deshacer` (A2). Lo demás de quién puede qué (Dimitri, el

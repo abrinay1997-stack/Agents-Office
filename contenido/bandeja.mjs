@@ -24,7 +24,7 @@ import path from 'node:path';
 import { redDeMetricool } from './metricool.mjs';
 import { buscarCuenta } from '../src/contenido-cifras.js';
 import { renombrar } from '../fs-seguro.mjs';
-import { ventanaDe, motivoVentana, revisarTextoMensaje, quedaTexto, GUARDAR_MENSAJES } from './bandeja-meta.mjs'; // B2: la ventana de 24 h y el largo // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
+import { ventanaDe, motivoVentana, revisarTextoMensaje, quedaTexto, GUARDAR_MENSAJES, ATRIBUCION } from './bandeja-meta.mjs'; // B2: la ventana de 24 h y el largo // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const TIPOS = { conversaciones: 'mensaje', comentarios: 'comentario', resenas: 'reseña' };
 export const ESTADOS = ['nuevo', 'borrador', 'respondido', 'descartado', 'fallo'];
@@ -110,7 +110,15 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
   const F = { ...(meta ? { meta } : {}), ...(metricool ? { metricool: fuenteMetricool(metricool) } : {}) };
   // CON-11 paso 2: el estado se lee y se escribe por un ALMACÉN `{ leer(): objeto, escribir(objeto) }`. Sin `almacen`, el de siempre: el archivo `archivo`.
   const alm = almacen || { leer: () => leerJSON(archivo, {}), escribir: d => escribirJSON(archivo, d) };
-  const leer = () => { const d = alm.leer() ?? {}; return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...d }; };
+  const leer = () => {
+    const d = { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...(alm.leer() ?? {}) };
+    // 2 nov 2026 · MIGRACIÓN de la atribución: antes, un comentario de un ANUNCIO se guardaba con la primera página/Instagram que se encontró (con varias
+    // marcas, la equivocada). Lo guardado con una versión anterior pierde su cuentaId y queda «cuenta por confirmar» (no se responde ni se oculta)
+    // hasta que una lectura nueva lo atribuya; si el anuncio ya no se lee, se queda así: mejor sin cuenta que con la de otra marca.
+    if ((d.atribucion || 0) < ATRIBUCION && Object.keys(d.items).length) { for (const x of Object.values(d.items)) if (x.fuente === 'meta' && x.enAnuncio) { delete x.cuentaId; x.cuentaPorConfirmar = true; } d.atribucion = ATRIBUCION; }
+    else if (!d.atribucion) d.atribucion = ATRIBUCION;
+    return d;
+  };
   const guardar = d => {
     const l = Object.values(d.items).sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
     if (l.length > MAX) { d.items = Object.fromEntries(l.slice(0, MAX).map(x => [x.id, x])); for (const [k, v] of Object.entries(d.alias)) if (!d.items[v]) delete d.alias[k]; }
@@ -139,7 +147,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const act = activas();
     return Object.fromEntries(Object.entries(F).map(([k, f]) => {
       const l = f.listo(), e = f.estado?.() || {};
-      return [k, { ok: l.ok, motivo: l.motivo, activa: act.includes(k), ultimaAt: d.fuentes?.[k]?.ultimaAt || e.ultimaAt || null, error: d.fuentes?.[k]?.error || '', ...(e.avisos?.length ? { avisos: e.avisos } : {}), ...(e.anunciosInstagram ? { anunciosInstagram: e.anunciosInstagram } : {}), ...(e.mensajes ? { mensajes: e.mensajes } : {}) }];
+      return [k, { ok: l.ok, motivo: l.motivo, activa: act.includes(k), ultimaAt: d.fuentes?.[k]?.ultimaAt || e.ultimaAt || null, error: d.fuentes?.[k]?.error || '', ...(e.avisos?.length ? { avisos: e.avisos } : {}), ...(e.anunciosInstagram ? { anunciosInstagram: e.anunciosInstagram } : {}), ...(e.saltados ? { saltados: e.saltados } : {}), ...(e.mensajes ? { mensajes: e.mensajes } : {}) }];
     }));
   }
 
@@ -151,6 +159,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const previo = d.items[m.id];
     if (previo) {
       const { yaRespondida, ...fresco } = m, x = { ...previo, ...fresco };
+      if (fresco.cuentaId) delete x.cuentaPorConfirmar; // una lectura nueva ya lo atribuyó
       if (previo.ocultoSimulado) x.oculto = previo.oculto; // lo ocultado en simulacro no lo deshace la lectura de Meta
       if (previo.texto !== m.texto) x.sospecha = injectionIn(`${m.texto}\n${m.autor}`) || '';
       if (yaRespondida && ['nuevo', 'borrador', 'fallo'].includes(previo.estado)) respondidoFuera(x); // respondido desde la app de la red
@@ -281,7 +290,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const c = l.find(x => x.id === id);
     return c ? { id: c.id, red: c.red, nombre: String(c.nombre || ''), usuario: String(c.usuario || ''), foto: /^https:\/\//.test(c.foto || '') ? c.foto : '', paginaId: String(c.paginaId || ''), conocida: true } : { id, red: String(id).split(':')[0], nombre: '', usuario: '', foto: '', paginaId: '', conocida: false };
   };
-  const conCuenta = x => (x.cuentaId ? { ...x, deCuenta: cuentaDeId(x.cuentaId) } : x);
+  const conCuenta = x => (x.cuentaId ? { ...x, deCuenta: cuentaDeId(x.cuentaId) } : x.cuentaPorConfirmar ? { ...x, deCuenta: { id: '', red: x.red, nombre: '', usuario: '', foto: '', paginaId: '', conocida: false, porConfirmar: true } } : x);
   const conVentana = x => conCuenta(esConversacionMeta(x) ? { ...x, ventana: ventanaDe(x.ultimoCliente, ahora()) } : x);
   function listar({ estado = '', red = '', tipo = '', fuente = '', cuenta: cuentaQ = '' } = {}) {
     const d = leer(), todos = Object.values(d.items).map(conVentana);
@@ -293,7 +302,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const cuenta = Object.fromEntries(ESTADOS.map(e => [e, todos.filter(x => x.estado === e).length]));
     // las cuentas que tienen mensajes (para el filtro), con cuántos esperan respuesta
     const por = new Map();
-    for (const x of todos) if (x.deCuenta) { const g = por.get(x.cuentaId) || { ...x.deCuenta, total: 0, pendientes: 0 }; g.total++; if (['nuevo', 'borrador', 'fallo'].includes(x.estado)) g.pendientes++; por.set(x.cuentaId, g); }
+    for (const x of todos) if (x.deCuenta && x.cuentaId) { const g = por.get(x.cuentaId) || { ...x.deCuenta, total: 0, pendientes: 0 }; g.total++; if (['nuevo', 'borrador', 'fallo'].includes(x.estado)) g.pendientes++; por.set(x.cuentaId, g); }
     return { items, cuenta, ...(cuentaNoEncontrada ? { cuentaNoEncontrada: true } : {}), cuentasBandeja: [...por.values()].sort((a, b) => b.pendientes - a.pendientes || String(a.nombre || a.usuario).localeCompare(String(b.nombre || b.usuario))), pendientes: cuenta.nuevo + cuenta.borrador + cuenta.fallo, ultimo: d.ultimo, error: d.error, fuente: listo(), modo: modo(), bandejaFuente: elegida(), fuentes: estadoFuentes(d) };
   }
   const uno = id => { const d = leer(), x = d.items[resolver(d, id)]; return x ? conVentana(x) : null; };
@@ -343,6 +352,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     let remoto = null;
     if (md === 'real') {
       const f = F[m.fuente || 'metricool'], l = f ? f.listo() : { ok: false, motivo: `la fuente ${m.fuente} ya no está conectada` }; if (!l.ok) return { error: l.motivo };
+      const sinCuenta = m.fuente === 'meta' ? f.verificarCuenta?.(m) : ''; if (sinCuenta) return { error: sinCuenta, cuentaDesconocida: true, status: 409 }; // nada se apunta ni se envía: no es un fallo del envío
       enviando.add(id); m.enviando = { at: ahoraIso(), texto: t }; guardar(d); // el testigo: si la oficina se corta aquí, no se vuelve a mandar sin «forzar»
       try { remoto = await f.responder(m, t); }
       catch (e) {
@@ -367,6 +377,7 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     if (md === 'apagado') return { error: 'la publicación está apagada (Ajustes → Contenido): no se cambia nada en las redes' };
     if (md === 'real') {
       const l = F.meta.listo(); if (!l.ok) return { error: l.motivo };
+      const sinCuenta = F.meta.verificarCuenta?.(m); if (sinCuenta) return { error: sinCuenta, cuentaDesconocida: true, status: 409 };
       enviando.add('oc:' + id);
       try { await F.meta.ocultar(m, Boolean(si)); }
       catch (e) { return { error: `Meta no lo dejó: ${e.message}` }; }

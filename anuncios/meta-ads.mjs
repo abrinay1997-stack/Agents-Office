@@ -86,7 +86,15 @@ export function crearMetaAds({ meta }) {
     const out = { cuenta: rc.datos, avisos: [] };
     const claves = Object.keys(listas);
     for (let i = 0; i < claves.length; i++) {
-      const k = claves[i], r = rl[i];
+      const k = claves[i];
+      let r = rl[i];
+      // 2 nov 2026: si Meta no conoce el subcampo `instagram_user_id` del creativo (error 100 de campo), NO se pierde la lectura entera: se repite
+      // esa lista una vez sin él y se apunta «sin cuenta de Instagram» (la cuenta sale entonces solo de la página, si hay).
+      if (!r.ok && (k === 'anuncios' || k === 'creativos') && r.error?.codigo === 100 && /instagram_user_id/.test(CAMPOS[k])) {
+        const params = { ...pet[i + 1].params, fields: CAMPOS[k].replace(/,instagram_user_id/g, '') };
+        try { const d = await meta.graph(await token(), pet[i + 1].ruta, { params }); r = { ok: true, datos: d }; pet[i + 1].params = params; out.avisos.push('sin cuenta de Instagram: Meta no devolvió el campo instagram_user_id del creativo; la cuenta de cada anuncio sale solo de su página'); out.sinInstagram = true; }
+        catch (e) { r = { ok: false, error: e }; }
+      }
       if (!r.ok) { if (k === 'creativos') { out.creativos = []; out.avisos.push(`no se pudieron leer los creativos: ${r.error.message}`); continue; } throw r.error; }
       out[k] = await resto(pet[i + 1].ruta, pet[i + 1].params, r.datos);
     }

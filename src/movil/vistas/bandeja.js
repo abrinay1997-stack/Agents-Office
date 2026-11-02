@@ -45,11 +45,14 @@ export function montarBandeja(host, ctx, { alContar = () => {} } = {}) {
   function pintar() {
     el.querySelectorAll('[data-f]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.f === S.f)); const n = S.items.filter(m => pasa(m, b.dataset.f)).length, nb = b.querySelector('b'); nb.textContent = n; nb.hidden = !n; });
     if (!S.cargado) { cuerpo.innerHTML = S.error ? falla(S.error) : esqueleto(4); return; }
+    const oc = opcionesCuentaBandeja(S.d), perdida = Boolean(S.cuenta) && !oc.some(([k]) => k === S.cuenta); // la cuenta elegida ya no tiene mensajes
+    if (perdida) S.cuenta = '';
     const lista = S.items.filter(m => pasa(m, S.f) && (!S.cuenta || m.cuentaId === S.cuenta));
-    const oc = opcionesCuentaBandeja(S.d), selC = oc.length ? `<label class="mv-lab" for="mdBjCta">Cuenta</label><select id="mdBjCta" data-cuenta-sel>${oc.map(([k, n]) => `<option value="${esc(k)}"${k === S.cuenta ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : '';
+    const salt = S.d?.fuentes?.meta?.saltados, avisoSalt = salt ? `<p class="md-aviso rojo" role="note" data-bj-saltados>${salt} ${salt === 1 ? 'anuncio tiene comentarios sin leer' : 'anuncios tienen comentarios sin leer'}: no se sabe de qué cuenta son y no se adivina.</p>` : '', avisoPerdida = perdida ? '<p class="md-aviso" role="note" data-bj-cuenta-aviso>Esa cuenta ya no tiene mensajes en la Bandeja: se muestran todas.</p>' : '';
+    const selC =oc.length ? `<label class="mv-lab" for="mdBjCta">Cuenta</label><select id="mdBjCta" data-cuenta-sel>${oc.map(([k, n]) => `<option value="${esc(k)}"${k === S.cuenta ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : '';
     const mm = S.d?.fuentes?.meta?.mensajes, franja = mm && mm.ok === false ? `<p class="md-aviso">Los mensajes privados esperan el acceso avanzado de Meta (${esc(mm.motivo || 'aún no está')}). Los comentarios siguen llegando.</p>` : '';
     const mod = S.d?.modo === 'simulacro' ? '<p class="md-aviso">Modo simulacro: lo que envíes se apunta, pero no sale de verdad.</p>' : S.d?.modo === 'apagado' ? '<p class="md-aviso">La publicación está apagada: ninguna respuesta sale.</p>' : '';
-    cuerpo.innerHTML = selC + franja + mod + (lista.length ? `<ul class="md-lista">${lista.map(fila).join('')}</ul>` : vacio(S.f === 'pendiente' ? 'Nadie espera respuesta' : 'Nada por aquí', S.f === 'pendiente' ? 'Cuando alguien comente o escriba, lo verás aquí.' : 'Prueba con otro filtro.', { icono: 'check' }));
+    cuerpo.innerHTML = selC + avisoPerdida + avisoSalt + franja + mod + (lista.length ? `<ul class="md-lista">${lista.map(fila).join('')}</ul>` : vacio(S.f === 'pendiente' ? 'Nadie espera respuesta' : 'Nada por aquí', S.f === 'pendiente' ? 'Cuando alguien comente o escriba, lo verás aquí.' : 'Prueba con otro filtro.', { icono: 'check' }));
   }
 
   // ---------------------------------------------------------------- el hilo (pantalla completa)

@@ -30,7 +30,7 @@ export function aBorrador(a = {}) {
   return b;
 }
 const RANGO = { type: 'string', enum: ['hoy', '7d', '30d', 'mes'], description: 'De qué días son las cifras: hoy, los últimos 7 días (por defecto), los últimos 30 o este mes. Días de la zona horaria de la cuenta.' };
-const CUENTA = { type: 'string', description: 'Solo los anuncios de UNA cuenta (la página de Facebook o el Instagram sobre el que corren): su @usuario, su nombre o su id (facebook:… / instagram:…). La cuenta publicitaria es una sola y la comparten varias marcas; sin esto salen todas, cada una con su cuenta. «sin» = los que la oficina no pudo atribuir a ninguna.' };
+const CUENTA = { type: 'string', description: 'Solo los anuncios de UNA cuenta (la página de Facebook o el Instagram sobre el que corren): su @usuario, su nombre o su id (facebook:… / instagram:…). La cuenta publicitaria es una sola y la comparten varias marcas; sin esto salen todas, cada una con su cuenta. «sin» = los que la oficina no pudo atribuir a ninguna. Si esa cuenta no existe, la respuesta es un texto que lo dice y lista las que hay (nunca devuelve «todas» en su lugar).' };
 export const TOOLS = [
   { name: 'ver_cuenta_anuncios', description: 'La cuenta publicitaria de Meta: su estado (activa, pago pendiente…), la moneda, el gasto de hoy, de 7 días y del mes contra los topes del dueño, los resultados de 7 días y su costo, y los avisos (anuncios rechazados, tope cerca). También dice cuánto gastó y logró cada cuenta (página/Instagram) dentro de esa cuenta publicitaria. Úsalo primero cuando la tarea hable de publicidad.',
     inputSchema: { type: 'object', properties: { rango: RANGO } } },

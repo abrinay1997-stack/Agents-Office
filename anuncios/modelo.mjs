@@ -266,13 +266,18 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
   // Un anuncio cuenta una sola vez (en su marca): sumar «Facebook» e «Instagram» por separado doblaría el gasto. Sin pista = «cuenta no identificada».
   const grupos = new Map();
   for (const x of porAnuncio) { const k = x.atr.clave || '~sin'; if (!grupos.has(k)) grupos.set(k, { clave: x.atr.clave, cuentas: [], items: [] }); const gr = grupos.get(k); gr.cuentas = unirCuentas([gr.cuentas, x.atr.cuentas]); gr.items.push(x); }
+  // Gasto en el rango de un anuncio que ya no está en la estructura leída (borrado o archivado): sin cuenta que atribuirle, va a «sin identificar»
+  // para que las cuentas sumen SIEMPRE el gasto total, sin doble conteo.
+  const conocidos = new Set(porAnuncio.map(x => x.id)), huerfanas = delRango.filter(f => !conocidos.has(f.ad_id));
+  if (huerfanas.length && !grupos.has('~sin')) grupos.set('~sin', { clave: null, cuentas: [], items: [] });
   const porCuenta = [...grupos.values()].map(gr => {
-    const filasG = delRango.filter(f => gr.items.some(i => i.id === f.ad_id));
+    const filasG = delRango.filter(f => gr.items.some(i => i.id === f.ad_id)), extra = gr.clave === null ? huerfanas : [];
     const tipos = {}; for (const i of gr.items) (tipos[i.ts] ||= []).push(...delRango.filter(f => f.ad_id === i.id));
     const tk = Object.keys(tipos).filter(Boolean), gastoT = k => tipos[k].reduce((s, f) => s + (num(f.spend) || 0), 0);
     const dom = tk.sort((a, b) => gastoT(b) - gastoT(a))[0] || null;
     return { clave: gr.clave, cuentas: gr.cuentas, texto: textoCuentas(gr.cuentas), anuncios: gr.items.length, campanas: new Set(campanas.filter(c => c.conjuntos.some(s => s.anuncios.some(a => gr.items.some(i => i.id === a.id)))).map(c => c.id)).size,
-      gasto: hayCifras ? r2(filasG.reduce((s, f) => s + (num(f.spend) || 0), 0)) : null, cifras: dom && hayCifras ? cifras(tipos[dom], dom, { hayDatos: hayCifras }) : null, otrosObjetivos: tk.length > 1 };
+      ...(extra.length ? { fueraDeLaLectura: new Set(extra.map(f => f.ad_id)).size } : {}), // anuncios con gasto que ya no están en lo leído de Meta
+      gasto: hayCifras ? r2([...filasG, ...extra].reduce((s, f) => s + (num(f.spend) || 0), 0)) : null, cifras: dom && hayCifras ? cifras(tipos[dom], dom, { hayDatos: hayCifras }) : null, otrosObjetivos: tk.length > 1 };
   }).sort((a, b) => (b.gasto ?? -1) - (a.gasto ?? -1) || (a.clave ? 0 : 1) - (b.clave ? 0 : 1));
 
   // el resumen de 7 días: los resultados del tipo con más gasto (sumar conversaciones con clics no dice nada)
@@ -311,6 +316,7 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
     const ac = avisoCredito(creditoDisponible(deMeta(cta.amount_spent, moneda), deMeta(cta.spend_cap, moneda, { ceroEsNada: true })), topes.diario, moneda); if (ac) avisos.push({ nivel: 'warn', texto: ac });
     if (cta.currency && cta.currency !== 'USD') avisos.push({ nivel: 'info', texto: `La cuenta va en ${cta.currency}, no en USD: los topes de la oficina se leen en esa moneda.` });
   }
+  if (cta) for (const t of (g.avisos || []).filter(x => /^sin cuenta de Instagram/.test(x))) avisos.push({ nivel: 'info', texto: t.charAt(0).toUpperCase() + t.slice(1) + '.' });
   const todos = campanas.flatMap(c => c.conjuntos.flatMap(s => s.anuncios));
   const rech = todos.filter(a => a.estado === 'DISAPPROVED'), prob = todos.filter(a => a.estado === 'WITH_ISSUES');
   if (rech.length) avisos.push({ nivel: 'bad', texto: `Meta rechazó ${rech.length === 1 ? 'un anuncio' : rech.length + ' anuncios'}: ${rech.slice(0, 3).map(a => `«${a.nombre}»${a.revision[0] ? ` (${a.revision[0]})` : ''}`).join(', ')}.` });

@@ -34,6 +34,25 @@ test('2 nov 2026 · la cuenta de cada anuncio: el creativo guarda page_id e inst
   assert.equal(x.object_story_spec.page_id, 'P1'); assert.equal(x.object_story_spec.instagram_user_id, 'IG1'); assert.equal(x.instagram_user_id, 'IG1'); assert.match(x.effective_object_story_id, /^P1_/);
 });
 
+test('2 nov 2026 · dos marcas: el token de una página NO sirve en la de otra (error 200), las conversaciones y los mensajes son de cada página, y comentar/ocultar valida al dueño', async () => {
+  const pg = [{ id: 'P1', name: 'PanaClaw', access_token: 'tk-p1', instagram_business_account: { id: 'IG1', username: 'panaclaw' } }, { id: 'P2', name: 'BukoFlow', access_token: 'tk-p2', instagram_business_account: { id: 'IG2', username: 'bukoflow' } }];
+  const g = crearMetaStand({ paginas: pg });
+  const ahora = new Date(g.st.reloj).toISOString();
+  g.st.conversaciones = [{ id: 't1', pagina: 'P1', platform: 'messenger', messages: { data: [{ id: 'a', message: 'hola', from: { id: 'U1' }, created_time: ahora }] } }, { id: 't2', pagina: 'P2', platform: 'messenger', messages: { data: [{ id: 'b', message: 'hola', from: { id: 'U2' }, created_time: ahora }] } }];
+  g.st.comentarios.M2 = [{ id: 'c2', text: 'x', username: 'u' }]; g.st.duenoDe = { M2: 'P2' };
+  const con = (tk, metodo, ruta, campos) => { const init = { method: metodo, headers: { authorization: `Bearer ${tk}` } }; if (campos) init.body = new URLSearchParams(Object.entries(campos).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)])); return g.fetchFn(`${G}${ruta}`, init).then(async r => ({ status: r.status, ...(await r.json()) })); };
+  assert.deepEqual((await con('tk-p2', 'GET', '/P2/conversations?platform=messenger')).data.map(c => c.id), ['t2'], 'cada página, sus conversaciones');
+  assert.deepEqual((await con('tk-p1', 'GET', '/P1/conversations?platform=messenger')).data.map(c => c.id), ['t1']);
+  assert.equal((await con('tk-p1', 'GET', '/P2/conversations?platform=messenger')).error.code, 200, 'con el token de la otra marca, no');
+  const msg = (tk, pgn, para) => con(tk, 'POST', `/${pgn}/messages`, { recipient: { id: para }, messaging_type: 'RESPONSE', message: { text: 'Hola' } });
+  assert.equal((await msg('tk-p1', 'P2', 'U2')).error.code, 200); assert.equal(g.st.enviados.length, 0, 'no salió nada');
+  const ok = await msg('tk-p2', 'P2', 'U2'); assert.ok(ok.message_id); assert.deepEqual([g.st.mensajesConToken[0].pagina, g.st.mensajesConToken[0].token], ['P2', 'tk-p2']);
+  assert.equal((await con('tk-p1', 'POST', '/c2/replies', { message: 'x' })).error.code, 200, 'responder a un comentario de P2 con el token de P1: no');
+  assert.equal((await con('tk-p1', 'POST', '/M2/comments', { message: 'x' })).error.code, 200, 'comentar en una publicación de P2 con el token de P1: no');
+  assert.equal((await con('tk-p2', 'POST', '/M2/comments', { message: 'x' })).error, undefined); assert.equal(g.st.respuestasConToken.at(-1).token, 'tk-p2');
+  assert.equal((await con(TOKEN_STAND, 'GET', '/P2/conversations?platform=messenger')).data.length, 1, 'el token de usuario del sistema ve todas');
+});
+
 test('Marketing API: crear en orden, en pausa, y leerlo con su estado efectivo', async () => {
   const g = crearMetaStand();
   const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());
