@@ -46,3 +46,18 @@ test('Fase 0 de Anuncios: los ids de Meta son opcionales y con su formato; los t
 test('un campo de texto obligatorio sigue sin poder quedar vacío', () => {
   assert.equal(S.apply({}, { name: '  ' }).errors.length, 1);
 });
+
+test('Anuncios (punto 10): el WhatsApp acepta +, espacios, guiones y paréntesis, guarda solo dígitos y exige código de país', () => {
+  const f = S.FIELDS.find(x => x.path === 'anuncios.whatsapp');
+  assert.deepEqual(S.clean(f, '+507 6531-0721'), { value: '50765310721' });
+  assert.deepEqual(S.clean(f, '(507) 6531 0721'), { value: '50765310721' });
+  assert.deepEqual(S.clean(f, '50765310721'), { value: '50765310721' });
+  assert.deepEqual(S.clean(f, ''), { value: '' }, 'vacío = sin WhatsApp');
+  const sin = S.clean(f, '62272025');
+  assert.match(sin.error, /falta el código de país.*507/);
+  assert.match(S.clean(f, '5076227202').error, /Panamá.*11/, 'empieza por 507 pero no tiene 11 dígitos');
+  assert.match(S.clean(f, '1234567').error, /entre 8 y 15/);
+  assert.match(S.clean(f, '1234567890123456').error, /entre 8 y 15/);
+  assert.match(S.clean(f, 'abc').error, /Número de WhatsApp Business/);
+  assert.deepEqual(S.clean(f, '+34 612 345 678'), { value: '34612345678' }, 'otro país con su código');
+});

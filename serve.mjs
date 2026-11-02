@@ -2345,8 +2345,9 @@ function officeStatus() {
   const rs = routinesOut().routines || [], failedR = rs.filter(r => { const t = list.find(x => x.id === r.lastTaskId); return t && t.error; });
   add('rutinas', 'Rutinas', failedR.length ? 'warn' : 'ok', rs.length ? (failedR.length ? `La última ejecución falló en: ${failedR.map(r => '«' + r.title + '»').join(', ')}.` : `${rs.length} en el horario; ninguna falló la última vez.`) : 'No hay rutinas.', failedR.length ? 'Abre la tarea para ver por qué; la rutina seguirá en su horario.' : '');
   // queue and retries
-  const waiting = list.filter(t => t.state === 'next' && !t.archived), retrying = waiting.filter(t => t.retryAt), oldest = waiting.reduce((m, t) => Math.min(m, t.addedAt || now), now);
-  add('cola', 'Cola de trabajo', waiting.length && now - oldest > 3600e3 ? 'warn' : 'ok', waiting.length ? `${waiting.length} esperando${retrying.length ? `, ${retrying.length} con reintento programado` : ''}; ${running.size} en marcha (máximo ${MAX_RUNS}).` : `Nada esperando; ${running.size} en marcha.`);
+  const exCola = colaTareas.explicarCola(list, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, ahora: now, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget });
+  // «esperando» = lo que la cola sí arrancaría; lo tuyo, lo de personas y lo bloqueado se cuenta aparte y se explica (punto 17)
+  add('cola', 'Cola de trabajo', exCola.esperando && exCola.masViejaMs > 3600e3 ? 'warn' : 'ok', exCola.total ? `${exCola.esperando} esperando a la oficina; ${running.size} en marcha (máximo ${MAX_RUNS}). ${exCola.texto}` : `Nada esperando; ${running.size} en marcha.${exCola.okPendiente ? ' ' + exCola.texto : ''}`);
   // approvals
   const appr = list.filter(t => t.state === 'waiting' && !t.archived), oldA = appr.filter(t => now - (t.waitingAt || now) > day);
   add('aprobaciones', 'Aprobaciones', oldA.length ? 'warn' : 'ok', appr.length ? `${appr.length} esperan tu visto bueno${oldA.length ? `, ${oldA.length} desde hace más de un día` : ''}.` : 'Nada espera tu visto bueno.');

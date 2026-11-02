@@ -599,3 +599,14 @@ test('auditoría 1 nov 2026: cada rango dice sus fechas y la zona de la cuenta, 
   assert.match(cifrasHTML({ gasto: 1, ctr: 1.09, ctrTodos: 1.74, cpc: 1, cpcTodos: 0.7 }, 'USD'), /CTR de enlace.*1,09 %.*CTR \(todos los clics\).*1,74 %/s);
   assert.doesNotMatch(cifrasHTML({ gasto: 1, ctr: 1 }, 'USD'), /<dt>CTR<\/dt>/, 'nunca un «CTR» a secas');
 });
+
+test('puntos 7 y 19: el detalle de una campaña enseña sus problemas (con esc) y el resumen dice «por pagar», no «saldo»', () => {
+  const d = datosDeEjemplo('7d');
+  const c = { ...d.campanas[0], problemas: ['Falla <b>de pago</b>'] };
+  const f = { nivel: 'campana', nodo: c, ruta: '' };
+  const html = detalleHTML(f, { moneda: 'USD' });
+  assert.match(html, /Problemas que marca Meta/); assert.match(html, /Falla &lt;b&gt;de pago&lt;\/b&gt;/); assert.doesNotMatch(html, /<b>de pago/);
+  assert.ok(tieneProblemas(c));
+  const r = resumenHTML({ ...d, cuenta: { ...d.cuenta, saldo: 14.89, porPagar: 14.89, disponible: 5 } });
+  assert.match(r, /deuda con Meta \/ por pagar/); assert.doesNotMatch(r, /· saldo /); assert.match(r, /queda del tope de la cuenta/);
+});

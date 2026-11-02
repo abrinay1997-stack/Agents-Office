@@ -72,6 +72,16 @@ test('activar: pasa por revisión; un rechazado y uno con problemas se leen con 
   assert.equal((await pedir(g, 'GET', `/${ids[0]}`)).effective_status, 'CAMPAIGN_PAUSED');
 });
 
+test('issues_info también sale en campañas y conjuntos, con el nivel que corresponde (punto 7)', async () => {
+  const g = crearMetaStand();
+  const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());
+  const s = await pedir(g, 'POST', `/${CUENTA_STAND}/adsets`, { campaign_id: c.id, name: 's', optimization_goal: 'LINK_CLICKS', billing_event: 'IMPRESSIONS', targeting: segmentacion, status: 'PAUSED' });
+  g.st.campanas[c.id].revision = 'WITH_ISSUES'; g.st.conjuntos[s.id].revision = 'WITH_ISSUES';
+  const rc = await pedir(g, 'GET', `/${c.id}`), rs = await pedir(g, 'GET', `/${s.id}`);
+  assert.equal(rc.issues_info[0].level, 'CAMPAIGN'); assert.ok(rc.issues_info[0].error_message);
+  assert.equal(rs.issues_info[0].level, 'ADSET');
+});
+
 test('copies (deep_copy) duplica todo en pausa; la cuenta con pago pendiente no deja crear', async () => {
   const g = crearMetaStand();
   const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());
