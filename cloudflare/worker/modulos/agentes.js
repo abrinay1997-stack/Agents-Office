@@ -20,6 +20,7 @@ import * as costos from '../lib/agentes/costos.js';
 import { tickAprobaciones } from '../lib/agentes/aprobaciones.js';
 import { crearCorrida, crearCorridasPendientes, corridasVivas, avanzar, modoInicial } from '../lib/agentes/ejecutor.js';
 import { tomarSiguiente } from './tareas.js';
+import { explicarCola } from '../../../tareas/cola.mjs';
 import { secretoPermitido } from '../lib/conectores.js';
 import { conectoresListados } from '../lib/conectores-acceso.js';
 import { resumenMcp } from '../lib/mcp-estado.js';
@@ -105,8 +106,10 @@ export async function estado(env, db) {
   add('conectores', 'Conectores', sinToken.length ? 'warn' : 'info', cons.length ? `${cons.length} registrados${sinToken.length ? `; sin su secreto: ${sinToken.map(c => c.nombre).join(', ')}` : ''}.` : 'No hay conectores MCP registrados.', sinToken.length ? 'Guarda el token de cada uno como secreto en GitHub (MCP_<NOMBRE>_TOKEN) y vuelve a desplegar.' : '');
   const rs = (await RT.rutinasConEstado(db, C.agents)).list, falladas = rs.filter(r => { const t = lista.find(x => x.id === r.lastTaskId); return t && t.error; });
   add('rutinas', 'Rutinas', falladas.length ? 'warn' : 'ok', rs.length ? (falladas.length ? `La última ejecución falló en: ${falladas.map(r => '«' + r.title + '»').join(', ')}.` : `${rs.length} en el horario; ninguna falló la última vez.`) : 'No hay rutinas.');
-  const esp = lista.filter(t => t.state === 'next' && !t.archived), reint = esp.filter(t => t.retryAt), vivas = (await corridasVivas(db)).length, viejo = esp.reduce((m, t) => Math.min(m, t.addedAt || now), now);
-  add('cola', 'Cola de trabajo', esp.length && now - viejo > 3600e3 ? 'warn' : 'ok', esp.length ? `${esp.length} esperando${reint.length ? `, ${reint.length} con reintento programado` : ''}; ${vivas} en marcha.` : `Nada esperando; ${vivas} en marcha.`);
+  const vivas = (await corridasVivas(db)).length, ajC = C.ajustes;
+  const ex = explicarCola(lista, { enVuelo: 0, max: Math.max(1, Math.min(8, +ajC.concurrency || 3)), ahora: now, sinPresupuesto: await costos.sinPresupuesto(db, ajC.costs, now), sinLlave: !hayLlave(env) });
+  // «esperando» = lo que la cola sí arrancaría; lo tuyo, lo de personas y lo bloqueado se cuenta aparte y se explica (punto 17)
+  add('cola', 'Cola de trabajo', ex.esperando && ex.masViejaMs > 3600e3 ? 'warn' : 'ok', ex.total ? `${ex.esperando} esperando a la oficina; ${vivas} en marcha. ${ex.texto}` : `Nada esperando; ${vivas} en marcha.${ex.okPendiente ? ' ' + ex.texto : ''}`);
   const ap = lista.filter(t => t.state === 'waiting' && !t.archived), viejas = ap.filter(t => now - (t.waitingAt || now) > day);
   add('aprobaciones', 'Aprobaciones', viejas.length ? 'warn' : 'ok', ap.length ? `${ap.length} esperan tu visto bueno${viejas.length ? `, ${viejas.length} desde hace más de un día` : ''}.` : 'Nada espera tu visto bueno.');
   const errs = lista.filter(t => t.error && !t.stopped && now - (t.doneAt || 0) < day);

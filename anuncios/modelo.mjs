@@ -213,6 +213,17 @@ function creativoDe(c) {
  * @param {object} o.topes          { diario, mensual, campana } en la moneda
  * @param {boolean} o.hayCifras     si alguna vez se leyeron las cifras
  */
+/**
+ * El crédito que queda de verdad, solo si se sabe: el tope de gasto de la cuenta (spend_cap) menos lo ya gastado. Sin tope de cuenta
+ * no hay dato (el `balance` de Meta es lo que se DEBE, no lo que queda) y devuelve null: nunca se inventa.
+ */
+export function creditoDisponible(gastado, spendCap) { return gastado === null || gastado === undefined || spendCap === null || spendCap === undefined ? null : Math.max(0, r2(spendCap - gastado)); }
+/** El aviso (solo aviso: nunca cambia ni gasta nada) de que lo que queda no alcanza para un día del tope diario; null si no se sabe o alcanza. */
+export function avisoCredito(disponible, topeDiario, moneda = 'USD') {
+  if (disponible === null || disponible === undefined || !(topeDiario > 0) || disponible >= topeDiario) return null;
+  const m = moneda === 'USD' ? 'US$' : moneda + ' ';
+  return `Al tope de gasto de la cuenta le quedan ${m}${disponible.toFixed(2)}, menos que un día del tope diario (${m}${topeDiario.toFixed(2)}): Meta puede dejar de entregar. Súbelo o revisa la facturación en el Administrador de anuncios.`;
+}
 export function armarVista({ guardado = null, filas = [], alcances = {}, rango = '7d', hoy, topes = {}, hayCifras = false } = {}) {
   const R = rangos(hoy), [desde, hasta] = R[rango] || R['7d'];
   const g = guardado || {}, cta = g.cuenta || null, moneda = cta?.currency || 'USD';
@@ -234,7 +245,7 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
       });
       return { id: s.id, nombre: es.nombre, creadoFuera: es.creadoFuera, optimizacion: s.optimization_goal || null, destino: s.destination_type || null, estado: s.effective_status || s.status || null, estadoTexto: estadoTexto(s.effective_status || s.status), aprendizaje: aprendizaje(s.learning_stage_info), presupuesto: presupuesto(s, moneda), publico: publicoTexto(s.targeting), inicio: s.start_time || null, fin: s.end_time || null, problemas: problemas(s.issues_info), cifras: cifras(delRango.filter(f => f.adset_id === s.id), ts, { alcance: alc('adset', s.id), hayDatos: hayCifras }), anuncios };
     });
-    return { id: camp.id, nombre: e.nombre, objetivo: camp.objective || null, objetivoTexto: objetivoTexto(camp.objective), estado: camp.effective_status || camp.status || null, estadoTexto: estadoTexto(camp.effective_status || camp.status), creadoFuera: e.creadoFuera, presupuesto: presupuesto(camp, moneda), spendCap: deMeta(camp.spend_cap, moneda, { ceroEsNada: true }), estrategia: camp.bid_strategy || null, inicio: camp.start_time || null, fin: camp.stop_time || null, resultado: tc, cifras: cifras(delRango.filter(f => f.campaign_id === camp.id), tc, { alcance: alc('campaign', camp.id), hayDatos: hayCifras }), conjuntos };
+    return { id: camp.id, nombre: e.nombre, objetivo: camp.objective || null, objetivoTexto: objetivoTexto(camp.objective), estado: camp.effective_status || camp.status || null, estadoTexto: estadoTexto(camp.effective_status || camp.status), creadoFuera: e.creadoFuera, presupuesto: presupuesto(camp, moneda), spendCap: deMeta(camp.spend_cap, moneda, { ceroEsNada: true }), estrategia: camp.bid_strategy || null, inicio: camp.start_time || null, fin: camp.stop_time || null, problemas: problemas(camp.issues_info), resultado: tc, cifras: cifras(delRango.filter(f => f.campaign_id === camp.id), tc, { alcance: alc('campaign', camp.id), hayDatos: hayCifras }), conjuntos };
   });
 
   // lo gastado (de las filas, que ya vienen en la moneda)
@@ -264,6 +275,7 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
   if (cta) {
     const ce = cuentaEstado(cta.account_status);
     if (ce.nivel !== 'ok') avisos.push({ nivel: ce.nivel, texto: `La cuenta publicitaria está: ${ce.texto.toLowerCase()}. Mientras tanto Meta no entrega anuncios: revísala en el Administrador de anuncios → Facturación.` });
+    const ac = avisoCredito(creditoDisponible(deMeta(cta.amount_spent, moneda), deMeta(cta.spend_cap, moneda, { ceroEsNada: true })), topes.diario, moneda); if (ac) avisos.push({ nivel: 'warn', texto: ac });
     if (cta.currency && cta.currency !== 'USD') avisos.push({ nivel: 'info', texto: `La cuenta va en ${cta.currency}, no en USD: los topes de la oficina se leen en esa moneda.` });
   }
   const todos = campanas.flatMap(c => c.conjuntos.flatMap(s => s.anuncios));
@@ -274,7 +286,7 @@ export function armarVista({ guardado = null, filas = [], alcances = {}, rango =
   tope(gasto.hoy, topes.diario, 'de hoy'); tope(gasto.mes, topes.mensual, 'del mes');
 
   return {
-    cuenta: cta ? { id: cta.id || null, nombre: cta.name || null, estado: num(cta.account_status), estadoTexto: cuentaEstado(cta.account_status).texto, moneda, zona: cta.timezone_name || null, gastado: deMeta(cta.amount_spent, moneda), spendCap: deMeta(cta.spend_cap, moneda, { ceroEsNada: true }), saldo: deMeta(cta.balance, moneda) } : null,
+    cuenta: cta ? { id: cta.id || null, nombre: cta.name || null, estado: num(cta.account_status), estadoTexto: cuentaEstado(cta.account_status).texto, moneda, zona: cta.timezone_name || null, gastado: deMeta(cta.amount_spent, moneda), spendCap: deMeta(cta.spend_cap, moneda, { ceroEsNada: true }), saldo: deMeta(cta.balance, moneda), porPagar: deMeta(cta.balance, moneda), disponible: creditoDisponible(deMeta(cta.amount_spent, moneda), deMeta(cta.spend_cap, moneda, { ceroEsNada: true })) } : null,
     rango, desde, hasta, gasto, avisos, resumen, campanas,
   };
 }

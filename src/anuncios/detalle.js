@@ -50,6 +50,7 @@ export function detalleHTML(f, { moneda = 'USD', rango = '7d', ahora = Date.now(
       ${rv.length ? `<p class="anu-mal-t">Lo que dijo la revisión:</p><ul class="anu-mal">${rv.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${pb.length ? `<p class="anu-mal-t">Problemas:</p><ul class="anu-mal">${pb.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</section>`;
   }
+  else if ((n.problemas || []).length) revision = `<section class="anu-dsec" aria-labelledby="anuDRv"><h3 id="anuDRv">Problemas que marca Meta</h3><ul class="anu-mal">${n.problemas.map(x => `<li>${esc(x)}</li>`).join('')}</ul></section>`;
   return `<div class="anu-dh"><div><p class="anu-dnivel">${NIVEL[f.nivel]}${ruta ? ` · <span>${ruta}</span>` : ''}</p><h2 id="anuDTit">${esc(n.nombre || '(sin nombre)')}</h2></div>
       <button type="button" class="anu-icb" data-cerrardet aria-label="Cerrar el detalle" title="Cerrar (Esc)">${svg('x')}</button></div>
     <dl class="anu-datos">${datos.join('')}</dl>${accionesBotonesHTML(f, ahora)}${creativo}${revision}

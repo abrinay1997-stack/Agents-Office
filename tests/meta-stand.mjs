@@ -113,7 +113,11 @@ export function crearMetaStand(o = {}) {
     const salida = { ...x, configured_status: x.status, effective_status: efectivo(x) };
     delete salida.revision;
     if (x.revision === 'DISAPPROVED') salida.ad_review_feedback = { global: { 'Texto engañoso': 'El anuncio promete un resultado que no se puede garantizar.' } };
-    if (x.revision === 'WITH_ISSUES') salida.issues_info = [{ error_code: 1487, error_summary: 'Problema con la página', error_message: 'La página del anuncio no está publicada.', level: 'AD' }];
+    if (x.revision === 'WITH_ISSUES') salida.issues_info = [x.adset_id
+      ? { error_code: 1487, error_summary: 'Problema con la página', error_message: 'La página del anuncio no está publicada.', level: 'AD' }
+      : x.campaign_id
+        ? { error_code: 1815, error_summary: 'Problema con el público', error_message: 'El público del conjunto es demasiado pequeño.', level: 'ADSET' }
+        : { error_code: 2446, error_summary: 'Problema con la campaña', error_message: 'La campaña tiene un problema de facturación.', level: 'CAMPAIGN' }];
     return salida;
   };
 

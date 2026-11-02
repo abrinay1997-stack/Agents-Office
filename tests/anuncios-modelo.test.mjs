@@ -2,7 +2,7 @@
 // la etiqueta de la oficina, las cifras recalculadas (nunca promediadas) y la vista que contesta GET /api/anuncios.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resultadoDe, cifras, estadoTexto, aprendizaje, cuentaEstado, deMeta, aMeta, etiqueta, conEtiqueta, publicoTexto, rangos, fechaEn, armarVista, buscar, textoCampanas, textoCuenta, textoObjeto,
+import { creditoDisponible, avisoCredito, resultadoDe, cifras, estadoTexto, aprendizaje, cuentaEstado, deMeta, aMeta, etiqueta, conEtiqueta, publicoTexto, rangos, fechaEn, armarVista, buscar, textoCampanas, textoCuenta, textoObjeto,
   borradorPorDefecto, normalizarBorrador, validarBorrador, combinacion, COMBINACIONES, TODAS_LAS_COMBINACIONES, costoMaximo, ErrorBorrador, lineaBorrador } from '../anuncios/modelo.mjs';
 
 test('el resultado depende del objetivo y del destino', () => {
@@ -72,7 +72,7 @@ test('la vista: estructura, estados, aprendizaje, rechazos con su motivo, cifras
   const hoy = '2026-10-08';
   const guardado = {
     cuenta: { id: 'act_1001', name: 'PanaClaw Ads', account_status: 1, currency: 'USD', timezone_name: 'America/Panama', amount_spent: '12345', spend_cap: '0', balance: '500' },
-    campanas: [{ id: 'C1', name: 'Mensajes · AO:b1', objective: 'OUTCOME_ENGAGEMENT', effective_status: 'ACTIVE', daily_budget: '1500', spend_cap: '15000' }, { id: 'C2', name: 'Vieja', objective: 'OUTCOME_TRAFFIC', effective_status: 'PAUSED' }],
+    campanas: [{ id: 'C1', name: 'Mensajes · AO:b1', objective: 'OUTCOME_ENGAGEMENT', effective_status: 'ACTIVE', daily_budget: '1500', spend_cap: '15000', issues_info: [{ error_message: 'La campaña tiene un problema de facturación.' }] }, { id: 'C2', name: 'Vieja', objective: 'OUTCOME_TRAFFIC', effective_status: 'PAUSED' }],
     conjuntos: [{ id: 'S1', campaign_id: 'C1', name: 'Panamá', effective_status: 'ACTIVE', optimization_goal: 'CONVERSATIONS', destination_type: 'WHATSAPP', learning_stage_info: { status: 'LEARNING', conversions: 6 }, targeting: { geo_locations: { countries: ['PA'] }, age_min: 18 } }],
     anuncios: [
       { id: 'A1', adset_id: 'S1', campaign_id: 'C1', name: 'Bueno · AO:b1', effective_status: 'ACTIVE', creative: { id: 'K1' } },
@@ -84,8 +84,9 @@ test('la vista: estructura, estados, aprendizaje, rechazos con su motivo, cifras
   const fila = (ad, fecha, spend, conv) => ({ ad_id: ad, adset_id: 'S1', campaign_id: 'C1', date_start: fecha, spend: String(spend), impressions: '1000', reach: '700', clicks: '10', inline_link_clicks: '8', actions: conv ? [{ action_type: 'onsite_conversion.messaging_conversation_started_7d', value: String(conv) }] : [] });
   const filas = [fila('A1', hoy, 9.5, 4), fila('A1', '2026-10-05', 5, 2), fila('A1', '2026-09-28', 5, 4)];
   const v = armarVista({ guardado, filas, alcances: {}, rango: '7d', hoy, topes: { diario: 10, mensual: 300, campana: 150 }, hayCifras: true });
-  assert.equal(v.cuenta.estadoTexto, 'Activa'); assert.equal(v.cuenta.gastado, 123.45); assert.equal(v.cuenta.spendCap, null); assert.equal(v.cuenta.saldo, 5);
+  assert.equal(v.cuenta.estadoTexto, 'Activa'); assert.equal(v.cuenta.gastado, 123.45); assert.equal(v.cuenta.spendCap, null); assert.equal(v.cuenta.saldo, 5); assert.equal(v.cuenta.porPagar, 5, 'punto 19: es lo que se debe'); assert.equal(v.cuenta.disponible, null, 'sin tope de cuenta no hay crédito conocido');
   const c1 = v.campanas.find(c => c.id === 'C1');
+  assert.deepEqual(c1.problemas, ['La campaña tiene un problema de facturación.'], 'punto 7: issues_info de la campaña'); assert.deepEqual(v.campanas.find(c => c.id === 'C2').problemas, []);
   assert.equal(c1.nombre, 'Mensajes'); assert.equal(c1.creadoFuera, false); assert.deepEqual(c1.presupuesto, { tipo: 'diario', usd: 15 }); assert.equal(c1.spendCap, 150); assert.equal(c1.objetivoTexto, 'Interacción');
   assert.equal(v.campanas.find(c => c.id === 'C2').creadoFuera, true);
   const s1 = c1.conjuntos[0]; assert.equal(s1.aprendizaje.texto, 'Aprendiendo'); assert.equal(s1.aprendizaje.conversiones, 6); assert.equal(s1.publico, 'Panamá · 18+');
@@ -177,4 +178,21 @@ test('A3: el costo máximo — al día, en total y la campaña con su spend_cap 
   assert.ok(v.problemas.some(p => /tope diario es US\$5: se crea en pausa, pero no se podrá activar así/.test(p.texto)));
   assert.ok(v.problemas.some(p => /Sin fecha de fin gastaría sin límite/.test(p.texto)));
   assert.match(lineaBorrador({ ...b, creativos: tres }), /^b\w+ · «Campaña nueva» \(Que me escriban por Instagram Direct\) · US\$10 al día · 3 creativo\(s\) · de dueno · borrador$/);
+});
+
+test('punto 19: el crédito solo se avisa si se conoce (tope de la cuenta menos gastado) y no alcanza para un día; nunca se inventa', () => {
+  assert.equal(creditoDisponible(100, 150), 50);
+  assert.equal(creditoDisponible(200, 150), 0);
+  assert.equal(creditoDisponible(100, null), null, 'sin tope de cuenta: no hay dato');
+  assert.equal(creditoDisponible(null, 150), null);
+  assert.match(avisoCredito(8, 10, 'USD'), /US\$8\.00.*US\$10\.00/);
+  assert.equal(avisoCredito(10, 10), null, 'alcanza justo');
+  assert.equal(avisoCredito(null, 10), null, 'sin dato, sin aviso');
+  assert.equal(avisoCredito(3, 0), null, 'sin tope diario no hay con qué comparar');
+  const base = { cuenta: { id: 'act_1', account_status: 1, currency: 'USD', amount_spent: '14500', spend_cap: '15000', balance: '1489' }, campanas: [], conjuntos: [], anuncios: [], creativos: [] };
+  const v = armarVista({ guardado: base, filas: [], alcances: {}, rango: '7d', hoy: '2026-10-08', topes: { diario: 10 }, hayCifras: false });
+  assert.equal(v.cuenta.porPagar, 14.89); assert.equal(v.cuenta.disponible, 5);
+  assert.ok(v.avisos.some(a => /quedan US\$5\.00/.test(a.texto) || /le quedan US\$5\.00/.test(a.texto)));
+  const sin = armarVista({ guardado: { ...base, cuenta: { ...base.cuenta, spend_cap: '0' } }, filas: [], alcances: {}, rango: '7d', hoy: '2026-10-08', topes: { diario: 10 }, hayCifras: false });
+  assert.equal(sin.cuenta.disponible, null); assert.ok(!sin.avisos.some(a => /tope de gasto de la cuenta/.test(a.texto)));
 });
