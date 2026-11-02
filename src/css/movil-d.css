@@ -25,8 +25,8 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 .md-redes { display: inline-flex; align-items: center; gap: 5px; } .md-redes .ao-red { display: block; }
 .md-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; } .md-acciones > .mv-btn { flex: 1 1 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .md-acciones.col { flex-direction: column; } .md-acciones.col > .mv-btn { flex: none; width: 100%; } .md-acciones.fin { margin-top: 18px; }
-.md-sal-b { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; } .md-sal-b > .mv-btn, .md-sal-b > a.mv-btn { flex: 1 1 130px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: inherit; }
-#mvRoot a.mv-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--mv-ink); }
+.md-sal-b { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; } .md-sal-b > .mv-btn, .md-sal-b > a.mv-btn { flex: 1 1 130px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; } .md-sal-b > .mv-btn:not(.primario) { color: inherit; }
+#mvRoot a.mv-btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--mv-ink); } #mvRoot a.mv-btn.primario, #mvRoot a.mv-btn.si { color: var(--mv-bg); }
 .md-pub-r { display: flex; gap: 12px; align-items: flex-start; } .md-pub-r .mv-ic { margin-left: auto; flex: none; }
 .mv-btn.si { background: var(--mv-acc); border-color: var(--mv-acc); color: var(--mv-bg); }
 .md-informe { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 14px; line-height: 1.5; background: var(--mv-surf); border: 1px solid var(--mv-line); border-radius: 12px; padding: 12px; margin: 8px 0; }
