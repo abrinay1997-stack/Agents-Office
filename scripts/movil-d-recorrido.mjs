@@ -49,6 +49,9 @@ export async function correr({ capturas = false } = {}) {
     const pApr = await crear({ titulo: 'Gracias por 1.000 seguidores', texto: 'Mil gracias a todos. Esto es por ustedes.', redes: ['instagram', 'facebook'], formato: 'post', medios: [f3], fecha: dia(4), hora: '09:00', estado: 'revision' });
     await o.api(`/api/contenido/piezas/${pApr.id}/aprobar`, 'POST', {});
     const pMal = await crear({ titulo: 'Idea sin hora', texto: 'Pendiente de pensar.', redes: ['instagram'], formato: 'post', medios: [], fecha: dia(3), estado: 'borrador' });
+    const pCar = await crear({ titulo: 'Carrusel de la semana', texto: 'Tres ideas para tu mesa.', redes: ['instagram'], formato: 'carrusel', medios: [f1, f2, f3], fecha: dia(1), hora: '10:00', estado: 'borrador' });
+    const pHis = await crear({ titulo: 'Historia del día', texto: 'Hoy abrimos temprano.', redes: ['instagram'], formato: 'historia', medios: [f3], fecha: dia(1), hora: '08:00', estado: 'borrador' });
+    const pIdea = await crear({ titulo: 'Lanzamos la colección de verano con sorpresas', texto: '', redes: ['instagram'], formato: 'post', medios: [], fecha: dia(1), hora: '11:00', estado: 'idea' });
     const pVideo = await crear({ titulo: 'Reel del taller', texto: 'Un día en el taller.', redes: ['instagram'], formato: 'reel', medios: [], fecha: dia(6), hora: '19:00', estado: 'borrador' });
 
     // ---- la Meta de mentira de la Bandeja (la oficina de prueba no tiene token) ----
@@ -93,7 +96,7 @@ export async function correr({ capturas = false } = {}) {
         for (const e of document.getElementById('mvRoot').querySelectorAll('button, [role="button"], input:not([type="hidden"]), select, textarea, summary, a[href]')) {
           if (!vis(e)) continue; const r = e.getBoundingClientRect();
           if (e.closest('.mv-tirar')) continue;
-          if (r.height < 43.5 || (r.width < 43.5 && !e.closest('.md-mes'))) malos.push(`${e.tagName.toLowerCase()}.${(e.className || '').toString().split(' ')[0]} ${Math.round(r.width)}×${Math.round(r.height)} «${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 22)}»`);
+          if (r.height < 43.5 || (r.width < 43.5 && !e.closest('.md-mes, .md-sem'))) malos.push(`${e.tagName.toLowerCase()}.${(e.className || '').toString().split(' ')[0]} ${Math.round(r.width)}×${Math.round(r.height)} «${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 22)}»`);
           if (/INPUT|TEXTAREA|SELECT/.test(e.tagName) && e.type !== 'checkbox' && parseFloat(getComputedStyle(e).fontSize) < 16) chicos.push(e.id || e.className);
           const n = (e.getAttribute('aria-label') || e.textContent || '').trim() || (e.id && document.querySelector(`label[for="${e.id}"]`)?.textContent.trim()) || e.getAttribute('placeholder'); if (!n) sinNombre.push(e.className || e.tagName);
         }
@@ -129,16 +132,60 @@ export async function correr({ capturas = false } = {}) {
     const api = async (r, m = 'GET', b) => o.api(r, m, b);
 
     // ============================================================ CONTENIDO · AGENDA
-    await irMas('contenido', '.md-pz');
-    paso(await page.locator('[data-vista="contenido"] .md-pz').count() >= 5, 'Contenido · Agenda: las piezas salen como tarjetas');
-    paso(await page.locator('[data-vista="contenido"] .md-pz svg.ao-red').count() >= 5, 'Contenido · Agenda: las redes salen con sus iconos reales (svg.ao-red)');
-    paso(/BORRADOR|A REVISAR|APROBADA/.test(await page.locator('[data-vista="contenido"]').innerText()), 'Contenido · Agenda: cada pieza dice su estado');
-    paso(await page.locator('[data-vista="contenido"] .md-mini img').count() >= 3, 'Contenido · Agenda: las piezas con imagen enseñan su miniatura');
+    const oscuro = async on => { await page.evaluate(t => { localStorage.setItem('ao.theme', t); if (window.CC?.setDark) window.CC.setDark(t === 'dark'); else document.body.classList.toggle('dark', t === 'dark'); }, on ? 'dark' : 'light'); await espera(250); };
+    const V = '[data-vista="contenido"]';
+    await irMas('contenido', '.md-vistas');
+    // ---- el modo predeterminado: «Mes + lista» (cuadrícula de miniaturas arriba, la lista del día abajo)
+    paso(await page.locator(`${V} [data-agv="mes-lista"][aria-pressed="true"]`).count() === 1, 'Contenido · Agenda: el modo predeterminado es «Mes + lista»');
+    paso(await page.locator(`${V} .md-vistas button`).count() === 5, 'Contenido · Agenda: el conmutador ofrece cinco modos');
+    if (!(await page.locator(`${V} .md-th-celda`).count())) await tocar(`${V} [data-mes="1"]`); // por si hoy es fin de mes y las piezas caen en el mes que viene
+    paso(await page.locator(`${V} .md-th-celda`).count() >= 4, 'Mes + lista: cada día con piezas muestra miniaturas');
+    paso(await page.locator(`${V} .md-celda-g .md-mas`).count() >= 1, 'Mes + lista: un día con más de 3 piezas dice «+N»');
+    paso(await page.locator(`${V} .md-celda`).evaluateAll(cs => Math.max(...cs.map(c => c.querySelectorAll('.md-th').length)) <= 3), 'Mes + lista: nunca más de 3 miniaturas por día');
+    paso(await page.locator(`${V} .md-th-celda .md-th-f svg`).count() >= 4, 'Mes + lista: cada miniatura lleva el glifo de su formato (no solo color)');
+    paso(await page.locator(`${V} .md-th-celda.t-punteado`).count() >= 1 && await page.locator(`${V} .md-th-celda.t-solido`).count() >= 1, 'Mes + lista: el estado se ve también por el trazo del borde (punteado / sólido)');
+    paso(await page.locator(`${V} .md-ley`).count() === 1, 'Mes + lista: la leyenda dice qué significa cada marca');
+    const celdaCon = `${V} .md-celda:has(.md-th)`;
+    const hoyOk = await page.locator(celdaCon).first().evaluate(c => { const r = c.getBoundingClientRect(); return r.width >= 43.5 && r.height >= 43.5; });
+    paso(hoyOk, 'Mes + lista: la celda del día es un botón de 44 px o más aunque la miniatura sea chica');
+    await tocar(celdaCon); await espera(200);
+    paso(await page.locator(`${V} .md-pz`).count() >= 1, 'Mes + lista: tocar un día abre su lista debajo');
+    paso(await page.locator(`${V} .md-pz .md-th-lista img, ${V} .md-pz .md-th-lista .md-th-t`).count() >= 1, 'Agenda: las tarjetas usan la misma miniatura (imagen, o icono del formato con sus palabras)');
+    await foto('agenda-miniaturas-mes-lista-claro'); await medir('Contenido · Mes + lista'); await anchos('Contenido · Mes + lista'); await axe('Contenido · Mes + lista');
+    await oscuro(true); await foto('agenda-miniaturas-mes-lista-oscuro'); await oscuro(false);
+    // ---- el día con 4 piezas (el del carrusel): una historia 9:16, un carrusel 1/N, una idea sin archivo
+    const diaMuchas = dia(1);
+    if (!(await page.locator(`${V} [data-dia="${diaMuchas}"]`).count())) await tocar(`${V} [data-mes="1"]`);
+    await tocar(`${V} [data-dia="${diaMuchas}"]`);
+    paso(await page.locator(`${V} .md-pz .md-th-lista.r-9x16`).count() >= 1, 'Tarjeta: una historia tiene miniatura 9:16');
+    paso(await page.locator(`${V} .md-pz .md-th-n`).evaluateAll(ns => ns.some(n => n.textContent.trim() === '1/3')), 'Tarjeta: un carrusel dice «1/3» sobre su primera imagen');
+    paso(await page.locator(`${V} .md-pz .md-th-t small`).evaluateAll(ns => ns.some(n => /Lanzamos/.test(n.textContent))), 'Tarjeta: una idea sin archivo enseña el icono del formato y sus primeras palabras');
+    // ---- Miniaturas: la cuadrícula sola; el día se abre en una hoja
+    await tocar(`${V} [data-agv="miniaturas"]`);
+    paso(await page.locator(`${V} .md-pz`).count() === 0, 'Miniaturas: la lista NO va debajo');
+    await tocar(`${V} [data-dia="${diaMuchas}"]`); await hojaAbierta();
+    paso(await page.locator('.mv-hoja .md-pz').count() >= 4, 'Miniaturas: tocar un día abre una hoja con sus piezas');
+    await foto('agenda-miniaturas-miniaturas-claro'); await medir('Contenido · hoja del día');
+    await tocar('.mv-hoja .md-pz'); await espera(700); await hojaAbierta();
+    paso(await page.locator('.mv-hoja [data-a="editar"]').count() === 1, 'Miniaturas: tocar una pieza de esa hoja abre la hoja de la pieza (una hoja a la vez)');
+    await page.goBack(); await sinHoja();
+    // ---- Semana
+    await tocar(`${V} [data-agv="semana"]`); paso(await page.locator(`${V} .md-sem-col`).count() === 7, 'Semana: siete columnas');
+    if (!(await page.locator(`${V} .md-th-semana`).count())) await tocar(`${V} [data-sem="1"]`);
+    paso(await page.locator(`${V} .md-th-semana`).count() >= 1, 'Semana: cada columna apila las miniaturas de su día');
+    await foto('agenda-miniaturas-semana-claro'); await medir('Contenido · Semana'); await anchos('Contenido · Semana'); await axe('Contenido · Semana');
+    await oscuro(true); await foto('agenda-miniaturas-semana-oscuro'); await oscuro(false);
+    // ---- Puntos (como antes) y el modo se recuerda en este teléfono
+    await tocar(`${V} [data-agv="puntos"]`); paso(await page.locator(`${V} .mv-celda`).count() >= 28 && await page.locator(`${V} .md-th`).count() === 0 || await page.locator(`${V} .mv-celda i u`).count() >= 1, 'Puntos: la cuadrícula con puntos, como antes');
+    await foto('agenda-miniaturas-puntos-claro'); await medir('Contenido · Puntos'); await anchos('Contenido · Puntos');
+    paso(await page.evaluate(() => localStorage.getItem('ao.mv.ct.vista')) === 'puntos', 'El modo elegido se recuerda en este teléfono (ao.mv.ct.vista)');
+    await page.reload(); await page.waitForSelector('#mvRoot .mv-tabs'); await espera(700); await irMas('contenido', '.md-vistas');
+    paso(await page.locator(`${V} [data-agv="puntos"][aria-pressed="true"]`).count() === 1, 'Tras recargar, la Agenda vuelve al modo elegido');
+    await tocar(`${V} [data-agv="lista"]`); paso(await page.locator(`${V} .md-pz`).count() >= 5, 'Lista: las piezas salen como tarjetas');
+    paso(await page.locator(`${V} .md-pz svg.ao-red`).count() >= 5, 'Contenido · Agenda: las redes salen con sus iconos reales (svg.ao-red)');
+    paso(/BORRADOR|A REVISAR|APROBADA/.test(await page.locator(V).innerText()), 'Contenido · Agenda: cada pieza dice su estado');
+    paso(await page.locator(`${V} .md-th-i img`).count() >= 3, 'Contenido · Agenda: las piezas con imagen enseñan su miniatura');
     await foto('01-agenda'); await medir('Contenido · Agenda'); await anchos('Contenido · Agenda'); await axe('Contenido · Agenda');
-    await tocar('[data-vista="contenido"] [data-modo="semana"]'); paso(await page.locator('[data-vista="contenido"] .md-semana .mv-chip').count() === 7, 'Contenido · Semana: siete días');
-    await foto('02-semana'); await medir('Contenido · Semana');
-    await tocar('[data-vista="contenido"] [data-modo="mes"]'); paso(await page.locator('[data-vista="contenido"] .mv-celda').count() >= 28, 'Contenido · Mes: la cuadrícula con puntos'); await medir('Contenido · Mes'); await anchos('Contenido · Mes');
-    await tocar('[data-vista="contenido"] [data-modo="lista"]');
     // abrir una pieza: la hoja con sus acciones
     await tocar(`[data-vista="contenido"] [data-pz="${pBor.id}"]`); await hojaAbierta();
     paso(/Combo de octubre/.test(await page.locator('.mv-hoja').innerText()) && await page.locator('.mv-hoja [data-a="aprobar"]').count() === 1, 'Contenido: tocar una pieza abre su hoja (texto, redes, Editar, Aprobar)'); await foto('03-pieza'); await medir('Contenido · hoja de una pieza');

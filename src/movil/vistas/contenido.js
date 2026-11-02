@@ -1,6 +1,5 @@
 // Versión móvil (25 oct 2026) — CONTENIDO: lo que se publica en redes, hecho para el pulgar. Cuatro pestañas dentro de una sola pantalla:
-//   · AGENDA   los días con sus piezas (tarjeta: miniatura, redes con sus iconos reales, estado y hora); semana y mes compactos con puntos;
-//              «+» flotante abre «Crear publicación» (crear.js, a pantalla completa por pasos);
+//   · AGENDA   los días con sus piezas: cinco modos (Mes + lista · Miniaturas · Semana · Puntos · Lista, recordado en ao.mv.ct.vista), cada pieza con su MINIATURA (src/movil/contenido-agenda-puro.js); «+» abre «Crear publicación»;
 //   · COLA     la Programación: lo que pide tu atención, «Borradores de la semana» con Aprobar, y la cola por día con EN COLA · ENTREGANDO ·
 //              PROGRAMADA · PUBLICADA · FALLÓ y sus botones; selección múltiple con una barra de acciones;
 //   · BANDEJA  los comentarios y mensajes de Meta (bandeja.js);
@@ -8,9 +7,10 @@
 // NO duplica reglas: las de cada red son contenido-reglas.js, la cola es contenido-cola.js, y quién aprueba lo decide el servidor (solo el dueño;
 // guardar no aprueba). Los botones que piden algo al servidor usan conEstado (ocupado → hecho ✓ | error con «Reintentar»).
 import { colaPorDia, requiereAccion, textoSalida, momentoDe, cuentaAtras } from '../../contenido-cola.js';
-import { ESTADO, FORMATO } from '../../pieza-base.js';
+import { ESTADO, FORMATO, FICON } from '../../pieza-base.js';
 import { formatoDe, nombreFormato } from '../../contenido-reglas.js';
 import { mesGrid, cabeceraSemana } from '../agenda.js';
+import { VISTAS, LLAVE_VISTA, normalizarVista, miniaturaDe, estadoVisual, piezasPorDia, resumenDia, diasDeSemana, frasePiezas, formatoPieza, LEYENDA, MAX_COLUMNA } from '../contenido-agenda-puro.js';
 import { esc, svg, vacio, esqueleto, falla } from '../ui.js';
 import { redes, miniatura, con, diaTexto, diaLargo, hoyYmd, sumaDias, aprobarPieza, publicarAhora, motivoNoYa, resumenSalida, motivo, NOMBRE_RED } from './d-comun.js';
 import { montarBandeja } from './bandeja.js';
@@ -22,13 +22,26 @@ const chipEstado = p => {
   if (sal) return `<span class="md-chip ${sal.malo ? 'mal' : sal.clave === 'publicada' ? 'bien' : 'info'}">${esc(sal.etiqueta)}</span>`;
   return `<span class="md-chip e-${esc(p.estado)}">${esc(e.name)}</span>`;
 };
+const vistaGuardada = () => { try { return normalizarVista(localStorage.getItem(LLAVE_VISTA)); } catch { return normalizarVista(null); } };
+const guardarVista = v => { try { localStorage.setItem(LLAVE_VISTA, v); } catch { /* sin almacenamiento: vale para esta sesión */ } };
+
+/** La miniatura de una pieza: su archivo (o, sin archivo, el icono del formato y sus primeras palabras), con el borde de su estado, el glifo del formato y —en grande— el glifo del estado y el «1/N» de un carrusel. `modo`: celda (mes) · semana · lista · perfil. */
+function thumb(p, modo = 'lista') {
+  const m = miniaturaDe(p), ev = estadoVisual(p, textoSalida(p)), chica = modo === 'celda' || modo === 'semana';
+  const fi = FICON[m.formato] || FICON.post;
+  const dentro = m.tipo === 'imagen' ? miniatura(m.src, { clase: 'md-th-i' })
+    : m.tipo === 'video' ? (modo === 'celda' ? '<span class="md-th-i md-th-v" aria-hidden="true"><i>▶</i></span>' : miniatura(m.src, { clase: 'md-th-i' }))
+      : `<span class="md-th-i md-th-t" aria-hidden="true">${modo === 'lista' ? `<small>${esc(m.texto)}</small>` : ''}</span>`;
+  return `<span class="md-th md-th-${modo} t-${ev.trazo} e-${ev.clave} r-${m.ratio.replace(':', 'x')}" data-e="${ev.clave}" data-formato="${esc(m.formato)}">${dentro}<span class="md-th-f" aria-hidden="true">${fi}</span>${modo === 'celda' ? '' : `<span class="md-th-e" aria-hidden="true">${ev.glifo}</span>`}${m.indicador && modo === 'lista' ? `<span class="md-th-n" aria-hidden="true">${esc(m.indicador)}</span>` : ''}</span>`;
+}
+const leyenda = () => `<p class="md-ley" aria-label="Qué significa cada marca">${LEYENDA.map(([g, n]) => `<span><b aria-hidden="true">${g}</b>${n}</span>`).join('')}</p>`;
 const formatosTxt = p => { const set = new Set((p.redes || []).map(r => nombreFormato(r, formatoDe(p, r)))); return [...set].join(' · '); };
 
 export function registrar(shell) {
   shell.registrarVista({
     id: 'contenido', titulo: 'Contenido', icono: 'contenido', grupo: 'mas', sec: 'trabajo', texto: 'Lo que publicas en redes',
     montar(el, ctx) {
-      const E = { piezas: [], ajustes: {}, cargado: false, error: null, tab: 'agenda', modo: 'lista', ancla: Date.now(), diaSel: hoyYmd(), sel: new Set(), seleccionando: false, publicadas: [], pendBandeja: 0, vivo: true };
+      const E = { piezas: [], ajustes: {}, cargado: false, error: null, tab: 'agenda', vista: vistaGuardada(), ancla: Date.now(), diaSel: hoyYmd(), sel: new Set(), seleccionando: false, publicadas: [], pendBandeja: 0, vivo: true };
       el.innerHTML = `<div class="mv-chips md-tabs" role="group" aria-label="Secciones de Contenido">${TABS.map(([k, n]) => `<button type="button" class="mv-chip" data-tab="${k}" aria-pressed="false">${n}<b data-n="${k}" hidden></b></button>`).join('')}</div>
         <div class="mv-scroll" data-sc><div class="mv-cuerpo md-cuerpo" aria-live="polite"></div></div>
         <button type="button" class="mv-fab" data-nueva aria-label="Crear publicación">${svg('mas1')}</button>
@@ -56,7 +69,7 @@ export function registrar(shell) {
         const extra = p.cambiadaTrasAprobar ? '<span class="md-chip mal">CAMBIÓ: vuelve a aprobarla</span>' : '';
         return `<li><button type="button" class="md-pz${sel ? ' sel' : ''}" data-pz="${esc(p.id)}" ${E.seleccionando ? `role="checkbox" aria-checked="${E.sel.has(p.id)}"` : ''}>
           ${E.seleccionando ? `<span class="md-check${E.sel.has(p.id) ? ' on' : ''}" aria-hidden="true">${E.sel.has(p.id) ? '✓' : ''}</span>` : ''}
-          ${miniatura((p.medios || [])[0], { clase: 'md-mini' })}
+          <span class="md-th-slot">${thumb(p, 'lista')}</span>
           <span class="md-pz-c"><b>${esc(titulo(p))}</b>
             ${p.texto ? `<small>${esc(String(p.texto).replace(/\s+/g, ' ').slice(0, 90))}</small>` : '<small>Sin texto todavía</small>'}
             <span class="md-pz-m">${redes(p.redes, 18)}<span class="md-fmt">${esc(formatosTxt(p))}</span>${chipEstado(p)}${extra}${errores ? `<span class="md-chip mal">${errores} ${errores === 1 ? 'problema' : 'problemas'}</span>` : avisos ? `<span class="md-chip aviso">${avisos} ${avisos === 1 ? 'aviso' : 'avisos'}</span>` : ''}</span></span>
@@ -65,11 +78,14 @@ export function registrar(shell) {
 
       // ---------------------------------------------------------------- AGENDA
       function dias(rango) { const m = new Map(); for (const p of E.piezas.filter(rango)) { if (!m.has(p.fecha)) m.set(p.fecha, []); m.get(p.fecha).push(p); } for (const v of m.values()) v.sort((a, b) => (a.hora || '').localeCompare(b.hora || '')); return m; }
+      const listaDelDia = f => { const del = (piezasPorDia(E.piezas).get(f) || []); return `<h3 class="mv-gh">${esc(diaTexto(f))} <span>${del.length}</span></h3>${del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>`}`; };
       function pintarAgenda() {
-        const seg = `<div class="mv-seg" role="group" aria-label="Cómo verlo">${[['lista', 'Agenda'], ['semana', 'Semana'], ['mes', 'Mes']].map(([k, n]) => `<button type="button" data-modo="${k}" aria-pressed="${E.modo === k}">${n}</button>`).join('')}</div>`;
+        const seg = `<div class="mv-seg md-vistas" role="group" aria-label="Cómo ver la agenda">${VISTAS.map(([k, n]) => `<button type="button" data-agv="${k}" aria-pressed="${E.vista === k}">${n}</button>`).join('')}</div>`;
         const modoTxt = E.ajustes.modo === 'simulacro' ? '<p class="md-aviso">Modo simulacro: lo aprobado no se publica de verdad.</p>' : E.ajustes.modo === 'apagado' ? '<p class="md-aviso">La publicación está apagada: lo aprobado no sale.</p>' : '';
-        if (E.modo === 'mes') return seg + modoTxt + pintarMes();
-        if (E.modo === 'semana') return seg + modoTxt + pintarSemana();
+        if (E.vista === 'puntos') return seg + modoTxt + pintarMes({ miniaturas: false, lista: true });
+        if (E.vista === 'miniaturas') return seg + modoTxt + pintarMes({ miniaturas: true, lista: false });
+        if (E.vista === 'mes-lista') return seg + modoTxt + pintarMes({ miniaturas: true, lista: true });
+        if (E.vista === 'semana') return seg + modoTxt + pintarSemana();
         const hoy = hoyYmd(), fin = sumaDias(hoy, 45), m = dias(p => p.fecha && p.fecha >= hoy && p.fecha <= fin);
         const sinFecha = E.piezas.filter(p => !p.fecha);
         const lista = [...m.keys()].sort();
@@ -80,20 +96,27 @@ export function registrar(shell) {
         const vencidas = atras ? `<p class="md-aviso rojo">${atras} ${atras === 1 ? 'pieza ya pasó' : 'piezas ya pasaron'} de hora sin salir. <button type="button" class="mv-link" data-tab-ir="cola">Verlas</button></p>` : '';
         return seg + modoTxt + vencidas + (E.piezas.length ? html + sf : vacio('Todavía no hay piezas', 'Crea la primera publicación con el botón «+».', { icono: 'contenido', boton: 'Crear publicación', accion: 'data-nueva-dia=""' }));
       }
+      // SEMANA: siete columnas; cada una es UN botón (el día) con sus miniaturas apiladas, más grandes que en el mes. La lista del día elegido va debajo.
       function pintarSemana() {
-        const lun = (() => { const d = new Date(`${E.diaSel}T12:00:00`); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; })();
-        const dd = [...Array(7)].map((_, i) => { const d = new Date(lun); d.setDate(lun.getDate() + i); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
-        const m = dias(p => p.fecha && dd.includes(p.fecha)), del = m.get(E.diaSel) || [];
+        const dd = diasDeSemana(E.diaSel), porDia = piezasPorDia(E.piezas), hoy = hoyYmd();
         return `<div class="mv-mes-cab"><button type="button" class="mv-ic" data-sem="-1" aria-label="Semana anterior">${svg('izq')}</button><h3>${esc(diaLargo(dd[0]).replace(/^\w+ /, ''))} – ${esc(diaLargo(dd[6]).replace(/^\w+ /, ''))}</h3><button type="button" class="mv-ic" data-sem="1" aria-label="Semana siguiente">${svg('der')}</button></div>
-          <div class="mv-chips md-semana" role="group" aria-label="Días de la semana">${dd.map((f, i) => { const n = (m.get(f) || []).length; return `<button type="button" class="mv-chip" data-dia="${f}" aria-pressed="${f === E.diaSel}" aria-label="${esc(diaLargo(f))}${n ? ', ' + n + ' piezas' : ''}"><span>${cabeceraSemana[i]} ${+f.slice(8)}</span>${n ? `<b>${n}</b>` : ''}</button>`; }).join('')}</div>
-          <h3 class="mv-gh">${esc(diaTexto(E.diaSel))} <span>${del.length}</span></h3>${del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${E.diaSel}">Crear una</button></p>`}`;
+          <div class="md-sem" role="group" aria-label="Días de la semana">${dd.map((f, i) => { const ps = porDia.get(f) || [], r = resumenDia(ps, MAX_COLUMNA); return `<button type="button" class="md-sem-col${f === E.diaSel ? ' sel' : ''}${f === hoy ? ' hoy' : ''}" data-dia="${f}" aria-pressed="${f === E.diaSel}" aria-label="${esc(diaLargo(f))}${ps.length ? ', ' + esc(frasePiezas(ps, p => estadoVisual(p, textoSalida(p)))) : ', sin piezas'}"><span class="md-sem-d">${cabeceraSemana[i]}</span><b>${+f.slice(8)}</b><span class="md-sem-g" aria-hidden="true">${r.mostrar.map(p => thumb(p, 'semana')).join('')}${r.mas ? `<span class="md-mas">+${r.mas}</span>` : ''}</span></button>`; }).join('')}</div>
+          ${leyenda()}${listaDelDia(E.diaSel)}`;
       }
-      function pintarMes() {
-        const evs = E.piezas.filter(p => p.fecha).map(p => ({ at: momentoDe(p) ?? new Date(`${p.fecha}T12:00`).getTime(), tipo: 'p' })), m = mesGrid(E.ancla, evs), del = E.piezas.filter(p => p.fecha === E.diaSel).sort((a, b) => (a.hora || '').localeCompare(b.hora || ''));
+      // MES: la cuadrícula con PUNTOS (como antes) o con MINIATURAS (hasta 3 por día y «+N»); la lista del día elegido, debajo o —en «Miniaturas»— en una hoja al tocar el día.
+      function pintarMes({ miniaturas, lista }) {
+        const porDia = piezasPorDia(E.piezas), evs = E.piezas.filter(p => p.fecha).map(p => ({ at: momentoDe(p) ?? new Date(`${p.fecha}T12:00`).getTime(), tipo: 'p' })), m = mesGrid(E.ancla, evs), hoy = hoyYmd();
+        const celda = c => {
+          const ps = porDia.get(c.dia) || [], r = resumenDia(ps), frase = ps.length ? ', ' + frasePiezas(ps, p => estadoVisual(p, textoSalida(p))) : '';
+          const g = !ps.length ? '' : miniaturas
+            ? `<span class="md-celda-g" data-n="${Math.min(ps.length, 4)}" aria-hidden="true">${r.mostrar.map(p => thumb(p, 'celda')).join('')}${r.mas ? `<span class="md-mas">+${r.mas}</span>` : ''}</span>`
+            : `<i>${'<u></u>'.repeat(Math.min(3, ps.length))}</i>`;
+          return `<button type="button" role="gridcell" class="mv-celda${miniaturas ? (ps.length ? ' md-celda' : ' md-celda sin') : ''}${c.delMes ? '' : ' fuera'}${c.dia === E.diaSel ? ' sel' : ''}${c.dia === hoy ? ' hoy' : ''}" data-dia="${c.dia}" aria-label="${esc(diaLargo(c.dia))}${esc(frase)}" aria-pressed="${c.dia === E.diaSel}"><b>${c.num}</b>${g}</button>`;
+        };
         return `<div class="mv-mes-cab"><button type="button" class="mv-ic" data-mes="-1" aria-label="Mes anterior">${svg('izq')}</button><h3>${esc(m.titulo)}</h3><button type="button" class="mv-ic" data-mes="1" aria-label="Mes siguiente">${svg('der')}</button></div>
           <div class="mv-mes md-mes" role="grid" aria-label="${esc(m.titulo)}"><div class="mv-mes-sem" role="row">${cabeceraSemana.map(c => `<span role="columnheader">${c}</span>`).join('')}</div>
-          ${m.semanas.map(w => `<div class="mv-mes-fila" role="row">${w.map(c => `<button type="button" role="gridcell" class="mv-celda${c.delMes ? '' : ' fuera'}${c.dia === E.diaSel ? ' sel' : ''}${c.dia === hoyYmd() ? ' hoy' : ''}" data-dia="${c.dia}" aria-label="${esc(diaLargo(c.dia))}${c.n ? ', ' + c.n + (c.n === 1 ? ' pieza' : ' piezas') : ''}" aria-pressed="${c.dia === E.diaSel}"><b>${c.num}</b><i>${c.n ? '<u></u>'.repeat(Math.min(3, c.n)) : ''}</i></button>`).join('')}</div>`).join('')}</div>
-          <h3 class="mv-gh">${esc(diaTexto(E.diaSel))} <span>${del.length}</span></h3>${del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${E.diaSel}">Crear una</button></p>`}`;
+          ${m.semanas.map(w => `<div class="mv-mes-fila" role="row">${w.map(celda).join('')}</div>`).join('')}</div>
+          ${miniaturas ? leyenda() : ''}${lista ? listaDelDia(E.diaSel) : '<p class="mv-intro">Toca un día para ver sus piezas.</p>'}`;
       }
 
       // ---------------------------------------------------------------- COLA (Programación)
@@ -131,7 +154,7 @@ export function registrar(shell) {
         const prog = ig.filter(p => p.fecha >= hoy && p.estado !== 'idea').sort((a, b) => (momentoDe(b) || 0) - (momentoDe(a) || 0));
         const pub = ig.filter(p => p.fecha < hoy).sort((a, b) => (momentoDe(b) || 0) - (momentoDe(a) || 0));
         const sueltas = (E.publicadas || []).filter(x => x.red === 'instagram');
-        const celda = (p, programada) => `<button type="button" class="md-cel${programada ? ' prog' : ''}" data-pz="${esc(p.id)}" aria-label="${esc(titulo(p))}, ${esc(programada ? 'programada para ' + diaTexto(p.fecha) : 'del ' + diaTexto(p.fecha))}">${miniatura(p.medios[0], { clase: 'md-cel-i' })}${programada ? `<i class="md-cel-p">${esc(diaTexto(p.fecha))}</i>` : ''}${p.medios.length > 1 ? '<i class="md-cel-t" aria-hidden="true">❐</i>' : ''}</button>`;
+        const celda = (p, programada) => `<button type="button" class="md-cel${programada ? ' prog' : ''}" data-pz="${esc(p.id)}" aria-label="${esc(titulo(p))}, ${esc(programada ? 'programada para ' + diaTexto(p.fecha) : 'del ' + diaTexto(p.fecha))}">${miniatura(p.medios[0], { clase: 'md-cel-i' })}${programada ? `<i class="md-cel-p">${esc(diaTexto(p.fecha))}</i>` : ''}<span class="md-th-f" aria-hidden="true">${FICON[formatoPieza(p)] || FICON.post}</span>${p.medios.length > 1 ? `<span class="md-th-n" aria-hidden="true">1/${p.medios.length}</span>` : ''}</button>`;
         const celdaFuera = x => `<a class="md-cel" href="${esc(x.enlace || '#')}" target="_blank" rel="noopener noreferrer" aria-label="Publicada fuera de la oficina">${miniatura(x.miniatura, { clase: 'md-cel-i' })}<i class="md-cel-t" aria-hidden="true">↗</i></a>`;
         if (!prog.length && !pub.length && !sueltas.length) return vacio('Tu cuadrícula está vacía', 'Aquí verás cómo se verá tu Instagram: lo programado encima de lo ya publicado. Crea una pieza con imagen o video.', { icono: 'contenido', boton: 'Crear publicación', accion: 'data-nueva-dia=""' });
         return `<p class="mv-intro">Así se ve tu Instagram. Lo programado va marcado con su día; toca una pieza para verla o cambiarla.</p>
@@ -178,6 +201,17 @@ export function registrar(shell) {
         });
         return h;
       }
+      // «Miniaturas» no pone la lista debajo: el día se abre en una hoja. Tocar una pieza cierra esta hoja y abre la de la pieza (una hoja a la vez).
+      function abrirDia(f) {
+        const del = piezasPorDia(E.piezas).get(f) || [];
+        const h = ctx.hoja({ titulo: `${diaTexto(f)} · ${diaLargo(f)}`, lleno: true, clase: 'md-hoja-dia', cuerpo: del.length ? `<ul class="md-lista">${del.map(p => tarjeta(p)).join('')}</ul>` : `<p class="mv-nada">Nada este día. <button type="button" class="mv-link" data-nueva-dia="${f}">Crear una</button></p>` });
+        h.cuerpo.addEventListener('click', e => {
+          const t = e.target.closest('button'); if (!t) return;
+          if (t.hasAttribute('data-nueva-dia')) { h.cerrar(); setTimeout(() => ctx.navegar('crear', { fecha: t.dataset.nuevaDia || '' }), 200); return; }
+          const pz = t.closest('[data-pz]'); const p = pz && porId(pz.dataset.pz); if (p) { h.cerrar(); setTimeout(() => abrirPieza(p), 250); }
+        });
+        return h;
+      }
       const accionSalida = (a, id) => ctx.api(`/api/contenido/piezas/${encodeURIComponent(id)}/${a === 'entregar' ? 'entregar' : a === 'quitar' ? 'quitar' : 'reintentar'}`, { method: 'POST', body: {} });
 
       // ---------------------------------------------------------------- lote (selección múltiple)
@@ -215,10 +249,10 @@ export function registrar(shell) {
         const t = e.target.closest('button, a'); if (!t) return;
         if (t.matches('[data-reintentar]')) return cargar();
         if (t.dataset.tabIr) { E.tab = t.dataset.tabIr; return pintar(); }
-        if (t.dataset.modo) { E.modo = t.dataset.modo; return pintar(); }
+        if (t.dataset.agv) { E.vista = normalizarVista(t.dataset.agv); guardarVista(E.vista); return pintar(); }
         if (t.dataset.mes) { const d = new Date(E.ancla); d.setMonth(d.getMonth() + +t.dataset.mes, 1); E.ancla = d.getTime(); E.diaSel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; return pintar(); }
         if (t.dataset.sem) { E.diaSel = sumaDias(E.diaSel, 7 * +t.dataset.sem); return pintar(); }
-        if (t.dataset.dia) { E.diaSel = t.dataset.dia; return pintar(); }
+        if (t.dataset.dia) { E.diaSel = t.dataset.dia; pintar(); if (E.vista === 'miniaturas') abrirDia(E.diaSel); return; }
         if (t.hasAttribute('data-nueva-dia')) return ctx.navegar('crear', { fecha: t.dataset.nuevaDia || '' });
         if (t.hasAttribute('data-seleccionar')) { E.seleccionando = !E.seleccionando; E.sel.clear(); return pintar(); }
         if (t.dataset.sal) { const r = await con(t, () => (t.dataset.sal === 'quitar' ? ctx.confirmar({ titulo: '¿Quitarla de la cola?', texto: 'No saldrá en las redes. La pieza se queda como la dejaste.', ok: 'Quitar de la cola' }).then(si => { if (!si) throw new Error('Cancelado'); return accionSalida('quitar', t.dataset.id); }) : accionSalida(t.dataset.sal, t.dataset.id)), { hecho: 'Hecho' }); if (r.ok) await cargar({ silencioso: true }); return; }
@@ -232,7 +266,7 @@ export function registrar(shell) {
       });
       barraSel.addEventListener('click', e => { const b = e.target.closest('[data-lote]'); if (!b) return; if (b.getAttribute('aria-disabled') === 'true') return ctx.toast('Elige al menos una pieza.'); lote(b.dataset.lote, b); });
       el.querySelector('.md-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; E.tab = b.dataset.tab; if (E.tab !== 'cola') { E.seleccionando = false; E.sel.clear(); } if (E.tab === 'bandeja') panelBandeja.mostrar(); if (E.tab === 'perfil') traerPublicadas(); sc.scrollTop = 0; pintar(); });
-      fab.addEventListener('click', () => ctx.navegar('crear', { fecha: E.tab === 'agenda' && E.modo !== 'lista' ? E.diaSel : '' }));
+      fab.addEventListener('click', () => ctx.navegar('crear', { fecha: E.tab === 'agenda' && E.vista !== 'lista' ? E.diaSel : '' }));
       ctx.tirar(sc, () => cargar({ silencioso: true }));
 
       async function traerPublicadas() {

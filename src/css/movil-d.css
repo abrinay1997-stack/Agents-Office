@@ -155,3 +155,45 @@ body.mv-inmersivo #mvRoot .mv-toasts, body.mv-inmersivo #mvRoot.con-franja .mv-t
 @media (prefers-reduced-motion: reduce) { .md-sw-i::after { transition: none; } }
 
 #mvRoot a.mv-link, #mvRoot .md-pub a { display: inline-flex; align-items: center; min-height: 44px; }
+
+/* ---- la agenda con MINIATURAS (2 nov 2026): una miniatura por pieza, con el borde de su estado (punteado, raya, sólido, doble), el glifo de su formato y —en grande— el del estado ---- */
+.md-vistas { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; }
+.md-vistas button { grid-column: span 2; min-width: 0; padding: 0 2px; font-size: 14px; } .md-vistas button:nth-child(n+4) { grid-column: span 3; }
+.md-th { position: relative; flex: none; display: block; box-sizing: border-box; overflow: hidden; border-radius: 10px; background: var(--mv-surf2); border: 2px solid var(--mv-line); color: var(--mv-ink); }
+.md-th-lista { height: 68px; } .md-th-lista.r-1x1 { aspect-ratio: 1 / 1; } .md-th-lista.r-4x5 { aspect-ratio: 4 / 5; } .md-th-lista.r-9x16 { aspect-ratio: 9 / 16; }
+.md-th-semana { width: 100%; border-radius: 6px; } .md-th-semana.r-1x1 { aspect-ratio: 1 / 1; } .md-th-semana.r-4x5 { aspect-ratio: 4 / 5; } .md-th-semana.r-9x16 { aspect-ratio: 9 / 16; }
+.md-th-celda { width: 100%; aspect-ratio: 1 / 1; border-width: 1.5px; border-radius: 5px; }
+.md-th-i { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; display: block; }
+.md-th-i img, .md-th-i video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.md-th-i.video i { position: absolute; right: 3px; bottom: 3px; font-style: normal; font-size: 11px; background: rgba(0,0,0,.66); color: #fff; border-radius: 6px; padding: 0 4px; }
+.md-th-i.vacia { background: var(--mv-surf2); }
+.md-th-v { display: grid; place-items: center; background: var(--mv-ink); color: var(--mv-bg); } .md-th-v i { font-style: normal; font-size: 11px; }
+.md-th-t { display: block; } .md-th-t small { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 11px; line-height: 1.2; padding: 3px 4px 0; }
+.md-th.t-punteado { border-style: dashed; border-color: var(--mv-grey); } .md-th.e-borrador { border-color: var(--mv-ambar); }
+.md-th.t-raya { border-style: dotted; border-color: var(--mv-azul); }
+.md-th.t-solido { border-style: solid; border-color: var(--mv-acc); } .md-th.e-publicada { border-color: var(--mv-ink); }
+.md-th.t-doble { border: 3px double var(--mv-rojo); }
+.md-th-f { position: absolute; left: 2px; bottom: 2px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; background: rgba(0,0,0,.66); color: #fff; }
+.md-th-f .pz-fi { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; } .md-th-f .pz-fi .fill { fill: currentColor; stroke: none; }
+.md-th-celda .md-th-f { left: 1px; bottom: 1px; width: 11px; height: 11px; border-radius: 3px; } .md-th-celda .md-th-f .pz-fi { width: 8px; height: 8px; }
+.md-th-semana .md-th-f { width: 14px; height: 14px; border-radius: 4px; } .md-th-semana .md-th-f .pz-fi { width: 10px; height: 10px; }
+.md-th-e { position: absolute; right: 2px; top: 2px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 3px; box-sizing: border-box; text-align: center; font-style: normal; font-size: 11px; font-weight: 800; border-radius: 8px; background: var(--mv-ink); color: var(--mv-bg); }
+.md-th-semana .md-th-e { min-width: 14px; height: 14px; line-height: 14px; padding: 0 1px; }
+.md-th-n { position: absolute; right: 2px; bottom: 2px; font-size: 11px; font-weight: 800; line-height: 15px; padding: 0 4px; border-radius: 7px; background: rgba(0,0,0,.66); color: #fff; }
+.md-th-lista .md-th-n { right: auto; left: 2px; top: 2px; bottom: auto; }
+.md-cel .md-th-n { right: 4px; bottom: 4px; }
+.md-cel .md-th-f { left: 4px; bottom: 4px; }
+.md-mas { display: grid; place-items: center; aspect-ratio: 1 / 1; font-size: 11px; font-weight: 800; border-radius: 5px; background: var(--mv-surf2); color: var(--mv-ink); border: 1.5px solid var(--mv-line); box-sizing: border-box; }
+.md-celda { min-height: 64px; justify-content: flex-start; align-items: stretch; gap: 1px; padding: 2px 1px; }
+.md-celda b { align-self: center; width: 26px; height: 20px; font-size: 14px; border-radius: 10px; }
+.md-celda.sin { min-height: 48px; justify-content: center; }
+.md-th-slot { flex: none; width: 68px; display: grid; place-items: center; }
+.md-celda.sel { background: var(--mv-surf2); box-shadow: inset 0 0 0 2px var(--mv-ink); } .md-celda.sel b { background: var(--mv-ink); color: var(--mv-bg); }
+.md-celda-g { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; padding: 0 2px; width: 100%; box-sizing: border-box; } .md-celda-g[data-n="1"] { grid-template-columns: 1fr; padding: 0 5px; }
+.md-sem { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-left: -2px; margin-right: -2px; }
+@media (max-width: 340px) { .md-sem { margin-left: -10px; margin-right: -10px; } }
+.md-sem-col { min-width: 0; min-height: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px; border: 0; border-radius: 10px; background: none; color: inherit; }
+.md-sem-d { font-size: 12px; font-weight: 800; color: var(--mv-grey); } .md-sem-col b { font-size: 15px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
+.md-sem-col.hoy b { border: 2px solid var(--mv-ink); } .md-sem-col.sel { background: var(--mv-surf2); box-shadow: inset 0 0 0 2px var(--mv-ink); } .md-sem-col.sel b { background: var(--mv-ink); color: var(--mv-bg); }
+.md-sem-g { display: flex; flex-direction: column; gap: 3px; width: 100%; } .md-sem-g .md-mas { aspect-ratio: auto; height: 22px; }
+.md-ley { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 8px 2px 0; font-size: 12px; color: var(--mv-grey); } .md-ley span { white-space: nowrap; } .md-ley b { color: var(--mv-ink); font-weight: 800; margin-right: 3px; }
