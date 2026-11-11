@@ -148,7 +148,10 @@ export function crearHistoriasAuto({ almacen, salidaDe = async () => null, inter
       await estado.guardar({ ultimaFecha: fecha, nota, creadas: creadas.map(c => c.id), at: new Date(t).toISOString(), ...(errores.length ? { errores: errores.slice(0, 5) } : {}) });
       if (creadas.length) {
         const solas = creadas.filter(c => c.sola).length, esperan = creadas.length - solas;
-        notice('contenido-historias', `Historias automáticas para el ${fecha}: ${creadas.length} ${creadas.length === 1 ? 'lista' : 'listas'}${esperan ? ` · ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} tu OK en Contenido` : ''}${solas ? ` · ${solas} ${solas === 1 ? 'sale sola' : 'salen solas'} (lo fijaste en Ajustes)` : ''}.`, { key: 'historias-' + fecha });
+        const partes = [`${creadas.length} ${creadas.length === 1 ? 'lista' : 'listas'}`];
+        if (esperan) partes.push(`${esperan} ${esperan === 1 ? 'espera' : 'esperan'} tu OK en Contenido`);
+        if (solas) partes.push(`${solas} ${solas === 1 ? 'sale sola' : 'salen solas'} (lo fijaste en Ajustes)`);
+        notice('contenido-historias', `Historias automáticas para el ${fecha}: ${partes.join(' · ')}.`, { key: 'historias-' + fecha });
       }
       return { hecho: true, fecha, creadas, nota, errores };
     } finally { enMarcha = false; }
