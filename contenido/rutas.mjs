@@ -28,8 +28,8 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 // (9 oct 2026 y 25 oct 2026) Las rutas de Contenido salieron a contenido/rutas-nucleo.mjs (un controlador sin servidor ni disco, que el Worker de Cloudflare
 // usa igual); aquí queda el envoltorio del servidor de la oficina local y la Bandeja, que es de otra fase.
 import { crearControlador } from './rutas-nucleo.mjs';
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, ahora = Date.now }) {
-  const ctl = crearControlador({ almacen, notice, ajustes, programador, metricool, conductorMeta, mejorHora, analiticasTexto, informe, guardados, mejorar, publicadas, encargar, quienLlena, plantillas, alBorrador, cuentas, ahora });
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, historias = null, alBorrador = () => {}, cuentas = null, ahora = Date.now }) {
+  const ctl = crearControlador({ almacen, notice, ajustes, programador, metricool, conductorMeta, mejorHora, analiticasTexto, informe, guardados, mejorar, publicadas, encargar, quienLlena, plantillas, historias, alBorrador, cuentas, ahora });
   handle.planLlenar = ctl.planLlenar; handle.llenar = ctl.llenar; handle.redesDe = ctl.redesDe;
   return handle;
 

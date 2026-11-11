@@ -20,9 +20,10 @@ import { crearGuardadosD1, crearPlantillasD1 } from './textos.js';
 import { crearMejorar } from './redaccion.js';
 import { aprenderDeLoPublicado, llevarIndicadoresMeta, indicadoresEstado } from './aprender.js';
 import { describirZona } from '../zona.js';
-import { leerDoc, mutarDoc } from '../almacen.js';
+import { leerDoc, mutarDoc, guardarDoc } from '../almacen.js';
 import { emitirAviso } from '../avisos.js';
 import { crearPresupuesto } from './presupuesto.js';
+import { crearHistoriasAuto, interaccionesDe } from '../../../../contenido/historias-auto.mjs';
 
 /** Un aviso para el dueño (la lista `notices`, la misma forma que data/notices.json: lo último 200; el mismo problema se dice una vez cada 6 horas). */
 export function avisarD1(db, ahora = Date.now) {
@@ -98,7 +99,15 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
   }
   const programador = { ...programadorInterno, async tick(o = {}) { const r = await vuelta({ solo: o?.solo || '' }); return r.tick; } }; // lo que llama la página ("Entregar ya") pasa por el candado
 
+  // 11 nov 2026: historias automáticas — lo ya publicado vuelve como historia (el último día preparado, en el doc `contenido.historias`)
+  const historias = crearHistoriasAuto({
+    almacen, salidaDe: id => programadorInterno.salidaDe(id), ajustes: () => config, ahora, notice: aviso, modo: () => config.modo,
+    interacciones: async ps => interaccionesDe(ps, (await publicadas()).publicaciones),
+    estado: { leer: async () => (await leerDoc(db, 'contenido.historias', {})).valor || {}, guardar: v => guardarDoc(db, 'contenido.historias', v) },
+  });
+
   const controlador = crearControlador({
+    historias,
     almacen, notice: aviso, programador, metricool: cond.metricool, conductorMeta: () => (config.conductor === 'meta' ? cond.conductores.meta : null),
     puedeConvertir: () => !!env['IMAGES'], mejorHora, informe, guardados, mejorar: mejorar.mejorar, publicadas, plantillas, analiticasTexto, quienLlena: mejorar.quien, ahora,
     cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: config.metaPagina || '', conductor: cond.actual().id }),
@@ -120,7 +129,7 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
   async function vaciar() { await cond.vaciar(); await Promise.all(pendientes.splice(0)); }
 
   return {
-    config, ahora, almacen, programador, vuelta, analit, mejorHora, guardados, plantillas, controlador, conductores: cond, indicadoresEstado: () => indicadoresEstado(db), despuesDeFoto,
+    config, ahora, almacen, programador, vuelta, historias, analit, mejorHora, guardados, plantillas, controlador, conductores: cond, indicadoresEstado: () => indicadoresEstado(db), despuesDeFoto,
     cambioMeta: () => cambioMeta, llamadas: () => pres.llamadas, consultas: () => pres.consultas, presupuesto: pres, puedeSeguir,
     /** Termina bien lo que quedó pendiente: lo que Meta anotó (freno, cuentas), los avisos y la auditoría. */
     vaciar,

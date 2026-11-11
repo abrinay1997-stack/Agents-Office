@@ -50,7 +50,8 @@ export async function leerCfg(db) {
   for (const [clave, vale] of [['approvers', objeto], ['admins', objeto]]) for (const doc of [d[DOC_AJUSTES], d[DOC_LOCAL]]) { const a = doc?.telegram?.[clave]; if (vale(a)) { cfg.telegram = { ...(cfg.telegram || {}), [clave]: Array.isArray(a) ? [...a] : { ...a } }; break; } } // de REEMPLAZO
   const c = await cont.leerConfig(db), e = await estudio.leerConfig(db);
   cfg = unir(cfg, {
-    contenido: { modo: c.modo, conductor: c.conductor, entregarHorasAntes: c.entregarHorasAntes, redes: c.redes, bandejaFuente: c.bandejaFuente, departments: c.departamentos },
+    contenido: { modo: c.modo, conductor: c.conductor, entregarHorasAntes: c.entregarHorasAntes, redes: c.redes, bandejaFuente: c.bandejaFuente, departments: c.departamentos,
+      historiasAuto: c.historiasAuto, historiasHora: c.historiasHora, historiasPorDia: c.historiasPorDia, historiasSinOk: c.historiasSinOk },
     media: Object.fromEntries(['dailyLimit', 'dailyBudget', 'monthlyBudget', 'maxPerRequest', 'concurrency'].filter((k) => e[k] !== undefined).map((k) => [k, e[k]])),
   });
   if (!cfg.name) cfg.name = 'PanaClaw'; // el nombre de la oficina que se ve mientras nadie ponga otro
@@ -66,7 +67,8 @@ const NO_ES_SECRETO = ['hooks.tokenEnQuery']; // un interruptor (sí/no) que sol
 export const esSecreto = (ruta) => !NO_ES_SECRETO.includes(String(ruta)) && PINTA_DE_SECRETO.test(String(ruta));
 
 // Los campos de `contenido.*` y de `media.*` se guardan donde cada módulo los lee.
-const CONTENIDO_CLAVE = { 'contenido.modo': 'modo', 'contenido.conductor': 'conductor', 'contenido.redes': 'redes', 'contenido.entregarHorasAntes': 'entregarHorasAntes', 'contenido.bandejaFuente': 'bandejaFuente', 'contenido.departments': 'departamentos' };
+const CONTENIDO_CLAVE = { 'contenido.modo': 'modo', 'contenido.conductor': 'conductor', 'contenido.redes': 'redes', 'contenido.entregarHorasAntes': 'entregarHorasAntes', 'contenido.bandejaFuente': 'bandejaFuente', 'contenido.departments': 'departamentos',
+  'contenido.historiasAuto': 'historiasAuto', 'contenido.historiasHora': 'historiasHora', 'contenido.historiasPorDia': 'historiasPorDia', 'contenido.historiasSinOk': 'historiasSinOk' };
 const MEDIA_CLAVE = { 'media.dailyLimit': 'dailyLimit', 'media.dailyBudget': 'dailyBudget', 'media.monthlyBudget': 'monthlyBudget', 'media.maxPerRequest': 'maxPerRequest', 'media.concurrency': 'concurrency' };
 
 /** Pone `ruta` = valor en `local`, guardando antes lo que la base ya tenía en ese grupo (ver la regla de arriba). */

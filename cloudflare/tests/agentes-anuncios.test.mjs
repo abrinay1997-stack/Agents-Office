@@ -21,7 +21,9 @@ test('HERRAMIENTAS: Marketing recibe las de Anuncios (leer, borradores, sugerenc
   const pedir = (id, dept, extra = {}) => herramientasInternas({ env, db: d1, agente: { id, department: dept }, tarea: 'abc12345', modulos: MODULOS, ...extra });
   const m = pedir('ada', 'marketing'), o = pedir('olead', 'ops');
   const an = m.defs.filter((d) => d.servidor === 'anuncios');
-  assert.deepEqual(an.map((d) => d.nombre.split('__')[2]).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'sugerir_mejora_anuncio', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_informe_anuncios', 'ver_resultados_anuncios', 'ver_sugerencias_anuncios']);
+  const DEL_METODO = ['ver_anuncios_competencia', 'ver_ciclo_ventas', 'ver_numeros_negocio', 'ver_revision_campanas']; // 11 nov 2026: el método de campañas, solo lectura
+  for (const n of DEL_METODO) assert.ok(an.some((d) => d.nombre.endsWith('__' + n)), n);
+  assert.deepEqual(an.map((d) => d.nombre.split('__')[2]).filter((n) => !DEL_METODO.includes(n)).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'sugerir_mejora_anuncio', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_informe_anuncios', 'ver_resultados_anuncios', 'ver_sugerencias_anuncios']);
   for (const d of an) { const n = d.nombre.split('__')[2]; assert.ok(/^(ver_|crear_borrador_|mejorar_borrador_|sugerir_)/.test(n) && !PROHIBIDAS.test(n), n); assert.equal(d.esquema.type, 'object'); }
   assert.ok(!m.omitidas.includes(OMITIDAS.anuncios), 'a Marketing no se le dice que falta');
   assert.ok(!o.defs.some((d) => d.servidor === 'anuncios'), 'Operaciones no las recibe');

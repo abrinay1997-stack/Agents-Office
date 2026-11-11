@@ -237,6 +237,11 @@ export function crearMetaStand(o = {}) {
     const filas = st.cifras.filter(f => (!rango || (f.date_start >= rango.since && f.date_start <= rango.until)) && (nivel === 'account' || f[`${nivel}_id`]));
     // Como Meta (1 nov 2026, auditoría de anuncios): con clics al enlace, también el CTR de enlace (%) y el costo por clic al enlace, como texto
     const conEnlace = f => { const c = Number(f.inline_link_clicks), i = Number(f.impressions), g = Number(f.spend); return Number.isFinite(c) && c > 0 ? { ...f, inline_link_click_ctr: i > 0 ? String((c / i) * 100) : '0', cost_per_inline_link_click: String(g / c) } : f; };
+    // El método de campañas (11 nov 2026): Meta rechaza la petición ENTERA si no conoce un campo (#100). `fallar.sinCamposNuevos` y `fallar.sinRankings`
+    // lo simulan para los campos de la revisión 3Q: la oficina tiene que bajar un escalón y seguir.
+    const pedidos = String(q.get('fields') || '');
+    if (st.fallar.sinCamposNuevos && /unique_inline_link_clicks|video_avg_time_watched_actions/.test(pedidos)) return errorGraph('(#100) Tried accessing nonexisting field (unique_inline_link_clicks)', 100);
+    if (st.fallar.sinRankings && /quality_ranking/.test(pedidos)) return errorGraph('(#100) Tried accessing nonexisting field (quality_ranking)', 100);
     if (q.get('time_increment')) return json({ data: filas.map(conEnlace), paging: { cursors: { before: 'a', after: 'b' } } });
     // Fase A1: sin `time_increment`, Meta da UNA fila por objeto del nivel para todo el rango. El alcance son personas únicas: no es la
     // suma de los días. Aquí, el mayor de los días (o `reach_rango` si el test lo puso en alguna fila), para que se note si alguien suma.
@@ -246,6 +251,15 @@ export function crearMetaStand(o = {}) {
       const g = grupos.get(k) ?? { ...(nivel === 'account' ? {} : { campaign_id: f.campaign_id, ...(nivel !== 'campaign' ? { adset_id: f.adset_id } : {}), ...(nivel === 'ad' ? { ad_id: f.ad_id } : {}) }), date_start: rango?.since ?? f.date_start, date_stop: rango?.until ?? f.date_start, spend: 0, impressions: 0, clicks: 0, inline_link_clicks: 0, reach: 0 };
       for (const c of ['spend', 'impressions', 'clicks', 'inline_link_clicks']) g[c] = Math.round((g[c] + Number(f[c] || 0)) * 100) / 100;
       g.reach = Math.max(g.reach, Number(f.reach_rango ?? f.reach ?? 0));
+      // las acciones (conversaciones, compras…) sí se suman entre días; los clics únicos de un rango no son la suma de los días: `unicos_rango` si el test lo puso
+      for (const k of ['actions', 'action_values']) for (const a of f[k] || []) {
+        const l = (g[k] ||= []), x = l.find(y => y.action_type === a.action_type);
+        if (x) x.value = String(Number(x.value) + Number(a.value)); else l.push({ ...a, value: String(a.value) });
+      }
+      const unicos = f.unicos_rango ?? f.unique_inline_link_clicks;
+      if (pedidos.includes('unique_inline_link_clicks') && unicos != null) g.unique_inline_link_clicks = String(Math.max(Number(g.unique_inline_link_clicks || 0), Number(unicos)));
+      if (pedidos.includes('video_avg_time_watched_actions') && f.video_avg_time_watched_actions) g.video_avg_time_watched_actions = f.video_avg_time_watched_actions;
+      if (nivel === 'ad' && pedidos.includes('quality_ranking') && f.quality_ranking) Object.assign(g, { quality_ranking: f.quality_ranking, engagement_rate_ranking: f.engagement_rate_ranking, conversion_rate_ranking: f.conversion_rate_ranking });
       grupos.set(k, g);
     }
     const data = [...grupos.values()].map(g => conEnlace({ ...g, spend: String(g.spend), impressions: String(g.impressions), reach: String(g.reach), frequency: g.reach ? String(g.impressions / g.reach) : '0' }));

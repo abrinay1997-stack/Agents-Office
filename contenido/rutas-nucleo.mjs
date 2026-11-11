@@ -23,7 +23,7 @@ const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar
 const ymdLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const R = (status, datos) => ({ status, datos });
 
-export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, puedeConvertir = () => true, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
+export function crearControlador({ almacen, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, historias = null, alBorrador = () => {}, cuentas = null, puedeConvertir = () => true, ahora = Date.now, segundoPlano = p => Promise.resolve(p).catch(() => {}) }) {
   // `segundoPlano(promesa)` — lo que no se espera para contestar (en el Worker: ctx.waitUntil, para que la vuelta de la cola no se corte al responder)
   const revisado = async p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? await programador.salidaDe(p.id) : null }; };
   const todasRevisadas = async piezas => { const out = []; for (const p of piezas) out.push(await revisado(p)); return out; };
@@ -175,6 +175,13 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
         const b = await cuerpo().catch(() => ({})); if (b?.por === 'agente') return R(403, { error: 'las plantillas las decide el dueño' });
         if (!plantillas) return R(404, { error: 'sin plantillas' });
         const r = await plantillas.borrar(decodeURIComponent(tp[1])); return R(r.error ? 404 : 200, r.error ? { error: r.error } : { ok: true, plantillas: await plantillas.listar() });
+      }
+      // 11 nov 2026: historias automáticas — lo ya publicado vuelve como historia (contenido/historias-auto.mjs). Ver es de todos; preparar ya, solo del dueño.
+      if (p === '/api/contenido/historias-auto' && metodo === 'GET') return historias ? R(200, await historias.ver()) : R(501, { error: 'las historias automáticas no están en esta oficina' });
+      if (p === '/api/contenido/historias-auto/preparar' && metodo === 'POST') {
+        const b = await body(); if (b.por) return R(403, { error: 'preparar las historias es del dueño' });
+        if (!historias) return R(501, { error: 'las historias automáticas no están en esta oficina' });
+        return R(200, { ok: true, ...(await historias.tick({ forzar: true })) });
       }
       if (p === '/api/contenido/llenar' && metodo === 'GET') { // C3: «Llenar la semana» — lo que propone (no crea nada)
         const q = query, desde = /^\d{4}-\d{2}-\d{2}$/.test(q.get('desde') || '') ? q.get('desde') : hoyYmd();

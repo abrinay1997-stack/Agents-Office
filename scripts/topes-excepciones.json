@@ -1,3 +1,6 @@
 {
-  "src/iconos-registro.mjs": "Datos, no lógica: cada línea es el trazado SVG de 24×24 de un logo (Simple Icons, CC0); partir un trazado en varias cadenas no lo hace más legible y complica compararlo con su fuente."
+  "src/iconos-registro.mjs": "Datos, no lógica: cada línea es el trazado SVG de 24×24 de un logo (Simple Icons, CC0); partir un trazado en varias cadenas no lo hace más legible y complica compararlo con su fuente.",
+  "metodo/numeros-negocio.mjs": "Portado tal cual de la aplicación de calendarios de Juancito Ads (scripts/portar-metodo.mjs): se mantiene igual que su fuente para poder regenerarlo y compararlo; no se parte a mano.",
+  "metodo/tres-q.mjs": "Portado tal cual de la aplicación de calendarios de Juancito Ads (scripts/portar-metodo.mjs): se mantiene igual que su fuente para poder regenerarlo y compararlo; no se parte a mano.",
+  "metodo/meta-cifras.mjs": "Portado tal cual de la aplicación de calendarios de Juancito Ads (scripts/portar-metodo.mjs): se mantiene igual que su fuente para poder regenerarlo y compararlo; no se parte a mano."
 }

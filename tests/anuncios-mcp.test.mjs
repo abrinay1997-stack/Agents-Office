@@ -72,7 +72,9 @@ function mcp(base) {
 }
 
 test('las herramientas de anuncios de los agentes leen y dejan borradores en la oficina: ningún nombre que active, pause, gaste o cree en Meta', () => {
-  assert.deepEqual(TOOLS.map(t => t.name).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'sugerir_mejora_anuncio', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_informe_anuncios', 'ver_resultados_anuncios', 'ver_sugerencias_anuncios']);
+  const NOMBRES_DEL_METODO = ['ver_anuncios_competencia', 'ver_ciclo_ventas', 'ver_numeros_negocio', 'ver_revision_campanas']; // 11 nov 2026: solo lectura
+  assert.deepEqual(TOOLS.map(t => t.name).filter(n => !NOMBRES_DEL_METODO.includes(n)).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'sugerir_mejora_anuncio', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_informe_anuncios', 'ver_resultados_anuncios', 'ver_sugerencias_anuncios']);
+  for (const n of NOMBRES_DEL_METODO) assert.ok(TOOLS.some(t => t.name === n), n);
   for (const t of TOOLS) {
     assert.ok(nombrePermitido(t.name), `«${t.name}» suena a algo que un agente no debe poder hacer`);
     assert.equal(kindOf(`mcp__anuncios__${t.name}`), 'read', 'el guardián trata a Anuncios como interno (nada sale de la oficina)');
