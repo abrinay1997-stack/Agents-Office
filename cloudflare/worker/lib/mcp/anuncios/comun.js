@@ -34,7 +34,7 @@ export async function conOficina(ctx, permitidas) {
 /** Un fallo esperado vuelve como texto claro; lo inesperado, además, se registra. Nunca lleva un secreto. */
 export function fallo(nombre, e) {
   console.error(`[mcp:${nombre}]`, e?.message ?? e);
-  return { texto: `No se pudo: ${limpiarSecretos(String(e?.message || e)).replace(/\s+/g, ' ').slice(0, 300)}`, esError: true };
+  return { texto: `No se pudo: ${sanear(limpiarSecretos(String(e?.message || e)).replace(/\s+/g, ' ').slice(0, 300))}`, esError: true };
 }
 
 const PAGINA = 15000;
@@ -46,7 +46,13 @@ export function paginar(texto, cursor) {
   return { texto: pedazo, ...(resto < t.length ? { siguiente: String(resto) } : {}) };
 }
 
-/** Lo que escribió un tercero (un nombre de campaña, un texto de anuncio, un competidor) con órdenes escondidas se SUSTITUYE por un aviso, línea por línea, ANTES del escaneo del servidor (que si no cortaría toda la respuesta). */
+const ID_EN_LINEA = /(?<![A-Za-z0-9_])(?:\d{6,20}|[A-Z]{2,5}\d{1,12})(?![A-Za-z0-9_])/g;
+/** Lo que escribió un tercero (un nombre de campaña, un texto de anuncio, un competidor) con órdenes escondidas se SUSTITUYE por un aviso, línea por línea, ANTES del escaneo del servidor (que si no cortaría toda la
+ *  respuesta). Los ids de Meta de esa línea se conservan (hasta 4, solo de letras y números), para que una campaña con nombre hostil siga siendo pausable. */
 export function sanear(texto) {
-  return String(texto ?? '').split('\n').map((l) => (safety.injectionIn(l) ? '[texto omitido: parecía traer órdenes escondidas]' : l)).join('\n');
+  return String(texto ?? '').split('\n').map((l) => {
+    if (!safety.injectionIn(l)) return l;
+    const ids = [...new Set(l.match(ID_EN_LINEA) || [])].slice(0, 4);
+    return `[nombre o texto omitido: parecía traer órdenes escondidas]${ids.length ? ` (id: ${ids.join(', ')})` : ''}`;
+  }).join('\n');
 }

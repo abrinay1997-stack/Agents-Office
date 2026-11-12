@@ -30,9 +30,11 @@ export const PERMITIDAS_LEER = Object.freeze([
 ]);
 export const PERMITIDAS_CAMBIAR = Object.freeze({
   pausar: [], bajar_presupuesto: [], crear_borrador: ['POST /api/anuncios/borradores'], cambiar_borrador: ['PATCH /api/anuncios/borradores/<id>'],
-  descartar_sugerencia: ['POST /api/anuncios/sugerencias/<id>/descartar'], posponer_sugerencia: ['POST /api/anuncios/sugerencias/<id>/posponer'],
+  descartar_sugerencia: ['GET /api/anuncios/sugerencias', 'POST /api/anuncios/sugerencias/<id>/descartar'], posponer_sugerencia: ['GET /api/anuncios/sugerencias', 'POST /api/anuncios/sugerencias/<id>/posponer'],
 });
 const ID_META = /^[A-Za-z0-9_]{1,40}$/, ID_BORRADOR = /^[A-Za-z0-9_-]{1,60}$/, ID_SUG = /^[A-Za-z0-9_~-]{1,90}$/, MES = /^\d{4}-\d{2}$/;
+export const REGLAS_DESCARTABLES = Object.freeze(['cortar', 'fatiga', 'escalar', 'limitado', 'estructura']);
+const VALOR_MIN = 1; // un presupuesto casi en cero no es «bajar»: es pausar
 const falla = (m) => { throw new Error(m); };
 
 const RANGO = { type: 'string', enum: ['hoy', '7d', '30d', 'mes'], };
@@ -125,7 +127,7 @@ registrarHerramienta({
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: {
     accion: { type: 'string', enum: [...ACCIONES_CAMBIAR] },
     id: { type: 'string', maxLength: 90 },
-    valor: { type: 'number', exclusiveMinimum: 0, description: 'US$ nuevo (menor).' },
+    valor: { type: 'number', minimum: 1, description: 'US$ nuevo (menor).' },
     dias: { type: 'integer', minimum: 1, maximum: 30 },
     ...CAMPOS,
   } },
@@ -133,9 +135,12 @@ registrarHerramienta({
     try {
       const office = await conOficina(ctx, PERMITIDAS_CAMBIAR[a.accion] || []);
       const idem = (fn) => conIdempotencia(ctx.db, { conexionId: ctx.conexion.id, herramienta: 'anuncios_cambiar', clave: ctx.claveIdempotencia, ms: ctx.ahoraMs, fn });
-      const r = await idem(async () => ({ texto: await cambiar(office, a, ctx) }));
-      await auditar(ctx.db, ctx.ahoraMs, ctx.usuario.email, { evento: 'anuncios-cambiar', accion: a.accion, id: String(a.id || '').slice(0, 90), ok: true, via: 'mcp' });
-      return r;
+      // la auditoría va DENTRO de lo idempotente: una sola fila por efecto real (repetir la misma clave no la repite)
+      return await idem(async () => {
+        const texto = await cambiar(office, a, ctx);
+        await auditar(ctx.db, ctx.ahoraMs, ctx.usuario.email, { evento: 'anuncios-cambiar', accion: a.accion, id: String(a.id || '').slice(0, 90), ok: true, via: 'mcp' });
+        return { texto };
+      });
     } catch (e) { return fallo('anuncios_cambiar', e); }
   },
 });
@@ -145,7 +150,7 @@ async function cambiar(office, a, ctx) {
   const { accion, id } = a;
   if (accion === 'pausar' || accion === 'bajar_presupuesto') {
     if (!ID_META.test(String(id || ''))) falla('falta el `id` de Meta (solo letras, números y «_»).');
-    const cuerpo = accion === 'pausar' ? { tipo: 'pausar', id } : { tipo: 'bajar_presupuesto', id, valor: Number.isFinite(a.valor) && a.valor > 0 ? a.valor : falla('bajar_presupuesto necesita `valor` (US$, mayor que 0).') };
+    const cuerpo = accion === 'pausar' ? { tipo: 'pausar', id } : { tipo: 'bajar_presupuesto', id, valor: Number.isFinite(a.valor) && a.valor >= VALOR_MIN ? a.valor : falla(`bajar_presupuesto necesita `+'`valor`'+` de US$${VALOR_MIN} o más (para dejarlo casi en cero, pausa).`) };
     const r = await bajarGasto(ctx, cuerpo);
     if (r.status !== 200 || r.cuerpo?.confirmar || !r.cuerpo?.hecho) falla(String(r.cuerpo?.motivo || r.cuerpo?.error || 'Anuncios no lo hizo: míralo en Anuncios (J).')); // una pausa o una baja nunca piden confirmación
     return `${r.cuerpo.hecho.texto || 'Hecho.'}${r.cuerpo.aviso ? ` Aviso: ${String(r.cuerpo.aviso).slice(0, 300)}` : ''}\nNo se puede deshacer desde aquí: volver a como estaba vuelve a gastar y lo hace el dueño en Anuncios (J).`;
@@ -161,6 +166,10 @@ async function cambiar(office, a, ctx) {
   }
   if (accion === 'descartar_sugerencia' || accion === 'posponer_sugerencia') {
     if (!ID_SUG.test(String(id || ''))) falla('falta el `id` de la sugerencia.');
+    // solo reglas de OPTIMIZACIÓN: las alertas (rechazado, con problemas, cuenta, aprendizaje) las ve y las resuelve el dueño
+    const viva = ((await office('/api/anuncios/sugerencias')).items || []).find((x) => x.id === id);
+    if (!viva) falla('esa sugerencia no existe (mira `sugerencias`).');
+    if (!REGLAS_DESCARTABLES.includes(viva.regla)) falla(`«${String(viva.regla).slice(0, 30)}» es una alerta de la cuenta, no una optimización: la resuelve el dueño en Anuncios (J).`);
     const pos = accion === 'posponer_sugerencia', r = await office(`/api/anuncios/sugerencias/${id}/${pos ? 'posponer' : 'descartar'}`, pos ? { dias: Number.isInteger(a.dias) && a.dias >= 1 && a.dias <= 30 ? a.dias : 3 } : {}, 'POST');
     return `${pos ? 'Pospuesta' : 'Descartada'}: ${String(r.sugerencia?.regla || id).slice(0, 80)}. No se aplicó nada.`;
   }

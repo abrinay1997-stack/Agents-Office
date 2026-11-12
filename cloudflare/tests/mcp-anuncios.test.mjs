@@ -11,10 +11,11 @@ import { crearMetaStand, TOKEN_STAND, CUENTA_STAND } from '../../tests/meta-stan
 import { PERMISOS_LECTURA, PERMISOS_ANUNCIOS } from '../../contenido/meta.mjs';
 import { usarFetchDePrueba } from '../worker/lib/anuncios-nube.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
+import { conAnuncios } from '../worker/lib/anuncios-nube.js';
 import { herramienta } from '../worker/lib/mcp/registro.js';
 import { restringir } from '../worker/lib/mcp/capa1/restringir.js';
 import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
-import { EXCLUIDAS, paginar } from '../worker/lib/mcp/anuncios/comun.js';
+import { EXCLUIDAS, paginar, sanear, fallo } from '../worker/lib/mcp/anuncios/comun.js';
 import * as A from '../worker/lib/mcp/dominios/anuncios.js';
 import * as N from '../worker/lib/mcp/dominios/analiticas.js';
 
@@ -72,7 +73,7 @@ test('EL CÓDIGO: lo único que cambia Meta es pausar y bajar_presupuesto, con u
   assert.ok(!/por: 'dueno'|por: 'dimitri'|confirmacion/.test(fuente), 'ni el dueño ni Dimitri ni un testigo');
   // ninguna ruta de gasto, de creación en Meta, de impulso, de confirmación o de deshacer aparece en el código ni en las listas blancas
   assert.ok(!/\/(deshacer|impulsar|sincronizar|aplicar|crear|validar|vista-previa|variaciones|indicadores|conversiones\/(probar|webhook))['"`\/]/.test(fuente.replace(/'GET \/api\/anuncios\/conversiones'/g, '')), 'ninguna ruta de gasto en el código');
-  for (const [accion, rutas] of Object.entries(A.PERMITIDAS_CAMBIAR)) for (const r of rutas) assert.ok(/^(POST \/api\/anuncios\/(borradores|sugerencias\/<id>\/(descartar|posponer))|PATCH \/api\/anuncios\/borradores\/<id>)$/.test(r), `${accion}: ${r}`);
+  for (const [accion, rutas] of Object.entries(A.PERMITIDAS_CAMBIAR)) for (const r of rutas) assert.ok(/^((GET \/api\/anuncios\/sugerencias)|POST \/api\/anuncios\/(borradores|sugerencias\/<id>\/(descartar|posponer))|PATCH \/api\/anuncios\/borradores\/<id>)$/.test(r), `${accion}: ${r}`);
   for (const r of A.PERMITIDAS_LEER) assert.ok(r.startsWith('GET '), r);
   for (const r of N.PERMITIDAS) assert.ok(r.startsWith('GET '), r);
   assert.deepEqual(A.PERMITIDAS_CAMBIAR.pausar, []); assert.deepEqual(A.PERMITIDAS_CAMBIAR.bajar_presupuesto, []);
@@ -289,3 +290,51 @@ test('FORMA DE LAS LECTURAS: `rango` llega a la ruta, una respuesta incompleta d
   assert.match(c, /encendida/); assert.ok(!/ana@ejemplo|60001111|aaaaaaaa|items/.test(c), 'sin datos personales ni hashes');
 });
 
+
+test('«ASISTENTE» DE VERDAD: la página no puede hacerse pasar por asistente, y ese papel no gasta ni confirma; el historial dice asistente', { skip: SALTAR }, async () => {
+  const { m, t, llamar, estados, ids, g } = await conectados();
+  // (a) por HTTP de la página, `por: 'asistente'` en el cuerpo se DESCARTA: sigue siendo el dueño (activar devuelve la cifra a confirmar, que al asistente se le negaría con 403)
+  const act = await m.admin('POST', '/api/anuncios/accion', { tipo: 'activar', id: ids.combo, por: 'asistente' });
+  assert.equal(act.status, 200, JSON.stringify(act.j).slice(0, 300)); assert.ok(act.j.confirmar?.token, 'el dueño recibe la cifra: no era el asistente');
+  const act2 = await m.admin('POST', '/api/anuncios/accion?por=asistente', { tipo: 'activar', id: ids.combo }); assert.equal(act2.status, 200); assert.ok(act2.j.confirmar);
+  assert.equal(estados()[ids.combo], 'PAUSED', 'pedir la cifra no activa nada');
+  // (b) con `por: 'asistente'` en el ejecutor (lo que usa el conector): ni activar, ni reanudar, ni subir, ni relanzar, ni confirmar
+  const como = (b) => conAnuncios({ db: m.d1, env: m.env }, async (x) => x.acc.accion({ ...b, por: 'asistente' }));
+  for (const tipo of ['activar', 'reanudar', 'subir_presupuesto', 'relanzar', 'alargar']) {
+    const r = await como({ tipo, id: ids.combo, valor: 50 }); assert.equal(r.status, 403, tipo); assert.match(JSON.stringify(r.cuerpo), /solo el dueño|gasta dinero/, tipo);
+  }
+  const conf = await como({ tipo: 'pausar', id: ids.activa, confirmacion: act.j.confirmar.token }); assert.equal(conf.status, 403, 'un asistente no confirma ni un testigo ajeno'); assert.equal(estados()[ids.activa], 'ACTIVE');
+  assert.deepEqual(Object.values(estados()).filter((x) => x === 'ACTIVE').length, 1, 'nada se activó');
+  // (c) lo que sí hace queda en el historial como asistente, y la auditoría del conector lleva la acción; (d) el conector nunca manda `confirmacion`
+  assert.equal((await llamar(t.oficina, 'anuncios_cambiar', { accion: 'pausar', id: ids.activa })).j.result.isError, false);
+  const hist = (await m.admin('GET', '/api/anuncios/historial')).j.items; assert.ok(hist.some((h) => h.quien === 'asistente' && h.que === 'pausar'), JSON.stringify(hist.map((h) => h.quien)));
+  assert.ok(!hist.some((h) => h.quien === 'dueno' && h.que === 'pausar'), 'ningún pausar del conector figura como del dueño');
+  assert.equal(g.llamadas.filter((l) => /confirmacion/.test(JSON.stringify(l.campos || ''))).length, 0);
+});
+
+test('SUGERENCIAS: solo las de optimización se descartan o se posponen; una alerta de la cuenta, no', { skip: SALTAR }, async () => {
+  const { m, t, llamar, ids } = await conectados();
+  const dejar = (regla) => m.admin('POST', '/api/anuncios/sugerencias', { por: 'agente', agente: 'ada', id: ids.combo, regla, tipo: 'revisar', dato: 'd', porque: 'p', efecto: 'e' });
+  const alerta = await dejar('rechazado'); assert.equal(alerta.status, 200, JSON.stringify(alerta.j));
+  for (const accion of ['descartar_sugerencia', 'posponer_sugerencia']) {
+    const r = await llamar(t.oficina, 'anuncios_cambiar', { accion, id: alerta.j.sugerencia.id }); assert.equal(r.j.result.isError, true, accion); assert.match(texto(r), /alerta de la cuenta/, accion);
+  }
+  assert.equal((await m.admin('GET', '/api/anuncios/sugerencias')).j.items.find((x) => x.id === alerta.j.sugerencia.id).estado, 'viva', 'la alerta sigue viva');
+  const fatiga = await dejar('fatiga'); const ok = await llamar(t.oficina, 'anuncios_cambiar', { accion: 'descartar_sugerencia', id: fatiga.j.sugerencia.id }); assert.equal(ok.j.result.isError, false, texto(ok));
+  assert.equal((await llamar(t.oficina, 'anuncios_cambiar', { accion: 'posponer_sugerencia', id: 'no-existe' })).j.result.isError, true);
+});
+
+test('B1·B2·B3·B5: un nombre hostil deja el id (la campaña sigue siendo pausable), un fallo se sanea, la auditoría es una por efecto y bajar no deja el presupuesto casi en cero', { skip: SALTAR }, async () => {
+  const hostil = `Campaña ${ORDEN} 1234567890 CMP9`;
+  const s1 = sanear(`- «${hostil}» · id 1234567890`); assert.ok(!s1.includes('mallory')); assert.match(s1, /id: 1234567890/); assert.match(s1, /CMP9/);
+  assert.equal(sanear('normal'), 'normal');
+  assert.ok(!fallo('x', new Error(`falló ${ORDEN}`)).texto.includes('mallory'), 'un fallo con órdenes escondidas se sanea');
+  const { m, t, llamar, ids, g } = await conectados();
+  const aud = () => m.db.prepare("select detalle from auditoria where tipo = 'mcp'").all().map((x) => JSON.parse(x.detalle)).filter((d) => d.evento === 'anuncios-cambiar').length;
+  const a0 = aud();
+  for (let i = 0; i < 2; i++) assert.equal((await llamar(t.oficina, 'anuncios_cambiar', { accion: 'pausar', id: ids.activa, clave_idempotencia: 'pausar-uno-001' })).j.result.isError, false);
+  assert.equal(aud() - a0, 1, 'repetir la misma clave no repite la auditoría');
+  const poco = await llamar(t.oficina, 'anuncios_cambiar', { accion: 'bajar_presupuesto', id: ids.grande, valor: 0.5 });
+  assert.equal(poco.j.result.isError, true); assert.match(texto(poco), /US\$1 o más/);
+  assert.equal(Number(g.st.campanas[ids.grande].daily_budget) > 100, true, 'no cambió');
+});
