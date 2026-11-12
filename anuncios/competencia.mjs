@@ -58,8 +58,18 @@ export function crearCompetencia({ dir, llave = () => '', ajustes = () => ({}), 
     throw new ErrorSC(mensajeErrorSC(ultimo), 502);
   }
 
+  // Las consultas que PAGAN van de una en una: dos a la vez leían el mismo `usados` y las dos pasaban el tope de la semana (una gastaba un crédito de más).
+  let enFila = Promise.resolve();
+  const enTurno = (fn) => { const r = enFila.then(fn, fn); enFila = r.then(() => {}, () => {}); return r; };
+
   /** Con la caché delante. `armar(datos)` reduce la respuesta a lo que se guarda. → { valor, cache, at } */
-  async function consultar(ruta, params, { horas, armar, quien = 'dueno' }) {
+  function consultar(ruta, params, o) {
+    const clave = claveDeCache(ruta, params), g = estado().cache[clave];
+    if (g && ahora() - Date.parse(g.at) < o.horas * 3600e3) return Promise.resolve({ valor: g.valor, cache: true, at: g.at }); // de la caché: ni paga ni espera turno
+    return enTurno(() => pagar(ruta, params, o));
+  }
+
+  async function pagar(ruta, params, { horas, armar, quien = 'dueno' }) {
     const clave = claveDeCache(ruta, params), e = estado(), g = e.cache[clave];
     if (g && ahora() - Date.parse(g.at) < horas * 3600e3) return { valor: g.valor, cache: true, at: g.at };
     if (!configurado()) throw new ErrorSC(motivo(), 503);

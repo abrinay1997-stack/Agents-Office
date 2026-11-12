@@ -99,9 +99,17 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
   }
   const programador = { ...programadorInterno, async tick(o = {}) { const r = await vuelta({ solo: o?.solo || '' }); return r.tick; } }; // lo que llama la página ("Entregar ya") pasa por el candado
 
+  // El candado de las historias en D1: el reloj y el botón del dueño son invocaciones distintas y cada una arma su propio servicio.
+  let duenoHist = '';
+  const candadoHistorias = {
+    tomar: async ms => { const d = 'historias:' + crypto.randomUUID(); const ok = await tomarCandado(db, 'historias', d, ms, ahora); if (ok) duenoHist = d; return ok; },
+    soltar: async () => { if (duenoHist) { const d = duenoHist; duenoHist = ''; await soltarCandado(db, 'historias', d); } },
+  };
+
   // 11 nov 2026: historias automáticas — lo ya publicado vuelve como historia (el último día preparado, en el doc `contenido.historias`)
   const historias = crearHistoriasAuto({
     almacen, salidaDe: id => programadorInterno.salidaDe(id), ajustes: () => config, ahora, notice: aviso, modo: () => config.modo,
+    candado: candadoHistorias,
     interacciones: async ps => interaccionesDe(ps, (await publicadas()).publicaciones),
     estado: { leer: async () => (await leerDoc(db, 'contenido.historias', {})).valor || {}, guardar: v => guardarDoc(db, 'contenido.historias', v) },
   });

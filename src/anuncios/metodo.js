@@ -13,6 +13,8 @@ const Q1 = { bien: ['Dentro del número', 'verde'], caro: ['Más caro que el obj
 const VENTANAS = [[7, '7 días'], [14, '14 días'], [30, '30 días']];
 
 const plata = (v, m) => (v == null ? SIN : dinero(v, m, { decimales: 2 }));
+// El número mágico es dinero (costo por conversación o por compra) o un MULTIPLICADOR (el ROAS de una tienda web): se formatea por su unidad, nunca siempre como dinero.
+const porUnidad = (v, unidad, m) => (v == null ? SIN : unidad === 'veces' ? `${v.toLocaleString('es', { maximumFractionDigits: 2 })} veces` : plata(v, m));
 const tono = t => TONO[t] || 'gris';
 const q1Chip = e => { const [t, c] = Q1[e] || [e || 'Sin datos', 'gris']; return chip(t, c); };
 const opciones = (lista, actual, vacio) => `<option value="">${esc(vacio)}</option>` + lista.map(o => `<option value="${esc(o.id)}"${o.id === actual ? ' selected' : ''}>${esc(o.nombre)}</option>`).join('');
@@ -109,7 +111,8 @@ function numerosHTML(S) {
       <div class="anu-kpi"><span>Equilibrio · por venta</span><b>${plata(e.cac, m)}</b>
         <small>${e.costoConversacion != null ? `${plata(e.costoConversacion, m)} por conversación · ROAS ${e.roas != null ? e.roas.toLocaleString('es', { maximumFractionDigits: 2 }) : SIN}` : 'faltan los costos'}</small></div>
       <div class="anu-kpi"><span>Inversión del mes</span><b>${plata(o.inversion, m)}</b><small>${o.ventasNecesarias != null ? `para ${num(o.ventasNecesarias)} ventas` : 'con tu meta de ventas'}</small></div>
-      <div class="anu-kpi"><span>${esc(g.metrica || 'Número mágico')} · real</span><b>${plata(g.real, m)}</b><small>últimos 30 días en Meta</small></div>
+      <div class="anu-kpi"><span>${esc(g.metrica || 'Número mágico')} · real</span><b>${porUnidad(g.real, g.unidad, m)}</b>
+        <small>últimos 30 días en Meta · objetivo ${porUnidad(g.objetivo, g.unidad, m)}</small></div>
     </div>
     ${(f.reparto || []).some(x => x.monto) ? `<p class="anu-ayuda">Reparto por etapa: ${f.reparto.map(x => `${esc(x.nombre)} ${num(x.pct)} % (${plata(x.monto, m)})`).join(' · ')}.</p>` : ''}
     ${(f.faltan || []).length ? `<p class="anu-ayuda">Falta: ${esc(f.faltan.join(', '))}.</p>` : ''}`;

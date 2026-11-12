@@ -114,3 +114,31 @@ test('las rutas: cualquiera las ve; preparar ya es solo del dueño', async () =>
   const dueno = await ctl.responder({ metodo: 'POST', p: '/api/contenido/historias-auto/preparar', cuerpo: async () => ({}) });
   assert.equal(dueno.status, 200); assert.equal(dueno.datos.creadas.length, 1);
 });
+
+test('con varias copias a la vez (el Worker), el candado deja preparar el día UNA sola vez', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-historias-candado-'));
+  const almacen = crearAlmacen({ dir, ahora: () => AHORA });
+  for (const [i, f] of ['2026-11-01', '2026-11-02'].entries()) {
+    const r = almacen.crear({ titulo: 'Oferta ' + (i + 1), fecha: f, hora: '10:00', formato: 'post', redes: ['instagram'], medios: [`foto${i}.jpg`], texto: 'Texto', estado: 'borrador' }, { por: 'dueno' });
+    assert.ok(r.pieza, r.error);
+  }
+  // un solo candado compartido, como el de D1: lo toma quien llega primero y el otro se va con su motivo
+  let tomado = null;
+  const candado = { tomar: async () => { if (tomado) return false; tomado = 'yo'; return true; }, soltar: async () => { tomado = null; } };
+  let guardado = {};
+  const copia = () => H.crearHistoriasAuto({ // cada invocación arma su PROPIO objeto: `enMarcha` no las coordina, el candado sí
+    almacen, ajustes: () => ({ historiasAuto: true, historiasPorDia: 2 }), ahora: () => AHORA, candado,
+    salidaDe: async () => { await new Promise(r => setTimeout(r, 5)); return { estado: 'publicada' }; }, // leer tarda: deja que la otra entre
+    estado: { leer: async () => guardado, guardar: async v => { guardado = v; } },
+  });
+  const [a, b] = await Promise.all([copia().tick(), copia().tick()]);
+  const hechas = almacen.listar({}).filter(H.esHistoriaAuto);
+  assert.equal(hechas.length, 2, 'dos historias en total, no cuatro');
+  assert.equal([a, b].filter(r => r.hecho).length, 1);
+  assert.equal([a, b].find(r => !r.hecho).motivo, 'otra vuelta las está preparando');
+  assert.equal(tomado, null, 'el candado se suelta al terminar');
+  // y una segunda vuelta FORZADA (el botón del dueño) tampoco duplica: ya están las del día
+  const r = await copia().tick({ forzar: true });
+  assert.equal(r.creadas.length, 0);
+  assert.equal(almacen.listar({}).filter(H.esHistoriaAuto).length, 2);
+});

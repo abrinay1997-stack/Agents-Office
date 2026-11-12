@@ -14,6 +14,7 @@ export const SEPARACION_MIN = 120; // entre una y la siguiente del mismo día
 export const SEPARACION_MINIMA = 30; // si no caben antes de la última hora, se juntan hasta aquí
 export const ULTIMA_HORA = '22:00';
 export const MARGEN_MIN = 10; // a menos de esto de su hora, ya es la de mañana
+const CANDADO_MS = 2 * 60e3; // lo que puede tardar una vuelta; si la copia muere a medias, caduca sola
 export const DIAS_SIN_REPETIR_POST = 2; // lo publicado hace menos de dos días todavía está fresco en el perfil
 export const DIAS_ENTRE_USOS = 4; // la misma publicación no vuelve como historia antes de cuatro días
 export const DIAS_ATRAS = 90; // más viejo ya no representa a la marca de hoy
@@ -113,8 +114,10 @@ export function textoHistorias({ ajustes: a, estado: e = {}, modo = '' } = {}) {
 /**
  * El corredor. `almacen` (el de piezas: listar, crear, aprobar), `salidaDe(id)` (la cola), `interacciones(piezas)` → { id: n } (opcional),
  * `ajustes()` → la sección `contenido`, `estado` { leer(), guardar(v) } (dónde se apunta el último día), `notice`, `ahora`.
+ * `candado` { tomar(ms) → ¿lo tomé?, soltar() } es OBLIGATORIO donde varias copias corren a la vez (el Worker: el reloj y el botón del dueño
+ * son invocaciones distintas, cada una con su propio objeto, así que `enMarcha` no las coordina y las dos prepararían el mismo día).
  */
-export function crearHistoriasAuto({ almacen, salidaDe = async () => null, interacciones = null, ajustes = () => ({}), estado, notice = () => {}, ahora = Date.now, modo = () => '' }) {
+export function crearHistoriasAuto({ almacen, salidaDe = async () => null, interacciones = null, ajustes = () => ({}), estado, notice = () => {}, ahora = Date.now, modo = () => '', candado = null }) {
   let enMarcha = false;
   const leerEstado = async () => (await estado.leer()) || {};
 
@@ -124,6 +127,8 @@ export function crearHistoriasAuto({ almacen, salidaDe = async () => null, inter
     if (!a.activo && !forzar) return { hecho: false, motivo: 'apagadas' };
     if (enMarcha) return { hecho: false, motivo: 'ya hay una vuelta en marcha' };
     enMarcha = true;
+    // El día se CLAVA antes de mirar nada: lo que se lea después (el último día preparado, las que ya hay) vale mientras nadie más prepare.
+    if (candado && !(await candado.tomar(CANDADO_MS))) { enMarcha = false; return { hecho: false, motivo: 'otra vuelta las está preparando' }; }
     try {
       const t = ahora(), fecha = proximaFecha(t, a.hora), e = await leerEstado();
       if (!forzar && e.ultimaFecha && e.ultimaFecha >= fecha) return { hecho: false, motivo: 'ese día ya está preparado', fecha };
@@ -154,7 +159,7 @@ export function crearHistoriasAuto({ almacen, salidaDe = async () => null, inter
         notice('contenido-historias', `Historias automáticas para el ${fecha}: ${partes.join(' · ')}.`, { key: 'historias-' + fecha });
       }
       return { hecho: true, fecha, creadas, nota, errores };
-    } finally { enMarcha = false; }
+    } finally { enMarcha = false; if (candado) await Promise.resolve(candado.soltar()).catch(() => { /* si no se suelta, caduca solo */ }); }
   }
 
   /** Lo que se enseña: ajustes, último día y qué saldría la próxima vez (sin crear nada). */
