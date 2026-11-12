@@ -64,12 +64,12 @@ test('EL REGISTRO: cada herramienta de la Capa 1 cumple el contrato (alcance, so
 test('TAMAÑO: tools/list de un token de gasto cabe en el presupuesto, y cada herramienta es corta', { skip: SALTAR }, async () => {
   const { m, t } = await conectados();
   const r = await m.rpc(t.gasto, 'tools/list'); const tools = r.j.result.tools;
-  const total = JSON.stringify(tools).length;
-  // P5 · carril anuncios: el presupuesto sube de 24.000 a 28.500 y de 21 a 24 herramientas por las tres de Anuncios y Analíticas (~4.600 letras, ya recortadas); cada carril que sume herramientas vuelve a subirlo con su motivo
-  assert.ok(total <= 28500, `tools/list pesa ${total} letras (presupuesto 28.500): cada herramienta nueva pesa en cada conversación`);
-  assert.ok(tools.length <= 24, `${tools.length} herramientas`);
-  assert.ok(Math.max(...tools.map((x) => x.description.length)) <= 2200, 'ninguna descripción pasa de 2.200 letras');
-  const delaCapa = new Set([...LEE, ...CAMBIA, ...ESTUDIO_GASTA, 'como_funciona']);
+  // el presupuesto es de la Capa 1 (24.000 letras, 21 herramientas): las de dominio de la P5 se miden en su propio archivo (cada una ≤ 2.000 letras y las de un dominio ≤ ~6.000)
+  const delaCapa = new Set([...LEE, ...CAMBIA, ...ESTUDIO_GASTA, 'como_funciona']), propias = tools.filter((x) => delaCapa.has(x.name));
+  const total = JSON.stringify(propias).length;
+  assert.ok(total <= 24000, `tools/list de la Capa 1 pesa ${total} letras (presupuesto 24.000): cada herramienta nueva pesa en cada conversación`);
+  assert.ok(propias.length <= 21, `${propias.length} herramientas`);
+  assert.ok(Math.max(...propias.map((x) => x.description.length)) <= 2200, 'ninguna descripción pasa de 2.200 letras');
   const lecturaTools = (await m.rpc(t.lectura, 'tools/list')).j.result.tools;
   assert.deepEqual(lecturaTools.map((x) => x.name).filter((n) => delaCapa.has(n)).sort(), ['como_funciona', ...LEE].sort(), 'un token de lectura ve, de la Capa 1, SOLO lo de lectura');
   for (const x of lecturaTools) assert.equal(x.annotations.readOnlyHint, true, `${x.name}: un token de lectura solo ve herramientas de solo lectura`);

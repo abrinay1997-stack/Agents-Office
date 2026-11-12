@@ -2,6 +2,7 @@
 // la paginación de texto y —en DATOS— lo que por MCP NUNCA se hace con los anuncios y por qué (`EXCLUIDAS`; lo vigila cloudflare/tests/mcp-anuncios.test.mjs).
 import { restringir } from '../capa1/restringir.js';
 import { limpiarSecretos } from '../../secretos.js';
+import * as safety from '../../../../../safety.mjs';
 
 /** Lo que el conector NO hace con los anuncios (la regla del dinero, plan MCP §4 y §14): cada entrada dice por qué. Ninguna de estas palabras puede aparecer como valor de `accion`. */
 export const EXCLUIDAS = Object.freeze({
@@ -43,4 +44,9 @@ export function paginar(texto, cursor) {
   if (d >= t.length && t.length) return { texto: '(no hay más)', esError: false };
   const pedazo = t.slice(d, d + PAGINA), resto = d + PAGINA;
   return { texto: pedazo, ...(resto < t.length ? { siguiente: String(resto) } : {}) };
+}
+
+/** Lo que escribió un tercero (un nombre de campaña, un texto de anuncio, un competidor) con órdenes escondidas se SUSTITUYE por un aviso, línea por línea, ANTES del escaneo del servidor (que si no cortaría toda la respuesta). */
+export function sanear(texto) {
+  return String(texto ?? '').split('\n').map((l) => (safety.injectionIn(l) ? '[texto omitido: parecía traer órdenes escondidas]' : l)).join('\n');
 }

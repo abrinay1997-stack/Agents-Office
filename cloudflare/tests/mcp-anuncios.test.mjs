@@ -47,6 +47,9 @@ async function conectados() {
 test('EL REGISTRO: tres herramientas, esquemas cerrados, alcances justos y ninguna acción de gasto en ningún enum', () => {
   const a = herramienta('anuncios'), c = herramienta('anuncios_cambiar'), n = herramienta('analiticas');
   for (const h of [a, c, n]) { assert.ok(h, 'registrada'); assert.equal(h.esquema.additionalProperties, false, `${h.nombre}: esquema cerrado`); assert.deepEqual(h.esquema.required, ['accion']); assert.ok(h.descripcion.length <= 1200, `${h.nombre}: descripción corta`); }
+  const peso = (h) => JSON.stringify({ name: h.nombre, description: h.descripcion, inputSchema: h.esquema }).length;
+  for (const h of [a, c, n]) assert.ok(peso(h) <= 2000, `${h.nombre}: ${peso(h)} letras (tope 2.000)`);
+  assert.ok(peso(a) + peso(c) + peso(n) <= 6000, 'las tres del dominio, ≤ 6.000 letras');
   assert.equal(a.alcance, 'lectura'); assert.equal(a.soloLectura, true); assert.equal(n.alcance, 'lectura'); assert.equal(n.soloLectura, true);
   assert.equal(c.alcance, 'oficina'); assert.equal(c.soloLectura, false); assert.ok(c.esquema.properties.clave_idempotencia, 'la escritura admite clave de idempotencia');
   assert.deepEqual(a.esquema.properties.accion.enum, [...A.ACCIONES_LEER]); assert.deepEqual(c.esquema.properties.accion.enum, [...A.ACCIONES_CAMBIAR]); assert.deepEqual(n.esquema.properties.accion.enum, [...N.ACCIONES]);
@@ -188,6 +191,7 @@ test('BORRADORES: se dejan en la oficina (nunca en Meta), solo se cambian los de
   await m.admin('POST', '/api/anuncios/borradores', { nombre: ORDEN, presupuesto: { usd: 5 } });
   const l = await llamar(t.lectura, 'anuncios', { accion: 'borradores' });
   assert.ok(!texto(l).includes('mallory'), 'lo escrito por un tercero con órdenes escondidas no se muestra');
+  assert.match(texto(l), /texto omitido/, 'se sustituye por un aviso (no se pierde toda la respuesta)'); assert.match(texto(l), /Combo desde Claude/, 'lo demás sí se ve');
 });
 
 test('SUGERENCIAS: se descartan o se posponen (y nada se aplica)', { skip: SALTAR }, async () => {
@@ -208,14 +212,20 @@ test('LISTA BLANCA DE RUTAS: cada acción solo llega a SU ruta, y `<id>` vale po
   const o = (p) => restringir(async (r, c, mt) => { visto.push(`${mt || (c ? 'POST' : 'GET')} ${r}`); return {}; }, p);
   const pausar = o(A.PERMITIDAS_CAMBIAR.pausar);
   await pausar('/api/anuncios/accion', { tipo: 'pausar' }, 'POST');
-  for (const [ruta, cuerpo, mt] of [['/api/anuncios/deshacer', {}, 'POST'], ['/api/anuncios/impulsar', {}, 'POST'], ['/api/anuncios/sincronizar', {}, 'POST'], ['/api/anuncios/borradores/b1/crear', {}, 'POST'], ['/api/anuncios/accion', undefined, 'GET'], ['/api/anuncios/borradores', {}, 'POST'], ['/api/oficina/accion', {}, 'POST']]) await assert.rejects(pausar(ruta, cuerpo, mt), /no puede hacer|no permitida/, `${mt} ${ruta}`);
+  for (const [ruta, cuerpo, mt] of [['/api/anuncios/deshacer', {}, 'POST'], ['/api/anuncios/impulsar', {}, 'POST'], ['/api/anuncios/sincronizar', {}, 'POST'], ['/api/anuncios/borradores/b1/crear', {}, 'POST'],
+    ['/api/anuncios/accion', undefined, 'GET'], ['/api/anuncios/borradores', {}, 'POST'], ['/api/oficina/accion', {}, 'POST']]) {
+    await assert.rejects(pausar(ruta, cuerpo, mt), /no puede hacer|no permitida/, `${mt} ${ruta}`);
+  }
   const cambiar = o(A.PERMITIDAS_CAMBIAR.cambiar_borrador);
   await cambiar('/api/anuncios/borradores/b123_x-9', {}, 'PATCH');
-  for (const ruta of ['/api/anuncios/borradores/b1/crear', '/api/anuncios/borradores/b1/validar', '/api/anuncios/borradores/', '/api/anuncios/borradores/a/b', '/api/anuncios/borradores/%2e%2e', '/api/anuncios/borradores/../accion', '/api/anuncios/borradoresX/b1']) await assert.rejects(cambiar(ruta, {}, 'PATCH'), /no puede hacer|no permitida/, ruta);
+  for (const ruta of ['/api/anuncios/borradores/b1/crear', '/api/anuncios/borradores/b1/validar', '/api/anuncios/borradores/', '/api/anuncios/borradores/a/b', '/api/anuncios/borradores/%2e%2e',
+    '/api/anuncios/borradores/../accion', '/api/anuncios/borradoresX/b1']) await assert.rejects(cambiar(ruta, {}, 'PATCH'), /no puede hacer|no permitida/, ruta);
   await assert.rejects(cambiar('/api/anuncios/borradores/b1', undefined, 'DELETE'), /no puede hacer/);
   const leer = o(A.PERMITIDAS_LEER);
   await leer('/api/anuncios/texto?que=cuenta'); await leer('/api/anuncios/objeto/123_4');
-  for (const [ruta, mt] of [['/api/anuncios/accion', 'POST'], ['/api/anuncios/borradores', 'POST'], ['/api/anuncios', 'GET'], ['/api/tasks', 'GET'], ['/api/anuncios/sugerencias/x/aplicar', 'POST']]) await assert.rejects(leer(ruta, mt === 'POST' ? {} : undefined, mt), /no puede hacer/, `${mt} ${ruta}`);
+  for (const [ruta, mt] of [['/api/anuncios/accion', 'POST'], ['/api/anuncios/borradores', 'POST'], ['/api/anuncios', 'GET'], ['/api/tasks', 'GET'], ['/api/anuncios/sugerencias/x/aplicar', 'POST']]) {
+    await assert.rejects(leer(ruta, mt === 'POST' ? {} : undefined, mt), /no puede hacer/, `${mt} ${ruta}`);
+  }
   const an = o(N.PERMITIDAS); await an('/api/contenido/analiticas/resumen?dias=30');
   await assert.rejects(an('/api/contenido/piezas', {}, 'POST'), /no puede hacer/);
   assert.equal(visto.length, 5);

@@ -8,7 +8,7 @@
 import { registrarHerramienta } from '../registro.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
 import { auditar } from '../auditoria.js';
-import { conOficina, fallo, paginar, EXCLUIDAS } from '../anuncios/comun.js';
+import { conOficina, fallo, sanear, paginar, EXCLUIDAS } from '../anuncios/comun.js';
 import { anunciosTexto } from '../../../../../oficina/lecturas.mjs';
 import { sugerenciasTexto, aBorrador, CAMPOS_BORRADOR } from '../../../../../anuncios-tools.mjs';
 import { lineaBorrador } from '../../../../../anuncios/modelo.mjs';
@@ -61,7 +61,7 @@ registrarHerramienta({
     try {
       const office = await conOficina(ctx, PERMITIDAS_LEER);
       const t = await leer(office, a);
-      return paginar(t, a.cursor);
+      return paginar(sanear(t), a.cursor);
     } catch (e) { return fallo('anuncios', e); }
   },
 });
