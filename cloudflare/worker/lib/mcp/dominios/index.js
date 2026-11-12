@@ -5,7 +5,8 @@ import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio 
 // import './cerebro.js';
 import './tareas.js'; // P5 carril 2: tareas y rutinas
 // import './contenido.js';
-// import './anuncios.js';
+import './anuncios.js'; // P5 · carril anuncios: Anuncios de Meta (leer, borradores y lo que baja el gasto)
+import './analiticas.js'; // P5 · carril anuncios: Analíticas de las redes (leer)
 // import './estudio.js';
 import './agentes.js'; // P5: agentes (roster, ficha, actividad, brief)
 import './dimitri.js'; // P5: las conversaciones de Dimitri de cada cuenta
