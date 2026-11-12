@@ -10,10 +10,13 @@
 //   · los mensajes del chat interno (`chat_mensajes`): 365 días (canales y miembros no crecen sin las personas)
 //   · las series de imágenes terminadas (`series`, hecho o cancelado): 180 días; una viva nunca
 //   · el libro del dinero de las series (`series_libro`): lo ya cerrado (liquidado o liberado) 400 días; lo reservado o incierto NUNCA (es dinero que puede estar en el aire)
+//   · el conector MCP: los códigos de autorización caducados (`mcp_codigos`) 1 día; los testigos (`mcp_tokens`) 30 días DESPUÉS de caducar su renovación, de rotarse o de cortarse; las aplicaciones registradas
+//     que nunca se usaron y no tienen conexión (`mcp_clientes`) 30 días
 //   · las notificaciones por persona (`notificaciones`): leídas 60 días, sin leer 180 días
 // Cada tabla se poda por tandas (`LOTE`) y como mucho `TANDAS` por tabla y por día: una poda atrasada se pone al día en los días siguientes, sin gastar de golpe la CPU del reloj.
 export const LOTE = 2000, TANDAS = 5;
-export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90, series: 180, series_libro: 400, series_tokens: 1 });
+export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90, series: 180, series_libro: 400, series_tokens: 1,
+  mcp_codigos: 1, mcp_tokens: 30, mcp_clientes: 30 });
 export const NOTIFICACIONES_SIN_LEER_DIAS = 180;
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -36,6 +39,9 @@ export async function podar(db, ahoraMs = Date.now()) {
     ['series', `delete from series where id in (select id from series where estado in ('hecho','cancelado') and actualizada < ? limit ?)`, ahoraMs - R.series * DIA_MS],
     ['series_libro', `delete from series_libro where clave in (select clave from series_libro where estado in ('liquidado','liberado') and at < ? limit ?)`, ahoraMs - R.series_libro * DIA_MS],
     ['series_tokens', 'delete from series_tokens where token in (select token from series_tokens where caduca < ? limit ?)', ahoraMs - DIA_MS], // los de GENERAR SERIE valen 2 minutos (la Idempotency-Key, 10): un día de sobra
+    ['mcp_codigos', 'delete from mcp_codigos where codigo_hash in (select codigo_hash from mcp_codigos where caduca_at < ? limit ?)', ahoraMs - R.mcp_codigos * DIA_MS],
+    ['mcp_tokens', 'delete from mcp_tokens where id in (select id from mcp_tokens where refresh_caduca_at < ? or rotado_at < ? or revocado_at < ? limit ?)', Array(3).fill(ahoraMs - R.mcp_tokens * DIA_MS)],
+    ['mcp_clientes', 'delete from mcp_clientes where client_id in (select c.client_id from mcp_clientes c where coalesce(c.ultimo_uso_at, c.creado_at) < ? and not exists (select 1 from mcp_tokens t where t.client_id = c.client_id) limit ?)', ahoraMs - R.mcp_clientes * DIA_MS],
     ['notificaciones', 'delete from notificaciones where id in (select id from notificaciones where (leida_at is not null and leida_at < ?) or creada_at < ? limit ?)', [ahoraMs - R.notificaciones * DIA_MS, ahoraMs - NOTIFICACIONES_SIN_LEER_DIAS * DIA_MS]],
     ['notas_personales', 'delete from notas_personales where id in (select id from notas_personales where vence_at < ? limit ?)', ahoraMs - R.notas_personales * DIA_MS],
   ];

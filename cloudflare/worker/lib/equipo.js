@@ -7,6 +7,7 @@
 //  · quitar a alguien conserva su cuenta (las ejecuciones antiguas apuntan a ella): sin sesiones, sin contraseña, sin correo, fuera del equipo.
 import { uuid, ahora, enHoras, sha256, testigo, igualSeguro } from './ids.js';
 import { hashearContrasena, colorDeNombre, nombrePorCorreo, validarClave, MIN_CLAVE } from './sesion.js';
+import { revocarDe } from './mcp/tokens.js';
 export { validarClave, MIN_CLAVE };
 
 export const ROLES = ['admin', 'editor', 'lectura'];
@@ -166,6 +167,7 @@ export async function cambiarRol(db, id, rol) {
   if (u.id === await fundador(db) && rol !== 'admin') return { estado: 409, error: 'Quien fundó la oficina siempre es administrador.' };
   const r = await db.prepare(`update users set rol = ? where id = ? and (? = 'admin' or rol != 'admin' or ${OTRO_ADMIN})`).bind(rol, u.id, rol).run();
   if (!r.meta?.changes) return { estado: 409, error: 'La oficina no puede quedarse sin administrador: nombra antes a otro.' };
+  if (rol !== 'admin') await revocarDe(db, u.id); // bajó de rol: sus conexiones de Claude (MCP) se cortan (solo un administrador conecta)
   return { ok: true };
 }
 
@@ -181,6 +183,7 @@ export async function quitarMiembro(db, id, { yo = null } = {}) {
   const t = ahora();
   await db.prepare(`insert into perfiles (user_id, baja_at, updated_at) values (?,?,?) on conflict (user_id) do update set baja_at = excluded.baja_at, foto_clave = null, foto_tipo = null, foto_at = null, updated_at = excluded.updated_at`).bind(u.id, t, t).run();
   await db.prepare('delete from sessions where user_id = ?').bind(u.id).run();
+  await revocarDe(db, u.id); // y sus conexiones de Claude (MCP)
   return { ok: true };
 }
 
@@ -246,5 +249,6 @@ export async function aplicarReinicio(db, bruto, contrasena) {
   const { salt, password_hash } = await hashearContrasena(String(contrasena));
   await db.prepare('update users set salt = ?, password_hash = ? where id = ?').bind(salt, password_hash, r.user_id).run();
   await db.prepare('delete from sessions where user_id = ?').bind(r.user_id).run();
+  await revocarDe(db, r.user_id); // y sus conexiones de Claude (MCP)
   return { id: r.user_id, email: r.email };
 }
