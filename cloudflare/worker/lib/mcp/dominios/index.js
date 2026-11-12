@@ -4,7 +4,8 @@
 import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio (capa1.js)
 // import './cerebro.js';
 // import './tareas.js';
-// import './contenido.js';
+import './contenido.js';
+import './bandeja.js';
 // import './anuncios.js';
 // import './estudio.js';
 // import './agentes.js';
