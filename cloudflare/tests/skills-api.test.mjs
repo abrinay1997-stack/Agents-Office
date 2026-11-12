@@ -7,6 +7,13 @@ import { guardarFila, listarFilas } from '../worker/lib/almacen.js';
 import { skillsDe } from '../worker/lib/agentes/contexto.js';
 import { cargarRoster } from '../worker/lib/tareas/roster.js';
 import { LIMITS } from '../../skills-core.mjs';
+import { podarSkills } from '../worker/lib/skills-api.js';
+import { podar } from '../worker/lib/mantenimiento.js';
+import { MODULOS } from '../worker/modulos/index.js';
+import { DESTINOS } from '../worker/lib/restablecer.js';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadSkills } from '../../skills.mjs';
 
 async function mundo() {
@@ -76,7 +83,7 @@ test('validación: todos los topes y rechazos (con el motivo en español y nada 
   // exactamente en el tope sí pasa
   assert.equal((await m.admin('PUT', '/api/skills/justa', buena(m, { text: 'a'.repeat(LIMITS.body), files: [{ name: 'a.md', text: 'a'.repeat(LIMITS.perFile) }, { name: 'b.md', text: 'a'.repeat(LIMITS.perFile) }] }))).status, 200);
   // para toda la casa, a propósito y con aviso
-  const t = await m.admin('PUT', '/api/skills/casa', { description: 'estilo de la casa', text: 'Tono cercano.', todos: true });
+  const t = await m.admin('PUT', '/api/skills/casa', { description: 'estilo de la casa', text: 'Tono cercano.', todos: true, confirmado: true });
   assert.equal(t.status, 200); assert.equal(t.j.skill.everyone, true); assert.match(t.j.avisos.join(' '), /TODOS/);
 });
 
@@ -102,9 +109,15 @@ test('papelera: borrar no destruye (30 días), se recupera, no pisa a una del mi
   const ids = (await m.admin('GET', '/api/skills/papelera')).j.items.map(i => i.id);
   const r = await m.admin('POST', '/api/skills/papelera/restaurar', { id: ids[0] }); assert.equal(r.status, 200);
   assert.equal((await m.admin('GET', '/api/skills/propuesta')).j.skill.description, 'La nueva');
-  // una de hace 31 días se poda al mirar la papelera
-  await guardarFila(m.d1, 'skills-papelera', 'vieja:0000000000001', { name: 'vieja', borrada: Date.now() - 31 * 864e5, por: 'x', valor: { name: 'vieja' } });
+  // una de hace 31 días no se enseña ni se recupera, y mirar la papelera NO escribe nada: la borra la poda diaria
+  await guardarFila(m.d1, 'skills-papelera', 'vieja:0000000000001', { name: 'vieja', borrada: Date.now() - 31 * 864e5, por: 'x', valor: { name: 'vieja', description: 'd', text: 'x', agents: [m.agente.id], departments: [], files: [] } });
+  const antesGet = m.db.prepare('select total_changes() c').get().c;
   assert.ok(!(await m.admin('GET', '/api/skills/papelera')).j.items.some(i => i.name === 'vieja'));
+  assert.equal(m.db.prepare('select total_changes() c').get().c, antesGet, 'GET no escribe');
+  assert.equal((await m.admin('POST', '/api/skills/papelera/restaurar', { id: 'vieja:0000000000001' })).status, 404);
+  assert.equal(m.db.prepare("select count(*) n from filas where id = 'vieja:0000000000001'").get().n, 1);
+  await podarSkills(m.d1);
+  assert.equal(m.db.prepare("select count(*) n from filas where id = 'vieja:0000000000001'").get().n, 0, 'la poda diaria la borra');
 });
 
 test('versiones: cada escritura deja una versión con su SKILL.md y se puede volver atrás (sin borrar el presente)', { skip: SALTAR }, async () => {
@@ -160,4 +173,94 @@ test('la local y la nube leen igual: parseSkill compartido; lo que la nube guard
   const p = parseSkill(md);
   assert.equal(p.meta.name, 'x'); assert.deepEqual(p.meta.agents, ['olead']); assert.deepEqual(p.meta.departments, ['sales']); assert.equal(p.body, 'Pasos.');
   assert.equal(typeof loadSkills, 'function');
+});
+
+test('restablecer: las skills, su papelera y su historial se vacían juntos (el historial lleva texto de skills quitadas)', async () => {
+  for (const c of ['skills', 'skills-papelera', 'skills-historial']) assert.ok(DESTINOS.habilidades.filas.includes(c), c);
+  const m = await mundo();
+  await m.admin('PUT', '/api/skills/propuesta', buena(m)); await m.admin('PUT', '/api/skills/propuesta', buena(m, { text: 'dos' })); await m.admin('DELETE', '/api/skills/propuesta');
+  const n = () => m.db.prepare("select count(*) n from filas where coleccion like 'skills%'").get().n;
+  assert.ok(n() >= 3);
+  const { pedirRestablecer, confirmarRestablecer } = await import('../worker/lib/restablecer.js');
+  const p = await pedirRestablecer(m.env ?? { DB: m.d1 }, m.d1, { modo: 'vacia', ambitos: ['habilidades'] });
+  const r = await confirmarRestablecer(m.env ?? { DB: m.d1 }, m.d1, { token: p.pendiente.token, escribio: 'RESTABLECER' }, { quien: 'dueno@panaclaw.test' });
+  assert.ok(!r.error, JSON.stringify(r));
+  assert.equal(m.db.prepare("select count(*) n from filas where coleccion like 'skills%'").get().n, 0);
+});
+
+test('/api/skills pasa por los MODULOS reales: ningún módulo anterior lo reconoce y la lista contesta', { skip: SALTAR }, async () => {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'worker', 'modulos');
+  const i = MODULOS.findIndex(x => x.nombre === 'skills'); assert.ok(i > 0);
+  for (const mod of MODULOS.slice(0, i)) {
+    const f = join(dir, mod.nombre.replace(/[A-Z]/g, c => '-' + c.toLowerCase()) + '.js');
+    let src = ''; try { src = readFileSync(f, 'utf8'); } catch { continue; }
+    assert.ok(!src.includes('/api/skills'), `${mod.nombre} menciona /api/skills`);
+  }
+  const m = await mundo();
+  await m.admin('PUT', '/api/skills/propuesta', buena(m));
+  const r = await m.lectura('GET', '/api/skills');
+  assert.equal(r.status, 200); assert.deepEqual(r.j.skills.map(s => s.name), ['propuesta']);
+});
+
+test('confirmado: para todos, o tocar una skill que llega a todos o a un departamento, pide un segundo paso con el texto claro', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  const casa = { description: 'casa', text: 'Tono.', todos: true };
+  let r = await m.admin('PUT', '/api/skills/casa', casa);
+  assert.equal(r.status, 409); assert.equal(r.j.requiereConfirmacion, true); assert.match(r.j.error, /TODOS los agentes/); assert.match(r.j.error, /confirmado: true/);
+  assert.equal((await m.admin('GET', '/api/skills')).j.total, 0, 'sin confirmar no se guardó');
+  assert.equal((await m.admin('PUT', '/api/skills/casa', { ...casa, confirmado: 'true' })).status, 409, 'solo el booleano true cuenta');
+  assert.equal((await m.admin('PUT', '/api/skills/casa', { ...casa, confirmado: true })).status, 200);
+  // reemplazar una global (aunque la nueva sea de un solo agente) también lo pide
+  r = await m.admin('PUT', '/api/skills/casa', buena(m));
+  assert.equal(r.status, 409); assert.match(r.j.error, /hoy llega a TODOS los agentes/);
+  assert.equal((await m.admin('PUT', '/api/skills/casa', buena(m, { confirmado: true }))).status, 200);
+  // una de departamento
+  const dep = { description: 'ventas', departments: ['sales'], text: 'Solo ventas.' };
+  assert.equal((await m.admin('PUT', '/api/skills/ventas', dep)).status, 200, 'crear una de departamento no pide segundo paso (solo «todos»)');
+  r = await m.admin('PUT', '/api/skills/ventas', { ...dep, text: 'Otra.' });
+  assert.equal(r.status, 409); assert.match(r.j.error, /hoy llega a los departamentos sales/);
+  assert.equal((await m.admin('PUT', '/api/skills/ventas', { ...dep, text: 'Otra.', confirmado: true })).status, 200);
+  // ensanchar una de un agente a un departamento también lo pide
+  await m.admin('PUT', '/api/skills/crece', buena(m));
+  assert.equal((await m.admin('PUT', '/api/skills/crece', { description: 'x', departments: ['emails'], text: 'x' })).status, 409);
+  // una de un solo agente sigue como siempre (sin segundo paso), y volver a una versión global también lo pide
+  assert.equal((await m.admin('PUT', '/api/skills/solo', buena(m))).status, 200);
+  assert.equal((await m.admin('PUT', '/api/skills/solo', buena(m, { text: 'cambio' }))).status, 200);
+  const v = (await m.admin('GET', '/api/skills/ventas/versiones')).j.versions.at(-1);
+  assert.equal((await m.admin('POST', '/api/skills/ventas/volver', { at: v.at })).status, 409);
+  assert.equal((await m.admin('POST', '/api/skills/ventas/volver', { at: v.at, confirmado: true })).status, 200);
+});
+
+test('base: null y vacío son «sin base»; una skill sembrada (sin `actualizado`) se edita sin 409 falso; con base vieja sí hay 409 atómico', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  await guardarFila(m.d1, 'skills', 'sembrada', { name: 'sembrada', description: 'de fábrica', agents: [m.agente.id], departments: [], everyone: false, text: 'x', files: [], source: 'shipped' });
+  const g = (await m.admin('GET', '/api/skills/sembrada')).j.skill; assert.equal(g.actualizado, null);
+  for (const base of [null, '']) assert.equal((await m.admin('PUT', '/api/skills/sembrada', buena(m, { base }))).status, 200, JSON.stringify(base));
+  const b = (await m.admin('GET', '/api/skills/sembrada')).j.skill.actualizado; assert.ok(b);
+  assert.equal((await m.admin('PUT', '/api/skills/sembrada', buena(m, { text: 'con base buena', base: b }))).status, 200);
+  assert.equal((await m.admin('PUT', '/api/skills/sembrada', buena(m, { text: 'con base vieja', base: b }))).status, 409);
+  assert.match((await m.admin('GET', '/api/skills/sembrada')).j.skill.text, /con base buena/);
+});
+
+test('restaurar pasa por la validación y el tope: un agente que ya no existe la rechaza, y con 150 no cabe otra', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  await guardarFila(m.d1, 'skills-papelera', 'rota:0000000000000'.replace('0000000000000', String(Date.now())), { name: 'rota', borrada: Date.now(), por: 'x', valor: { name: 'rota', description: 'd', text: 'x', agents: ['ya-no-existe'], departments: [], files: [] } });
+  const id = m.db.prepare("select id from filas where coleccion = 'skills-papelera'").get().id;
+  const r = await m.admin('POST', '/api/skills/papelera/restaurar', { id });
+  assert.equal(r.status, 422); assert.match(r.j.error, /No se puede recuperar tal cual/);
+  await m.admin('PUT', '/api/skills/buena', buena(m)); await m.admin('DELETE', '/api/skills/buena');
+  const id2 = (await m.admin('GET', '/api/skills/papelera')).j.items.find(i => i.name === 'buena').id;
+  for (let i = 0; i < 150; i++) await guardarFila(m.d1, 'skills', 's' + i, { name: 's' + i, text: 'x', agents: [m.agente.id], departments: [], files: [] });
+  assert.equal((await m.admin('POST', '/api/skills/papelera/restaurar', { id: id2 })).status, 409);
+});
+
+test('la poda diaria: la papelera vencida y el historial de las skills que ya no existen (el de las vivas o recuperables se queda)', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  await m.admin('PUT', '/api/skills/viva', buena(m)); await m.admin('PUT', '/api/skills/recuperable', buena(m)); await m.admin('DELETE', '/api/skills/recuperable');
+  await guardarFila(m.d1, 'skills-historial', 'fantasma:0000000000001', { name: 'fantasma', at: 1, md: 'texto de una skill quitada' });
+  const n = (nombre) => m.db.prepare("select count(*) n from filas where coleccion = 'skills-historial' and id like ?").get(nombre + ':%').n;
+  assert.ok(n('viva') && n('recuperable') && n('fantasma'));
+  const r = await podar(m.d1);
+  assert.equal(n('fantasma'), 0); assert.ok(n('viva') > 0 && n('recuperable') > 0);
+  assert.equal(r.skills, 1, 'cuenta lo que borró');
 });

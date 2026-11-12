@@ -12,6 +12,7 @@
 //   · el libro del dinero de las series (`series_libro`): lo ya cerrado (liquidado o liberado) 400 días; lo reservado o incierto NUNCA (es dinero que puede estar en el aire)
 //   · las notificaciones por persona (`notificaciones`): leídas 60 días, sin leer 180 días
 // Cada tabla se poda por tandas (`LOTE`) y como mucho `TANDAS` por tabla y por día: una poda atrasada se pone al día en los días siguientes, sin gastar de golpe la CPU del reloj.
+import { podarSkills } from './skills-api.js';
 export const LOTE = 2000, TANDAS = 5;
 export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90, series: 180, series_libro: 400, series_tokens: 1 });
 export const NOTIFICACIONES_SIN_LEER_DIAS = 180;
@@ -48,6 +49,8 @@ export async function podar(db, ahoraMs = Date.now()) {
       if (n < LOTE) break;
     }
   }
+  // la papelera de skills (30 días) y el historial de las que ya no existen son filas, no tabla: se cuentan solo si borró algo
+  try { const r = await podarSkills(db); if (r.papelera + r.historial) borradas.skills = r.papelera + r.historial; } catch { /* la poda de skills no tumba la del resto */ }
   return borradas;
 }
 
