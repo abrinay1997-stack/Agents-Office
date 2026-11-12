@@ -43,7 +43,11 @@ export async function manejar(ctx) {
   if (ruta !== '/api/conectar-claude' && !ruta.startsWith('/api/conectar-claude/')) return null;
   if (usuario.rol !== 'admin' || usuario.agente) return prohibido('Solo un administrador ve y corta las conexiones de Claude.'); // el rol, ANTES que la ruta o el cuerpo
   const ms = reloj(env);
-  if (ruta === '/api/conectar-claude' && req.method === 'GET') return json({ activo: await mcpActivo(db), url: urlMcp(env), host: hostMcp(env), alcances: ALCANCES, conexiones: await listar(db, ms) });
+  if (ruta === '/api/conectar-claude' && req.method === 'GET') {
+    const canonico = hostValido(req, env);
+    const aviso = canonico ? {} : { aviso: `El dominio aún no está conectado: /mcp responde 404 en este host (${new URL(req.url).host}); solo contesta en ${hostMcp(env)}.` };
+    return json({ activo: await mcpActivo(db), url: urlMcp(env), host: hostMcp(env), hostCanonico: canonico, ...aviso, alcances: ALCANCES, conexiones: await listar(db, ms) });
+  }
   if (ruta === '/api/conectar-claude/cortar-todas' && req.method === 'POST') {
     const n = await revocarTodas(db, ms);
     await auditar(db, ms, usuario.email, { evento: 'cortar-todas', testigos: n });

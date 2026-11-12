@@ -9,7 +9,7 @@ import { crearRegistro, PROPIEDADES_PROHIBIDAS, herramientas } from '../worker/l
 import '../worker/lib/mcp/servidor.js'; // carga todas las herramientas reales
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ok = (extra = {}) => ({ nombre: 'dinero_prueba', descripcion: 'Una herramienta de prueba.', esquema: { type: 'object', properties: {} }, alcance: 'gasto', soloLectura: false, ejecutar: async () => 'x', ...extra });
+const ok = (extra = {}) => ({ nombre: 'dinero_prueba', descripcion: 'Una herramienta de prueba.', esquema: { type: 'object', properties: {}, additionalProperties: false }, alcance: 'gasto', soloLectura: false, soloPrepara: true, ejecutar: async () => 'x', ...extra });
 
 test('el registro NO admite una herramienta que canjee un testigo de gasto', () => {
   const r = crearRegistro();
@@ -21,8 +21,8 @@ test('el registro NO admite una herramienta que canjee un testigo de gasto', () 
 test('…ni un argumento que lleve o reciba el testigo (a cualquier profundidad, con cualquier mayúscula)', () => {
   for (const p of PROPIEDADES_PROHIBIDAS) {
     const r = crearRegistro();
-    assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: { [p]: { type: 'string' } } } })), /testigo de un gasto/, p);
-    assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: { datos: { type: 'object', properties: { [p.toUpperCase()]: { type: 'string' } } } } } })), /testigo de un gasto/, p + ' anidado');
+    assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: { [p]: { type: 'string' } }, additionalProperties: false } })), /testigo de un gasto/, p);
+    assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: { datos: { type: 'object', properties: { [p.toUpperCase()]: { type: 'string' } } } }, additionalProperties: false } })), /testigo de un gasto/, p + ' anidado');
   }
   assert.ok(['confirmacion', 'testigo'].every((p) => PROPIEDADES_PROHIBIDAS.includes(p)), '`confirmacion` es el argumento con que anuncios/acciones.mjs canjea el segundo paso');
 });
@@ -56,4 +56,19 @@ test('el código del conector no sabe canjear un testigo de gasto: no importa an
 test('el registro del dinero está escrito: el contrato de registro.js dice que el segundo paso es de una persona', () => {
   const t = readFileSync(join(RAIZ, 'worker/lib/mcp/registro.js'), 'utf8');
   assert.match(t, /LA REGLA DEL DINERO/); assert.match(t, /paso 2 lo da una persona/);
+});
+
+test('LISTA BLANCA: un objeto raíz abierto no entra, y una herramienta de gasto debe declarar soloPrepara', () => {
+  const r = crearRegistro();
+  assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: {} } })), /additionalProperties/, 'sin additionalProperties');
+  assert.throws(() => r.registrar(ok({ esquema: { type: 'object', properties: {}, additionalProperties: true } })), /additionalProperties/, 'objeto libre');
+  assert.throws(() => r.registrar(ok({ soloPrepara: undefined })), /soloPrepara/, 'gasto sin declarar que solo prepara');
+  assert.throws(() => r.registrar(ok({ soloPrepara: false })), /soloPrepara/);
+  const buena = r.registrar(ok()); assert.equal(buena.soloPrepara, true);
+  const oficina = r.registrar(ok({ nombre: 'otra_cosa', alcance: 'oficina', soloPrepara: undefined })); assert.equal(oficina.soloPrepara, false, 'las de oficina no lo necesitan');
+});
+
+test('más nombres y argumentos que huelen a gastar o a canjear: gastar, activar, subir_presupuesto, token, confirm, ok', () => {
+  for (const n of ['gastar', 'gastar_ya', 'activar', 'activar_campana', 'subir_presupuesto', 'reanudar_anuncio', 'relanzar']) assert.throws(() => crearRegistro().registrar(ok({ nombre: n })), /nombre/, n);
+  for (const a of ['token', 'confirm', 'ok', 'Token', 'OK']) assert.throws(() => crearRegistro().registrar(ok({ esquema: { type: 'object', properties: { [a]: { type: 'boolean' } }, additionalProperties: false } })), /testigo de un gasto/, a);
 });

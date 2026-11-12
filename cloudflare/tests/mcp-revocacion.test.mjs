@@ -112,3 +112,10 @@ test('PODA: códigos caducados 1 día, testigos 30 días después de caducar/rot
   assert.deepEqual(m.db.prepare("select nombre from mcp_clientes where nombre in ('viejo sin uso','viejo usado hace poco','nuevo') order by nombre").all().map((x) => x.nombre), ['nuevo', 'viejo usado hace poco']);
   assert.equal(m.db.prepare("select count(*) n from mcp_tokens where familia != 'fd' and id not like 't-%'").get().n, 1, 'la conexión viva sigue'); assert.equal((await m.rpc(vivo.tokens.access_token, 'ping')).status, 200);
 });
+
+test('PANEL: en un host que no es el canónico avisa que el dominio aún no está conectado', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  const bien = await m.admin('GET', '/api/conectar-claude'); assert.equal(bien.j.hostCanonico, true); assert.equal(bien.j.aviso, undefined);
+  const r = await m.crudo('/api/conectar-claude', { cookie: m.cookies.admin, host: 'agents-office.algo.workers.dev' }); const j = await r.json();
+  assert.equal(r.status, 200); assert.equal(j.hostCanonico, false); assert.match(j.aviso, /dominio aún no está conectado/); assert.match(j.aviso, /\/mcp responde 404 en este host/);
+});

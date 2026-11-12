@@ -198,6 +198,6 @@ export function plan(docs, pedido) {
 export function idsDe(texto) {
   const t = String(texto || '').trim().toLowerCase();
   if (!t || t === 'listas') return LISTAS.map((f) => f.id);
-  if (t === 'todas') return MANEJABLES.map((f) => f.id);
+  if (t === 'todas') return MANEJABLES.filter((f) => !f.soloAMano).map((f) => f.id); // lo que abre acceso desde fuera (soloAMano) jamás entra por «todas»
   return t.split(/[,\s]+/).filter(Boolean);
 }

@@ -19,13 +19,14 @@
     pane.innerHTML = '<p class="sg-lead">Cargando las conexiones…</p>';
     const dibujar = async () => {
       const d = await api('/api/conectar-claude');
+      const dominio = d.hostCanonico === false ? `<p class="fn-porque" role="note">${esc(d.aviso || 'El dominio aún no está conectado.')}</p>` : '';
       const apagado = d.activo ? '' : '<p class="fn-porque" role="note">El conector está APAGADO: nadie puede conectarse y las conexiones de abajo no funcionan. Se enciende en Funciones nuevas → «Conectar Claude (MCP)».</p>';
       const intro = '<p class="sg-lead">Conecta Claude (claude.ai, Claude Code o Claude Desktop) con la oficina. En Claude, añade un conector con esta dirección y entra con tu cuenta de administrador: '
         + 'allí eliges qué puede hacer (leer, escribir sin gastar o preparar un gasto). <b>Gastar nunca lo confirma Claude: siempre lo confirmas tú.</b></p>';
       const direccion = `<label class="nb-lbl" for="ccUrl">Dirección del conector</label><input id="ccUrl" class="nb-in" type="text" readonly value="${esc(d.url)}" style="font-size:16px;min-height:44px">`;
       const todas = '<div class="fn-acc"><button type="button" class="sg-btn" data-cc="todas">Cortar todas</button><span class="nb-msg" role="status" aria-live="polite"></span></div>';
       const lista = d.conexiones.length ? `<ul class="fn-lista">${d.conexiones.map(tarjeta).join('')}</ul>${todas}` : '<p class="sg-lead">No hay ninguna conexión.</p>';
-      pane.innerHTML = `${intro}${apagado}${direccion}<h3 class="nb-h">Conexiones</h3>${lista}`;
+      pane.innerHTML = `${intro}${dominio}${apagado}${direccion}<h3 class="nb-h">Conexiones</h3>${lista}`;
     };
     try { await dibujar(); } catch (e) { pane.innerHTML = `<p class="nb-msg mal" role="alert">${esc(e.message)}</p>`; return; }
     if (pane._cc) return; pane._cc = true;

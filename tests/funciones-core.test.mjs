@@ -94,7 +94,8 @@ test('«listas» deja fuera lo que no está construido, y «todas» lo incluye p
   assert.ok(listas.includes('chat') && listas.includes('lotes-nube'));
   assert.ok(!listas.includes('mcp'), 'el conector MCP abre acceso desde fuera: no entra por «listas»');
   assert.ok(MANEJABLES.some((f) => f.id === 'mcp') && idsDe('mcp').includes('mcp'), 'pero sí se puede nombrar y se maneja desde el panel');
-  assert.deepStrictEqual(idsDe('todas'), MANEJABLES.map((f) => f.id));
+  assert.deepStrictEqual(idsDe('todas'), MANEJABLES.filter((f) => !f.soloAMano).map((f) => f.id));
+  assert.ok(!idsDe('todas').includes('mcp'), 'el conector MCP nunca se enciende con «todas»');
   assert.deepStrictEqual(idsDe('chat, lotes-nube'), ['chat', 'lotes-nube']);
   assert.deepStrictEqual(idsDe(''), LISTAS.map((f) => f.id));
 });

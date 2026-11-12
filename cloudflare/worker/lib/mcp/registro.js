@@ -14,11 +14,12 @@
 //
 // LA REGLA DEL DINERO (no negociable, mcp-dinero.test.mjs): un token de MCP NUNCA canjea un testigo de gasto. El alcance `gasto` solo permitirá, en fases futuras, PREPARAR un gasto (el paso 1: la cifra y los
 // topes, que deja una tarjeta «espera tu OK» en la oficina y en Telegram); el paso 2 lo da una persona en la oficina o en Telegram. Por eso el registro NO admite una herramienta que canjee un testigo,
-// ni un argumento que lo lleve (`confirmacion`, `testigo`…), ni nombres que suenen a aprobar, enviar, publicar o pagar. Hoy no hay ninguna herramienta que gaste.
+// ni un argumento que lo lleve (`confirmacion`, `testigo`, `token`, `confirm`, `ok`…),
+// ni un objeto raíz abierto (lista blanca: `additionalProperties: false`), ni una herramienta de alcance `gasto` que no declare `soloPrepara: true`, ni nombres que suenen a aprobar, enviar, publicar o pagar. Hoy no hay ninguna herramienta que gaste.
 import { ALCANCES } from './constantes.js';
 
-export const PROPIEDADES_PROHIBIDAS = Object.freeze(['confirmacion', 'confirmation', 'testigo', 'token_confirmacion', 'confirm_token', 'confirmar_gasto', 'canjear', 'token_de_gasto', 'spend_token']);
-const NOMBRE_PROHIBIDO = /(aprobar|aprueba|canjear|canjea|confirmar_gasto|enviar|publicar|pagar|restablecer|borrar_cuenta)/;
+export const PROPIEDADES_PROHIBIDAS = Object.freeze(['confirmacion', 'confirmation', 'testigo', 'token_confirmacion', 'confirm_token', 'confirmar_gasto', 'canjear', 'token_de_gasto', 'spend_token', 'token', 'confirm', 'ok']);
+const NOMBRE_PROHIBIDO = /(aprobar|aprueba|canjear|canjea|confirmar_gasto|enviar|publicar|pagar|restablecer|borrar_cuenta|gastar|activar|reanudar|relanzar|subir_presupuesto)/;
 const NOMBRE_OK = /^[a-z][a-z0-9_]{2,47}$/;
 export const CLAVE_IDEMPOTENCIA = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -45,13 +46,18 @@ export function crearRegistro() {
     if (d.destructiva !== undefined && typeof d.destructiva !== 'boolean') falla('`destructiva` es verdadero o falso.');
     if (d.soloLectura && d.destructiva) falla('una herramienta de solo lectura no puede ser destructiva.');
     if (typeof d.ejecutar !== 'function') falla('falta `ejecutar`.');
+    if (d.esquema.additionalProperties !== false) falla('el esquema debe llevar `additionalProperties: false` en el objeto raíz: sin eso entra un argumento que nadie revisó (lista blanca).');
+    if (d.alcance === 'gasto' && d.soloPrepara !== true) falla('una herramienta de alcance «gasto» debe declarar `soloPrepara: true`: solo PREPARA el gasto; el paso 2 es de una persona.');
     if (d.canjeaGasto || d.canjeaTestigo) falla('ninguna herramienta MCP canjea un testigo de gasto: el segundo paso del dinero lo da una persona en la oficina o en Telegram.');
     const prohibidas = [...clavesDe(d.esquema)].filter((k) => PROPIEDADES_PROHIBIDAS.includes(k));
     if (prohibidas.length) falla(`el esquema lleva «${prohibidas[0]}»: un token de MCP no manda ni recibe el testigo de un gasto.`);
     const esquema = JSON.parse(JSON.stringify(d.esquema));
     const dice = 'Opcional: una clave única (8 a 64 letras, números, «-» o «_») para que repetir esta misma llamada no repita el efecto.';
     if (!d.soloLectura && !esquema.properties.clave_idempotencia) esquema.properties.clave_idempotencia = { type: 'string', pattern: CLAVE_IDEMPOTENCIA.source, description: dice };
-    const h = Object.freeze({ nombre: d.nombre, titulo: String(d.titulo || d.nombre), descripcion: d.descripcion, esquema, alcance: d.alcance, soloLectura: d.soloLectura, destructiva: d.destructiva === true, idempotente: d.idempotente ?? d.soloLectura, ejecutar: d.ejecutar });
+    const h = Object.freeze({
+      soloPrepara: d.soloPrepara === true, nombre: d.nombre, titulo: String(d.titulo || d.nombre), descripcion: d.descripcion,
+      esquema, alcance: d.alcance, soloLectura: d.soloLectura, destructiva: d.destructiva === true, idempotente: d.idempotente ?? d.soloLectura, ejecutar: d.ejecutar ,
+    });
     mapa.set(h.nombre, h);
     return h;
   }
