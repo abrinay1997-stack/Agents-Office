@@ -22,3 +22,5 @@ create table if not exists mcp_solicitudes (
 );
 create index if not exists mcp_solicitudes_familia on mcp_solicitudes(familia, creada_at);
 create index if not exists mcp_solicitudes_estado on mcp_solicitudes(estado, vence_at);
+-- la misma petición (mismo hash) de una conexión no abre dos tarjetas a la vez, ni aunque lleguen juntas
+create unique index if not exists mcp_solicitudes_hash_espera on mcp_solicitudes(familia, hash) where estado = 'espera';

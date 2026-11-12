@@ -305,3 +305,18 @@ test('TELEGRAM solo ve las tarjetas: del módulo mcp el bot no llega a cortar co
   assert.equal(mcpSoloSolicitudes.manejar({ ruta: '/api/conectar-claude/cortar-todas' }), null);
   assert.equal(o.tarjetas()[0].id, f.id);
 });
+
+test('MISMO PEDIDO A LA VEZ: tres peticiones idénticas abren UNA tarjeta (índice único parcial)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const r = await Promise.all([1, 2, 3].map(() => o.pedir(IMG)));
+  assert.equal(o.tarjetas().length, 1); for (const x of r) assert.equal(x.j.result.isError, false);
+});
+
+test('INCIERTA tardía: una tarjeta aprobada 2 h después de crearla y fallada bloquea el mismo pedido desde ESE momento; y un «⛔» que nombra un trabajo es rechazada', { skip: SALTAR }, async () => {
+  const o = await oficina(); await o.pedir(IMG); const [f] = o.tarjetas();
+  o.m.db.prepare("update mcp_solicitudes set estado = 'incierta', resuelta_at = ? where id = ?").run(o.m.ahora(), f.id); // aprobada hace un momento (la tarjeta nació hace 2 h)
+  o.m.db.prepare('update mcp_solicitudes set creada_at = creada_at - ?, vence_at = vence_at - ? where id = ?').run(2 * 3600e3, 2 * 3600e3, f.id);
+  assert.match(texto(await o.pedir(IMG)), /quedó a medias/); assert.equal(o.tarjetas().length, 1);
+  assert.equal(veredicto('⛔ Este trabajo costaría US$3 y pasa el tope (trabajo jabc12345)').estado, 'rechazada');
+  assert.equal(veredicto('trabajo sin-forma-real').estado, 'incierta');
+});

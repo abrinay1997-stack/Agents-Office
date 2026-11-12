@@ -42,9 +42,10 @@ export async function barrer(db, ms) {
 /** Qué dice la herramienta del Estudio: con id de trabajo o de lote (o «Listo:» / «En marcha:») se pidió; un error escrito es «rechazada»; el silencio, «incierta» (no se sabe si se creó). Pura. */
 export function veredicto(r) {
   const crudo = String(typeof r === 'string' ? r : r?.text ?? '');
-  const trabajo = /\b(?:trabajo|lote) ([A-Za-z0-9]{5,30})\b/.exec(crudo)?.[1];
-  if (trabajo || /^\s*(Listo:|En marcha:)/.test(crudo)) return { estado: 'ejecutada', texto: `Pedida al Estudio${trabajo ? ` (${trabajo})` : ''}: la oficina te avisa cuando termine.` };
+  // lo primero, el error: un «⛔ … este trabajo costaría …» nombra un trabajo y NO se pidió nada
   if (r?.isError || /^\s*(⛔|no se pudo|error)/i.test(crudo)) return { estado: 'rechazada', texto: `El Estudio no lo pidió: ${clip(crudo, 250)}` };
+  const trabajo = /\b(?:trabajo|lote) ([jL][a-z0-9]{4,30})\b/.exec(crudo)?.[1]; // la forma real de los ids: j… (trabajo) y L… (lote)
+  if (trabajo || /^\s*(Listo:|En marcha:)/.test(crudo)) return { estado: 'ejecutada', texto: `Pedida al Estudio${trabajo ? ` (${trabajo})` : ''}: la oficina te avisa cuando termine.` };
   return { estado: 'incierta', texto: 'No se sabe si se creó (la respuesta no trajo ningún trabajo): mira el Historial del Estudio antes de volver a intentarlo.' };
 }
 
@@ -76,13 +77,20 @@ export async function crearSolicitud(db, { conexion, usuario, ms, herramienta, a
   const hash = await sha256(`${herramienta}|${canonico(args)}`);
   const ya = await db.prepare(`${SELECT} where s.familia = ? and s.hash = ? and s.estado = 'espera' and s.vence_at > ?`).bind(conexion.id, hash, ms).first();
   if (ya) return { repetida: publica(ya) };
-  const dudosa = await db.prepare(`select id from mcp_solicitudes where familia = ? and hash = ? and estado in ('ejecutando','incierta') and creada_at > ?`).bind(conexion.id, hash, ms - REABRIR_MS).first();
+  const dudosa = await db.prepare(`select id from mcp_solicitudes where familia = ? and hash = ? and estado in ('ejecutando','incierta') and coalesce(resuelta_at, creada_at) > ?`).bind(conexion.id, hash, ms - REABRIR_MS).first();
   if (dudosa) return { limite: 'Este mismo pedido quedó a medias hace poco y puede haberse gastado: no se abre otra tarjeta en 30 minutos. El dueño lo revisa en el Estudio.' };
   const id = 'g' + testigo(9), resumen = clip(`${ev.que}${ev.idea ? ` — «${ev.idea}»` : ''}`, 400);
   // el tope de tarjetas se aplica EN la misma sentencia que inserta: dos pedidos a la vez no pasan los dos
-  const ins = await db.prepare(`insert into mcp_solicitudes (id, familia, user_id, conexion, herramienta, args, resumen, cifra_usd, cifra_nota, topes, hash, estado, creada_at, vence_at)
+  let ins;
+  try { ins = await db.prepare(`insert into mcp_solicitudes (id, familia, user_id, conexion, herramienta, args, resumen, cifra_usd, cifra_nota, topes, hash, estado, creada_at, vence_at)
       select ?,?,?,?,?,?,?,?,?,?,?,'espera',?,? where (select count(*) from mcp_solicitudes where familia = ? and estado = 'espera') < ? and (select count(*) from mcp_solicitudes where familia = ? and creada_at > ?) < ?`)
-    .bind(id, conexion.id, usuario.id, clip(conexion.nombre, 80), herramienta, JSON.stringify(args), resumen, Number(ev.usd) || 0, clip(ev.nota, 200) || null, JSON.stringify(numeros(ev.bu)), hash, ms, ms + VENCE_MS, conexion.id, MAX_ABIERTAS, conexion.id, ms - 864e5, MAX_POR_DIA).run();
+    .bind(id, conexion.id, usuario.id, clip(conexion.nombre, 80), herramienta, JSON.stringify(args), resumen, Number(ev.usd) || 0, clip(ev.nota, 200) || null, JSON.stringify(numeros(ev.bu)), hash, ms, ms + VENCE_MS, conexion.id, MAX_ABIERTAS, conexion.id, ms - 864e5, MAX_POR_DIA).run(); }
+  catch (e) { // dos pedidos idénticos a la vez: el índice único de (conexión, hash) en «espera» deja pasar uno; el otro encuentra su tarjeta
+    if (!/unique|constraint/i.test(String(e?.message))) throw e;
+    const otra = await db.prepare(`${SELECT} where s.familia = ? and s.hash = ? and s.estado = 'espera'`).bind(conexion.id, hash).first();
+    if (otra) return { repetida: publica(otra) };
+    throw e;
+  }
   if (!ins.meta?.changes) {
     const abiertas = (await db.prepare(`select count(*) n from mcp_solicitudes where familia = ? and estado = 'espera'`).bind(conexion.id).first())?.n || 0;
     const llenas = `Ya hay ${abiertas} tarjetas de esta conexión esperando el OK del dueño (el máximo es ${MAX_ABIERTAS}). No se abre otra hasta que las apruebe, las rechace o venzan.`;
