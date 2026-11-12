@@ -48,7 +48,7 @@ test('EL REGISTRO: tres herramientas, esquemas cerrados, alcances justos y ningu
   const a = herramienta('anuncios'), c = herramienta('anuncios_cambiar'), n = herramienta('analiticas');
   for (const h of [a, c, n]) { assert.ok(h, 'registrada'); assert.equal(h.esquema.additionalProperties, false, `${h.nombre}: esquema cerrado`); assert.deepEqual(h.esquema.required, ['accion']); assert.ok(h.descripcion.length <= 1200, `${h.nombre}: descripción corta`); }
   const peso = (h) => JSON.stringify({ name: h.nombre, description: h.descripcion, inputSchema: h.esquema }).length;
-  for (const h of [a, c, n]) assert.ok(peso(h) <= 2000, `${h.nombre}: ${peso(h)} letras (tope 2.000)`);
+  for (const h of [a, c, n]) assert.ok(peso(h) <= 1800, `${h.nombre}: ${peso(h)} letras (tope 1.800)`);
   assert.ok(peso(a) + peso(c) + peso(n) <= 6000, 'las tres del dominio, ≤ 6.000 letras');
   assert.equal(a.alcance, 'lectura'); assert.equal(a.soloLectura, true); assert.equal(n.alcance, 'lectura'); assert.equal(n.soloLectura, true);
   assert.equal(c.alcance, 'oficina'); assert.equal(c.soloLectura, false); assert.ok(c.esquema.properties.clave_idempotencia, 'la escritura admite clave de idempotencia');
@@ -64,16 +64,18 @@ test('EL REGISTRO: tres herramientas, esquemas cerrados, alcances justos y ningu
 });
 
 test('EL CÓDIGO: lo único que cambia Meta es pausar y bajar_presupuesto, con un tipo literal y el cuerpo armado campo por campo', () => {
-  const fuente = readFileSync(new URL('../worker/lib/mcp/dominios/anuncios.js', import.meta.url), 'utf8').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
-  // el único POST a /accion arma un cuerpo con tipo literal
-  const acciones = fuente.match(/office\('\/api\/anuncios\/accion'[^)]*\)/g) || [];
-  assert.equal(acciones.length, 1); assert.match(fuente, /\{ tipo: 'pausar', id \}/); assert.match(fuente, /\{ tipo: 'bajar_presupuesto', id, valor:/);
-  assert.ok(!/office\('\/api\/anuncios\/accion',\s*\{\s*\.\.\./.test(fuente) && !/\.\.\.a[,\s}]/.test(fuente.replace(/\.\.\.aBorrador\(a\)/g, '')), 'el cuerpo de una acción nunca reenvía lo que mandó el modelo');
+  const fuente = readFileSync(new URL('../worker/lib/mcp/dominios/anuncios.js', import.meta.url), 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l)).join('\n');
+  // pausar y bajar van DIRECTO al ejecutor con `por: 'asistente'` y un cuerpo de tipo literal; no pasan por `office` (el módulo HTTP borraría `por`)
+  assert.equal((fuente.match(/x\.acc\.accion\(/g) || []).length, 1); assert.match(fuente, /x\.acc\.accion\(\{ \.\.\.cuerpo, por: 'asistente' \}\)/);
+  assert.match(fuente, /\{ tipo: 'pausar', id \}/); assert.match(fuente, /\{ tipo: 'bajar_presupuesto', id, valor:/);
+  assert.ok(!/office\('\/api\/anuncios\/accion'/.test(fuente), 'ya no se manda la acción por el módulo HTTP');
+  assert.ok(!/por: 'dueno'|por: 'dimitri'|confirmacion/.test(fuente), 'ni el dueño ni Dimitri ni un testigo');
   // ninguna ruta de gasto, de creación en Meta, de impulso, de confirmación o de deshacer aparece en el código ni en las listas blancas
   assert.ok(!/\/(deshacer|impulsar|sincronizar|aplicar|crear|validar|vista-previa|variaciones|indicadores|conversiones\/(probar|webhook))['"`\/]/.test(fuente.replace(/'GET \/api\/anuncios\/conversiones'/g, '')), 'ninguna ruta de gasto en el código');
-  for (const [accion, rutas] of Object.entries(A.PERMITIDAS_CAMBIAR)) for (const r of rutas) assert.ok(/^(POST \/api\/anuncios\/(accion|borradores|sugerencias\/<id>\/(descartar|posponer))|PATCH \/api\/anuncios\/borradores\/<id>)$/.test(r), `${accion}: ${r}`);
+  for (const [accion, rutas] of Object.entries(A.PERMITIDAS_CAMBIAR)) for (const r of rutas) assert.ok(/^(POST \/api\/anuncios\/(borradores|sugerencias\/<id>\/(descartar|posponer))|PATCH \/api\/anuncios\/borradores\/<id>)$/.test(r), `${accion}: ${r}`);
   for (const r of A.PERMITIDAS_LEER) assert.ok(r.startsWith('GET '), r);
   for (const r of N.PERMITIDAS) assert.ok(r.startsWith('GET '), r);
+  assert.deepEqual(A.PERMITIDAS_CAMBIAR.pausar, []); assert.deepEqual(A.PERMITIDAS_CAMBIAR.bajar_presupuesto, []);
   assert.ok(A.RUTAS.length >= 15 && N.RUTAS.length === 5);
 });
 
@@ -101,7 +103,7 @@ test('LEER NO ESCRIBE: cada acción de `anuncios` y de `analiticas` solo hace GE
     if (['cuenta', 'campanas', 'ver', 'resultados'].includes(accion)) assert.equal(r.j.result.isError, false, `${accion}: ${texto(r)}`);
   }
   assert.match(texto(await llamar(t.lectura, 'anuncios', { accion: 'campanas' })), /Mensajes|Combo/);
-  for (const [accion, extra] of [['resumen', {}], ['comparar', { dias: 30 }], ['mejor_hora', { redes: ['instagram'] }], ['informe', {}], ['estado', {}]]) {
+  for (const [accion, extra] of [['resumen', { dias: 30 }], ['mejor_hora', { redes: ['instagram'] }], ['informe', {}], ['estado', {}]]) {
     const r = await llamar(t.lectura, 'analiticas', { accion, ...extra }); assert.ok(r.j.result?.content?.[0]?.text, `analiticas ${accion}`); assert.ok(texto(r).length <= TOPE_SALIDA);
   }
   assert.equal((await llamar(t.lectura, 'analiticas', { accion: 'cuenta' })).j.result.isError, true, 'cuenta sin `cuenta` es un fallo esperado');
@@ -161,7 +163,9 @@ test('PAUSAR Y BAJAR: lo que baja el gasto sí se hace, por el servidor (topes y
   // quedó en la auditoría del conector (sin el contenido) y en el historial de Anuncios
   const aud = m.db.prepare("select detalle from auditoria where tipo = 'mcp'").all().map((x) => JSON.parse(x.detalle));
   assert.ok(aud.some((d) => d.evento === 'anuncios-cambiar' && d.accion === 'pausar' && d.id === ids.activa && d.via === 'mcp'), JSON.stringify(aud).slice(0, 400));
-  assert.match(JSON.stringify((await m.admin('GET', '/api/anuncios/historial')).j), /pausar/);
+  const hist = (await m.admin('GET', '/api/anuncios/historial')).j.items;
+  assert.ok(hist.length >= 2 && hist.every((h) => h.quien === 'asistente'), `el historial lo anota como asistente: ${JSON.stringify(hist.map((h) => h.quien))}`);
+  assert.match(texto(await llamar(t.lectura, 'anuncios', { accion: 'historial' })), /asistente · pausar · Mensajes/);
   // y un id que no existe en Meta: fallo esperado, nada cambia
   const mal = await llamar(t.oficina, 'anuncios_cambiar', { accion: 'pausar', id: '99999999999' });
   assert.equal(mal.j.result.isError, true);
@@ -211,7 +215,7 @@ test('LISTA BLANCA DE RUTAS: cada acción solo llega a SU ruta, y `<id>` vale po
   const visto = [];
   const o = (p) => restringir(async (r, c, mt) => { visto.push(`${mt || (c ? 'POST' : 'GET')} ${r}`); return {}; }, p);
   const pausar = o(A.PERMITIDAS_CAMBIAR.pausar);
-  await pausar('/api/anuncios/accion', { tipo: 'pausar' }, 'POST');
+  await assert.rejects(pausar('/api/anuncios/accion', { tipo: 'pausar' }, 'POST'), /no puede hacer/, 'pausar no usa `office`: llama directo al ejecutor con por «asistente»');
   for (const [ruta, cuerpo, mt] of [['/api/anuncios/deshacer', {}, 'POST'], ['/api/anuncios/impulsar', {}, 'POST'], ['/api/anuncios/sincronizar', {}, 'POST'], ['/api/anuncios/borradores/b1/crear', {}, 'POST'],
     ['/api/anuncios/accion', undefined, 'GET'], ['/api/anuncios/borradores', {}, 'POST'], ['/api/oficina/accion', {}, 'POST']]) {
     await assert.rejects(pausar(ruta, cuerpo, mt), /no puede hacer|no permitida/, `${mt} ${ruta}`);
@@ -228,7 +232,7 @@ test('LISTA BLANCA DE RUTAS: cada acción solo llega a SU ruta, y `<id>` vale po
   }
   const an = o(N.PERMITIDAS); await an('/api/contenido/analiticas/resumen?dias=30');
   await assert.rejects(an('/api/contenido/piezas', {}, 'POST'), /no puede hacer/);
-  assert.equal(visto.length, 5);
+  assert.equal(visto.length, 4);
 });
 
 test('SALIDA: un texto largo se parte en páginas con cursor y nunca pasa de 20.000', () => {
@@ -246,8 +250,42 @@ test('D1: una llamada de lectura no pasa de 50 sentencias', { skip: SALTAR }, as
   const c = contarD1(m.d1); await llamar(t.oficina, 'anuncios_cambiar', { accion: 'crear_borrador', nombre: 'Para contar' }); assert.ok(c.parar().n <= 50);
 });
 
-test('SIN DEPENDER DE HOY: el reloj de la prueba es de 2031 y las lecturas no dicen la fecha de verdad', { skip: SALTAR }, async () => {
+test('SIN DEPENDER DE HOY: un mes fijo (enero de 2031) sale como informe, sin error y sin la fecha de verdad', { skip: SALTAR }, async () => {
   const { t, llamar } = await conectados();
   const r = await llamar(t.lectura, 'analiticas', { accion: 'informe', mes: '2031-01' });
-  assert.ok(r.j.result?.content?.[0]?.text);
+  assert.equal(r.j.result.isError, false, texto(r)); assert.match(texto(r), /enero de 2031/); assert.match(texto(r), /<informe>/);
+  const i = await llamar(t.lectura, 'anuncios', { accion: 'informe', mes: '2020-01' });
+  assert.equal(i.j.result.isError, false, texto(i)); assert.match(texto(i), /enero de 2020/);
+  const futuro = await llamar(t.lectura, 'anuncios', { accion: 'informe', mes: '2099-01' }); assert.equal(futuro.j.result.isError, true); assert.match(texto(futuro), /todavía no empieza/, 'un mes futuro es un fallo esperado, con su motivo');
+  assert.equal((await llamar(t.lectura, 'anuncios', { accion: 'informe', mes: '31-01' })).j.result.isError, true, 'un mes mal escrito se rechaza');
 });
+
+test('ANALÍTICAS: el contenido de cada acción (sin Meta leído: dice que no hay datos y no inventa cifras) y el cursor de punta a punta', { skip: SALTAR }, async () => {
+  const { t, llamar } = await conectados();
+  const r1 = await llamar(t.lectura, 'analiticas', { accion: 'resumen', dias: 30 }); assert.equal(r1.j.result.isError, false, texto(r1)); assert.match(texto(r1), /<analiticas>[\s\S]*no tiene datos[\s\S]*No inventes cifras/);
+  const r2 = await llamar(t.lectura, 'analiticas', { accion: 'estado' }); assert.equal(r2.j.result.isError, false, texto(r2)); assert.match(texto(r2), /^Meta: conectada\. Cuentas: .*Última foto: .*Indicadores:/);
+  const r3 = await llamar(t.lectura, 'analiticas', { accion: 'mejor_hora', redes: ['instagram'] }); assert.equal(r3.j.result.isError, false, texto(r3)); assert.match(texto(r3), /No hay mejor hora todavía/);
+  const r4 = await llamar(t.lectura, 'analiticas', { accion: 'cuenta', cuenta: 'instagram:inexistente' }); assert.ok(texto(r4).length > 10);
+  assert.equal((await llamar(t.lectura, 'analiticas', { accion: 'comparar' })).j.result.isError, true, '«comparar» ya no existe: resumen trae una línea por cuenta');
+  // el cursor: un desplazamiento fuera del texto no revienta ni repite; uno raro vuelve al principio
+  const fin = await llamar(t.lectura, 'analiticas', { accion: 'informe', mes: '2031-01', cursor: '9999999' }); assert.equal(fin.j.result.isError, false); assert.equal(texto(fin), '(no hay más)');
+  const raro = await llamar(t.lectura, 'analiticas', { accion: 'informe', mes: '2031-01', cursor: 'abc' }); assert.match(texto(raro), /enero de 2031/);
+  assert.equal((await llamar(t.lectura, 'analiticas', { accion: 'resumen', dias: 3 })).j.result.isError, false, 'dias fuera de rango no revienta (el servidor lo acota)');
+});
+
+test('FORMA DE LAS LECTURAS: `rango` llega a la ruta, una respuesta incompleta dice «sin datos» y la fecha del historial se lee como número o texto; conversiones sin datos personales', async () => {
+  const vistas = [], oficina = (resp) => async (ruta) => { vistas.push(ruta); return typeof resp === 'function' ? resp(ruta) : resp; };
+  await A.leer(oficina({ texto: 'x' }), { accion: 'resultados', rango: '30d', nivel: 'campana' }); assert.match(vistas.at(-1), /rango=30d/); assert.match(vistas.at(-1), /nivel=campana/);
+  await A.leer(oficina({ texto: 'x' }), { accion: 'cuenta' }); assert.match(vistas.at(-1), /rango=7d/, 'por defecto, 7d');
+  await A.leer(oficina({ texto: 'x' }), { accion: 'campanas', rango: 'mes', estado: 'activas' }); assert.match(vistas.at(-1), /que=campanas/); assert.match(vistas.at(-1), /estado=activas/);
+  assert.match(await A.leer(oficina({}), { accion: 'informe' }), /<informe>\nsin datos\n<\/informe>/, 'sin `texto` no sale «undefined»');
+  assert.ok(!(await A.leer(oficina({ texto: '' }), { accion: 'informe' })).includes('undefined'));
+
+   const hist = await A.leer(oficina({ items: [{ at: Date.UTC(2031, 0, 2, 3, 4, 5), quien: 'dueno', que: 'pausar', objeto: { nombre: 'A' } }, { at: '2031-01-03T01:02:03.000Z', quien: 'asistente', que: 'pausar', objeto: 'B' }, { at: null, quien: 'x', que: 'y', objeto: null }] }),
+  { accion: 'historial' });
+  assert.match(hist, /2031-01-02 03:04:05 · dueno/); assert.match(hist, /2031-01-03 01:02:03 · asistente/); assert.match(hist, /sin fecha · x/); assert.ok(!/undefined|NaN/.test(hist));
+  // conversiones: aunque el servidor devolviera de más, solo salen los campos de estado (centinela de correo y teléfono)
+  const c = await A.leer(oficina({ encendida: true, listo: true, eventos: ['compra'], prueba: false, hoy: { enviados: 2 }, email: 'ana@ejemplo.test', telefono: '+50760001111', hash: 'a'.repeat(64), items: [{ email: 'ana@ejemplo.test' }] }), { accion: 'conversiones' });
+  assert.match(c, /encendida/); assert.ok(!/ana@ejemplo|60001111|aaaaaaaa|items/.test(c), 'sin datos personales ni hashes');
+});
+

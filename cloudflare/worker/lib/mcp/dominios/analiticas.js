@@ -1,17 +1,17 @@
 // DOMINIO `analiticas` del conector remoto (P5, carril anuncios): cómo van las redes, solo lectura. Una herramienta (alcance lectura, solo GET):
-// resumen (total por red y una línea por cuenta) · cuenta (una cuenta sola) · comparar (todas las cuentas) · mejor_hora · informe del mes · estado (conexión con Meta, última foto, indicadores).
+// resumen (total por red y una línea por cuenta) · cuenta (una cuenta sola) · mejor_hora · informe del mes · estado (conexión con Meta, última foto, indicadores).
 // Usa las mismas lecturas que los agentes (contenido-tools.mjs) sobre las mismas rutas: nada se duplica.
 import { registrarHerramienta } from '../registro.js';
 import { conOficina, fallo, sanear, paginar } from '../anuncios/comun.js';
 import { crearLlamador } from '../../../../../contenido-tools.mjs';
 
 export const RUTAS = Object.freeze(['GET /api/contenido/analiticas', 'GET /api/contenido/analiticas/resumen', 'GET /api/contenido/mejor-hora', 'GET /api/contenido/informe', 'GET /api/contenido']);
-export const ACCIONES = Object.freeze(['resumen', 'cuenta', 'comparar', 'mejor_hora', 'informe', 'estado']);
+export const ACCIONES = Object.freeze(['resumen', 'cuenta', 'mejor_hora', 'informe', 'estado']);
 export const PERMITIDAS = Object.freeze(['GET /api/contenido/analiticas', 'GET /api/contenido/analiticas/resumen', 'GET /api/contenido/mejor-hora', 'GET /api/contenido/informe', 'GET /api/contenido']);
 
 registrarHerramienta({
   nombre: 'analiticas', titulo: 'Analíticas de las redes (leer)', alcance: 'lectura', soloLectura: true,
-  descripcion: 'LEE cómo van las redes; no cambia nada. `accion`: resumen (total por red y una línea por cuenta, `dias` 7–90) · cuenta (una sola, por `cuenta`) · comparar (todas lado a lado) · mejor_hora (`redes`, `fecha`) · '
+  descripcion: 'LEE cómo van las redes; no cambia nada. `accion`: resumen (total por red y una línea por cada cuenta, para compararlas; `dias` 7–90, por defecto 30) · cuenta (una sola, por `cuenta`) · mejor_hora (`redes`, `fecha`) · '
     + 'informe (del `mes`) · estado (Meta conectada, última foto, indicadores). Cita las cifras tal cual; no inventes las que falten.',
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: {
     accion: { type: 'string', enum: [...ACCIONES] },
@@ -26,7 +26,7 @@ registrarHerramienta({
     try {
       const office = await conOficina(ctx, PERMITIDAS), llamar = crearLlamador({ office });
       let t;
-      if (a.accion === 'resumen' || a.accion === 'comparar') t = await llamar('ver_analiticas', { dias: a.dias });
+      if (a.accion === 'resumen') t = await llamar('ver_analiticas', { dias: a.dias });
       else if (a.accion === 'cuenta') t = await llamar('ver_analiticas', { dias: a.dias, cuenta: String(a.cuenta || '').trim() || fallaTexto('cuenta necesita la `cuenta` (@usuario, nombre o id).') });
       else if (a.accion === 'mejor_hora') t = await llamar('ver_mejor_hora', { redes: a.redes, fecha: a.fecha });
       else if (a.accion === 'informe') t = await llamar('ver_informe_mes', { mes: a.mes });
