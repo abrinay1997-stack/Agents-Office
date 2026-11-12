@@ -50,6 +50,7 @@ const con = (o, fn) => conSesion(o.d1, fn);
 // Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
 // Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
 const ESCRIBEN = [
+  '/api/skills/mi-skill', '/api/skills/papelera/restaurar', '/api/skills/mi-skill/volver',
   '/api/funciones', '/api/conectar-claude/cortar-todas', '/api/conectar-claude/abc123', '/api/conectar-claude/solicitudes/g0123456789ab/aprobar', '/api/conectar-claude/solicitudes/g0123456789ab/rechazar',
   '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas',
   '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
@@ -69,6 +70,7 @@ const ESCRIBEN = [
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
 const SOLO_ADMIN = [
+  ['PUT', '/api/skills/mi-skill'], ['DELETE', '/api/skills/mi-skill'], ['POST', '/api/skills/papelera/restaurar'], ['POST', '/api/skills/mi-skill/volver'],
   ['POST', '/api/funciones'],
   ['POST', '/api/conectar-claude/cortar-todas'], ['DELETE', '/api/conectar-claude/abc123'], ['POST', '/api/conectar-claude/solicitudes/g0123456789ab/aprobar'], ['POST', '/api/conectar-claude/solicitudes/g0123456789ab/rechazar'],
   ['POST', '/api/chat/config'],
