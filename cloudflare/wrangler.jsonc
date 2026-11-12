@@ -32,6 +32,10 @@
   "vars": { "AI_MODELO": "claude-sonnet-5-5", "CONTENIDO_MAX_LLAMADAS": "40", "CONTENIDO_MAX_CONSULTAS": "40", "CONTENIDO_MAX_ACCIONES": "6", "AGENTES_MAX_LLAMADAS": "60", "AGENTES_MAX_CONSULTAS": "300" },
 
   "triggers": { "crons": ["* * * * *"] },
+  // P1 del plan docs/plan-mcp-oficina-panaclaw.md: dominio propio. workers_dev DEBE seguir en true (con `routes`, wrangler lo daría por false y rompería las vueltas de OAuth/webhooks de workers.dev).
+  // Permisos del token de despliegue (docs de Cloudflare: Workers authorization, https://developers.cloudflare.com/workers/authorization/): «Account → Workers Scripts → Edit» y «Zone → Workers Routes → Edit» sobre panaclaw.com.
+  // NO confirmado en la documentación oficial: si además hace falta «Zone → Zone → Read» o «DNS → Edit» para un custom_domain; la doc de `zone_name` solo dice que con token exige alcance de cuenta. Se probará en el primer despliegue.
+  "routes": [{ "pattern": "oficina.panaclaw.com", "custom_domain": true }],
   "workers_dev": true,
   // Los registros de invocación (con la URL de cada petición) se apagan: un enlace de invitación es una URL con un testigo dentro. Los console.error del código siguen.
   "observability": { "enabled": true, "logs": { "invocation_logs": false } }
