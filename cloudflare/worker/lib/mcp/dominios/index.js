@@ -7,9 +7,10 @@ import './tareas.js'; // P5 carril 2: tareas y rutinas
 // import './contenido.js';
 import './anuncios.js'; // P5 · carril anuncios: Anuncios de Meta (leer, borradores y lo que baja el gasto)
 import './analiticas.js'; // P5 · carril anuncios: Analíticas de las redes (leer)
-// import './estudio.js';
 import './agentes.js'; // P5: agentes (roster, ficha, actividad, brief)
 import './dimitri.js'; // P5: las conversaciones de Dimitri de cada cuenta
+import './estudio.js'; // P5 carril 5: galería (ver y ordenar) del Estudio
+import './series.js'; // P5 carril 5: series de imágenes (leer y proponer)
 // import './skills.js';
 // import './empresa.js';
 export {};
