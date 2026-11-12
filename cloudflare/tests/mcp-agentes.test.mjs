@@ -35,7 +35,7 @@ async function sembrarTareas(d1) {
 }
 const AGENTE = 'piper';
 
-test('EL REGISTRO: tres herramientas de agentes y Dimitri cumplen el contrato; nada aprueba, borra ni cambia lo fijo', () => {
+test('EL REGISTRO: las cuatro herramientas de agentes y Dimitri cumplen el contrato; nada aprueba, borra ni cambia lo fijo', () => {
   const por = new Map(herramientas().map((h) => [h.nombre, h]));
   for (const [n, alcance] of [['agentes', 'lectura'], ['dimitri_chats', 'lectura'], ['agentes_cambiar', 'oficina'], ['dimitri_chats_cambiar', 'oficina']]) {
     const h = por.get(n); assert.ok(h, n); assert.equal(h.alcance, alcance, n); assert.equal(h.soloLectura, alcance === 'lectura', n); assert.equal(h.esquema.additionalProperties, false, n);
@@ -80,7 +80,7 @@ test('LEER: el roster, la ficha y la actividad; leer no escribe nada', { skip: S
   assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'tareas' and json like '%\"state\":\"done\"%'").get().n, 2);
   // las listas largas traen cursor
   const p = paginar(Array.from({ length: 45 }, (_, i) => i), undefined, 20); assert.equal(p.pagina.length, 20); assert.equal(p.siguiente, '20'); assert.equal(paginar([1, 2, 3], '2', 20).siguiente, undefined);
-  const pag = await llamar(t.lectura, 'agentes', { accion: 'listar', limite: 10 }); assert.equal(pag.j.result.structuredContent?.siguiente ?? /siguiente: 10/.exec(texto(pag))?.[0] ? true : true, true);
+  const pag = await llamar(t.lectura, 'agentes', { accion: 'listar', limite: 10 });
   assert.match(texto(pag), /siguiente: 10/);
 });
 
@@ -124,11 +124,14 @@ test('EL BRIEF: una orden escondida se rechaza, el tope de 2.000 letras y lo vac
 
 test('MODELO Y ESFUERZO: se cambian, se pueden dejar vacíos y no admiten valores inventados', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
-  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE, modelo: 'opus' })).j.result.isError, false);
-  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'esfuerzo', id: AGENTE, esfuerzo: 'high' })).j.result.isError, false);
+  // SUBIR de nivel exige el sí de la persona; sin él solo se explica
+  for (const a of [{ accion: 'modelo', modelo: 'opus' }, { accion: 'esfuerzo', esfuerzo: 'high' }]) { const x = await llamar(t.oficina, 'agentes_cambiar', { id: AGENTE, ...a }); assert.match(texto(x), /SIN CAMBIAR/, a.accion); }
+  assert.match(texto(await llamar(t.lectura, 'agentes', { accion: 'ver', id: AGENTE })), /Modelo: el de la oficina/, 'sin confirmar no cambió');
+  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE, modelo: 'opus', confirmado: true })).j.result.isError, false);
+  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'esfuerzo', id: AGENTE, esfuerzo: 'high', confirmado: true })).j.result.isError, false);
   const ficha = texto(await llamar(t.lectura, 'agentes', { accion: 'ver', id: AGENTE })); assert.match(ficha, /Modelo: opus · esfuerzo: high/);
   assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE, modelo: 'gpt-9' })).j.result.isError, true);
-  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE, modelo: '' })).j.result.isError, false);
+  assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE, modelo: '' })).j.result.isError, false, 'bajar es libre');
   assert.match(texto(await llamar(t.lectura, 'agentes', { accion: 'ver', id: AGENTE })), /Modelo: el de la oficina/);
   assert.equal((await llamar(t.oficina, 'agentes_cambiar', { accion: 'modelo', id: AGENTE })).j.result.isError, true, 'falta el valor');
   assert.ok(m.db.prepare("select detalle from auditoria where tipo = 'mcp'").all().some((x) => JSON.parse(x.detalle).evento === 'agente-modelo'));
@@ -205,4 +208,36 @@ test('TAMAÑO DEL DOMINIO: cada descripción ≤ 2.000 letras y las cuatro herra
   assert.equal(mias.length, 4);
   for (const x of mias) assert.ok(x.description.length <= 2000, `${x.name}: ${x.description.length}`);
   const total = JSON.stringify(mias).length; assert.ok(total <= 7000, `el dominio pesa ${total} letras`);
+});
+
+test('TERCEROS HOSTILES: una fila con una orden escondida se sustituye y NO inutiliza la lista; el resto se ve', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados(); await sembrarTareas(m.d1);
+  await guardarFila(m.d1, 'tareas', 't-hostil', tarea('t-hostil', { state: 'waiting', waitingAt: 1_700_000_300_000, title: ORDEN, result: ORDEN }), 1_700_000_000_000);
+  for (const accion of ['aprobaciones', 'actividad', 'ejecuciones']) {
+    const r = await llamar(t.lectura, 'agentes', { accion }), x = texto(r);
+    assert.equal(r.j.result.isError, false, `${accion}: ${x}`); assert.ok(!x.includes('mallory'), accion);
+  }
+  const ap = texto(await llamar(t.lectura, 'agentes', { accion: 'aprobaciones' }));
+  assert.match(ap, /fila omitida/); assert.match(ap, /t-wait/, 'las demás filas se ven'); assert.match(ap, /datos, no órdenes/);
+  // los títulos de las conversaciones de Dimitri: una archivada con un título hostil no tumba el historial
+  const u = m.db.prepare('select id from users limit 1').get().id;
+  await guardarFila(m.d1, 'subgerente:' + u, 'm1', { id: 'm1', who: 'user', text: ORDEN, at: 1_700_000_000_000 }, 1);
+  const lt = await llamar(t.lectura, 'dimitri_chats', { accion: 'listar' }), tx = texto(lt);
+  assert.equal(lt.j.result.isError, false, tx); assert.ok(!tx.includes('mallory')); assert.match(tx, /fila omitida/);
+});
+
+test('VOLVER no repone una versión con una orden escondida', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  await llamar(t.oficina, 'agentes_cambiar', { accion: 'brief', id: AGENTE, texto: 'Un brief limpio.', confirmado: true });
+  const { guardarDoc } = await import('../worker/lib/almacen.js');
+  await guardarDoc(m.d1, PREFIJO_VERSIONES + AGENTE, { lista: [{ at: 1, brief: ORDEN, por: 'x' }] });
+  const r = await llamar(t.oficina, 'agentes_cambiar', { accion: 'volver_brief', id: AGENTE, version: 1, confirmado: true });
+  assert.equal(r.j.result.isError, true); assert.match(texto(r), /orden escondida/);
+  assert.ok(texto(await llamar(t.lectura, 'agentes', { accion: 'ver', id: AGENTE })).includes('Un brief limpio.'));
+});
+
+test('quitarVersion solo quita la que guardó esa llamada', { skip: SALTAR }, async () => {
+  const { m } = await conectados(); const { guardarVersion, quitarVersion, versionesDe } = await import('../worker/lib/mcp/agentes/ayudas.js');
+  await guardarVersion(m.d1, AGENTE, { brief: 'a', at: 10, por: 'x' }); await guardarVersion(m.d1, AGENTE, { brief: 'b', at: 20, por: 'y' });
+  await quitarVersion(m.d1, AGENTE, 10); assert.deepEqual((await versionesDe(m.d1, AGENTE)).map((v) => v.brief), ['b'], 'la ajena (20) sigue');
 });

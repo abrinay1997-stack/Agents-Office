@@ -8,7 +8,7 @@ import { registrarHerramienta } from '../registro.js';
 import { limpiarSecretos } from '../../secretos.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
 import { restringir } from '../capa1/restringir.js';
-import { ID_CONVERSACION, corta, dia, paginar, cabecera } from '../agentes/ayudas.js';
+import { ID_CONVERSACION, corta, dia, paginar, cabecera, sanear, AVISO_TERCEROS } from '../agentes/ayudas.js';
 
 export const ACCIONES_LEE = Object.freeze(['listar', 'actual', 'leer']);
 export const ACCIONES_CAMBIA = Object.freeze(['renombrar', 'nueva']);
@@ -25,6 +25,7 @@ const FALLO = (n, e) => { console.error(`[mcp:dimitri] ${n}:`, e?.message ?? e);
 const conOficina = async (ctx, permitidas) => { const { crearOficinaMcp } = await import('../capa1/oficina.js'); return restringir(await crearOficinaMcp({ env: ctx.env, db: ctx.db, usuario: ctx.usuario, ahoraMs: ctx.ahoraMs }), permitidas); };
 const idem = (ctx, herramienta, fn) => conIdempotencia(ctx.db, { conexionId: ctx.conexion.id, herramienta, clave: ctx.claveIdempotencia, ms: ctx.ahoraMs, fn });
 const quien = (m) => (m.who === 'user' ? (m.por ? `${corta(m.por, 30)}` : 'Tú') : 'Dimitri');
+const titulo = (x) => `«${corta(x, 80)}»`;
 const mensajes = (l, n = 30) => l.slice(-n).map((m) => `${dia(m.at)} · ${quien(m)}: ${corta(m.text, 700)}`).join('\n');
 
 registrarHerramienta({
@@ -35,24 +36,27 @@ registrarHerramienta({
     accion: { type: 'string', enum: [...ACCIONES_LEE] }, id: { type: 'string', maxLength: 30, description: 'leer: el id de una conversación de «listar».' }, limite: { type: 'integer', minimum: 1, maximum: 50 }, cursor: { type: 'string', maxLength: 200 } } },
   alcance: 'lectura', soloLectura: true,
   ejecutar: async (ctx, a) => {
+    const r = await leer(ctx, a); return r.texto ? { ...r, texto: sanear(r.texto) + `\n${AVISO_TERCEROS}` } : r; // fila por fila
+  },
+});
+async function leer(ctx, a) {
     try {
       const office = await conOficina(ctx, ['GET']);
       if (a.accion === 'listar') {
         const r = await office('/api/sub/conversaciones'), p = paginar(r.lista || [], a.cursor, a.limite || 25);
-        return { texto: [r.actual ? `Ahora: ${r.actual.n} mensajes · «${corta(r.actual.titulo, 80)}» (último ${dia(r.actual.at)})` : 'Ahora: conversación vacía.', cabecera('Archivadas', p),
-          ...p.pagina.map((x) => `${x.id} · ${dia(x.at)} · ${x.n} mensajes · «${corta(x.titulo, 80)}»`)].join('\n'), siguiente: p.siguiente };
+        return { texto: [r.actual ? `Ahora: ${r.actual.n} mensajes · ${titulo(r.actual.titulo)} (último ${dia(r.actual.at)})` : 'Ahora: conversación vacía.', cabecera('Archivadas', p),
+          ...p.pagina.map((x) => `${x.id} · ${dia(x.at)} · ${x.n} mensajes · ${titulo(x.titulo)}`)].join('\n'), siguiente: p.siguiente };
       }
       if (a.accion === 'actual') { const r = await office('/api/sub'); const l = r.messages || []; return { texto: l.length ? `Conversación de ahora (${l.length} mensajes; los últimos):\n${mensajes(l, a.limite || 20)}` : 'La conversación de ahora está vacía.' }; }
       if (a.accion === 'leer') {
         if (!ID_CONVERSACION.test(String(a.id || ''))) return { texto: 'falta `id`: el de una conversación de «listar».', esError: true };
         let c; try { c = await office(`/api/sub/conversaciones/${a.id}`); } catch { return { texto: 'esa conversación no está en TU historial.', esError: true }; }
         const l = c.messages || [], p = paginar(l, a.cursor, a.limite || 30);
-        return { texto: `«${corta(c.titulo, 80)}» (${dia(c.at)}, ${l.length} mensajes)\n${p.pagina.map((m) => `${dia(m.at)} · ${quien(m)}: ${corta(m.text, 700)}`).join('\n')}`, siguiente: p.siguiente };
+        return { texto: `${titulo(c.titulo)} (${dia(c.at)}, ${l.length} mensajes)\n${p.pagina.map((m) => `${dia(m.at)} · ${quien(m)}: ${corta(m.text, 700)}`).join('\n')}`, siguiente: p.siguiente };
       }
       return { texto: `la acción «${corta(a.accion, 30)}» no existe.`, esError: true };
     } catch (e) { return FALLO('dimitri_chats', e); }
-  },
-});
+}
 
 registrarHerramienta({
   nombre: 'dimitri_chats_cambiar', titulo: 'Dimitri: renombrar o empezar una conversación nueva',
