@@ -13,8 +13,8 @@ export const RUTAS = Object.freeze([
 registrarHerramienta({
   nombre: 'radiografia',
   titulo: 'Radiografía del negocio',
-  descripcion: 'Cómo está TODO en una sola lectura: 1 caja e indicadores · 2 pauta (anuncios) · 3 contenido de la semana · 4 tareas y aprobaciones · 5 gasto de IA · 6 salud de la oficina. Empieza por aquí cuando pregunten «¿cómo vamos?». ' +
-    '`seccion` (opcional) trae solo una. Una parte que no se pueda leer lo dice y las demás siguen. Solo lee.',
+  descripcion: '¿Cómo está TODO? Una lectura: 1 caja e indicadores · 2 pauta · 3 contenido de la semana · 4 tareas y aprobaciones · 5 gasto de IA · 6 salud. ' +
+    'Empieza por aquí. `seccion` trae solo una; lo que no se pueda leer lo dice y las demás siguen.',
   esquema: { type: 'object', additionalProperties: false, properties: { seccion: { type: 'string', enum: SECCIONES, description: 'Solo esa parte: caja, pauta, contenido, tareas, ia o salud.' } } },
   alcance: 'lectura', soloLectura: true,
   ejecutar: async (ctx, args) => {

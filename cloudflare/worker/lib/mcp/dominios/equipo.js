@@ -23,8 +23,7 @@ async function cuentas(office) {
 registrarHerramienta({
   nombre: 'equipo',
   titulo: 'Equipo y cuentas',
-  descripcion: 'Lee quién hay en la oficina, sin contraseñas, enlaces ni ids de Telegram, y con los correos acortados. accion: personas (a quiénes se les puede asignar trabajo) · cuentas (las cuentas con su rol e invitaciones pendientes). ' +
-    'Solo lee: invitar, quitar o cambiar roles lo hace un administrador en la oficina.',
+  descripcion: 'Lee quién hay: personas a las que se asigna trabajo y cuentas con su rol, con correos acortados y sin contraseñas, enlaces ni ids de Telegram. Solo lee.',
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: { accion: { type: 'string', enum: LEE } } },
   alcance: 'lectura', soloLectura: true,
   ejecutar: async (ctx, a) => {

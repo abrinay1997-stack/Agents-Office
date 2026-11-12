@@ -11,7 +11,7 @@ import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
 import { FIELDS } from '../../settings.mjs';
 import { AJUSTES_PERMITIDOS, TOPES, PATH_DE_TOPE, motivoFuera, afloja, EXCLUIDO, RUTAS_EXCLUIDAS, CAMPOS_OCULTOS } from '../worker/lib/mcp/empresa/datos.js';
 import { RUTAS as R_EMPRESA } from '../worker/lib/mcp/dominios/empresa.js';
-import { RUTAS as R_AJUSTES, LEE as L_AJUSTES, CAMBIA as C_AJUSTES } from '../worker/lib/mcp/dominios/ajustes.js';
+import { RUTAS as R_AJUSTES, LEE as L_AJUSTES, CAMBIA as C_AJUSTES, validarTipo, puedeMarcarLeidos } from '../worker/lib/mcp/dominios/ajustes.js';
 import { RUTAS as R_COSTOS, LEE as L_COSTOS, ponerTope } from '../worker/lib/mcp/dominios/costos.js';
 import { RUTAS as R_CONECT, LEE as L_CONECT, CAMBIA as C_CONECT } from '../worker/lib/mcp/dominios/conectores.js';
 import { RUTAS as R_EQUIPO, LEE as L_EQUIPO } from '../worker/lib/mcp/dominios/equipo.js';
@@ -83,10 +83,11 @@ test('NINGÚN CABO SUELTO (ajustes): todo campo de Ajustes está en la lista bla
 
 test('NINGÚN CABO SUELTO (rutas): cada ruta /api/ de los módulos de la empresa la cubre un dominio o está excluida con su motivo', () => {
   const cubiertas = new Set([...R_EMPRESA, ...R_AJUSTES, ...R_COSTOS, ...R_CONECT, ...R_EQUIPO].map((r) => r.split(' ')[1].replace(/\/:[a-z]+/g, '')));
-  const archivos = ['ajustes', 'negocio', 'equipo', 'conectores', 'modelos', 'disparadores', 'telegram', 'notificaciones', 'chat', 'restablecer', 'funciones', 'vinculo-telegram'];
+  const archivos = ['ajustes', 'negocio', 'equipo', 'conectores', 'modelos', 'disparadores', 'telegram', 'notificaciones', 'chat', 'restablecer', 'funciones', 'vinculo-telegram', 'notas-personales'];
   const fuente = archivos.map((a) => readFileSync(new URL(`../worker/modulos/${a}.js`, import.meta.url), 'utf8')).join('\n') + readFileSync(new URL('../worker/modulos/agentes.js', import.meta.url), 'utf8');
   const rutas = new Set([...fuente.matchAll(/['`](\/api\/[a-z][a-zA-Z0-9._/-]*)/g)].map((x) => x[1].replace(/\/+$/, '')));
-  const mias = ['/api/settings', '/api/cifras', '/api/business', '/api/team', '/api/equipo', '/api/conectores', '/api/mcp', '/api/modelos', '/api/notices', '/api/triggers', '/api/status', '/api/costs', '/api/quality', '/api/usage', '/api/telegram', '/api/hook', '/api/kpi', '/api/chat', '/api/notificaciones', '/api/yo', '/api/live', '/api/voice', '/api/onboard', '/api/brain', '/api/funciones', '/api/restablecer'];
+  const mias = ['/api/settings', '/api/cifras', '/api/business', '/api/team', '/api/equipo', '/api/conectores', '/api/mcp', '/api/modelos', '/api/notices', '/api/triggers', '/api/status', '/api/costs', '/api/quality', '/api/usage',
+    '/api/telegram', '/api/hook', '/api/kpi', '/api/chat', '/api/notificaciones', '/api/yo', '/api/live', '/api/voice', '/api/onboard', '/api/brain', '/api/funciones', '/api/restablecer', '/api/notas-personales'];
   const sueltas = [];
   for (const r of rutas) {
     if (!mias.some((m) => r === m || r.startsWith(m + '/') || r.startsWith(m + '.'))) continue; // las de otros dominios (tareas, estudio…) las cubren sus carriles
@@ -128,7 +129,7 @@ test('ALCANCES Y ROLES: «lectura» ve solo lo de lectura; los cambios piden «o
     const r = await llamar(t.lectura, n, a); assert.equal(esError(r), true, n); assert.match(texto(r), /alcance «lectura»/, n);
   }
   const of = (await m.rpc(t.oficina, 'tools/list')).j.result.tools;
-  for (const x of of) assert.equal(x.annotations.readOnlyHint, LEE.includes(x.name) || x.name === 'como_funciona' || x.annotations.readOnlyHint === true && !CAMBIA.includes(x.name), `${x.name}: readOnlyHint`);
+  for (const n of [...LEE, 'como_funciona']) assert.equal(of.find((x) => x.name === n).annotations.readOnlyHint, true, `${n}: solo lectura`);
   for (const n of CAMBIA) assert.equal(of.find((x) => x.name === n).annotations.readOnlyHint, false, n);
 });
 
@@ -148,7 +149,8 @@ test('LECTURA: todas las acciones contestan, no escriben nada y ningún secreto 
   await m.admin('POST', '/api/settings', { changes: { 'anuncios.cuenta': `act_${CENTINELA}`, 'anuncios.whatsapp': '50760001234' } });
   const antes = JSON.stringify(m.d1._db.prepare("select * from docs where clave not like 'mcp.%' order by clave").all());
   const filas0 = m.d1._db.prepare('select count(*) n from conectores').get().n;
-  const casos = [['radiografia', {}], ...L_AJUSTES.map((a) => ['ajustes', { accion: a }]), ...L_COSTOS.map((a) => ['costos', { accion: a }]), ...L_CONECT.filter((a) => a !== 'herramientas').map((a) => ['conectores', { accion: a }]), ['conectores', { accion: 'herramientas', nombre: 'zap-prueba' }], ...L_EQUIPO.map((a) => ['equipo', { accion: a }])];
+  const casos = [['radiografia', {}], ...L_AJUSTES.map((a) => ['ajustes', { accion: a }]), ...L_COSTOS.map((a) => ['costos', { accion: a }]), ...L_CONECT.filter((a) => a !== 'herramientas').map((a) => ['conectores', { accion: a }]),
+    ['conectores', { accion: 'herramientas', nombre: 'zap-prueba' }], ...L_EQUIPO.map((a) => ['equipo', { accion: a }])];
   const salida = [];
   for (const [n, a] of casos) {
     const r = await llamar(t.lectura, n, a); salida.push(texto(r));
@@ -173,17 +175,19 @@ test('TOPES: bajar sin preguntar, subir exige confirmado y siempre dice antes �
   const valor = async (p) => (await m.admin('GET', '/api/settings')).j.values[p];
   // donde no había tope (0 = sin tope): fijar uno LIMITA y no pide confirmación
   const a = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 50 }); assert.notEqual(esError(a), true, texto(a));
-  assert.match(texto(a), /antes sin tope → ahora 50 US\$/); assert.equal(await valor('costs.monthlyBudget'), 50);
+  assert.match(texto(a), /antes sin tope → ahora US\$50\.00/); assert.equal(await valor('costs.monthlyBudget'), 50);
   // bajar
-  const b = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 30 }); assert.match(texto(b), /antes 50 US\$ → ahora 30 US\$ \(limita más\)/); assert.equal(await valor('costs.monthlyBudget'), 30);
+  const b = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 30 }); assert.match(texto(b), /antes US\$50\.00 → ahora US\$30\.00 \(limita más\)/); assert.equal(await valor('costs.monthlyBudget'), 30);
   // subir SIN confirmar: se rechaza y NO escribe
-  const c = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 90 }); assert.equal(esError(c), true); assert.match(texto(c), /Subir o quitar.*de 30 US\$ a 90 US\$.*el dueño lo pida expresamente/s); assert.doesNotMatch(texto(c), /confirmado/, 'el rechazo no invita a poner el parámetro'); assert.equal(await valor('costs.monthlyBudget'), 30);
+  const c = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 90 }); assert.equal(esError(c), true); assert.match(texto(c), /Subir o quitar.*de US\$30\.00 a US\$90\.00.*el dueño lo pida expresamente/s); assert.doesNotMatch(texto(c),
+    /confirmado/, 'el rechazo no invita a poner el parámetro'); assert.equal(await valor('costs.monthlyBudget'), 30);
   // quitar el tope (0) también afloja
   assert.equal(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 0 })), true); assert.equal(await valor('costs.monthlyBudget'), 30);
   // confirmado: true lo hace y devuelve el antes y el después
-  const d = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 90, confirmado: true }); assert.notEqual(esError(d), true, texto(d)); assert.match(texto(d), /antes 30 US\$ → ahora 90 US\$ \(lo aflojaste, con confirmación; quedó un aviso para el dueño\)/);
+  const d = await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 90, confirmado: true }); assert.notEqual(esError(d), true, texto(d));
+  assert.match(texto(d), /antes US\$30\.00 → ahora US\$90\.00 \(lo aflojaste, con confirmación; quedó un aviso para el dueño\)/);
   const avisos = m.d1._db.prepare("select json from filas where coleccion = 'avisos'").all().map((f) => f.json).join('\n');
-  assert.match(avisos, /mcp-cambio/); assert.match(avisos, /Presupuesto del mes de IA.*de 30 US\$ a 90 US\$/); assert.match(avisos, /conexión/); assert.equal(await valor('costs.monthlyBudget'), 90);
+  assert.match(avisos, /mcp-cambio/); assert.match(avisos, /Presupuesto del mes de IA.*de US\$30\.00 a US\$90\.00/); assert.match(avisos, /conexión/); assert.equal(await valor('costs.monthlyBudget'), 90);
   // Estudio y anuncios: cada uno con su regla del cero
   assert.notEqual(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'estudio_mes_usd', valor: 100 })), true);
   assert.notEqual(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'anuncios_dia_usd', valor: 0 })), true, 'en anuncios 0 es no gastar: limita');
@@ -196,7 +200,7 @@ test('TOPES: bajar sin preguntar, subir exige confirmado y siempre dice antes �
   for (const v of [-1, 1e9]) assert.equal(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'estudio_dia_usd', valor: v, confirmado: true })), true, String(v));
   assert.equal(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'estudio_dia_usd', valor: true })), true);
   assert.equal(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'secreto', valor: 1 })), true, 'un tope que no existe');
-  const lista = texto(await llamar(t.lectura, 'costos', { accion: 'topes' })); assert.match(lista, /presupuesto_ia_mes.*90 US\$/); assert.match(lista, /estudio_mes_usd.*100/);
+  const lista = texto(await llamar(t.lectura, 'costos', { accion: 'topes' })); assert.match(lista, /presupuesto_ia_mes.*US\$90\.00/); assert.match(lista, /estudio_mes_usd.*100/);
   // la regla se prueba también sin pasar por /mcp
   assert.equal((await ponerTope(async () => ({ values: { 'media.dailyBudget': 10 }, errors: [] }), { tope: 'estudio_dia_usd', valor: 99 })).esError, true);
   const aud = texto(await llamar(t.lectura, 'ajustes', { accion: 'auditoria' })); assert.match(aud, /mcp/);
@@ -209,7 +213,8 @@ test('AJUSTES: cambiar lo permitido, rechazar lo demás con su motivo, y nunca u
   assert.notEqual(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo: 'telegram.notify.done', valor: true })), true);
   assert.notEqual(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo: 'contenido.redes', valor: ['instagram', 'facebook'] })), true);
   assert.equal(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo: 'costs.hourlyRate', valor: 99999 })), true, 'un valor fuera de rango lo rechaza Ajustes');
-  for (const campo of ['approvals.undoSeconds', 'quality.review.enabled', 'telegram.quiet.from', 'telegram.notify.approvals', 'costs.alertAt', 'safety.writes', 'approvals.amountLimit', 'contenido.modo', 'anuncios.conversiones', 'anuncios.cuenta', 'tools.browser', 'mcp.allow', 'team.people', 'hooks.tokenEnQuery', 'model', 'concurrency']) {
+  for (const campo of ['approvals.undoSeconds', 'quality.review.enabled', 'telegram.quiet.from', 'telegram.notify.approvals', 'costs.alertAt', 'safety.writes', 'approvals.amountLimit', 'contenido.modo', 'anuncios.conversiones', 'anuncios.cuenta',
+    'tools.browser', 'mcp.allow', 'team.people', 'hooks.tokenEnQuery', 'model', 'concurrency']) {
     const r = await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo, valor: 'x' }); assert.equal(esError(r), true, campo); assert.match(texto(r), /no se cambia desde aquí: .{20,}/, campo);
   }
   const tope = await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo: 'media.dailyBudget', valor: 5 }); assert.equal(esError(tope), true); assert.match(texto(tope), /topes_cambiar/);
@@ -257,7 +262,10 @@ test('CONECTORES: se ven sin token, se apagan y se habilitan los que existen; ni
   assert.match(texto(await llamar(t.oficina, 'conectores_cambiar', { accion: 'apagar', nombre: 'zap-prueba' })), /apagado/);
   assert.equal(m.d1._db.prepare("select activo from conectores where nombre = 'zap-prueba'").get().activo, 0);
   assert.match(texto(await llamar(t.oficina, 'conectores_cambiar', { accion: 'apagar', nombre: 'zap-prueba' })), /ya estaba apagado/);
-  assert.match(texto(await llamar(t.oficina, 'conectores_cambiar', { accion: 'habilitar', nombre: 'zap-prueba' })), /habilitado otra vez/);
+  const sinOk = await llamar(t.oficina, 'conectores_cambiar', { accion: 'habilitar', nombre: 'zap-prueba' }); assert.equal(esError(sinOk), true); assert.match(texto(sinOk), /el dueño lo pida expresamente/); assert.doesNotMatch(texto(sinOk), /confirmado/);
+  assert.equal(m.d1._db.prepare("select activo from conectores where nombre = 'zap-prueba'").get().activo, 0, 'sin confirmar sigue apagado');
+  assert.match(texto(await llamar(t.oficina, 'conectores_cambiar', { accion: 'habilitar', nombre: 'zap-prueba', confirmado: true })), /habilitado otra vez/);
+  assert.match(m.d1._db.prepare("select json from filas where coleccion = 'avisos'").all().map((f) => f.json).join('\n'), /el conector «zap-prueba»/);
   assert.equal(m.d1._db.prepare("select activo from conectores where nombre = 'zap-prueba'").get().activo, 1);
   const no = await llamar(t.oficina, 'conectores_cambiar', { accion: 'habilitar', nombre: 'no-existe' }); assert.equal(esError(no), true); assert.match(texto(no), /no los crea/);
   assert.equal(esError(await llamar(t.oficina, 'conectores_cambiar', { accion: 'apagar', nombre: '../etc' })), true);
@@ -332,7 +340,8 @@ test('REVISIÓN #1 (M3): cambiar el modelo a uno más caro o de otro proveedor a
 
 test('REVISIÓN #1 (M4): no habilita un disparador sin OK o sin firma, ni reescribe la lista si hay disparadores con problemas', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
-  const tg = await m.admin('PUT', '/api/triggers', { triggers: [{ id: 'sin-ok', dept: 'fin', source: 'generic', text: 'Haz algo con {{id}}', needsOk: false, paused: true }, { id: 'sin-firma', dept: 'fin', source: 'stripe', text: 'Pago {{id}}', needsOk: true, sinFirma: true, paused: true }, { id: 'normal', dept: 'fin', source: 'generic', text: 'Revisa {{id}}', needsOk: true, paused: true }] });
+  const tg = await m.admin('PUT', '/api/triggers', { triggers: [{ id: 'sin-ok', dept: 'fin', source: 'generic', text: 'Haz algo con {{id}}', needsOk: false, paused: true }, { id: 'sin-firma', dept: 'fin', source: 'stripe', text: 'Pago ' +
+    '{{id}}', needsOk: true, sinFirma: true, paused: true }, { id: 'normal', dept: 'fin', source: 'generic', text: 'Revisa {{id}}', needsOk: true, paused: true }] });
   assert.ok(tg.status < 300, JSON.stringify(tg.j));
   for (const id of ['sin-ok', 'sin-firma']) { const r = await llamar(t.oficina, 'ajustes_cambiar', { accion: 'habilitar_disparador', id }); assert.equal(esError(r), true, id); assert.match(texto(r), /lo decide el dueño/, id); }
   assert.notEqual(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'habilitar_disparador', id: 'normal' })), true);
@@ -358,4 +367,40 @@ test('REVISIÓN #1 (B1, B3): lo que afloja la supervisión no se puede cambiar, 
     const src = readFileSync(new URL(`../worker/lib/mcp/dominios/${f}.js`, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /conOficina\(ctx, \[\s*'GET'\s*\]\)/, `${f}.js usa un GET genérico: pide las rutas exactas`);
   }
+});
+
+test('REVISIÓN #2 (H1): el TIPO del valor se comprueba antes de llamar a Ajustes (nada de coerciones silenciosas)', { skip: SALTAR }, async () => {
+  const campo = (p) => FIELDS.find((f) => f.path === p);
+  const malo = (p, v) => assert.ok(validarTipo(campo(p), v), `${p} no debería aceptar ${JSON.stringify(v)}`), bueno = (p, v) => assert.equal(validarTipo(campo(p), v), null, `${p} sí acepta ${JSON.stringify(v)}`);
+  for (const v of ['sí', 'true', 1, '', null]) malo('deputy.weekly', v); bueno('deputy.weekly', true); bueno('deputy.weekly', false);
+  for (const v of ['', '5', NaN, Infinity, -1, 1e9, true, null]) malo('costs.hourlyRate', v); bueno('costs.hourlyRate', 25);
+  for (const v of ['instagram', [], ['nada'], ['instagram', 3], null]) malo('contenido.redes', v); bueno('contenido.redes', ['instagram']);
+  for (const v of ['marketing', ['marketing', 'nope'], [3], null]) malo('contenido.departments', v); bueno('contenido.departments', []); bueno('contenido.departments', ['marketing', 'fin']);
+  for (const v of ['sonnet ', 'gpt', 1, ['sonnet']]) malo('model', v); bueno('model', 'sonnet');
+  for (const v of ['25:00', '9:5', 5, 'tarde']) malo('telegram.quiet.from', v); bueno('telegram.quiet.from', ''); bueno('telegram.quiet.from', '22:30');
+  for (const v of [5, ['a'], null, 'x'.repeat(61)]) malo('name', v); bueno('name', 'PanaClaw');
+  for (const v of ['a', 5, ['a', 3], null]) malo('safety.browserSites', v); bueno('safety.browserSites', ['a.com']);
+  const { m, t, llamar } = await conectados();
+  const valor = async (p) => (await m.admin('GET', '/api/settings')).j.values[p];
+  for (const [p, v] of [['deputy.weekly', 'sí'], ['costs.hourlyRate', ''], ['contenido.departments', ['marketing', 'nope']], ['contenido.redes', 'instagram'], ['contenido.entregarHorasAntes', '5']]) {
+    const antes = await valor(p), r = await llamar(t.oficina, 'ajustes_cambiar', { accion: 'poner', campo: p, valor: v }); assert.equal(esError(r), true, p); assert.match(texto(r), /No se guardó/, p); assert.deepEqual(await valor(p), antes, `${p} no cambió`);
+  }
+});
+
+test('REVISIÓN #2 (H2, H5, H6, H8): presupuesto leído de su forma real, indicadores solo con número, avisos que no esconden estado, defectos de los topes', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  assert.notEqual(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'presupuesto_ia_mes', valor: 50 })), true);
+  assert.match(texto(await llamar(t.lectura, 'costos', { accion: 'resumen' })), /presupuesto US\$50\.00 \(0 %, ok\)/);
+  const q = await llamar(t.lectura, 'costos', { accion: 'calidad' }); assert.notEqual(esError(q), true);
+  assert.ok((await m.admin('POST', '/api/business/kpi', { id: 'ventas_semana', name: 'Ventas', unit: 'US$', goal: 1000 })).status < 300);
+  for (const v of ['', [], true, 'abc', '1e3']) assert.equal(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'kpi_anotar', id: 'ventas_semana', valor: v })), true, JSON.stringify(v));
+  for (const v of [250, '7,5']) assert.notEqual(esError(await llamar(t.oficina, 'ajustes_cambiar', { accion: 'kpi_anotar', id: 'ventas_semana', valor: v })), true, JSON.stringify(v));
+  const verde = puedeMarcarLeidos({ overall: 'ok' }), rojo = puedeMarcarLeidos({ overall: 'bad' }); assert.equal(verde, true); assert.equal(rojo, false); assert.equal(puedeMarcarLeidos({ overall: 'warn' }), false);
+  const r = await llamar(t.oficina, 'ajustes_cambiar', { accion: 'avisos_leidos' }); assert.equal(esError(r), true, 'con el semáforo en rojo no se marcan'); assert.match(texto(r), /no los marco como leídos/);
+  for (const [id, d] of Object.entries(TOPES)) {
+    const f = FIELDS.find((x) => x.path === d.path);
+    if (f.default !== undefined) assert.equal(d.defecto, f.default, `${id}: el defecto debe ser el de settings.mjs`); else assert.ok(d.defecto === 0 || d.defecto === false, `${id}: sin default en settings, el implícito es 0 o apagado`);
+  }
+  assert.notEqual(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'anuncios_mes_usd', valor: 100 })), true, 'bajar el de fábrica (300) no pide confirmación aunque nunca se haya guardado');
+  assert.equal(esError(await llamar(t.oficina, 'topes_cambiar', { accion: 'poner_tope', tope: 'anuncios_campana_usd', valor: 500 })), true, 'subir sobre el de fábrica (150) sí');
 });

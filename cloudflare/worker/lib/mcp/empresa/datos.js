@@ -12,17 +12,17 @@ export const AJUSTES_PERMITIDOS = Object.freeze([
  * Los topes de gasto. `cero` dice qué significa un 0: 'sin-tope' (0 = SIN límite: ponerlo AFLOJA), 'no-gasta' (0 = no se gasta: ponerlo limita), null (el mínimo es 1).
  * `bool`: el interruptor «frenar al pasar el presupuesto»: encendido limita; apagado afloja.
  */
-export const TOPES = Object.freeze({ // `defecto`: lo que rige si nunca se tocó (los de fábrica del Worker); los de anuncios no tienen uno conocido aquí y cuentan como «no se sabe»
+export const TOPES = Object.freeze({ // `defecto`: lo que rige si nunca se tocó (los de fábrica del Worker); `defecto` sale de `FIELDS[].default` (un test lo compara); sin él, el implícito (0 o apagado)
   presupuesto_ia_mes: { path: 'costs.monthlyBudget', cero: 'sin-tope', defecto: 0, unidad: 'US$', titulo: 'Presupuesto del mes de IA (agentes, Dimitri…)' },
   freno_presupuesto: { path: 'costs.stopAtBudget', bool: true, defecto: false, titulo: 'Frenar las tareas nuevas al pasar el presupuesto de IA' },
   estudio_dia_usd: { path: 'media.dailyBudget', cero: 'sin-tope', defecto: 0, unidad: 'US$', titulo: 'Gasto máximo al día en el Estudio' },
   estudio_mes_usd: { path: 'media.monthlyBudget', cero: 'sin-tope', defecto: 0, unidad: 'US$', titulo: 'Gasto máximo al mes en el Estudio' },
   estudio_generaciones_dia: { path: 'media.dailyLimit', cero: 'sin-tope', defecto: 40, unidad: 'generaciones', titulo: 'Tope de generaciones del Estudio al día' },
   estudio_por_pedido: { path: 'media.maxPerRequest', cero: null, defecto: 8, unidad: 'imágenes', titulo: 'Imágenes por pedido (máximo)' },
-  anuncios_dia_usd: { path: 'anuncios.topeDiario', cero: 'no-gasta', unidad: 'US$', titulo: 'Tope de gasto de anuncios al día' },
-  anuncios_mes_usd: { path: 'anuncios.topeMensual', cero: 'no-gasta', unidad: 'US$', titulo: 'Tope de gasto de anuncios al mes' },
-  anuncios_campana_usd: { path: 'anuncios.topeCampana', cero: 'no-gasta', unidad: 'US$', titulo: 'Tope de gasto por campaña' },
-  competencia_semana: { path: 'anuncios.competenciaTopeSemana', cero: 'no-gasta', unidad: 'créditos', titulo: 'Créditos de la competencia por semana' },
+  anuncios_dia_usd: { path: 'anuncios.topeDiario', cero: 'no-gasta', defecto: 20, unidad: 'US$', titulo: 'Tope de gasto de anuncios al día' },
+  anuncios_mes_usd: { path: 'anuncios.topeMensual', cero: 'no-gasta', defecto: 300, unidad: 'US$', titulo: 'Tope de gasto de anuncios al mes' },
+  anuncios_campana_usd: { path: 'anuncios.topeCampana', cero: 'no-gasta', defecto: 150, unidad: 'US$', titulo: 'Tope de gasto por campaña' },
+  competencia_semana: { path: 'anuncios.competenciaTopeSemana', cero: 'no-gasta', defecto: 10, unidad: 'créditos', titulo: 'Créditos de la competencia por semana' },
 });
 export const PATH_DE_TOPE = Object.freeze(Object.fromEntries(Object.entries(TOPES).map(([k, v]) => [v.path, k])));
 
@@ -89,6 +89,7 @@ export const RUTAS_EXCLUIDAS = Object.freeze([
   ['/api/brain', 'las notas del Cerebro las cubre el carril del Cerebro'], ['/api/onboard', 'preparar la oficina desde una web o restablecerla: solo el dueño, en la oficina'], ['/api/restablecer', 'restablecer la oficina: nunca por MCP'],
   ['/api/costs.csv', 'es un archivo para contabilidad, no texto'], ['/api/costs/apply', 'aplica una sugerencia que cambia el modelo de un agente o pausa una rutina: lo cubren los carriles de agentes y tareas'],
   ['/api/usage', 'el medidor de la esquina: lo cubre `costos` → resumen'], ['/api/funciones', 'los interruptores de funciones nuevas abren gasto o acceso: solo el dueño, en la oficina'],
+  ['/api/notas-personales', 'las notas que una persona le deja a otra son privadas de cada cuenta: no se leen ni se escriben por MCP'],
   ['/api/notificaciones/config', 'encender o apagar las notificaciones es un interruptor de funciones: solo el dueño (leerlo sí está en `ajustes` → avisos)'],
   ['/api/notificaciones', 'la bandeja de avisos de cada persona es personal'], ['/api/chat', 'el chat interno del equipo es privado: ni se lee ni se escribe por MCP (solo se dice si está encendido)'],
 ]);
