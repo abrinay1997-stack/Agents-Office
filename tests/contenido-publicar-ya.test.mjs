@@ -129,8 +129,11 @@ test('publicar-ya no está al alcance de Dimitri, el asistente, los agentes ni T
   const ruta = d => { for (const f of fs.readdirSync(path.join(raiz, d), { withFileTypes: true })) { const r = d + '/' + f.name; if (f.isDirectory()) ruta(r); else if (/\.m?js$/.test(f.name) && /publicar-ya|publicarYa/.test(lee(r))) hallados.push(r); } };
   for (const d of ['contenido', 'oficina', 'src', 'cloudflare/worker', 'cloudflare/public', 'tareas', 'anuncios', 'media']) if (fs.existsSync(path.join(raiz, d))) ruta(d);
   for (const f of fs.readdirSync(raiz).filter(x => /\.m?js$/.test(x))) if (/publicar-ya|publicarYa/.test(lee(f))) hallados.push(f);
-  const raros = hallados.filter(f => !/^(src\/|contenido\/|settings\.mjs$|serve\.mjs$|cloudflare\/(worker\/lib\/contenido\/|worker\/modulos\/contenido\.js$|worker\/lib\/funciones\.js$|public\/))/.test(f));
+  const raros = hallados.filter(f => !/^(src\/|contenido\/|settings\.mjs$|serve\.mjs$|cloudflare\/(worker\/lib\/contenido\/|worker\/modulos\/contenido\.js$|worker\/lib\/funciones\.js$|worker\/lib\/mcp\/dominios\/contenido\.js$|public\/))/.test(f));
   assert.deepEqual(raros, [], 'publicar-ya solo vive en el controlador, la sesión, la página y los ajustes');
+  // el conector MCP (P5) nombra la ruta SOLO para decir que está EXCLUIDA (con su motivo): ninguna otra línea de su código la menciona
+  const mcp = lee('cloudflare/worker/lib/mcp/dominios/contenido.js').split('\n').filter(l => /publicar-ya|publicarYa/.test(l));
+  assert.ok(mcp.every(l => /^\s*'POST \/api\/contenido\/piezas\/:id\/publicar-ya': '/.test(l)), 'en el conector solo aparece como exclusión: ' + mcp.join(' | '));
   for (const f of ['sub.mjs', 'oficina/rutas.mjs', 'oficina-mcp.mjs', 'oficina-tools.mjs', 'contenido-mcp.mjs', 'telegram.mjs']) assert.ok(!/publicar-ya|publicarYa/.test(lee(f)), f);
   assert.match(lee('cloudflare/worker/modulos/contenido.js'), /repetir\|publicar-ya/, 'solo administrador en la nube');
 });
