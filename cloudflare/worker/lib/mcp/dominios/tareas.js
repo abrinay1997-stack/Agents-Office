@@ -10,7 +10,8 @@ import { registrarHerramienta } from '../registro.js';
 import { limpiarSecretos } from '../../secretos.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
 import { restringirRutas, ID } from '../tareas/acceso.js';
-import { filtrar, pagina, fichaTarea, lineaRutina, ESTADOS } from '../tareas/formato.js';
+import { filtrar, pagina, fichaTarea, lineaRutina, corta, ESTADOS } from '../tareas/formato.js';
+import { revisarCuando, horarioNuevo } from '../tareas/cadencia.js';
 
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 const PRIO = ['alta', 'media', 'baja'];
@@ -75,10 +76,20 @@ async function conOficina(ctx, herramienta) {
   const { crearOficinaMcp } = await import('../capa1/oficina.js');
   return restringirRutas(await crearOficinaMcp({ env: ctx.env, db: ctx.db, usuario: ctx.usuario, ahoraMs: ctx.ahoraMs }), PERMITIDAS[herramienta]);
 }
-/** La tarea que crea un asistente nace con la marca `by: 'mcp'` (el servidor no la admite en el cuerpo): se apunta después, sobre la fila. */
+/** La tarea que crea un asistente nace con la marca `by: 'mcp'` (el servidor no la admite en el cuerpo): se apunta después, sobre la fila, y SE COMPRUEBA. → null si quedó marcada, o el aviso. */
 async function marcarOrigen(db, id) {
-  if (!id) return;
-  try { await db.prepare("update filas set json = json_set(json, '$.by', 'mcp') where coleccion = 'tareas' and id = ?").bind(String(id)).run(); } catch (e) { console.warn('[mcp:tareas] no se pudo marcar el origen:', e?.message ?? e); }
+  const aviso = `ATENCIÓN: la tarea ${id} se creó pero NO pude marcarla como creada por el conector; avísale al dueño para que la revise.`;
+  if (!id) return aviso;
+  try { const r = await db.prepare("update filas set json = json_set(json, '$.by', 'mcp') where coleccion = 'tareas' and id = ?").bind(String(id)).run(); return r?.meta?.changes === 0 ? aviso : null; }
+  catch (e) { console.warn('[mcp:tareas] no se pudo marcar el origen:', e?.message ?? e); return aviso; }
+}
+/** Un texto ya hecho + el aviso de marca, si lo hay (un fallo de marca es un error CLARO, sin tirar la llamada: la tarea ya existe y repetir la duplicaría). */
+const conMarca = (texto, aviso) => (aviso ? { texto: `${texto}\n${aviso}`, esError: true } : texto);
+/** Rechaza si la tarea espera el OK del dueño: un borrador de agente no sale de Aprobaciones por MCP. */
+async function sinOkPendiente(office, id) {
+  const t = (await office(`/api/tareas/${id}`))?.tarea;
+  if (!t) falta('esa tarea no existe.');
+  if (t.state === 'waiting' || t.approving) falta('esa tarea espera el visto bueno del dueño: un borrador de un agente no sale de Aprobaciones por este conector (se decide en la oficina).');
 }
 const limpio = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 const fechaOk = (v, que) => (v === undefined || v === null || (typeof v === 'string' && FECHA.test(v)) ? v : falta(`${que} va como AAAA-MM-DD (y la hora, si quieres, THH:MM).`));
@@ -101,10 +112,10 @@ async function leerTareas(office, a) {
   switch (a.accion) {
     case 'listar': return pagina(filtrar(await office('/api/tasks?light=1'), { estado: a.estado, dept: a.dept, agente: a.agente, quien: a.quien, texto: a.texto, archivadas: a.archivadas === true }), a.cursor);
     case 'ver': { const id = idDe(a); const [r, b] = await Promise.all([office(`/api/tareas/${id}`), office(`/api/tareas/${id}/bitacora`).catch(() => ({ lineas: [] }))]); return { texto: fichaTarea(r, b.lineas) }; }
-    case 'agenda': { const q = new URLSearchParams(limpio({ dias: a.dias ? String(a.dias) : undefined, agente: a.agente, dept: a.dept })).toString(); return { texto: String((await office(`/api/tareas/agenda${q ? '?' + q : ''}`)).texto || '(sin agenda)') }; }
-    case 'mias': return { texto: String((await office('/api/tareas/mias')).texto || '(sin tareas tuyas)') };
-    case 'proyectos': { const c = await office('/api/tareas/catalogo'); return { texto: `Proyectos:\n${(c.proyectos || []).map((p) => `${p.id} «${p.nombre}» [${p.estado || ''}]${p.progreso ? ` ${JSON.stringify(p.progreso).slice(0,
-      80)}` : ''}`).join('\n') || '(ninguno)'}\nEtiquetas: ${(c.etiquetas || []).map((e) => `${e.id} (${e.nombre})`).join(', ') || '(ninguna)'}` }; }
+    case 'agenda': { const q = new URLSearchParams(limpio({ dias: a.dias ? String(a.dias) : undefined, agente: a.agente, dept: a.dept })).toString(); return { texto: corta(String((await office(`/api/tareas/agenda${q ? '?' + q : ''}`)).texto || '(sin agenda)')) }; }
+    case 'mias': return { texto: corta(String((await office('/api/tareas/mias')).texto || '(sin tareas tuyas)')) };
+    case 'proyectos': { const c = await office('/api/tareas/catalogo'); return { texto: corta(`Proyectos:\n${(c.proyectos || []).map((p) => `${p.id} «${p.nombre}» [${p.estado || ''}]${p.progreso ? ` ${JSON.stringify(p.progreso).slice(0,
+      80)}` : ''}`).join('\n') || '(ninguno)'}\nEtiquetas: ${(c.etiquetas || []).map((e) => `${e.id} (${e.nombre})`).join(', ') || '(ninguna)'}`) }; }
     case 'resumen': return { texto: JSON.stringify(await office(`/api/tareas/resumen${a.dias ? '?dias=' + Math.max(7, Math.min(180, +a.dias || 30)) : ''}`)).slice(0, 8000) };
     case 'equipo': { const { nombres, yo } = await personas(office); return { texto: `Personas a las que se puede asignar trabajo: ${nombres.join(', ') || '(ninguna)'}${yo ? `\nTe escribe: ${yo}` : ''}` }; }
     default: return falta('esa acción no existe.');
@@ -124,18 +135,19 @@ async function cambiarTareas(ctx, office, a) {
     case 'crear': {
       const nota = String(a.texto || '').trim(), titulo = String(a.titulo || '').trim();
       if (!titulo && !nota) falta('di qué hay que hacer (`titulo` y/o `texto`).');
+      if (a.agente && !a.dept) falta('un `agente` pide también su `dept` (su departamento).');
       fechaOk(a.limite, 'El límite');
       const campos = limpio({ prioridad: a.prioridad, limite: a.limite || undefined, etiquetas: a.etiquetas, proyecto: a.proyecto });
       if (a.dept && !a.persona) { // trabajo para un AGENTE: pide el OK siempre, y nace marcada
         if (a.agente) await agenteValido(office, a.agente, a.dept);
         const t = await office('/api/tasks', { dept: a.dept, text: marcada(titulo && nota ? `${titulo}. ${nota}` : nota || titulo), ...(titulo ? { title: titulo } : {}), ...(a.agente ? { agent: a.agente } : {}), needsOk: true, ...campos });
-        await marcarOrigen(ctx.db, t.id);
-        return `Tarea creada: ${t.id} «${t.title}» para ${t.agent} (${t.dept}), ya en la cola. Si su trabajo envía, publica o paga algo, ESPERA el OK del dueño (siempre, desde aquí).`;
+        const av = await marcarOrigen(ctx.db, t.id);
+        return conMarca(`Tarea creada: ${t.id} «${t.title}» para ${t.agent} (${t.dept}), ya en la cola. Si su trabajo envía, publica o paga algo, ESPERA el OK del dueño (siempre, desde aquí).`, av);
       }
       const persona = a.persona && String(a.persona).toLowerCase() !== 'yo' ? await personaValida(office, a.persona) : undefined; // para una persona, o para mí
       const r = await office('/api/tareas/mias', { title: titulo || nota.split('\n')[0].slice(0, 90), ...(nota && titulo ? { notas: MCP + nota } : {}), ...(persona ? { persona } : {}), ...(a.dept ? { dept: a.dept } : {}), ...campos });
-      await marcarOrigen(ctx.db, r.tarea?.id);
-      return `Tarea creada: ${r.tarea.id} «${r.tarea.title}» ${persona ? `para ${persona}` : 'en tu lista'}${r.tarea.limite ? `, límite ${String(r.tarea.limite).replace('T', ' ')}` : ''}.`;
+      const av = await marcarOrigen(ctx.db, r.tarea?.id);
+      return conMarca(`Tarea creada: ${r.tarea.id} «${r.tarea.title}» ${persona ? `para ${persona}` : 'en tu lista'}${r.tarea.limite ? `, límite ${String(r.tarea.limite).replace('T', ' ')}` : ''}.`, av);
     }
     case 'editar': {
       const id = idDe(a); fechaOk(a.limite, 'El límite');
@@ -146,14 +158,15 @@ async function cambiarTareas(ctx, office, a) {
     }
     case 'mover': case 'cancelar': case 'hecha': return porOp(office, a);
     case 'delegar': {
-      const id = idDe(a), nota = a.nota ? MCP + String(a.nota).slice(0, 560) : undefined;
+      const id = idDe(a); await sinOkPendiente(office, id);
+      const nota = a.nota ? MCP + String(a.nota).slice(0, 560) : undefined;
       if (a.persona) { const persona = await personaValida(office, a.persona); const r = await office(`/api/tareas/${id}/delegar`, limpio({ a: 'persona', persona, nota })); return `Delegada a ${r.a}: ${r.tarea.id} «${r.tarea.title}».`; }
       if (!a.dept) falta('«delegar» pide `persona`, o `dept` (y, si quieres, `agente`).');
       if (a.agente) await agenteValido(office, a.agente, a.dept);
       const r = await office(`/api/tareas/${id}/delegar`, limpio({ a: 'agente', dept: a.dept, agente: a.agente, nota, needsOk: true })); // el OK nunca se quita por MCP
       return `Delegada a ${r.a} (${r.como}): ${r.tarea.id} «${r.tarea.title}». Pide el OK del dueño antes de enviar nada.`;
     }
-    case 'tomar': { const r = await office(`/api/tareas/${idDe(a)}/tomar`, limpio({ nota: a.nota ? MCP + String(a.nota).slice(0, 560) : undefined })); return `Ahora es tuya: ${r.tarea.id} «${r.tarea.title}».`; }
+    case 'tomar': { await sinOkPendiente(office, idDe(a)); const r = await office(`/api/tareas/${idDe(a)}/tomar`, limpio({ nota: a.nota ? MCP + String(a.nota).slice(0, 560) : undefined })); return `Ahora es tuya: ${r.tarea.id} «${r.tarea.title}».`; }
     case 'comentar': {
       const t = String(a.texto || '').trim(); if (!t) falta('el comentario está vacío (`texto`).');
       const r = await office(`/api/tasks/${idDe(a)}/comment`, { text: MCP + t.slice(0, 1900) });
@@ -176,12 +189,18 @@ async function leerRutinas(office, a) {
 async function cambiarRutinas(office, a) {
   if (a.accion === 'crear') {
     if (!DEPTS.includes(a.dept) || !String(a.texto || '').trim() || !a.cuando) falta('«crear» pide `dept`, `texto` y `cuando` (el horario).');
+    const mal = revisarCuando(a.cuando); if (mal) falta(mal);
     const r = await office('/api/routines', { dept: a.dept, text: marcada(String(a.texto).trim().slice(0, 3900)), when: a.cuando, ...(a.agente ? { agent: a.agente } : {}), needsOk: true }); // espera el OK siempre
     return `Rutina creada: ${r.routine?.id ?? '?'} «${r.routine?.title ?? ''}». Cada vez que corra, su resultado espera el OK del dueño.`;
   }
   const id = idDe(a), r = await rutinaDe(office, id);
   if (r.autonomous === true) falta('esa rutina es autónoma (envía sola): no se toca desde aquí, solo el dueño en la oficina.');
-  if (a.accion === 'horario') { if (!a.cuando) falta('«horario» pide `cuando`.'); await office(`/api/routines/${id}`, { when: a.cuando }, 'PATCH'); return `Horario cambiado: ${id}.`; } // solo el horario: ni `text`, ni `needsOk`, ni `autonomous`
+  if (a.accion === 'horario') { // solo el horario: ni `text`, ni `needsOk`, ni `autonomous`; y nunca más a menudo que el actual
+    if (r.needsOk === false) falta('esa rutina no pide el OK del dueño (solo lee o trabaja libre): su horario lo cambia el dueño en la oficina.');
+    const h = horarioNuevo(r.when, a.cuando); if (h.error) falta(h.error);
+    await office(`/api/routines/${id}`, { when: h.when }, 'PATCH'); return `Horario cambiado: ${id}.`;
+  }
+  if (a.accion === 'reanudar' && (a.confirmado !== true || r.needsOk === false)) falta('reanudar una rutina que alguien pausó pide `confirmado: true` (solo si el dueño lo pidió con esas palabras) y no vale para una rutina sin OK.');
   if (a.accion === 'pausar' || a.accion === 'reanudar') { await office(`/api/routines/${id}/${a.accion === 'pausar' ? 'pause' : 'resume'}`, {}); return `${a.accion === 'pausar' ? 'Pausada' : 'Reanudada'}: ${id}.`; }
   const ms = Date.parse(String(a.at || '')); if (!(ms > 0)) falta('«saltar» pide `at`: la hora de esa ejecución (ISO, con zona: la que da `rutinas` · ver como «próxima»).');
   await office(`/api/routines/${id}/${a.accion === 'saltar' ? 'skip' : 'unskip'}`, { at: ms }); return `${a.accion === 'saltar' ? 'Esa ejecución se salta' : 'Esa ejecución vuelve'}: ${id}.`;
@@ -190,8 +209,8 @@ async function cambiarRutinas(office, a) {
 /* ---------- el registro ---------- */
 const cursor = { type: 'string', maxLength: 200, description: 'La página que sigue (el `siguiente` de la respuesta anterior).' };
 const comun = { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{3,40}$', description: 'El id de la tarea o la rutina.' }, dept: { type: 'string', enum: DEPTS }, agente: { type: 'string', maxLength: 40, description: 'El id de un agente de ese departamento.' } };
-const cuando = { type: 'object', additionalProperties: false, description: 'Horario: {kind:daily|weekdays|weekly|monthly|hourly|minutes, at:"HH:MM", days:[0-6] (0=domingo), day:1..31|-1, nth/weekday, every, from, to, weekdaysOnly, start/end:"AAAA-MM-DD", count}.',
-  properties: { kind: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'hourly', 'minutes'] }, at: { type: 'string' }, days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7 }, day: { type: 'integer', minimum: -1, maximum: 31 },
+const cuando = { type: 'object', additionalProperties: false, description: 'Horario: {kind:daily|weekdays|weekly|monthly|hourly (hourly pide every≥1, from y to; como mucho una vez por hora), at:"HH:MM", days:[0-6] (0=domingo), day:1..31|-1, nth/weekday, every, from, to, weekdaysOnly, start/end:"AAAA-MM-DD", count}.',
+  properties: { kind: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'hourly'] }, at: { type: 'string' }, days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7 }, day: { type: 'integer', minimum: -1, maximum: 31 },
     nth: { type: 'integer', minimum: -1, maximum: 5 }, weekday: { type: 'integer', minimum: 0, maximum: 6 }, every: { type: 'integer', minimum: 1, maximum: 1440 }, from: { type: 'string' }, to: { type: 'string' }, weekdaysOnly: { type: 'boolean' },
     start: { type: 'string' }, end: { type: 'string' }, count: { type: 'integer', minimum: 1, maximum: 1000 } }, required: ['kind'] };
 
@@ -232,7 +251,7 @@ definir({
 });
 definir({
   nombre: 'rutinas_cambiar', lee: false, destructiva: true, ejecutar: (_c, office, a) => cambiarRutinas(office, a),
-  descripcion: 'Cambia RUTINAS. `accion`: crear (`dept`, `texto`, `cuando`, `agente?`: SIEMPRE espera el OK del dueño), horario (`id`, `cuando`: es lo ÚNICO que se edita; el texto, el OK y la autonomía son del dueño), pausar y reanudar (`id`), '
+  descripcion: 'Cambia RUTINAS. `accion`: crear (`dept`, `texto`, `cuando`, `agente?`: SIEMPRE espera el OK del dueño), horario (`id`, `cuando`: es lo ÚNICO que se edita y nunca corre más a menudo que antes), pausar y reanudar (`id`; reanudar pide `confirmado: true`), '
     + 'saltar y no_saltar (`id`, `at`: una ejecución concreta). No ejecuta una rutina ya, no borra rutinas y no toca una rutina autónoma.',
-  props: { accion: { type: 'string', enum: [...ACCIONES_RUTINAS_CAMBIAR] }, id: comun.id, dept: comun.dept, texto: { type: 'string', maxLength: 3900 }, cuando, agente: comun.agente, at: { type: 'string', description: 'ISO de la ejecución.' } },
+  props: { accion: { type: 'string', enum: [...ACCIONES_RUTINAS_CAMBIAR] }, id: comun.id, dept: comun.dept, texto: { type: 'string', maxLength: 3900 }, cuando, agente: comun.agente, at: { type: 'string', description: 'ISO de la ejecución.' }, confirmado: { type: 'boolean', description: 'Solo para reanudar: true si el dueño pidió reanudarla.' } },
 });

@@ -3,6 +3,8 @@ const una = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const f = (ms) => (Number.isFinite(+ms) && +ms > 0 ? new Date(+ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '');
 export const ESTADOS = ['idea', 'scheduled', 'next', 'doing', 'waiting', 'done'];
 export const PAGINA = 30;
+/** Un texto largo se recorta con aviso: ninguna lectura pasa de ~15.000 letras (el servidor corta en 20.000). */
+export const corta = (t, n = 15000) => (String(t).length > n ? `${String(t).slice(0, n)}\n…(recortado: pide algo más concreto)` : String(t));
 
 /** De quién es la tarea, en palabras. */
 export function dequien(t) { return t.person ? `persona ${t.person}` : t.agent ? `agente ${t.agent}` : t.dept ? `área ${t.dept}` : 'sin dueño'; }
@@ -35,7 +37,7 @@ export function fichaTarea(r, lineas = []) {
   const com = (t.comments || []).slice(-5).map((c) => `  ${f(c.at)} ${una(c.by, 40)}: ${una(c.text, 240)}`), notas = (t.notas || []).slice(-5).map((c) => `  ${f(c.at)} ${una(c.por, 40)}: ${una(c.texto, 240)}`);
   const bit = (lineas || []).slice(-15).map((x) => `  ${f(x.t)} ${una(x.por, 30)} ${una(x.tipo, 20)} ${una(x.campo ?? x.a ?? '', 40)}`);
   return [lineaTarea(t), r?.visible ? `Estado visible: ${una(r.visible?.etiqueta || r.visible?.k || JSON.stringify(r.visible), 60)}` : '', t.needsOk !== undefined ? `Pide el OK del dueño: ${t.needsOk ? 'sí' : 'no'}` : '',
-    t.text ? `Texto: ${una(t.text, 800)}` : '', t.result ? `Resultado: ${una(t.draft || t.result, 800)}` : '', p.length ? `Pasos:\n${p.join('\n')}` : '',
+    t.text ? `Texto: ${una(t.text, 800)}` : '', t.result ? `Resultado: ${una(t.result, 800)}` : '', t.draft ? `Borrador: ${una(t.draft, 800)}` : '', p.length ? `Pasos:\n${p.join('\n')}` : '',
     (r?.bloquean || []).length ? `Espera a: ${r.bloquean.map((d) => `${d.id} «${una(d.title, 60)}»`).join(', ')}` : '', com.length ? `Comentarios:\n${com.join('\n')}` : '', notas.length ? `Notas de trabajo:\n${notas.join('\n')}` : '',
     bit.length ? `Bitácora (lo último):\n${bit.join('\n')}` : ''].filter(Boolean).join('\n');
 }

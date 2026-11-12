@@ -38,7 +38,7 @@ test('EL REGISTRO: cuatro herramientas con acción cerrada, alcances correctos, 
   for (const [n, e] of Object.entries(enums)) { const h = por.get(n); assert.deepEqual(h.esquema.properties.accion.enum, [...e], n); assert.equal(h.esquema.additionalProperties, false); assert.deepEqual(h.esquema.required, ['accion']); }
   // por esquema: ningún campo `needsOk`, `autonomous` ni `text` de rutina: el OK y la autonomía no se tocan por MCP
   const props = JSON.stringify([...por.values()].filter((h) => [...LEE, ...CAMBIA].includes(h.nombre)).map((h) => Object.keys(h.esquema.properties)));
-  assert.ok(!/needsOk|autonomous|aprob|confirm/i.test(props), props);
+  assert.ok(!/needsOk|autonomous|aprob|confirmacion|testigo/i.test(props), props);
   assert.ok(RUTAS.every((r) => /^(GET|POST|PATCH) \/api\//.test(r)));
   for (const [r, motivo] of Object.entries(EXCLUIDAS)) { assert.match(r, /^(GET|POST|PATCH|DELETE) \/api\//); assert.ok(motivo.length > 25, `${r}: motivo`); assert.ok(!RUTAS.includes(r), `${r} está excluida y servida a la vez`); }
 });
@@ -138,21 +138,22 @@ test('NO HAY CAMINO A APROBAR, DEVOLVER NI QUITAR EL OK: ni en el esquema ni en 
 
 test('RUTINAS: listar, crear (espera OK), horario (solo eso), pausar, reanudar, saltar; una autónoma no se toca; editar no cambia texto, OK ni autonomía', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
-  const cr = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Listar las facturas vencidas', cuando: { kind: 'weekly', days: [1], at: '09:00' }, clave_idempotencia: 'rutina-mcp-001' });
+  const cr = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Listar las facturas vencidas', cuando: { kind: 'weekly', days: [1, 3, 5], at: '09:00' }, clave_idempotencia: 'rutina-mcp-001' });
   assert.equal(cr.j.result.isError, false, texto(cr)); const rid = /Rutina creada: (\S+)/.exec(texto(cr))[1];
-  const mismas = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Listar las facturas vencidas', cuando: { kind: 'weekly', days: [1], at: '09:00' }, clave_idempotencia: 'rutina-mcp-001' }); assert.match(texto(mismas), /no se repitió/);
+  const mismas = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Listar las facturas vencidas', cuando: { kind: 'weekly', days: [1, 3, 5], at: '09:00' }, clave_idempotencia: 'rutina-mcp-001' }); assert.match(texto(mismas), /no se repitió/);
   const crudo = () => JSON.parse(m.db.prepare("select json from filas where coleccion = 'rutinas' and id = ?").get(rid).json);
   assert.equal(crudo().needsOk, true, 'una rutina nueva espera el OK'); assert.match(crudo().text, /\[vía MCP\]$/);
   const lst = texto(await llamar(t.lectura, 'rutinas', { accion: 'listar' })); assert.match(lst, new RegExp(rid)); assert.match(lst, /pide OK/);
   assert.match(texto(await llamar(t.lectura, 'rutinas', { accion: 'ver', id: rid })), /Texto:/);
   const antes = crudo();
-  const h = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'daily', at: '07:30' } }); assert.equal(h.j.result.isError, false, texto(h));
-  const desp = crudo(); assert.deepEqual(desp.when, { kind: 'daily', at: '07:30' }); assert.equal(desp.text, antes.text); assert.equal(desp.needsOk, true);
-  for (const extra of [{ text: 'otra cosa' }, { needsOk: false }, { autonomous: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'daily', at: '08:00' }, ...extra }); assert.equal(r.j.result.isError, true, JSON.stringify(extra));
+  const h = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1, 3], at: '07:30' } }); assert.equal(h.j.result.isError, false, texto(h));
+  const desp = crudo(); assert.deepEqual(desp.when, { kind: 'weekly', days: [1, 3], at: '07:30' }); assert.equal(desp.text, antes.text); assert.equal(desp.needsOk, true);
+  for (const extra of [{ text: 'otra cosa' }, { needsOk: false }, { autonomous: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1], at: '08:00' }, ...extra }); assert.equal(r.j.result.isError, true, JSON.stringify(extra));
     assert.match(texto(r), /no|Unexpected|propiedad|additional|permit/i); }
   assert.equal(crudo().text, antes.text); assert.equal(crudo().autonomous, undefined);
   assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'pausar', id: rid })).j.result.isError, false); assert.equal(crudo().paused, true);
-  assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'reanudar', id: rid })).j.result.isError, false); assert.equal(crudo().paused, false);
+  assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'reanudar', id: rid })).j.result.isError, true, 'reanudar pide confirmado');
+  assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'reanudar', id: rid, confirmado: true })).j.result.isError, false); assert.equal(crudo().paused, false);
   const prox = new Date(Date.now() + 3 * 864e5).toISOString(); const sk = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'saltar', id: rid, at: prox }); assert.equal(sk.j.result.isError, false, texto(sk));
   assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'no_saltar', id: rid, at: prox })).j.result.isError, false);
   // una rutina autónoma (ganada por el dueño) no se toca en nada
@@ -163,6 +164,50 @@ test('RUTINAS: listar, crear (espera OK), horario (solo eso), pausar, reanudar, 
   const sinId = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'pausar', id: 'noexiste1' }); assert.equal(sinId.j.result.isError, true); assert.match(texto(sinId), /no existe/);
   assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'x' })).j.result.isError, true, 'sin horario no se crea');
   assert.equal(m.db.prepare("select count(*) n from auditoria where tipo = 'mcp' and detalle like '%rutinas_cambiar%'").get().n >= 5, true, 'cada cambio queda en la auditoría');
+});
+
+test('FRECUENCIA: nada de «cada minuto», nada que corra más a menudo que antes, ni en rutinas sin OK; el end se conserva', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const crear = (cuando, extra = {}) => llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Mirar la caja', cuando, ...extra });
+  assert.equal((await crear({ kind: 'minutes', every: 1 })).j.result.isError, true, 'minutes ni está en el enum');
+  for (const mal of [{ kind: 'hourly', every: 1 }, { kind: 'hourly', from: '09:00', to: '17:00' }, { kind: 'hourly', every: 0, from: '09:00', to: '17:00' }]) { const r = await crear(mal); assert.equal(r.j.result.isError, true, JSON.stringify(mal)); }
+  const hh = await crear({ kind: 'hourly', every: 2, from: '09:00', to: '17:00', weekdaysOnly: true }); assert.equal(hh.j.result.isError, false, texto(hh)); const rid = /Rutina creada: (\S+)/.exec(texto(hh))[1];
+  const crudo = (id) => JSON.parse(m.db.prepare("select json from filas where coleccion = 'rutinas' and id = ?").get(id).json);
+  for (const mas of [{ kind: 'hourly', every: 1, from: '09:00', to: '17:00', weekdaysOnly: true }, { kind: 'hourly', every: 3, from: '00:00', to: '23:00' }, { kind: 'hourly', every: 2, from: '09:00', to: '17:00' }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: mas }); assert.equal(r.j.result.isError, true, JSON.stringify(mas)); assert.match(texto(r), /más a menudo/); }
+  const menos = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekdays', at: '10:00' } }); assert.equal(menos.j.result.isError, false, texto(menos));
+  const conFin = await crear({ kind: 'weekly', days: [1, 2], at: '09:00', end: '2031-12-31', count: 20 }); const rf = /Rutina creada: (\S+)/.exec(texto(conFin))[1];
+  const sc = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rf, cuando: { kind: 'weekly', days: [1], at: '09:00', end: '2040-01-01' } }); assert.equal(sc.j.result.isError, true); assert.match(texto(sc), /start, end ni count/);
+  const ok = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rf, cuando: { kind: 'weekly', days: [1], at: '08:00' } }); assert.equal(ok.j.result.isError, false, texto(ok));
+  assert.equal(crudo(rf).when.end, '2031-12-31', 'conserva su end'); assert.equal(crudo(rf).when.count, 20);
+  // una rutina que no pide OK: ni horario ni reanudar
+  await guardarFila(m.d1, 'rutinas', 'sinok1', { ...crudo(rf), id: 'sinok1', title: 'Lee sola', needsOk: false, paused: true }, Date.now());
+  for (const a of [{ accion: 'horario', cuando: { kind: 'weekly', days: [1], at: '07:00' } }, { accion: 'reanudar', confirmado: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { id: 'sinok1', ...a }); assert.equal(r.j.result.isError, true, a.accion); }
+});
+
+test('UNA TAREA QUE ESPERA EL OK del dueño no se toma ni se delega por MCP; un agente sin dept falla claro; si no se puede marcar el origen se dice', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const base = { plan: [], eta: 15, why: '', addedAt: Date.now(), by: 'you', dept: 'ops', agent: 'x', prioridad: 'media', v: 2, version: 1 };
+  await guardarFila(m.d1, 'tareas', 'esper1', { ...base, id: 'esper1', title: 'Borrador por aprobar', text: 'x', state: 'waiting', draft: 'hola' }, Date.now());
+  await guardarFila(m.d1, 'tareas', 'aprob1', { ...base, id: 'aprob1', title: 'Aprobada en curso', text: 'x', state: 'next', approving: { at: Date.now() } }, Date.now());
+  for (const id of ['esper1', 'aprob1']) for (const a of [{ accion: 'tomar' }, { accion: 'delegar', dept: 'fin' }, { accion: 'delegar', persona: 'yo' }]) {
+    const r = await llamar(t.oficina, 'tareas_cambiar', { id, ...a }); assert.equal(r.j.result.isError, true, `${id} ${a.accion}`); assert.match(texto(r), /visto bueno del dueño/);
+  }
+  assert.equal(fila(m, 'esper1').state, 'waiting'); assert.equal(fila(m, 'esper1').agent, 'x');
+  const sd = await llamar(t.oficina, 'tareas_cambiar', { accion: 'crear', agente: 'x', titulo: 'hola' }); assert.equal(sd.j.result.isError, true); assert.match(texto(sd), /`dept`/);
+  assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 2, 'no se creó nada «para mí» en silencio');
+  const orig = m.d1.prepare; m.d1.prepare = (sql) => { if (/json_set\(json, '\$\.by'/.test(sql)) throw new Error('D1 caído'); return orig.call(m.d1, sql); };
+  let r; try { r = await llamar(t.oficina, 'tareas_cambiar', { accion: 'crear', titulo: 'Sin marca' }); } finally { m.d1.prepare = orig; }
+  assert.equal(r.j.result.isError, true); assert.match(texto(r), /NO pude marcarla/); assert.match(texto(r), /Tarea creada: /);
+});
+
+test('LA INYECCIÓN también se corta en `ver`: resultado, borrador, comentarios y notas', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const base = { plan: [], eta: 15, why: '', addedAt: Date.now(), by: 'you', dept: 'ops', agent: 'x', prioridad: 'media', v: 2, version: 1, state: 'done', text: 'x' };
+  const casos = { r1: { result: ORDEN }, r2: { draft: ORDEN, result: 'ok' }, r3: { comments: [{ at: Date.now(), by: 'Ana', text: ORDEN }] }, r4: { notas: [{ at: Date.now(), por: 'x', texto: ORDEN }] }, r5: { pasos: [{ id: 'p1', texto: ORDEN, hecho: false }] } };
+  for (const [id, extra] of Object.entries(casos)) {
+    await guardarFila(m.d1, 'tareas', id + 'aaa', { ...base, id: id + 'aaa', title: 'Una tarea normal ' + id, ...extra }, Date.now());
+    const r = await llamar(t.lectura, 'tareas', { accion: 'ver', id: id + 'aaa' }); assert.equal(r.j.result.isError, true, id); assert.match(texto(r), /órdenes escondidas/, id); assert.ok(!texto(r).includes('mallory'));
+  }
 });
 
 test('UN TEXTO CON ÓRDENES ESCONDIDAS en una tarea no llega al modelo', { skip: SALTAR }, async () => {
