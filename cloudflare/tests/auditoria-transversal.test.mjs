@@ -50,7 +50,7 @@ const con = (o, fn) => conSesion(o.d1, fn);
 // Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
 // Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
 const ESCRIBEN = [
-  '/api/funciones', '/api/conectar-claude/cortar-todas', '/api/conectar-claude/abc123',
+  '/api/funciones', '/api/conectar-claude/cortar-todas', '/api/conectar-claude/abc123', '/api/conectar-claude/solicitudes/g0123456789ab/aprobar', '/api/conectar-claude/solicitudes/g0123456789ab/rechazar',
   '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas',
   '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
   '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
@@ -70,7 +70,7 @@ const ESCRIBEN = [
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
 const SOLO_ADMIN = [
   ['POST', '/api/funciones'],
-  ['POST', '/api/conectar-claude/cortar-todas'], ['DELETE', '/api/conectar-claude/abc123'],
+  ['POST', '/api/conectar-claude/cortar-todas'], ['DELETE', '/api/conectar-claude/abc123'], ['POST', '/api/conectar-claude/solicitudes/g0123456789ab/aprobar'], ['POST', '/api/conectar-claude/solicitudes/g0123456789ab/rechazar'],
   ['POST', '/api/chat/config'],
   ['PUT', '/api/modelos'], ['POST', '/api/modelos/probar'], ['POST', '/api/modelos/comparar'], ['POST', '/api/conectores/probar'], ['PUT', '/api/conectores/gmail/token'], ['DELETE', '/api/conectores/gmail/token'],
   ['POST', '/api/conectores'], ['POST', '/api/migrar/notas'], ['POST', '/api/migrar/filas'], ['POST', '/api/migrar/docs'],
@@ -208,7 +208,7 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
   for (const [d, nombre] of [[RETENCION_DIAS.notas_papelera + 5, 'n-vieja'], [2, 'n-nueva']]) db.prepare("insert into notas_papelera (nombre, grupo, texto, borrada) values (?, 'Notas', 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0, docs_mcp: 0, mcp_codigos: 0, mcp_tokens: 0, mcp_clientes: 0 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0, docs_mcp: 0, mcp_codigos: 0, mcp_tokens: 0, mcp_clientes: 0, mcp_solicitudes: 0 });
   assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from notas_papelera where nombre = 'n-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
@@ -388,7 +388,7 @@ const TABLAS = {
   filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); presets-versiones: las últimas 20 por preset, podadas al guardar (lib/estudio/presets.js); el resto es configuración',
   estudio_lotes: 'mantenimiento',
   series: 'mantenimiento', series_libro: 'mantenimiento', series_tokens: 'mantenimiento',
-  mcp_codigos: 'mantenimiento', mcp_tokens: 'mantenimiento', mcp_clientes: 'mantenimiento', // el conector MCP (P2): los códigos caducan al minuto; los testigos y los clientes sin uso se podan (lib/mantenimiento.js)
+  mcp_codigos: 'mantenimiento', mcp_tokens: 'mantenimiento', mcp_solicitudes: 'mantenimiento', mcp_clientes: 'mantenimiento', // el conector MCP (P2; las tarjetas de gasto, P4): los códigos caducan al minuto; los testigos y los clientes sin uso se podan (lib/mantenimiento.js)
   tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
   // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
   auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento', notas_papelera: 'mantenimiento', notificaciones: 'mantenimiento', chat_mensajes: 'mantenimiento', notas_personales: 'mantenimiento',
