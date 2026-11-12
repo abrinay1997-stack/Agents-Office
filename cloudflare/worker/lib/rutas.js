@@ -15,6 +15,7 @@ import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 import { avisarCambio } from './vivo.js';
 import * as equipo from '../modulos/equipo.js';
+import { publicaMcp } from '../modulos/mcp.js';
 import { retrocesoActivo, fallosDe, anotarFallo, esperaMs, dormir } from './retroceso.js';
 import { tasa, tasaVer, ipDe, relojDe, cupoDeModelo } from './equipo.js';
 import { cerrarDe } from './vivo.js';
@@ -61,6 +62,9 @@ async function manejarInterno(req, env, exec = null) {
   const url = new URL(req.url);
   const ruta = url.pathname;
   const db = env.DB;
+  // El conector MCP remoto (P2): /mcp, /oauth/*, /.well-known/oauth-* y /conectar-claude se contestan SIN la cookie de la oficina (un cliente de otro origen los llama con su propio Bearer o PKCE) y
+  // quedan FUERA de la comprobación de Origen de abajo. Son excepciones explícitas: el resto de rutas sigue exigiendo sesión y mismo origen. Apagado o por otro host, todas dan 404 (modulos/mcp.js).
+  { const rm = await publicaMcp(req, env); if (rm) return rm; }
   if (!ruta.startsWith('/api/')) {
     const u = await usuarioDeLaPeticion(db, req);
     // /media/<archivo> (el Estudio: lo que la página pide para ver cada imagen) lo sirve el módulo que lo posee, solo con sesión

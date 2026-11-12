@@ -78,7 +78,7 @@ test('un fallo LOCAL tras la respuesta cobrada (disco/almacén: EACCES, EINVAL) 
 });
 
 test('los campos internos de un trabajo (aceptado, causa, serie) no llegan a los agentes: el MCP del Estudio nunca los lee ni los repite', () => {
-  const mcp = fs.readFileSync(new URL('../estudio-mcp.mjs', import.meta.url), 'utf8');
+  const mcp = ['../estudio-mcp.mjs', '../estudio-tools.mjs'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n'); // el stdio y las definiciones (desde el 12 nov 2026 viven aparte)
   assert.doesNotMatch(mcp, /\.aceptado|\.causa\b|\.serie\b|\bserie:/, 'estudio-mcp.mjs arma sus respuestas con campos elegidos, nunca con el trabajo entero');
 });
 
@@ -91,7 +91,7 @@ for (const [nombre, id, kind] of MOTORES) {
 }
 
 test('el MCP del Estudio no devuelve jamás el trabajo entero: ni JSON.stringify(job), ni ...job, ni lo reenvía tal cual', () => {
-  const mcp = fs.readFileSync(new URL('../estudio-mcp.mjs', import.meta.url), 'utf8');
+  const mcp = ['../estudio-mcp.mjs', '../estudio-tools.mjs'].map(f => fs.readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n'); // el stdio y las definiciones (desde el 12 nov 2026 viven aparte)
   assert.doesNotMatch(mcp, /JSON\.stringify\(\s*(j|job|r|out)\s*[,)]/, 'nada de volcar el trabajo (ni la respuesta de la oficina) como JSON'); assert.doesNotMatch(mcp, /\.\.\.\s*(j|job)\b/, 'nada de esparcir el trabajo');
   assert.doesNotMatch(mcp, /text:\s*(j|job)\s*[,}]|content:\s*(j|job)\s*[,}]/, 'ninguna respuesta al agente es el trabajo tal cual'); assert.match(mcp, /function answer\(j, prompt\)/, 'las respuestas pasan por answer(), que elige sus campos');
 });

@@ -209,5 +209,5 @@ test('ATÓMICO Y BARATO: todo en un lote de D1 (si falla, no cambia nada) y poca
   o.d1.batch = real; prepares = 0;
   const q1 = await o.admin('POST', '/api/restablecer', { modo: 'panaclaw', ambitos: IDS_AMBITOS }), antesPrep = prepares; prepares = 0;
   const q2 = await o.admin('POST', '/api/restablecer/confirmar', { token: q1.j.pendiente.token, escribio: PALABRA }); assert.equal(q2.status, 200, q2.texto);
-  assert.ok(prepares <= 46, `confirmar usó ${prepares} sentencias (plan gratuito: 50 por petición)`); assert.ok(antesPrep <= 20, 'pedir: ' + antesPrep);
+  assert.ok(prepares <= 48, /* 46 + las 2 que cortan las conexiones de Claude (MCP) */ `confirmar usó ${prepares} sentencias (plan gratuito: 50 por petición)`); assert.ok(antesPrep <= 20, 'pedir: ' + antesPrep);
 });

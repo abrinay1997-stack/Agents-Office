@@ -5,6 +5,7 @@
 //  3. Cookie con prefijo `__Host-`: sin Domain, solo vale para este origen.
 import { sha256, testigo, ahora, enHoras } from './ids.js';
 import { leerDoc, guardarDoc } from './almacen.js';
+import { revocarDe } from './mcp/tokens.js';
 
 export const COOKIE = '__Host-sesion';
 export const ITERACIONES = 600_000;
@@ -165,6 +166,7 @@ export async function cerrarSesionPorId(db, userId, id, req) {
 export async function cerrarTodas(db, userId) {
   const n = (await db.prepare('select count(*) n from sessions where user_id = ?').bind(userId).first())?.n ?? 0;
   await db.prepare('delete from sessions where user_id = ?').bind(userId).run();
+  await revocarDe(db, userId); // las conexiones de Claude (MCP) de esa persona se cortan con sus sesiones
   return n;
 }
 
@@ -215,5 +217,6 @@ export async function cambiarContrasena(db, req, usuario, actual, nueva) {
   const propia = await sha256(leerCookie(req) ?? '');
   await db.prepare('update users set salt = ?, password_hash = ? where id = ?').bind(salt, password_hash, usuario.id).run();
   await db.prepare('delete from sessions where user_id = ? and token_hash != ?').bind(usuario.id, propia).run();
+  await revocarDe(db, usuario.id); // y las conexiones de Claude (MCP): cambiar la contraseña las corta
   return null;
 }
