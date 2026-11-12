@@ -5,7 +5,7 @@
 // Las herramientas de dominio NO van aquí: cada carril añade su archivo en lib/mcp/dominios/.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { hostValido, mcpActivo, plano, conCors, urlMcp, hostMcp, ALCANCES, ahoraMs as reloj } from '../lib/mcp/config.js';
-import { metadatosServidor, metadatosRecurso, registrar, token, jsonOAuth } from '../lib/mcp/oauth.js';
+import { metadatosServidor, metadatosRecurso, registrar, token, revocar, jsonOAuth } from '../lib/mcp/oauth.js';
 import { permiso } from '../lib/mcp/permiso.js';
 import { manejarMcp } from '../lib/mcp/servidor.js';
 import { listar, revocarFamilia, revocarTodas } from '../lib/mcp/tokens.js';
@@ -15,7 +15,7 @@ export const nombre = 'mcp';
 export const grupos = ['conectar-claude'];
 
 /** ¿Esta ruta es de las públicas del conector? (lib/rutas.js la llama antes de nada; un test la compara con la lista de excepciones). */
-export const RUTAS_PUBLICAS_MCP = Object.freeze(['/mcp', '/oauth/register', '/oauth/authorize', '/oauth/token', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude']);
+export const RUTAS_PUBLICAS_MCP = Object.freeze(['/mcp', '/oauth/register', '/oauth/authorize', '/oauth/token', '/oauth/revoke', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude']);
 const esPublica = (p) => RUTAS_PUBLICAS_MCP.includes(p.replace(/\/+$/, '') || '/');
 
 export async function publicaMcp(req, env) {
@@ -32,6 +32,7 @@ export async function publicaMcp(req, env) {
   if (p === '/.well-known/oauth-protected-resource' || p === '/.well-known/oauth-protected-resource/mcp') return solo('GET', () => conCors(jsonOAuth(metadatosRecurso(env))));
   if (p === '/oauth/register') return solo('POST', async () => conCors(await registrar(db, env, req)));
   if (p === '/oauth/token') return solo('POST', async () => conCors(await token(db, env, req)));
+  if (p === '/oauth/revoke') return solo('POST', async () => conCors(await revocar(db, env, req)));
   if (p === '/oauth/authorize') return solo('GET', () => new Response(null, { status: 302, headers: { location: '/conectar-claude' + url.search, 'cache-control': 'no-store' } }));
   return null;
 }

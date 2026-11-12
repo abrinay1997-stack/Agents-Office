@@ -57,7 +57,7 @@ export async function mundo({ activo = true, extraEnv = {} } = {}) {
   m.aprobar = async (q, cli, reto, { alcance = 'lectura', nombre, extra = {}, decision = 'aprobar', cabeceras = {} } = {}) => {
     const p = await m.pantalla(q, cli, reto, extra);
     if (!p.csrf) return { ...p, sinPantalla: true };
-    const r = await crudo('/conectar-claude', { metodo: 'POST', cookie: cookies[q], cabeceras, form: { ...paramsAut(cli, reto, extra), csrf: p.csrf, alcance, decision, ...(nombre ? { nombre } : {}) } });
+    const r = await crudo('/conectar-claude', { metodo: 'POST', cookie: cookies[q], cabeceras, form: { ...paramsAut(cli, reto, extra), csrf: p.csrf, alcance, decision, ...(alcance !== 'lectura' ? { confirmo: 'si' } : {}), ...(nombre ? { nombre } : {}) } });
     const ubicacion = r.headers.get('location'); const u = ubicacion ? new URL(ubicacion) : null;
     return { status: r.status, ubicacion, codigo: u?.searchParams.get('code') ?? null, error: u?.searchParams.get('error') ?? null, estado: u?.searchParams.get('state') ?? null };
   };

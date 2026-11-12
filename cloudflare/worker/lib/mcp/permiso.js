@@ -68,6 +68,7 @@ export async function permiso(req, env, db) {
   if (params.decision !== 'aprobar') return mensaje('Petición no válida', 'Falta la decisión.', 400, {});
   const alcance = params.alcance === undefined ? ALCANCE_POR_DEFECTO : params.alcance;
   if (!ALCANCES.includes(alcance)) return mensaje('Petición no válida', 'Ese alcance no existe.', 400, {});
+  if (alcance !== ALCANCE_POR_DEFECTO && params.confirmo !== 'si') return mensaje('Falta tu confirmación', 'Para dar «Leer y escribir» o «preparar un gasto» hay que marcar «Confirmo que acabo de pedir esta conexión». Vuelve atrás y márcalo, o elige «Solo leer».', 400, {});
   const nombre = nombreDeCliente(params.nombre || v.cliente.nombre);
   const codigo = await crearCodigo(db, { cliente: v.cliente, userId: usuario.id, redirectUri: v.campos.redirect_uri, reto: v.campos.code_challenge, alcance, nombre, ms });
   await auditar(db, ms, usuario.email, { evento: 'conectar-aprobado', cliente: v.cliente.nombre, alcance, nombre });

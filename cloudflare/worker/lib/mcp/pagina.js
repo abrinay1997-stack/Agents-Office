@@ -22,7 +22,7 @@ label.o input{margin-top:4px;width:20px;height:20px}label.o b{display:block}labe
 .n{display:block;width:100%;font:inherit;padding:10px;border:1px solid var(--borde);border-radius:8px;background:transparent;color:inherit;min-height:44px}
 .b{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}button{font:inherit;min-height:44px;padding:10px 18px;border-radius:10px;border:1px solid var(--borde);background:transparent;color:inherit;cursor:pointer}
 button.p{background:var(--azul);border-color:var(--azul);color:#fff}@media (prefers-color-scheme:dark){button.p{color:#0b1220}}
-.e{color:var(--rojo);font-weight:600}a{color:var(--azul)}`;
+.e{color:var(--rojo);font-weight:600}.av{border:2px solid var(--rojo);border-radius:10px;padding:12px;margin:8px 0;color:var(--texto)}.av b{color:var(--rojo)}a{color:var(--azul)}`;
 
 const CABEZA = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">';
 const marco = (nonce, titulo, cuerpo) => `<!doctype html><html lang="es"><head>${CABEZA}<title>${esc(titulo)}</title><style nonce="${esc(nonce)}">${ESTILO}</style></head><body><main><div class="t">${cuerpo}</div></main></body></html>`;
@@ -39,13 +39,17 @@ const DESCRIPCION = {
 
 /** El formulario de permiso. `campos` son los parámetros OAuth ya validados (se reenvían tal cual en campos ocultos). */
 export function paginaPermiso({ nonce, cliente, destino, persona, campos, csrf, nombreSugerido }) {
+  const aviso = '<p class="av" role="alert"><b>Aprueba solo si acabas de pulsar «Conectar» en Claude.</b> Si alguien te mandó este enlace, cancela: así se roba el acceso a una oficina.</p>';
   const ocultos = Object.entries(campos).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join('');
   const opciones = ALCANCES.map((a) => `<label class="o"><input type="radio" name="alcance" value="${a}"${a === 'lectura' ? ' checked' : ''} required><span><b>${esc(DESCRIPCION[a][0])}</b><small>${esc(DESCRIPCION[a][1])}</small></span></label>`).join('');
   return marco(nonce, 'Conectar Claude con la oficina', `<h1>Conectar Claude con la oficina</h1>
-<p><b>${esc(cliente.nombre)}</b> pide entrar a la oficina como <b>${esc(persona.nombre)}</b> (${esc(persona.email)}). Volverá a <span class="c">${esc(destino)}</span>.</p>
+${aviso}
+<p>Una aplicación pide entrar a la oficina como <b>${esc(persona.nombre)}</b> (${esc(persona.email)}).</p>
+<p class="s">Nombre que dice la aplicación (lo declara ella, no está verificado): <b>${esc(cliente.nombre)}</b><br>Origen verificado al que volverá: <span class="c">${esc(destino)}</span></p>
 <p class="s">Solo un administrador puede conectar. Esta conexión se ve y se corta en Ajustes → Conectar Claude.</p>
 <form method="post" action="/conectar-claude" autocomplete="off">${ocultos}<input type="hidden" name="csrf" value="${esc(csrf)}">
 <fieldset><legend>¿Qué puede hacer esta conexión?</legend>${opciones}</fieldset>
 <p><label for="nombre"><b>Nombre de la conexión</b></label><input class="n" id="nombre" name="nombre" maxlength="60" value="${esc(nombreSugerido)}"></p>
+<p class="r"><label class="o"><input type="checkbox" name="confirmo" value="si"><span><b>Confirmo que acabo de pedir esta conexión</b><small>Obligatorio para «Leer y escribir» y para «preparar un gasto»: con ellos, esa aplicación cambia cosas en la oficina.</small></span></label></p>
 <div class="b"><button class="p" type="submit" name="decision" value="aprobar">Aprobar</button><button type="submit" name="decision" value="cancelar">Cancelar</button></div></form>`);
 }

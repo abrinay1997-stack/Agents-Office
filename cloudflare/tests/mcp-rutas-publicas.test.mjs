@@ -13,7 +13,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const opts = { skip: SALTAR };
 
 test('la lista de excepciones es exactamente esta (si cambia, que cambie aquí a propósito)', () => {
-  assert.deepEqual([...RUTAS_PUBLICAS_MCP].sort(), ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude', '/mcp', '/oauth/authorize', '/oauth/register', '/oauth/token'].sort());
+  assert.deepEqual([...RUTAS_PUBLICAS_MCP].sort(), ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude', '/mcp', '/oauth/authorize', '/oauth/register', '/oauth/revoke', '/oauth/token'].sort());
   assert.deepEqual(RUTAS_PUBLICAS, ['/api/hook/', '/api/telegram/', '/api/kpi/'], 'los webhooks de siempre no cambiaron');
   const rutas = readFileSync(join(RAIZ, 'worker/lib/rutas.js'), 'utf8');
   assert.equal((rutas.match(/publicaMcp\(/g) || []).length, 1, 'rutas.js llama al conector en UN solo sitio');
@@ -54,7 +54,11 @@ test('ORIGEN: las rutas que exigen sesión SIGUEN rechazando otro origen; las de
   assert.equal(t.status, 400, 'el token se procesa (y se rechaza por su código, no por el origen)');
   assert.equal((await m.rpc(null, 'ping')).status, 401);
   const con = await m.conectar(); const rr = await m.crudo('/mcp', { metodo: 'POST', cabeceras: { ...ajeno, authorization: 'Bearer ' + con.tokens.access_token }, cuerpo: { jsonrpc: '2.0', id: 1, method: 'ping' } });
-  assert.equal(rr.status, 200, '/mcp con su Bearer acepta otro origen (un cliente web de MCP)');
+  assert.equal(rr.status, 403, '/mcp rechaza un Origin ajeno aunque el Bearer sea bueno');
+  const ping = (cabeceras) => m.crudo('/mcp', { metodo: 'POST', cabeceras: { authorization: 'Bearer ' + con.tokens.access_token, ...cabeceras }, cuerpo: { jsonrpc: '2.0', id: 1, method: 'ping' } });
+  for (const o of ['https://claude.ai', 'https://claude.com', 'http://localhost:3000', 'http://127.0.0.1:8080']) assert.equal((await ping({ origin: o })).status, 200, o);
+  for (const o of ['null', 'https://claude.ai.evil.example', 'http://localhost.evil.example', 'https://localhost:3000', 'http://evil.example']) assert.equal((await ping({ origin: o })).status, 403, o);
+  assert.equal((await ping({})).status, 200, 'sin Origin (un programa) pasa con su Bearer');
   // …pero la pantalla de permiso (la que SÍ lleva la cookie) no: ya lo prueba mcp-oauth.test.mjs («otro origen» → 403)
 });
 

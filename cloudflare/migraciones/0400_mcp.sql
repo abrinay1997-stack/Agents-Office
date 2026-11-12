@@ -8,9 +8,11 @@ create table if not exists mcp_clientes (
   nombre text not null,
   redirect_uris text not null check (json_valid(redirect_uris)),   -- lista cerrada, ya validada al registrar
   creado_at integer not null,
+  ip_huella text,                                                    -- SHA-256 de la IP que lo registró (tope por IP y hora); nunca la IP
   ultimo_uso_at integer                                              -- null = nunca se usó; el mantenimiento borra al que lleva 30 días así y sin conexiones
 );
 create index if not exists mcp_clientes_creado on mcp_clientes(creado_at);
+create index if not exists mcp_clientes_ip on mcp_clientes(ip_huella, creado_at);
 
 -- El código de autorización: de UN solo uso, con su reto PKCE y su redirect_uri; caduca en un minuto.
 create table if not exists mcp_codigos (

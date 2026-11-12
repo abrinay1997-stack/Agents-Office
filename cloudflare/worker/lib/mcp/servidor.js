@@ -7,6 +7,7 @@ import { origenMcp, VERSION_SERVIDOR, TOPE_SALIDA, TOPE_CUERPO_MCP, MAX_ESCRITUR
 import { autenticar } from './tokens.js';
 import { auditar } from './auditoria.js';
 import { REGISTRO, CLAVE_IDEMPOTENCIA } from './registro.js';
+import { origenPermitido } from './origen.js';
 import { alcanzaElAlcance, decidirLlamada } from './permisos.js';
 import './base/index.js';
 import './dominios/index.js';
@@ -91,7 +92,9 @@ async function llamarHerramienta({ id, params, db, env, conexion, usuario, regis
   }
   const objeto = typeof salida === 'string' ? { texto: salida } : (salida || {});
   let texto = String(objeto.texto ?? '');
-  const por = safety.injectionIn(texto);
+  const siguienteBruto = typeof objeto.siguiente === 'string' ? objeto.siguiente : '';
+  let estructuradoTxt = ''; try { estructuradoTxt = objeto.estructurado === undefined ? '' : JSON.stringify(objeto.estructurado) ?? ''; } catch { estructuradoTxt = ''; }
+  const por = safety.injectionIn(texto) || safety.injectionIn(estructuradoTxt) || safety.injectionIn(siguienteBruto); // también lo que viaja en structuredContent y en el cursor
   if (por) {
     await auditar(db, ms, usuario.email, { ...base, permitida: true, resultado: 'inyeccion', porque: String(por).slice(0, 80) });
     return exito(id, resultadoError('Lo que devolvió esta herramienta trae órdenes escondidas (parecen dirigidas a ti, no al dueño). No lo muestro ni lo sigo. Avisa a un administrador.'));
@@ -130,6 +133,8 @@ export async function manejarMcp(req, env, db, { registro = REGISTRO } = {}) {
   if (req.method === 'OPTIONS') return conCors(new Response(null, { status: 204 }));
   if (req.method !== 'POST') return conCors(new Response(JSON.stringify({ error: 'Este servidor solo contesta POST (Streamable HTTP sin estado).' }), { status: 405, headers: { ...cabecerasJson, allow: 'POST, OPTIONS' } }));
   const ms = reloj(env);
+  // Un navegador que llama a /mcp manda su Origin: solo claude.ai, claude.com o la propia máquina (Claude Code y Desktop). Sin Origin (un programa) pasa y se autentica con su Bearer.
+  if (!origenPermitido(req.headers.get('origin'))) return conCors(new Response(JSON.stringify({ error: 'Origen no permitido.' }), { status: 403, headers: cabecerasJson }));
   const cab = req.headers.get('authorization') || '';
   const m = /^Bearer\s+(\S+)$/i.exec(cab);
   if (!m) return sinPermiso(env, false);

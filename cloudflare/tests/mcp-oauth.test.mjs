@@ -317,3 +317,52 @@ test('con el interruptor APAGADO, una conexión que ya existía deja de valer (4
   await m.activar(false); assert.equal((await m.rpc(tokens.access_token, 'ping')).status, 404);
   await m.activar(true); assert.equal((await m.rpc(tokens.access_token, 'ping')).status, 200);
 });
+
+test('ANTI-PHISHING: la pantalla avisa en grande, rotula el nombre como «declarado», enseña el origen verificado y pide confirmación reforzada para oficina y gasto', opts, async () => {
+  const m = await mundo(); const cli = await m.registrar(REDIRECT, 'Soy Anthropic oficial'); const { reto } = await pkce();
+  const p = await m.pantalla('admin', cli, reto);
+  assert.match(p.html, /Aprueba solo si acabas de pulsar «Conectar» en Claude/); assert.match(p.html, /Si alguien te mandó este enlace, cancela/);
+  assert.match(p.html, /lo declara ella, no está verificado/); assert.match(p.html, /Origen verificado al que volverá: <span class="c">https:\/\/claude\.ai\/api\/mcp\/auth_callback/); assert.match(p.html, /name="confirmo"/);
+  assert.match(p.html, /name="alcance" value="lectura" checked/, 'por defecto sigue «lectura»');
+  const campos = { ...m.paramsAut(cli, reto), csrf: p.csrf, decision: 'aprobar' };
+  const post = (extra) => m.crudo('/conectar-claude', { metodo: 'POST', cookie: m.cookies.admin, form: { ...campos, ...extra } });
+  for (const alcance of ['oficina', 'gasto']) {
+    const sin = await post({ alcance }); assert.equal(sin.status, 400, alcance + ' sin confirmar'); assert.equal(sin.headers.get('location'), null);
+    assert.equal((await post({ alcance, confirmo: 'quizas' })).status, 400, alcance + ' con una confirmación que no es «si»');
+  }
+  assert.equal(m.db.prepare('select count(*) n from mcp_codigos').get().n, 0, 'nada emitido sin la confirmación');
+  assert.equal((await post({ alcance: 'lectura' })).status, 303, 'lectura no pide la casilla');
+  assert.equal((await post({ alcance: 'oficina', confirmo: 'si' })).status, 303);
+});
+
+test('REGISTRO: ninguna IP gasta más de 10 por hora y un solo origen no agota el cupo global', opts, async () => {
+  const m = await mundo();
+  for (let i = 0; i < 10; i++) { m.avanzar(7000); assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201); }
+  m.avanzar(7000); const r = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } });
+  assert.equal(r.status, 429); assert.match((await r.json()).error_description, /desde aquí/);
+  assert.ok(m.db.prepare('select count(*) n from mcp_clientes').get().n < 60, 'el cupo global quedó casi entero');
+  assert.ok(!m.db.prepare('select ip_huella h from mcp_clientes').all().some((f) => /\d+\.\d+/.test(f.h || '')), 'se guarda la huella, no la IP');
+  m.avanzar(3600_000); assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201, 'una hora después, otra vez');
+});
+
+test('un código gastado NO corta la conexión si lo presenta OTRA aplicación', opts, async () => {
+  const m = await mundo(); const a = await m.conectar(); const otra = await m.registrar();
+  const r = await m.token({ grant_type: 'authorization_code', code: a.codigo, code_verifier: a.verificador, redirect_uri: REDIRECT, client_id: otra });
+  assert.equal(r.status, 400);
+  assert.equal((await m.rpc(a.tokens.access_token, 'ping')).status, 200, 'la conexión de la aplicación legítima sigue viva');
+  const mismo = await m.token({ grant_type: 'authorization_code', code: a.codigo, code_verifier: a.verificador, redirect_uri: REDIRECT, client_id: a.cli });
+  assert.equal(mismo.status, 400); assert.equal((await m.rpc(a.tokens.access_token, 'ping')).status, 401, 'pero la reutilización por su propio cliente sí la corta');
+});
+
+test('REVOCAR (RFC 7009): el cliente corta su propia conexión con su testigo; el de otro cliente no hace nada; siempre 200', opts, async () => {
+  const m = await mundo();
+  assert.equal((await (await m.crudo('/.well-known/oauth-authorization-server')).json()).revocation_endpoint, 'https://oficina.test/oauth/revoke');
+  const a = await m.conectar(); const otra = await m.registrar();
+  const rev = (token, client_id) => m.crudo('/oauth/revoke', { metodo: 'POST', form: { token, client_id } });
+  assert.equal((await rev(a.tokens.refresh_token, otra)).status, 200); assert.equal((await m.rpc(a.tokens.access_token, 'ping')).status, 200, 'otro cliente no corta');
+  assert.equal((await rev('basura', a.cli)).status, 200);
+  assert.equal((await rev(a.tokens.access_token, a.cli)).status, 200); assert.equal((await m.rpc(a.tokens.access_token, 'ping')).status, 401);
+  assert.equal((await m.token({ grant_type: 'refresh_token', refresh_token: a.tokens.refresh_token, client_id: a.cli })).status, 400, 'la renovación también murió');
+  assert.equal((await rev('x', 'mcp_' + '0'.repeat(32))).status, 401);
+  assert.equal((await m.crudo('/oauth/revoke', { metodo: 'GET' })).status, 405);
+});
