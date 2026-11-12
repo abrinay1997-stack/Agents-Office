@@ -78,9 +78,9 @@ async function conOficina(ctx, herramienta) {
 }
 /** La tarea que crea un asistente nace con la marca `by: 'mcp'` (el servidor no la admite en el cuerpo): se apunta después, sobre la fila, y SE COMPRUEBA. → null si quedó marcada, o el aviso. */
 async function marcarOrigen(db, id) {
-  const aviso = `ATENCIÓN: la tarea ${id} se creó pero NO pude marcarla como creada por el conector; avísale al dueño para que la revise.`;
+  const aviso = `ATENCIÓN: la tarea ${id} se creó pero NO quedó marcada como de MCP (by); avísale al dueño para que la revise.`;
   if (!id) return aviso;
-  try { const r = await db.prepare("update filas set json = json_set(json, '$.by', 'mcp') where coleccion = 'tareas' and id = ?").bind(String(id)).run(); return r?.meta?.changes === 0 ? aviso : null; }
+  try { const r = await db.prepare("update filas set json = json_set(json, '$.by', 'mcp', '$.version', coalesce(json_extract(json, '$.version'), 0) + 1) where coleccion = 'tareas' and id = ?").bind(String(id)).run(); return r?.meta?.changes === 0 ? aviso : null; }
   catch (e) { console.warn('[mcp:tareas] no se pudo marcar el origen:', e?.message ?? e); return aviso; }
 }
 /** Un texto ya hecho + el aviso de marca, si lo hay (un fallo de marca es un error CLARO, sin tirar la llamada: la tarea ya existe y repetir la duplicaría). */
@@ -89,7 +89,7 @@ const conMarca = (texto, aviso) => (aviso ? { texto: `${texto}\n${aviso}`, esErr
 async function sinOkPendiente(office, id) {
   const t = (await office(`/api/tareas/${id}`))?.tarea;
   if (!t) falta('esa tarea no existe.');
-  if (t.state === 'waiting' || t.approving) falta('esa tarea espera el visto bueno del dueño: un borrador de un agente no sale de Aprobaciones por este conector (se decide en la oficina).');
+  if (t.state === 'waiting' || t.approving || (t.state === 'idea' && t.needsOk === true)) falta('esa tarea espera el visto bueno del dueño: un borrador de un agente no sale de Aprobaciones por este conector (se decide en la oficina).');
 }
 const limpio = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 const fechaOk = (v, que) => (v === undefined || v === null || (typeof v === 'string' && FECHA.test(v)) ? v : falta(`${que} va como AAAA-MM-DD (y la hora, si quieres, THH:MM).`));
@@ -255,5 +255,5 @@ definir({
   descripcion: 'Cambia RUTINAS. `accion`: crear (`dept`, `texto`, `cuando`, `agente?`: SIEMPRE espera el OK del dueño), horario (`id`, `cuando`: es lo ÚNICO que se edita y nunca corre más a menudo que antes), pausar y reanudar (`id`; reanudar pide `confirmado: true`), '
     + 'saltar y no_saltar (`id`, `at`: una ejecución concreta). No ejecuta una rutina ya, no borra rutinas y no toca una rutina autónoma.',
   props: { accion: { type: 'string', enum: [...ACCIONES_RUTINAS_CAMBIAR] }, id: comun.id, dept: comun.dept, texto: { type: 'string', maxLength: 3900 }, cuando, agente: comun.agente, at: { type: 'string', description: 'ISO de la ejecución.' }, confirmado: { type: 'boolean',
-    description: 'Solo para reanudar: true si el dueño pidió reanudarla.' } },
+    description: 'Solo para reanudar. NO lo pongas por tu cuenta: solo true si el dueño pidió reanudarla con esas palabras.' } },
 });

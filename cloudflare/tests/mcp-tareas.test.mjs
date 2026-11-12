@@ -186,20 +186,35 @@ test('FRECUENCIA: nada de «cada minuto», nada que corra más a menudo que ante
   for (const a of [{ accion: 'horario', cuando: { kind: 'weekly', days: [1], at: '07:00' } }, { accion: 'reanudar', confirmado: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { id: 'sinok1', ...a }); assert.equal(r.j.result.isError, true, a.accion); }
 });
 
+test('FRECUENCIA, lo pillado por el verificador: monthly→weekly, ventanas que cruzan la medianoche, días y horas mal formados', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const crear = (cuando) => llamar(t.oficina, 'rutinas_cambiar', { accion: 'crear', dept: 'fin', texto: 'Mirar la caja', cuando });
+  const mens = await crear({ kind: 'monthly', day: 15, at: '09:00' }); assert.equal(mens.j.result.isError, false, texto(mens)); const rid = /Rutina creada: (\S+)/.exec(texto(mens))[1];
+  const sube = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1], at: '09:00' } });
+  assert.equal(sube.j.result.isError, true, 'mensual → semanal sube la frecuencia'); assert.match(texto(sube), /más a menudo/);
+  for (const mal of [{ kind: 'hourly', every: 1, from: '22:00', to: '06:00' }, { kind: 'weekly', days: [], at: '09:00' }, { kind: 'weekly', days: [99], at: '09:00' }, { kind: 'weekly', days: [1, 1.5], at: '09:00' },
+    { kind: 'daily', at: '25:99' }, { kind: 'daily' }, { kind: 'hourly', every: 1, from: '25:00', to: '26:00' }, { kind: 'monthly', at: '09:00' }, { kind: 'monthly', day: 40, at: '09:00' }]) {
+    const r = await crear(mal); assert.equal(r.j.result.isError, true, JSON.stringify(mal));
+  }
+  assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'rutinas'").get().n, 1, 'ninguna rutina mal formada se creó');
+  assert.equal((await crear({ kind: 'weekly', days: [0, 6], at: '23:59' })).j.result.isError, false);
+});
+
 test('UNA TAREA QUE ESPERA EL OK del dueño no se toma ni se delega por MCP; un agente sin dept falla claro; si no se puede marcar el origen se dice', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
   const base = { plan: [], eta: 15, why: '', addedAt: Date.now(), by: 'you', dept: 'ops', agent: 'x', prioridad: 'media', v: 2, version: 1 };
   await guardarFila(m.d1, 'tareas', 'esper1', { ...base, id: 'esper1', title: 'Borrador por aprobar', text: 'x', state: 'waiting', draft: 'hola' }, Date.now());
   await guardarFila(m.d1, 'tareas', 'aprob1', { ...base, id: 'aprob1', title: 'Aprobada en curso', text: 'x', state: 'next', approving: { at: Date.now() } }, Date.now());
-  for (const id of ['esper1', 'aprob1']) for (const a of [{ accion: 'tomar' }, { accion: 'delegar', dept: 'fin' }, { accion: 'delegar', persona: 'yo' }]) {
+  await guardarFila(m.d1, 'tareas', 'idea01', { ...base, id: 'idea01', title: 'Idea que pide OK', text: 'x', state: 'idea', needsOk: true }, Date.now());
+  for (const id of ['esper1', 'aprob1', 'idea01']) for (const a of [{ accion: 'tomar' }, { accion: 'delegar', dept: 'fin' }, { accion: 'delegar', persona: 'yo' }]) {
     const r = await llamar(t.oficina, 'tareas_cambiar', { id, ...a }); assert.equal(r.j.result.isError, true, `${id} ${a.accion}`); assert.match(texto(r), /visto bueno del dueño/);
   }
   assert.equal(fila(m, 'esper1').state, 'waiting'); assert.equal(fila(m, 'esper1').agent, 'x');
   const sd = await llamar(t.oficina, 'tareas_cambiar', { accion: 'crear', agente: 'x', titulo: 'hola' }); assert.equal(sd.j.result.isError, true); assert.match(texto(sd), /`dept`/);
-  assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 2, 'no se creó nada «para mí» en silencio');
+  assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 3, 'no se creó nada «para mí» en silencio');
   const orig = m.d1.prepare; m.d1.prepare = (sql) => { if (/json_set\(json, '\$\.by'/.test(sql)) throw new Error('D1 caído'); return orig.call(m.d1, sql); };
   let r; try { r = await llamar(t.oficina, 'tareas_cambiar', { accion: 'crear', titulo: 'Sin marca' }); } finally { m.d1.prepare = orig; }
-  assert.equal(r.j.result.isError, true); assert.match(texto(r), /NO pude marcarla/); assert.match(texto(r), /Tarea creada: /);
+  assert.equal(r.j.result.isError, true); assert.match(texto(r), /NO quedó marcada/); assert.match(texto(r), /Tarea creada: /);
 });
 
 test('LA INYECCIÓN también se corta en `ver`: resultado, borrador, comentarios y notas', { skip: SALTAR }, async () => {
