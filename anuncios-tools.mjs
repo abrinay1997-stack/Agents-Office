@@ -59,6 +59,18 @@ export const TOOLS = [
       dato: { type: 'string', description: 'El dato que la motiva, con la cifra tal cual.' }, porque: { type: 'string' }, efecto: { type: 'string', description: 'Lo que se espera que pase.' },
     }, required: ['id', 'regla', 'tipo', 'dato', 'porque'] } },
   // Fase A7 (9 oct 2026): el informe del mes, solo leer
+  // 11 nov 2026 · el método de campañas (anuncios/metodo.mjs): solo lectura
+  { name: 'ver_numeros_negocio', description: 'Los números del negocio: ticket, costos, margen, % de la venta que se invierte; el OBJETIVO y el EQUILIBRIO por venta y por conversación (el número mágico), el ROAS y el reparto del presupuesto por etapa. Léelo antes de opinar de una campaña.',
+    inputSchema: { type: 'object', properties: {} } },
+  { name: 'ver_revision_campanas', description: 'La revisión 3Q de lo que corre en Meta: qué pasó frente al número mágico (30, 14 y 7 días), por qué (CTR único, % de mensajes, frecuencia, CPM, video) y qué hacer con cada campaña, conjunto y anuncio. No cambia nada.',
+    inputSchema: { type: 'object', properties: {} } },
+  { name: 'ver_ciclo_ventas', description: 'El ciclo de ventas del negocio: qué anuncio va en cada etapa (presentación, evaluación, conversión, ascensión), con qué tipo de arte, a qué público y a dónde lleva. Úsalo al proponer un borrador de campaña o piezas para pauta.',
+    inputSchema: { type: 'object', properties: { tipo: { type: 'string', description: 'productos, servicios, segunda-necesidad, suscripcion, nicho, producto-nuevo o cursos (sin él, el del negocio).' }, destino: { type: 'string', enum: ['whatsapp', 'web'] } } } },
+  { name: 'ver_anuncios_competencia', 
+    description: 'LEE los anuncios que corre un competidor (o una palabra clave del rubro) en la Biblioteca de anuncios de Meta: cuáles llevan más tiempo activos, formatos, botones, a dónde llevan y su texto, '
+      + 'con las preguntas del método para analizarlos. Sin parámetros: los competidores guardados. No copies su texto ni su marca: toma la forma.',
+    inputSchema: { type: 'object', properties: { empresa: { type: 'string', description: 'El nombre del competidor.' }, pagina: { type: 'string', description: 'El id de su página, si se sabe.' },
+      palabra: { type: 'string', description: 'O una palabra clave.' }, pais: { type: 'string', description: 'Dos letras; por defecto el de Ajustes.' } } } },
   { name: 'ver_informe_anuncios', description: 'El informe de anuncios de un mes, como lo arma la oficina con sus datos (sin un modelo): lo gastado, los resultados y el costo por resultado de cada campaña, los mejores creativos, las sugerencias que se aplicaron y qué pasó después, y lo que se pausó o activó. Lo que no se sabe dice «sin datos»: no lo rellenes. Úsalo para la revisión mensual o para comparar con el mes anterior.',
     inputSchema: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM (por defecto, el mes en curso: sus cifras son hasta hoy).' } } } },
 ];
@@ -100,6 +112,19 @@ export function crearLlamador({ office, agente: AGENTE = '', tarea: TAREA = '' }
     const r = await office('/api/anuncios/sugerencias', { por: 'agente', agente: AGENTE, ...(TAREA ? { tarea: TAREA } : {}), id: a.id, regla: a.regla, tipo: a.tipo, ...(a.valor !== undefined ? { valor: a.valor } : {}), dato: a.dato, porque: a.porque, efecto: a.efecto || '' }, 'POST');
     const x = r.sugerencia;
     return `Sugerencia dejada en Anuncios → Sugerencias (id ${x.id}): ${x.regla} · ${x.objeto.nivel} «${x.objeto.nombre}» · ${x.cambio.tipo}${x.gasto ? ' (gasta: el dueño la confirma con dos clics)' : ''}. No se aplicó nada: el dueño decide.`;
+  }
+  if (name === 'ver_anuncios_competencia') {
+    const q = new URLSearchParams({ por: 'agente' });
+    if (a.empresa) q.set('empresa', String(a.empresa).slice(0, 100)); if (/^\d{3,30}$/.test(String(a.pagina || ''))) q.set('pageId', String(a.pagina));
+    if (a.palabra) q.set('q', String(a.palabra).slice(0, 100)); if (a.pais) q.set('pais', String(a.pais).slice(0, 2));
+    const r = await office(`/api/anuncios/competencia/texto?${q}`);
+    return r.texto || r.motivo || 'Sin datos de la competencia.';
+  }
+  if (name === 'ver_numeros_negocio') return (await office('/api/anuncios/metodo/texto?que=negocio&por=agente')).texto || 'Sin números del negocio.';
+  if (name === 'ver_revision_campanas') return (await office('/api/anuncios/metodo/texto?que=revision&por=agente')).texto || 'Sin revisión.';
+  if (name === 'ver_ciclo_ventas') {
+    const q = new URLSearchParams({ que: 'ciclo', por: 'agente', ...(a.tipo ? { tipo: String(a.tipo).slice(0, 30) } : {}), ...(a.destino ? { destino: String(a.destino).slice(0, 20) } : {}) });
+    return (await office(`/api/anuncios/metodo/texto?${q}`)).texto || 'Sin ciclo.';
   }
   if (name === 'ver_informe_anuncios') {
     if (a.mes !== undefined && !/^\d{4}-\d{2}$/.test(String(a.mes))) throw new Error('el mes va como AAAA-MM');

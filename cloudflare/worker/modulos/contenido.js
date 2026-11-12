@@ -27,7 +27,7 @@ const MAX_CUERPO = 1_000_000;
 // Lo que SOLO hace un administrador (el dueño): decidir qué sale, tocar Meta, gastar en el agente, escribir en el Cerebro.
 const SOLO_ADMIN = [
   /^\/api\/contenido\/piezas\/[a-z0-9-]+\/(aprobar|devolver|reintentar|entregar|quitar|repetir|publicar-ya)$/,
-  /^\/api\/contenido\/(cola\/tick|conductor\/comprobar|llenar|mejorar|guardados|plantillas|config|meta\/sincronizar|analiticas\/actualizar|analiticas\/indicadores)(\/.*)?$/,
+  /^\/api\/contenido\/(cola\/tick|conductor\/comprobar|llenar|mejorar|guardados|plantillas|config|meta\/sincronizar|analiticas\/actualizar|analiticas\/indicadores|historias-auto\/preparar)(\/.*)?$/,
 ];
 const soloAdmin = (metodo, ruta) => metodo !== 'GET' && SOLO_ADMIN.some(r => r.test(ruta));
 
@@ -133,6 +133,8 @@ export async function cadaMinuto(env) {
     const huboTrabajo = v.ocupada || (v.tick?.acciones || 0) > 0 || (v.cambios || 0) > 0;
     if ((v.tick?.acciones || 0) > 0 || (v.cambios || 0) > 0) avisarDelReloj(env, 'contenido'); // CON-12: la cola o Meta cambió algo; las páginas abiertas lo releen sin esperar su sondeo
     if (!huboTrabajo) await tickAnaliticas(svc, env);
+    // 11 nov 2026: las historias automáticas del día (apagadas no cuestan nada; encendidas, una lectura del doc y, una vez al día, crear las piezas)
+    if (config.historiasAuto && !huboTrabajo) { try { const h = await svc.historias.tick(); if (h.creadas?.length) avisarDelReloj(env, 'contenido'); } catch (err) { console.warn('[contenido] historias:', err?.message ?? err); } }
     const t = Date.now();
     if (t - ultimaLimpieza > 3600e3) { ultimaLimpieza = t; await svc.almacen.purgarPapelera().catch(() => {}); } // lo que lleva 30 días en la papelera se va
     return v;

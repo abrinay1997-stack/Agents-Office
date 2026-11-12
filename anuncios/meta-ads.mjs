@@ -33,6 +33,13 @@ export const CAMPOS = {
   alcance: 'campaign_id,adset_id,ad_id,reach,impressions,frequency',
 };
 export const NIVELES_ALCANCE = ['account', 'campaign', 'adset', 'ad'];
+// El método de campañas (11 nov 2026): lo que pide la revisión 3Q por nivel. Los de siempre, los del curso (POR VERIFICAR con la cuenta real;
+// por eso la escalera) y los rankings de calidad, que Meta solo da por anuncio.
+const BASICOS_3Q = ['spend', 'impressions', 'reach', 'frequency', 'cpm', 'cpc', 'ctr', 'clicks', 'inline_link_clicks', 'actions', 'action_values'];
+export const CAMPOS_NUEVOS_3Q = ['unique_inline_link_clicks', 'unique_inline_link_click_ctr', 'cost_per_unique_inline_link_click', 'video_avg_time_watched_actions', 'video_thruplay_watched_actions'];
+const RANKINGS_3Q = ['quality_ranking', 'engagement_rate_ranking', 'conversion_rate_ranking'];
+const IDS_3Q = { campaign: ['campaign_id'], adset: ['campaign_id', 'adset_id'], ad: ['campaign_id', 'adset_id', 'ad_id'] };
+const ESCALERA_3Q = { campaign: [CAMPOS_NUEVOS_3Q, []], adset: [CAMPOS_NUEVOS_3Q, []], ad: [[...CAMPOS_NUEVOS_3Q, ...RANKINGS_3Q], CAMPOS_NUEVOS_3Q, []] };
 
 /** «act_123» con o sin el prefijo → «act_123»; cualquier otra cosa → ''. */
 export const idCuenta = s => { const t = String(s || '').trim(); return /^act_\d+$/.test(t) ? t : /^\d+$/.test(t) ? `act_${t}` : ''; };
@@ -126,6 +133,33 @@ export function crearMetaAds({ meta }) {
       }
     });
     return out;
+  }
+
+  /**
+   * El método de campañas (11 nov 2026): las cifras de la cuenta POR NIVEL (campaña, conjunto, anuncio) en varias ventanas, para la
+   * revisión 3Q (metodo/tres-q.mjs). UN lote (niveles × ventanas = 9 GET en una sola llamada), no una llamada por campaña. Lleva las
+   * métricas del curso que las cifras diarias no traen (clics ÚNICOS al enlace, tiempo de reproducción, ThruPlays y, por anuncio, los
+   * rankings de calidad): los únicos no se pueden sumar día a día. Si Meta rechaza un campo (#100), ese nivel baja un escalón y se
+   * repite una vez (`leidoCon` dice hasta dónde llegó). `ventanas`: { 30: ['AAAA-MM-DD', 'AAAA-MM-DD'], 14: […], 7: […] }.
+   * → { filas: { campaign: { 30: [], 14: [], 7: [] }, adset, ad }, leidoCon: 'completo'|'sin-rankings'|'basico', recortado }
+   */
+  async function ventanas3q(cuenta, ventanas) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const escalon = { campaign: 0, adset: 0, ad: 0 }, filas = { campaign: {}, adset: {}, ad: {} };
+    let pendientes = Object.keys(ESCALERA_3Q).flatMap(nivel => Object.entries(ventanas).map(([w, [desde, hasta]]) => ({ nivel, w, desde, hasta }))), recortado = false;
+    for (let vuelta = 0; vuelta < 3 && pendientes.length; vuelta++) {
+      const r = await lote(pendientes.map(p => ({ ruta: `/${act}/insights`, params: { level: p.nivel, fields: [...IDS_3Q[p.nivel], ...BASICOS_3Q, ...ESCALERA_3Q[p.nivel][escalon[p.nivel]]].join(','), time_range: { since: p.desde, until: p.hasta }, limit: LIMITE_CIFRAS } })));
+      const otra = [], bajar = new Set();
+      pendientes.forEach((p, i) => {
+        if (r[i].ok) { filas[p.nivel][p.w] = r[i].datos?.data ?? []; if (r[i].datos?.paging?.next) recortado = true; return; }
+        if (r[i].error?.codigo === 100 && escalon[p.nivel] < ESCALERA_3Q[p.nivel].length - 1) { bajar.add(p.nivel); otra.push(p); return; }
+        throw r[i].error;
+      });
+      for (const n of bajar) { escalon[n]++; for (const p of pendientes) if (p.nivel === n && !otra.includes(p)) otra.push(p); } // el nivel entero, con los mismos campos en sus tres ventanas
+      pendientes = otra;
+    }
+    const leidoCon = escalon.campaign === 1 || escalon.adset === 1 || escalon.ad === 2 ? 'basico' : escalon.ad === 1 ? 'sin-rankings' : 'completo';
+    return { filas, leidoCon, recortado };
   }
 
   // ---------------------------------------------------------------- Fase A2: leer UN objeto y cambiarlo
@@ -234,7 +268,7 @@ export function crearMetaAds({ meta }) {
     return { ok: true, instagram: typeof r?.is_instagram_eligible === 'boolean' ? r.is_instagram_eligible : null, motivo: '' };
   }
 
-  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar, crearEn, buscarPorNombre, subirImagen, subirVideo, leerVideo, vistaPrevia, impulsable };
+  return { lote, estructura, cifrasDiarias, alcances, ventanas3q, todas, leer, cambiar, copiar, crearEn, buscarPorNombre, subirImagen, subirVideo, leerVideo, vistaPrevia, impulsable };
 }
 export const MAX_VIDEO = 200 * 1048576;
 

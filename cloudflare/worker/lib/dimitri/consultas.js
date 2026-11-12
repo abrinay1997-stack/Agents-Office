@@ -152,6 +152,30 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
     let top = []; try { top = (await office('/api/anuncios/sugerencias')).sugerencias?.slice(0, 3) || []; } catch { /* sin sugerencias */ }
     return ok(sub.anunciosText(v, top) || 'Anuncios no está conectado o no hay datos todavía.', `rango ${rango}`);
   }
+  // 11 nov 2026 · el método de campañas (anuncios/metodo.mjs): todo es lectura y cálculo; nada cambia Meta.
+  async function verRevision(e) {
+    const r = await office(`/api/anuncios/metodo/revision${e.fresco === true ? '?fresco=1' : ''}`);
+    return { ...ok(String(r.texto || 'No hay revisión todavía.'), r.configurado ? `${r.resumen?.campanas ?? 0} campañas · ${r.resumen?.pendientes ?? 0} pendientes` : 'sin Meta'), externo: (r.campanas || []).map((c) => c.nombre).join(' ') };
+  }
+  async function verNumeros() { return ok(String((await office('/api/anuncios/metodo/texto?que=negocio')).texto || 'Sin números del negocio.'), 'números del negocio'); }
+  async function verCiclo(e) {
+    const q = new URLSearchParams({ que: 'ciclo', ...(e.tipo ? { tipo: cadena(e.tipo, 30) } : {}), ...(e.destino ? { destino: cadena(e.destino, 20) } : {}) });
+    return ok(String((await office(`/api/anuncios/metodo/texto?${q}`)).texto || 'Sin ciclo.'), 'ciclo de ventas');
+  }
+  async function verSimulacion(e) {
+    const q = new URLSearchParams();
+    for (const k of ['modo', 'gasto', 'cpm', 'frecuencia', 'ctrUnico', 'pctConversion', 'ctrSaliente', 'pctVisitas', 'pctCompras', 'valorPromedio']) if (e[k] !== undefined && e[k] !== null && e[k] !== '') q.set(k, cadena(e[k], 20));
+    const r = await office(`/api/anuncios/metodo/simular?${q}`);
+    return r.ok ? ok(String(r.texto), 'tres escenarios') : falla(String(r.texto || 'Faltan datos para simular.'));
+  }
+  async function buscarCompetencia(e) { // lo que escribe un anunciante es de un TERCERO: pasa por el escudo (no está en PROPIOS)
+    const q = new URLSearchParams();
+    if (e.empresa) q.set('empresa', cadena(e.empresa, 100)); if (e.pagina && /^\d{3,30}$/.test(String(e.pagina))) q.set('pageId', String(e.pagina)); if (e.palabra) q.set('q', cadena(e.palabra, 100));
+    for (const k of ['pais', 'estado', 'medio']) if (e[k]) q.set(k, cadena(e[k], 12));
+    const r = await office(`/api/anuncios/competencia/texto?${q}`);
+    if (r.error) return falla(String(r.motivo || r.error));
+    return { ...ok(String(r.texto || 'Sin datos de la competencia.'), e.empresa || e.palabra ? cadena(e.empresa || e.palabra, 30) : 'competidores'), externo: String(r.texto || '') };
+  }
   async function verAnaliticas(e) {
     const dias = ent(e.dias, 1, 90, 30), red = ['instagram', 'facebook'].includes(e.red) ? e.red : 'todas';
     return ok(sub.analiticasText(await analiticasResumen(office, { dias, red })), `${dias} días`);
@@ -226,10 +250,12 @@ export function crearConsultas({ env, db, office, C, lista, cfg, fetchFn = null,
   const EJECUTORES = {
     buscar_en_guia: (e) => { const r = buscarEnGuia(cadena(e.consulta, 300), { max: 3, minimo: 2 }); return r.length ? ok(guiaTexto(r.map((x) => x.entrada), { maxChars: 3400 }), `${r.length} temas`) : ok(`No encontré eso en la guía. Los temas que hay:\n${indiceGuia()}`, 'sin coincidencia'); },
     buscar_tareas: buscarTareas, ver_tarea: verTarea, historial_reciente: historial, ver_agente: verAgente, ver_equipo: verEquipo,
-    buscar_en_cerebro: buscarCerebro, leer_nota: leerNota, ver_contenido: verContenido, ver_anuncios: verAnuncios, ver_analiticas: verAnaliticas, buscar_en_galeria: buscarGaleria,
+    buscar_en_cerebro: buscarCerebro, leer_nota: leerNota, ver_contenido: verContenido, ver_anuncios: verAnuncios,
+    buscar_anuncios_competencia: buscarCompetencia, ver_revision_campanas: verRevision, ver_numeros_negocio: verNumeros, ver_ciclo_ventas: verCiclo, ver_simulacion_campana: verSimulacion,
+    ver_analiticas: verAnaliticas, buscar_en_galeria: buscarGaleria,
     ver_rutinas: verRutinas, ver_costos: verCostos, ver_aprobaciones: verAprobaciones, ver_conectores: verConectores, ver_herramientas_conector: verHerramientasConector, usar_conector: usarConector,
   };
-  const PROPIOS = new Set(['buscar_en_guia', 'ver_equipo', 'ver_costos', 'ver_conectores', 'ver_herramientas_conector']); // lo que escribió la oficina, no un tercero
+  const PROPIOS = new Set(['buscar_en_guia', 'ver_equipo', 'ver_numeros_negocio', 'ver_ciclo_ventas', 'ver_simulacion_campana', 'ver_costos', 'ver_conectores', 'ver_herramientas_conector']); // lo que escribió la oficina, no un tercero
 
   async function ejecutar(alias, entrada) {
     const f = EJECUTORES[alias];

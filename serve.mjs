@@ -101,6 +101,7 @@ import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content piec
 import { crearRutas } from './contenido/rutas.mjs';
 import { prepararSubida } from './media/formatos-imagen.mjs'; // CON-02: gif/avif/bmp/tiff al subir → JPEG
 import { porDefecto as porDefectoCuentasContenido, motivoNoPublica, listaCuentas, MOTIVO_METRICOOL } from './src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
+import { crearHistoriasAuto, interaccionesDe } from './contenido/historias-auto.mjs'; // 11 nov 2026: lo ya publicado vuelve como historia
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
 import { agenteDeContenido, promptMejorar, leerPropuesta, prepararVistas } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
 import { crearPlantillas as crearPlantillasContenido } from './contenido/plantillas.mjs'; // C3: plantillas de publicación
@@ -111,6 +112,8 @@ import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
 import { crearMetaAds } from './anuncios/meta-ads.mjs'; // Fase A1 de Anuncios (8 oct 2026): el panel de Anuncios, SOLO LECTURA (docs/plan-meta-anuncios-y-bandeja-2026-10-09.md)
 import { crearSincronizador as crearSincAnuncios } from './anuncios/sincronizar.mjs';
 import { crearRutasAnuncios } from './anuncios/rutas.mjs';
+import { crearCompetencia as crearCompetenciaAnuncios } from './anuncios/competencia.mjs'; // 11 nov 2026: los anuncios de la competencia (Scrape Creators)
+import { crearMetodo as crearMetodoAnuncios } from './anuncios/metodo.mjs'; // 11 nov 2026: el método de campañas (números del negocio, revisión 3Q, ciclo de ventas)
 import { crearAcciones as crearAccionesAnuncios } from './anuncios/acciones.mjs'; // Fase A2 (9 oct 2026): pausar, presupuestos, relanzar — los dos clics del dinero, en el servidor
 import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios/modelo.mjs';
 import { crearBorradores as crearBorradoresAnuncios } from './anuncios/borradores.mjs'; // Fase A3 (9 oct 2026): borradores de campaña y crear en Meta EN PAUSA
@@ -1940,7 +1943,18 @@ async function mejorarAnuncio({ borrador, creativo, campo, pide }) {
 }
 /** C2 (8 oct 2026): la zona horaria de ESTA máquina (la de las horas de Contenido) y su desfase con UTC ahora mismo, para que se vea. */
 const zonaHoraria = () => { const m = -new Date().getTimezoneOffset(); return { nombre: Intl.DateTimeFormat().resolvedOptions().timeZone || '', utc: `UTC${m < 0 ? '−' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.abs(m) % 60).padStart(2, '0')}` }; };
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
+// 11 nov 2026: historias automáticas (apagadas hasta que el dueño las encienda en Ajustes → Contenido). El último día preparado, en data/contenido/historias-auto.json
+const HISTORIAS_F = path.join(DATA, 'contenido', 'historias-auto.json');
+const historiasAuto = crearHistoriasAuto({
+  almacen: contenido, salidaDe: id => programador.salidaDe(id), ajustes: () => cfg.contenido || {}, notice, modo: () => contenidoModo(),
+  interacciones: ps => interaccionesDe(ps, metricas.leer({ dias: 120 }).publicaciones),
+  estado: {
+    leer: () => { try { return JSON.parse(fs.readFileSync(HISTORIAS_F, 'utf8')); } catch { return {}; } },
+    guardar: v => { fs.mkdirSync(path.dirname(HISTORIAS_F), { recursive: true }); fs.writeFileSync(HISTORIAS_F + '.tmp', JSON.stringify(v, null, 1)); renombrar(HISTORIAS_F + '.tmp', HISTORIAS_F); },
+  },
+});
+setInterval(() => historiasAuto.tick().catch(e => console.warn('contenido: historias —', e.message)), 60e3); setTimeout(() => historiasAuto.tick().catch(() => {}), 45e3);
+const contenidoRoutes = crearRutas({ almacen: contenido, historias: historiasAuto, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
   publicadas: () => ({ ...metricas.leer({ dias: 120 }), conectado: meta.configurado() }), // C2: lo ya publicado, en el calendario de Contenido
   // C3 (8 oct 2026): «Llenar la semana» pide los borradores a tu puesto de redes de Marketing (solo deja borradores: nada que aprobar aquí)
   encargar: async ({ texto, titulo }) => { const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); const t = await newTask({ dept: a?.department || 'marketing', text: texto, agent: a?.id || null, title: titulo, needsOk: false }); return { id: t.id, titulo: t.title, agente: AGENTS.find(x => x.id === t.agent)?.name || t.agent }; },
@@ -1987,7 +2001,10 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor, informe: anunciosInforme, indicadores: anunciosInd, conversiones: anunciosConv, bandeja, hookOk: (req, url) => triggers.authorized(req.headers['x-office-token'] || url.searchParams.get('token') || String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')) }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosCompetencia = crearCompetenciaAnuncios({ dir: ANUNCIOS_DIR, llave: () => String(process.env.SCRAPECREATORS_API_KEY || ''), ajustes: () => cfg.anuncios || {} });
+const anunciosMetodo = crearMetodoAnuncios({ dir: ANUNCIOS_DIR, sync: anuncios, ads: anunciosAds, meta, empresa: () => cfg.name });
+const ANUNCIOS_MAS = { metodo: anunciosMetodo, competencia: anunciosCompetencia }; // 11 nov 2026: el método de campañas y la competencia
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, ...ANUNCIOS_MAS, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor, informe: anunciosInforme, indicadores: anunciosInd, conversiones: anunciosConv, bandeja, hookOk: (req, url) => triggers.authorized(req.headers['x-office-token'] || url.searchParams.get('token') || String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')) }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {

@@ -108,7 +108,7 @@ import { deConversacion as deConversacionE } from './conversiones.mjs';
 export const AGENTE_CADA_MIN = 10;
 export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null, informe = null, indicadores = null, conversiones = null, bandeja = null, hookOk = () => false }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null, informe = null, indicadores = null, conversiones = null, bandeja = null, hookOk = () => false, metodo = null, competencia = null }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
@@ -249,11 +249,16 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     const c = sync.conexion(), v = sync.vista(rango);
     let ind; if (indicadores) { try { ind = indicadores.estado(); } catch { /* data/kpis.json ilegible: la vista sigue */ } } // A6: qué indicadores tiene el dueño
     let conv; if (conversiones) { try { const e = conversiones.estado({ ultimos: 5 }); conv = { encendida: e.encendida, listo: e.listo, motivo: e.motivo, prueba: e.prueba, eventos: e.eventos, hoy: e.hoy, pendientes: e.pendientes, fallos: e.fallos, ultimoError: e.ultimoError, ultimoErrorAt: e.ultimoErrorAt, ultimoEnvioAt: e.ultimoEnvioAt }; } catch { /* la vista sigue */ } } // A6: la API de conversiones, sin datos personales
-    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo(), ...(ind ? { indicadores: ind } : {}), ...(conv ? { conversiones: conv } : {}) };
+    let met; if (metodo) { try { met = { linea: metodo.linea() }; } catch { /* sin números: la vista sigue */ } } // 11 nov 2026: el número mágico, en una línea
+    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, ...(met ? { metodo: met } : {}), topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo(), ...(ind ? { indicadores: ind } : {}), ...(conv ? { conversiones: conv } : {}) };
   }
 
   async function handle(req, res, url) {
     const p = url.pathname;
+    // 11 nov 2026: el método de campañas (números del negocio, revisión 3Q, ciclo de ventas): anuncios/metodo.mjs. Solo lee y calcula; nunca cambia Meta.
+    // 11 nov 2026: los anuncios de la competencia (Biblioteca de anuncios por Scrape Creators): anuncios/competencia.mjs. Solo lee; gasta créditos de ESE servicio, con tope semanal.
+    if (competencia && (p === '/api/anuncios/competencia' || p.startsWith('/api/anuncios/competencia/'))) { try { return await competencia.rutas(req, res, url, { json, body }); } catch (e) { return json(res, e.status || 500, { error: e.message, motivo: e.message }), true; } }
+    if (metodo && (p === '/api/anuncios/metodo' || p.startsWith('/api/anuncios/metodo/'))) { try { return await metodo.rutas(req, res, url, { json, body }); } catch (e) { return json(res, e.status || 500, { error: e.message, motivo: e.message }), true; } }
     if (p !== '/api/anuncios' && !p.startsWith('/api/anuncios/')) return false;
     try {
       const mv = /^\/api\/anuncios\/creativos\/([A-Za-z0-9_]{1,40})\/variaciones$/.exec(p);

@@ -610,3 +610,30 @@ test('puntos 7 y 19: el detalle de una campaña enseña sus problemas (con esc) 
   const r = resumenHTML({ ...d, cuenta: { ...d.cuenta, saldo: 14.89, porPagar: 14.89, disponible: 5 } });
   assert.match(r, /deuda con Meta \/ por pagar/); assert.doesNotMatch(r, /· saldo /); assert.match(r, /queda del tope de la cuenta/);
 });
+
+// 11 nov 2026: las pestañas Método y Competencia (src/anuncios/metodo.js). Solo lectura y cálculo: ningún botón de gasto.
+test('Método y Competencia: están entre las pestañas, sin oficina lo dicen, y de su formulario sale el negocio entero con el origen de cada dato', async () => {
+  const { crearMetodoVista, negocioDelFormulario, TABS_METODO } = await import('../src/anuncios/metodo.js');
+  assert.deepEqual(TABS_METODO.map(([k]) => k), ['metodo', 'competencia']);
+  const fuente = fs.readFileSync(new URL('../src/anuncios/vista.js', import.meta.url), 'utf8'), mio = fs.readFileSync(new URL('../src/anuncios/metodo.js', import.meta.url), 'utf8');
+  assert.match(fuente, /\['metodo', 'Método'\], \['competencia', 'Competencia'\]/);
+  assert.doesNotMatch(mio, /\/api\/anuncios\/(accion|deshacer|borradores|impulsar)/, 'estas pestañas no tocan el dinero: ni acciones ni borradores');
+  assert.doesNotMatch(mio, /<img/, 'ninguna imagen de un servidor ajeno');
+  const v = crearMetodoVista({ servida: false });
+  assert.match(v.html('metodo'), /con la oficina abierta/); assert.match(v.html('competencia'), /con la oficina abierta/);
+  const s = crearMetodoVista({ servida: true });
+  assert.match(s.html('metodo'), /Revisión 3Q[\s\S]*Números del negocio[\s\S]*Ciclo de ventas/); assert.match(s.html('metodo'), /Leyendo la revisión/);
+  s.estado.comp = { configurado: false, motivo: 'Falta la llave.', semana: { usados: 0, tope: 10 }, competidores: [{ nombre: '<b>Rival</b>', pageId: '123' }], recientes: [] };
+  const h = s.html('competencia');
+  assert.match(h, /Falta conectar la Biblioteca/); assert.match(h, /&lt;b&gt;Rival&lt;\/b&gt;/, 'lo de un tercero va escapado'); assert.match(h, /type="submit"[^>]* disabled/, 'sin llave no se busca');
+  // el formulario → lo que se guarda
+  const datos = new Map([['tipo', 'servicios'], ['destino', 'whatsapp'], ['cuenta', ''], ['c:ticket', '120'], ['c:invertir', '20,5'], ['c:metaVentas', ''], ['c:fijos', '-3'], ['cn:0', 'Producción'], ['cp:0', '40'], ['cn:1', 'Sin porcentaje'], ['cp:1', '']]);
+  const real = globalThis.FormData; globalThis.FormData = class { constructor(f) { this.m = f; } get(k) { return this.m.get(k) ?? null; } entries() { return this.m.entries(); } };
+  try {
+    const n = negocioDelFormulario(datos, { ticket: { valor: 120, origen: 'agencia' }, modo: 'plataforma' });
+    assert.deepEqual(n.ticket, { valor: 120, origen: 'agencia' }, 'un número que no cambió conserva su origen');
+    assert.deepEqual(n.invertir, { valor: 20.5, origen: 'cliente' }, 'el que escribes ahora es del cliente (y la coma vale)');
+    assert.equal(n.metaVentas, undefined); assert.equal(n.fijos, undefined, 'vacío o negativo no se manda');
+    assert.deepEqual(n.costos, [{ nombre: 'Producción', pct: 40 }]); assert.equal(n.modo, 'plataforma'); assert.equal(n.tipo, 'servicios');
+  } finally { globalThis.FormData = real; }
+});

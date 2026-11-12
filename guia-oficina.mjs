@@ -77,6 +77,29 @@ export const GUIA = [
     palabras: ['anuncios', 'campaña', 'campañas', 'publicidad', 'meta ads', 'presupuesto de anuncios', 'pausar anuncio', 'activar anuncio', 'impulsar', 'sugerencias de anuncios', 'topes de gasto'],
     texto: 'Ves las campañas, conjuntos y anuncios de Meta con su estado, aprendizaje, rechazos, gasto contra los topes, resultados y costo por resultado. Bajar el gasto (pausar, bajar presupuesto, archivar) es un clic con deshacer. Gastar (activar, reanudar, subir presupuesto, alargar, relanzar) pide dos clics del dueño con la cifra exacta y nunca pasa de sus topes. Todo se crea EN PAUSA (asistente de 5 pasos en Borradores). La cuenta publicitaria es una sola y la comparten varias marcas: cada campaña, conjunto y anuncio dice sobre qué página de Facebook e Instagram corre (o «cuenta no identificada»), se filtra por cuenta y el Resumen reparte el gasto y los resultados por cuenta. Hay sugerencias de mejora con su porqué y el informe del mes. Ni Dimitri, ni los agentes, ni un asistente conectado pueden gastar.' },
 
+  { id: 'historias-automaticas', tema: 'contenido', titulo: 'Historias automáticas de lo ya publicado', donde: 'Ajustes → Contenido · Contenido (K)', vistas: ['contenido', 'ajustes'],
+    palabras: ['historia', 'historias', 'automatica', 'automaticas', 'stories', 'story', 'repost', 'repostear', 'callada', 'diario', 'sola', 'solas'],
+    texto: 'Con «Historias automáticas» encendido en Ajustes → Contenido, cada día lo ya publicado con imagen vuelve como historia en Instagram y Facebook: de 1 a 5 al día, desde la hora que elijas. '
+      + 'Cada una es una pieza normal de Contenido (formato historia) con la imagen de la publicación original; no gasta. Se elige lo publicado hace más de 2 días, lo menos usado y lo que más movió, '
+      + 'y la misma publicación no vuelve antes de 4 días. Por defecto cada historia espera el OK del dueño; solo él puede encender «que salgan sin pedirme el OK», y el modo de Contenido sigue mandando '
+      + '(en Simulacro no sale nada de verdad). Un día se prepara una sola vez: la que el dueño tira a la papelera no vuelve a crearse.' },
+
+  { id: 'metodo-campanas', tema: 'contenido', titulo: 'Método de campañas: número mágico y revisión 3Q', donde: 'Anuncios (J) · consultas de Dimitri', vistas: ['anuncios'],
+    palabras: ['numero magico', 'números del negocio', 'ticket', 'margen', 'equilibrio', 'roas', 'costo por conversacion', 'tasa de cierre', 'revision 3q', 'tres q', 'que hago con la campaña',
+      'apagar campaña', 'escalar', 'frecuencia', 'ctr unico', 'fase de aprendizaje', 'efecto desglose', 'cuanto invertir', 'simular presupuesto', 'rentabilidad', 'analisis de anuncios', 'competencia'],
+    texto: 'Los NÚMEROS DEL NEGOCIO (ticket, costos, % de la venta que se invierte, meta, tasa de cierre) dan el OBJETIVO —lo que se paga por venta y por conversación— y el EQUILIBRIO —desde dónde se pierde—: '
+      + 'el número mágico. Los guarda el dueño. La REVISIÓN 3Q lee lo que corre en Meta (30, 14 y 7 días): Q1 qué pasó frente al número mágico; Q2 por qué (% de mensajes, CTR único, video, frecuencia, CPM); '
+      + 'Q3 qué hacer. Reglas: se juzga el CONJUNTO y, si va bien, sus anuncios no se tocan; lo que aprende o cambió hace menos de 5 días ESPERA; se pausa lo que gastó el doble del número mágico y cuesta 1,5 veces '
+      + 'lo que aguanta su etapa o pasa del equilibrio. Presentación aguanta un 30 % más; conversión y ascensión, un 20 % menos. También lee los anuncios de la COMPETENCIA (los que más días llevan activos) '
+      + 'para analizarlos. Todo es lectura: pausar, subir o activar sigue con la regla del dinero.' },
+  { id: 'ciclo-ventas', tema: 'contenido', titulo: 'El ciclo de ventas: qué anuncio va en cada etapa', donde: 'Consultas de Dimitri · agentes de Marketing', vistas: ['anuncios', 'contenido'],
+    palabras: ['ciclo de ventas', 'presentacion', 'evaluacion', 'conversion', 'ascension', 'embudo', 'publico frio', 'retargeting', 'audiencia', 'audiencias', 'objetivo de campaña', 'tipo de arte',
+      'que anuncio hago', 'estructura de campañas', 'reparto del presupuesto', 'excluir publicos'],
+    texto: 'Cuatro etapas, cada una con su público, su pieza y su parte del presupuesto (60/20/10/10; una cuenta nueva arranca solo con las dos primeras, 75/25): PRESENTACIÓN, gente nueva (intereses, similares o abierto), excluyendo a quien '
+      + 'ya interactuó; EVALUACIÓN, quien interactuó, vio videos o visitó la web; CONVERSIÓN, quien escribió, dio clic o dejó el carrito; ASCENSIÓN, quien ya compró. Qué pieza va en cada una, con qué tipo de arte (producto, beneficios, '
+      + 'demostración, testimonio, promoción, educativo…) y a dónde lleva cambia con el tipo de negocio (productos, servicios, segunda necesidad, suscripción, nicho, producto nuevo, cursos) y el destino: WhatsApp → campaña de Interacción '
+      + 'y se vigila el costo por conversación; web → Ventas y se vigila el ROAS. Los cursos no se venden por WhatsApp. El simulador dice qué da un presupuesto en tres escenarios.' },
+
   // ───────────────────────── ESTUDIO ─────────────────────────
   { id: 'estudio-imagen', tema: 'estudio', titulo: 'Crear una imagen en el Estudio', donde: 'Estudio (E) → Crear', vistas: ['studio'],
     palabras: ['estudio', 'imagen', 'imagenes', 'generar imagen', 'crear imagen', 'foto', 'modelo de imagen', 'prompt', 'nano banana', 'generar'],

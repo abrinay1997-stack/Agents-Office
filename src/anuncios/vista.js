@@ -20,6 +20,7 @@ import { crearAsistente } from './asistente.js';
 import { sugerenciasHTML, FILTROS_SUG, reglaTexto } from './sugerencias.js';
 import { creativosHTML, grupoDeAnuncio, borradorDeCreativo } from './creativos.js';
 import { crearVentanaInforme } from './informe.js';
+import { crearMetodoVista } from './metodo.js'; // 11 nov 2026: las pestañas Método (revisión 3Q, números, ciclo) y Competencia
 // Fase A3 (9 oct 2026): CREAR. La pestaña BORRADORES (antes de Historial) con la lista y el asistente de 5 pasos (src/anuncios/asistente.js);
 // «+ Nueva campaña» también en el Resumen. Lo creado nace EN PAUSA en Meta y se enlaza a su campaña; activarlo es la A2 (dos clics).
 // Fase A5 (9 oct 2026): SUGERENCIAS (tras Campañas: src/anuncios/sugerencias.js) y CREATIVOS (tras Borradores: src/anuncios/creativos.js),
@@ -31,7 +32,7 @@ import { crearVentanaInforme } from './informe.js';
 
 /* global __AO_ANUNCIOS_VERSION__ */
 const VERSION = typeof __AO_ANUNCIOS_VERSION__ === 'string' ? __AO_ANUNCIOS_VERSION__ : '';
-const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['sugerencias', 'Sugerencias'], ['borradores', 'Borradores'], ['creativos', 'Creativos'], ['historial', 'Historial']];
+const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['sugerencias', 'Sugerencias'], ['metodo', 'Método'], ['competencia', 'Competencia'], ['borradores', 'Borradores'], ['creativos', 'Creativos'], ['historial', 'Historial']];
 const NIVEL = { campana: 'Campaña', conjunto: 'Conjunto', anuncio: 'Anuncio' };
 const guarda = { get: (k, d) => { try { const v = localStorage.getItem('ao.anu.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('ao.anu.' + k, JSON.stringify(v)); } catch {} } };
 const vale = (lista, v, d) => (lista.some(([k]) => k === v) ? v : d);
@@ -62,6 +63,8 @@ function init(ov, ctx) {
     repintar: () => { if (S.tab === 'borradores' && S.abierta) pintar(); },
     irACampana: async id => { await cargar(); if (S.d && buscar(S.d.campanas || [], id)) abrirDetalle(id, null); else { S.tab = 'campanas'; guarda.set('tab', S.tab); pintar(); decir('La campaña aparecerá en Campañas en la próxima lectura de Meta.'); } },
     alCrear: () => { cargar(); cargarHistorial(); } });
+  const esMet = t => t === 'metodo' || t === 'competencia'; // solo lectura y cálculo: ningún botón de estas dos pestañas gasta
+  const met = crearMetodoVista({ servida: ctx.servida, decir, repintar: () => { if (esMet(S.tab) && S.abierta) pintar(); } });
   const inf = crearVentanaInforme({ ov, datos, modal, decir, enEjemplo });
 
   /* ---------- cargar ---------- */
@@ -80,7 +83,7 @@ function init(ov, ctx) {
   }
   async function cargarHistorial() { try { S.hist = await datos.historial({ ejemplo: S.ejemplo }); } catch (e) { S.hist = []; decir('No se pudo traer el historial: ' + e.message); } if (S.tab === 'historial') pintar(); }
   let reloj = 0;
-  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || inf.abierto() || !caja.hidden || S.tab === 'borradores' || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
+  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || inf.abierto() || !caja.hidden || S.tab === 'borradores' || esMet(S.tab) || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
 
   /* ---------- pintar ---------- */
   function pintarCabecera() {
@@ -102,6 +105,7 @@ function init(ov, ctx) {
     pintarCabecera();
     const foco = clavFoco(), scroll = main.scrollTop, ahora = Date.now();
     if (S.tab === 'borradores') main.innerHTML = ctl.html();
+    else if (esMet(S.tab)) main.innerHTML = met.html(S.tab, { ejemplo: S.ejemplo });
     else if (!S.d) main.innerHTML = S.error ? `<div class="anu-vacio" role="alert"><b>No se pudieron traer los anuncios</b><span>${esc(S.error)}</span><button type="button" class="anu-btn" data-a="reintentar">Reintentar</button></div>` : '<p class="anu-cargando">Cargando…</p>';
     else if (S.tab === 'resumen') main.innerHTML = resumenHTML(filtrarVista(S.d, cuentaSel()), { rango: S.rango, ahora, sug: S.sug, cuenta: cuentaSel() });
     else if (S.tab === 'sugerencias') main.innerHTML = S.d.configurado ? sugerenciasHTML(S.sug, { filtro: S.sfiltro, moneda: moneda(), buscarFila: id => buscar(S.d.campanas || [], id), error: S.sug ? '' : S.sugErr, ahora }) : resumenHTML(S.d);
@@ -311,6 +315,7 @@ function init(ov, ctx) {
     S.tab = n; guarda.set('tab', n);
     if (n === 'historial' && S.hist == null) cargarHistorial();
     if (n === 'borradores') { cerrarDetalle(false); ctl.cargar(); }
+    if (esMet(n)) { cerrarDetalle(false); met.cargar(n); }
     if ((n === 'sugerencias' || n === 'creativos') && !S.sug) cargarSug();
     pintar();
   }
@@ -417,6 +422,7 @@ function init(ov, ctx) {
     if (b.closest('.anu-fondo-gal') || b.closest('.anu-fondo-inf')) return; // la galería del asistente y la ventana del informe escuchan solas
     if (b.dataset.a === 'nueva' && S.tab !== 'borradores') { S.tab = 'borradores'; guarda.set('tab', S.tab); cerrarDetalle(false); }
     if ((S.tab === 'borradores' || b.dataset.vercamp) && main.contains(b) && ctl.click(b)) return;
+    if (esMet(S.tab) && main.contains(b) && met.click(b)) return;
     if (caja.contains(b) && b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, menuDe);
     if (b.dataset.menu) return caja.hidden || menuDe !== b ? abrirMenu(b) : cerrarMenu();
     if (b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, b);
@@ -452,6 +458,7 @@ function init(ov, ctx) {
     if (a === 'conv-probar') return probarConversiones(b);
   });
   ov.addEventListener('submit', e => {
+    if (esMet(S.tab) && main.contains(e.target) && met.submit(e)) return;
     const form = e.target.closest('[data-form]'); if (!form || !S.dlg) return;
     e.preventDefault();
     const g = S.dlg, val = n => form.querySelector(`[data-campo="${n}"]`)?.value ?? '';
@@ -465,7 +472,8 @@ function init(ov, ctx) {
     return primerClic(S.dlg);
   });
   ov.addEventListener('input', e => { if (S.tab === 'borradores' && main.contains(e.target)) ctl.input(e); });
-  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; guarda.set('cuenta', S.cuenta); pintar(); return; } if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
+  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; 
+    if (esMet(S.tab) && main.contains(e.target) && met.change(e)) return; if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; guarda.set('cuenta', S.cuenta); pintar(); return; } if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
   ov.addEventListener('keydown', e => {
     const el = e.target;
     if (S.tab === 'borradores' && main.contains(el) && ctl.keydown(e)) return;
@@ -488,6 +496,7 @@ function init(ov, ctx) {
       if (o.impulsar) { ctl.impulsar(o.impulsar); return; }
       if (S.tab === 'borradores' && o.borrador) { ctl.abrir(o.borrador, { paso: o.paso ?? 0, medios: o.medios || [] }); return; } // A3: de vuelta del Estudio «para el anuncio»
       if (S.tab === 'borradores') ctl.cargar();
+      if (esMet(S.tab)) met.cargar(S.tab);
       setTimeout(() => ov.querySelector(`[data-tab="${S.tab}"]`)?.focus(), 30);
     },
     close() { S.abierta = false; clearInterval(reloj); ctl.cerrar(); cerrarMenu(false); cerrarDlg(false); inf.cerrar(false); cerrarDetalle(false); },
