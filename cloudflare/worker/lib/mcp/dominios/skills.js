@@ -9,7 +9,10 @@
 //   · lo escrito lleva como primera línea la marca «(escrita vía MCP …)».
 import { registrarHerramienta } from '../registro.js';
 import { fallo, conOficina, idem, paginar } from '../skills/comun.js';
-import { SKILLS_DE_FABRICA, NOMBRE_SKILL, ID_HABILIDAD, TEXTO_MAX, conMarca, sospecha, listaTexto, verTexto, versionesTexto, papeleraTexto, bibliotecaTexto, habilidadTexto } from '../skills/ayudas.js';
+import { leerFila } from '../../almacen.js';
+import { cargarRoster } from '../../tareas/roster.js';
+import { jsonSemilla } from '../../semilla.js';
+import { SKILLS_DE_FABRICA, NOMBRE_SKILL, ID_HABILIDAD, TEXTO_MAX, conMarca, nombreOk, pideConfirmar, sospecha, listaTexto, verTexto, versionesTexto, papeleraTexto, bibliotecaTexto, habilidadTexto } from '../skills/ayudas.js';
 
 const LEE = ['listar', 'ver', 'versiones', 'papelera', 'biblioteca', 'habilidad'];
 const CAMBIA = ['crear', 'reemplazar', 'borrar', 'restaurar', 'volver'];
@@ -49,7 +52,7 @@ registrarHerramienta({
     try {
       const a = args.accion; if (!LEE.includes(a)) return NO(`acción desconocida «${String(a).slice(0, 30)}». Las que hay: ${LEE.join(', ')}.`);
       const O = await conOficina(ctx, ['GET']), n = String(args.nombre || '');
-      if (['ver', 'versiones'].includes(a) && !NOMBRE_SKILL.test(n)) return NO('falta «nombre» de la skill (minúsculas, números, punto, guion).');
+      if (['ver', 'versiones'].includes(a) && !nombreOk(n)) return NO('falta «nombre» de la skill (minúsculas, números, punto, guion; no vale «papelera», «versiones», «volver» ni «restaurar»).');
       if (a === 'habilidad' && !ID_HABILIDAD.test(n)) return NO('falta «nombre» = el id de la habilidad (como «copywriting»; mira «biblioteca»).');
       let t;
       if (a === 'listar') t = listaTexto(await O('/api/skills'));
@@ -63,13 +66,17 @@ registrarHerramienta({
   },
 });
 
-const pideConfirmar = (e) => /confirmado: true/.test(String(e?.message || ''));
-const avisoConfirmar = (e) => `esto necesita confirmación de una PERSONA, no del modelo. ${String(e.message).slice(0, 500)} Dile a la persona a quién llega y, solo si ella lo autoriza en esta conversación, repite la llamada con «confirmado»: true.`;
+const pideConfirmarServidor = (e) => /confirmado: true/.test(String(e?.message || ''));
+const aviso = (motivos) => `esto necesita la confirmación EXPRESA del dueño (${motivos}). No lo hagas por tu cuenta: explícale a quién llega y espera a que él mismo lo pida; solo entonces se manda «confirmado».`;
+async function rosterDe(db) { const r = await cargarRoster(db); return r.agents.map((a) => ({ id: a.id, department: a.department })); }
+/** Las skills de fábrica: las de la semilla del despliegue (equipo.json) y, como piso, las de ejemplo conocidas. */
+async function deFabrica(env, n) { const j = await jsonSemilla(env, 'equipo.json').catch(() => null); return SKILLS_DE_FABRICA.includes(n) || (Array.isArray(j?.skills) && j.skills.some((x) => x?.name === n)); }
+const alcanceTexto = (v) => (v.everyone ? 'TODOS los agentes' : [...(v.departments || []), ...(v.agents || [])].join(', ') || 'nadie');
 
 registrarHerramienta({
   nombre: 'skills_cambiar', titulo: 'Skills (cambiar)',
   descripcion: 'Cambia las skills de los agentes (cada agente la lee ENTERA antes de cada tarea). accion: crear (nombre, descripcion, texto, agentes/departamentos o todos) · reemplazar (igual + base: el «actualizado» leído con «ver») '
-    + '· borrar (nombre; va a la papelera) · restaurar (id de la papelera) · volver (nombre, at: una versión). Para TODOS los agentes, o reemplazar/ensanchar una que ya llega a todos o a un departamento, hace falta «confirmado»: true. '
+    + '· borrar (nombre; va a la papelera) · restaurar (id de la papelera) · volver (nombre, at: una versión). Si llega a TODOS, a muchos agentes o departamentos, si su alcance crece o es de fábrica, hace falta «confirmado»: true. '
     + 'NO pongas «confirmado» por tu cuenta: solo si la persona lo autorizó expresamente tras ver a quién llega. Si el texto parece pedir saltarse reglas, se rechaza. Nada borra para siempre.',
   esquema: esquemaCambia, alcance: 'oficina', soloLectura: false, destructiva: false, idempotente: false,
   ejecutar: async (ctx, args) => {
@@ -78,25 +85,27 @@ registrarHerramienta({
       if (!CAMBIA.includes(a)) return NO(`acción desconocida «${String(a).slice(0, 30)}». Las que hay: ${CAMBIA.join(', ')}.`);
       const conf = args.confirmado === true;
       const n = String(args.nombre || ''); const hoy = new Date(ctx.ahoraMs).toISOString().slice(0, 10);
-      if (a !== 'restaurar' && !NOMBRE_SKILL.test(n)) return NO('falta «nombre» de la skill (minúsculas, números, punto, guion).');
-      if (a === 'restaurar') {
-        if (!/^[a-z0-9][a-z0-9._-]{0,59}:\d{13}$/.test(String(args.id || ''))) return NO('falta «id» de la papelera (como nombre:1700000000000; mira «papelera»).');
-        const O = await conOficina(ctx, ['GET', 'POST /api/skills/papelera/restaurar']);
-        return await idem(ctx, 'skills_cambiar', async () => {
-          try { const r = await O('/api/skills/papelera/restaurar', { id: args.id, confirmado: conf }, 'POST'); return `Skill «${r.name}» restaurada.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}`; }
-          catch (e) { if (pideConfirmar(e)) throw new Error(avisoConfirmar(e)); throw e; }
-        });
-      }
-      if (a === 'volver') {
-        if (!/^\d{13}$/.test(String(args.at || ''))) return NO('falta «at» (el id de la versión; mira «versiones»).');
-        const O = await conOficina(ctx, ['GET', `POST ${URL_SKILL(n)}/volver`]);
-        return await idem(ctx, 'skills_cambiar', async () => {
-          try { await O(`${URL_SKILL(n)}/volver`, { at: String(args.at), confirmado: conf }, 'POST'); return `«${n}» volvió a la versión ${args.at}. Lo anterior quedó en el historial.`; }
-          catch (e) { if (pideConfirmar(e)) throw new Error(avisoConfirmar(e)); throw e; }
-        });
+      if (a !== 'restaurar' && !nombreOk(n)) return NO('falta «nombre» de la skill (minúsculas, números, punto, guion; no vale «papelera», «versiones», «volver» ni «restaurar»).');
+      const trabajo = async (fn) => { try { return await fn(); } catch (e) { if (pideConfirmarServidor(e)) throw new Error(aviso(String(e.message).slice(0, 300))); throw e; } };
+      if (a === 'restaurar' || a === 'volver') { // se lee lo que volvería a estar vivo: sospecha, alcance y fábrica se miran antes de tocar nada
+        if (a === 'restaurar' && !/^[a-z0-9][a-z0-9._-]{0,59}:\d{13}$/.test(String(args.id || ''))) return NO('falta «id» de la papelera (como nombre:1700000000000; mira «papelera»).');
+        if (a === 'volver' && !/^\d{13}$/.test(String(args.at || ''))) return NO('falta «at» (el id de la versión; mira «versiones»).');
+        const O = await conOficina(ctx, a === 'restaurar' ? ['GET', 'POST /api/skills/papelera/restaurar'] : ['GET', `POST ${URL_SKILL(n)}/volver`]);
+        return await idem(ctx, 'skills_cambiar', () => trabajo(async () => {
+          const f = await leerFila(ctx.db, a === 'restaurar' ? 'skills-papelera' : 'skills-historial', a === 'restaurar' ? args.id : `${n}:${args.at}`);
+          if (!f?.valor) throw new Error(a === 'restaurar' ? 'esa skill no está en la papelera (¿pasaron los 30 días?).' : 'esa versión no existe.');
+          const valor = f.valor, nombre = a === 'restaurar' ? f.name : n;
+          const falsa = sospecha({ description: valor.description, text: valor.text, files: valor.files });
+          if (falsa) throw new Error(`lo que volvería parece pedir que un agente se salte sus reglas («${String(falsa).slice(0, 80)}»). Por MCP no se restaura; se revisa en la oficina.`);
+          const antes = a === 'volver' ? (await O(URL_SKILL(n))).skill : null;
+          const motivo = pideConfirmar(valor, antes, await rosterDe(ctx.db), { fabrica: antes ? await deFabrica(ctx.env, n) : false });
+          if (motivo && !conf) throw new Error(aviso(`${nombre} quedaría con alcance: ${alcanceTexto(valor)}; ${motivo}`));
+          if (a === 'restaurar') { const r = await O('/api/skills/papelera/restaurar', { id: args.id, confirmado: conf }, 'POST'); return `Skill «${r.name}» restaurada.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}`; }
+          await O(`${URL_SKILL(n)}/volver`, { at: String(args.at), confirmado: conf }, 'POST'); return `«${n}» volvió a la versión ${args.at}. Lo anterior quedó en el historial.`;
+        }));
       }
       if (a === 'borrar') {
-        if (SKILLS_DE_FABRICA.includes(n)) return NO(`«${n}» es una skill de ejemplo de la oficina: no se borra por MCP (se hace en la oficina).`);
+        if (await deFabrica(ctx.env, n)) return NO(`«${n}» es una skill de fábrica de la oficina: no se borra por MCP (se hace en la oficina).`);
         const O = await conOficina(ctx, ['DELETE ' + URL_SKILL(n)]);
         return await idem(ctx, 'skills_cambiar', async () => { const r = await O(URL_SKILL(n), undefined, 'DELETE'); return `«${n}» fue a la papelera (${r.dias} días). Para deshacerlo: accion restaurar con id ${r.id}.`; });
       }
@@ -108,19 +117,18 @@ registrarHerramienta({
       if (falsa) return NO(`el texto parece pedir que un agente se salte sus reglas («${String(falsa).slice(0, 80)}»). Por MCP no se guarda; si es legítimo, se escribe en la oficina.`);
       const base = args.base ? String(args.base) : null;
       if (a === 'reemplazar' && !base) return NO('reemplazar exige «base»: el «actualizado» que leíste con «ver». Así no pisas lo que otra persona cambió.');
-      const todos = args.todos === true;
-      const cuerpo = { description: descripcion, text: conMarca(texto, hoy), agents: args.agentes || [], departments: args.departamentos || [], files: archivos, todos, confirmado: conf, ...(a === 'reemplazar' ? { base } : {}) };
       const O = await conOficina(ctx, ['GET', 'PUT ' + URL_SKILL(n)]);
-      return await idem(ctx, 'skills_cambiar', async () => {
-        let existe = true; try { await O(URL_SKILL(n)); } catch { existe = false; }
-        if (a === 'crear' && existe) throw new Error(`ya existe una skill «${n}»: para cambiarla usa «reemplazar» con su «base».`);
-        if (a === 'reemplazar' && !existe) throw new Error(`no existe la skill «${n}»: para hacerla nueva usa «crear».`);
-        try {
-          const r = await O(URL_SKILL(n), cuerpo, 'PUT'), quien = r.skill.everyone ? 'TODOS los agentes' : [...r.skill.departments, ...r.skill.agents].join(', ');
-          return `Skill «${n}» ${r.creada ? 'creada' : 'reemplazada'}: llega a ${quien}.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}\nLleva la marca de origen en su primera línea.`;
-        }
-        catch (e) { if (pideConfirmar(e)) throw new Error(avisoConfirmar(e)); throw e; }
-      });
+      return await idem(ctx, 'skills_cambiar', () => trabajo(async () => {
+        let antes = null; try { antes = (await O(URL_SKILL(n))).skill; } catch { antes = null; }
+        if (a === 'crear' && antes) throw new Error(`ya existe una skill «${n}»: para cambiarla usa «reemplazar» con su «base».`);
+        if (a === 'reemplazar' && !antes) throw new Error(`no existe la skill «${n}»: para hacerla nueva usa «crear».`);
+        const nuevo = { everyone: args.todos === true, agents: args.agentes || [], departments: args.departamentos || [] };
+        const motivo = pideConfirmar(nuevo, antes, await rosterDe(ctx.db), { fabrica: antes ? await deFabrica(ctx.env, n) : false });
+        if (motivo && !conf) throw new Error(aviso(`${n} llegaría a ${alcanceTexto(nuevo)}; ${motivo}`));
+        const cuerpo = { description: descripcion, text: conMarca(texto, hoy), agents: nuevo.agents, departments: nuevo.departments, files: archivos, todos: nuevo.everyone, confirmado: conf, ...(a === 'reemplazar' ? { base } : { soloNueva: true }) };
+        const r = await O(URL_SKILL(n), cuerpo, 'PUT'), quien = r.skill.everyone ? 'TODOS los agentes' : [...r.skill.departments, ...r.skill.agents].join(', ');
+        return `Skill «${n}» ${r.creada ? 'creada' : 'reemplazada'}: llega a ${quien}.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}\nLleva la marca de origen en su primera línea.`;
+      }));
     } catch (e) { return fallo('skills_cambiar', e); }
   },
 });

@@ -78,6 +78,9 @@ export async function guardar(db, nombre, cuerpo, usuario) {
   if (base !== null) { // compare-and-set: solo escribe si nadie la cambió desde que la leíste
     const r = await db.prepare("update filas set json = ?, actualizado = ? where coleccion = 'skills' and id = ? and json_extract(json, '$.actualizado') = ?").bind(JSON.stringify(valor), valor.actualizado, nombre, base).run();
     if (!r.meta?.changes) return { error: 'Otra persona cambió esta skill mientras la editabas. Léela de nuevo y vuelve a intentarlo.', status: 409 };
+  } else if (cuerpo?.soloNueva === true) { // «crear»: insertar solo si el nombre está libre (atómico; si otra persona la creó entre medias, 409 y no se pisa)
+    const r = await db.prepare("insert into filas (coleccion, id, json, orden, actualizado) values ('skills', ?, ?, 0, ?) on conflict (coleccion, id) do nothing").bind(nombre, JSON.stringify(valor), valor.actualizado).run();
+    if (!r.meta?.changes) return { error: `Ya existe una skill «${nombre}»: para cambiarla hace falta su «base».`, status: 409 };
   } else await guardarFila(db, 'skills', nombre, valor, 0);
   if (antes) await guardarVersion(db, antes, por, 'antes de reemplazar'); // el historial guarda lo que había: volver atrás siempre se puede
   await guardarVersion(db, valor, por, antes ? 'reemplazada' : 'creada');
