@@ -12,7 +12,7 @@ import { serializarBiblia } from '../../biblia-core.mjs';
 import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
 import { restringir } from '../worker/lib/mcp/capa1/restringir.js';
 import { RUTAS, EXCLUSIONES, ACCIONES_LEER } from '../worker/lib/mcp/dominios/estudio.js';
-import { RUTAS as RUTAS_SERIES, EXCLUSIONES_SERIES, ACCIONES_SERIES, ACCIONES_SERIES_CAMBIAR } from '../worker/lib/mcp/dominios/series.js';
+import { RUTAS as RUTAS_SERIES, EXCLUSIONES_SERIES, ACCIONES_SERIES, ACCIONES_SERIES_CAMBIAR, TOPE_GUARDADAS_DIA } from '../worker/lib/mcp/dominios/series.js';
 import { preparar, ACCIONES_CAMBIAR, PREFIJO_UNDO_EST } from '../worker/lib/mcp/estudio-dom/cambios.js';
 import { rutaDeArchivo } from '../worker/lib/mcp/estudio-dom/comun.js';
 
@@ -68,10 +68,14 @@ test('POR ESCRITO: el código del dominio no llama a nada que genere, inicie un 
   const codigo = fuentes.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n').replace(/\/\/ .*$/gm, '').replace(/\/\*\*[\s\S]*?\*\//g, '');
   // quitado lo escrito en datos de EXCLUSIONES (cadenas que NOMBRAN las rutas excluidas): lo que queda no puede llamarlas
   const sinExcl = codigo.replace(/export const EXCLUSIONES(_SERIES)?[\s\S]*?\}\);/g, '');
-  for (const mala of ['/api/media/jobs', '/api/media/generate', '/api/media/edit', '/api/media/enhance', 'presets/apply', 'trash/purge', '/api/voces/design', '/api/voces/clone', '/presupuesto', '/generar', '/continuar', '/resolver', '/api/media/upload', '/api/media/limites\', {']) {
+  for (const mala of ['/api/media/jobs', '/api/media/generate', '/api/media/edit', '/api/media/enhance', 'presets/apply', 'trash/purge', '/api/voces/design', '/api/voces/clone', '/presupuesto', '/generar', '/continuar', '/resolver', '/api/media/upload', '/api/media/limites\', {', '/pausar', '/cancelar', 'huerfanas', '/api/series/libro', '/libro`']) {
     assert.ok(!sinExcl.includes(mala), `el dominio menciona ${mala}`);
   }
   assert.ok(!/\/api\/media\/lotes[`'"][^)]*,\s*\{/.test(sinExcl), 'ningún POST a /lotes');
+  // lo ÚNICO que series.js puede escribir (POST/PATCH) fuera de EXCLUSIONES_SERIES: la propuesta y la tanda
+  const serieSrc = readFileSync(new URL('../worker/lib/mcp/dominios/series.js', import.meta.url), 'utf8').replace(/export const EXCLUSIONES_SERIES[\s\S]*?\}\);/, '').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const escribe = [...serieSrc.matchAll(/(?:POST|PATCH|PUT|DELETE) (\/api\/[^'`\s,\]]+)/g)].map((x) => x[1]).sort();
+  assert.deepEqual([...new Set(escribe)], ['/api/series/${a.id}/tanda', '/api/series/:id/tanda', '/api/series/proponer'], 'series.js solo escribe la propuesta y la tanda');
   assert.ok(!/confirmacion|testigo|costoMostrado/.test(sinExcl.replace(/^import .*ids\.js';$/m, '')), 'ni rastro de un testigo de gasto');
 });
 
@@ -258,6 +262,21 @@ test('SERIES: una serie guardada se lista y se ve con su contenido real, y un re
   const fila = m.db.prepare('select id from series').get(); assert.ok(fila, 'la propuesta se guardó');
   const lista = texto(await llamar(t.lectura, 'series', { accion: 'listar' })); assert.ok(lista.includes(fila.id) && /2 planos/.test(lista) && /Sala de verano/.test(lista), lista);
   const ver = texto(await llamar(t.lectura, 'series', { accion: 'ver', id: fila.id })); assert.ok(ver.includes('plano 1') && ver.includes('plano 2') && ver.includes('Sala de verano'), ver.slice(0, 400));
-  assert.match(texto(await llamar(t.lectura, 'series', { accion: 'libro', id: fila.id })), /Libro de gasto/);
+  assert.equal((await llamar(t.lectura, 'series', { accion: 'libro', id: fila.id })).j.result.isError, true, 'el libro (dinero) no se lee por el alcance de lectura');
   assert.equal(m.db.prepare("select count(*) n from estudio_trabajos").get().n, 0); assert.equal(libro(m), 0);
+});
+
+test('SERIES: «tanda» solo sobre una serie prevista, y guardar propuestas tiene tope por día', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await montar({ series: true });
+  const brief = { titulo: 'Sala', objetivo: 'mostrar', formato: 'carrusel' }, plano = (i) => ({ descripcion: `plano ${i}`, prompt: `un sofá gris, vista ${i}`, modelo: 'prueba' });
+  const p = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief, planos: [plano(1)], guardar: true }); assert.equal(p.j.result.isError, false, texto(p));
+  const id = m.db.prepare('select id from series').get().id;
+  const ok = await llamar(t.oficina, 'series_cambiar', { accion: 'tanda', id, planos: [plano(2)] }); assert.equal(ok.j.result.isError, false, texto(ok));
+  m.db.prepare("update series set estado = 'espera_ok', json = json_set(json, '$.estado', 'espera_ok') where id = ?").run(id);
+  const no = await llamar(t.oficina, 'series_cambiar', { accion: 'tanda', id, planos: [plano(3)] }); assert.equal(no.j.result.isError, true); assert.match(texto(no), /solo se añaden planos a una serie prevista/);
+  for (let i = 1; i < TOPE_GUARDADAS_DIA; i++) assert.equal((await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief, planos: [plano(1)], guardar: true })).j.result.isError, false, `guardada ${i + 1}`);
+  const once = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief, planos: [plano(1)], guardar: true }); assert.equal(once.j.result.isError, true); assert.match(texto(once), /ya se guardaron/);
+  assert.equal(m.db.prepare('select count(*) n from series').get().n, TOPE_GUARDADAS_DIA, 'no pasa del tope');
+  const calc = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief, planos: [plano(1)] }); assert.equal(calc.j.result.isError, false, 'sin guardar solo calcula: no gasta cupo');
+  assert.equal(m.db.prepare('select count(*) n from series').get().n, TOPE_GUARDADAS_DIA);
 });
