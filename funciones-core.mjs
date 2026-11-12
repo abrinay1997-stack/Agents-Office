@@ -9,6 +9,7 @@
 // REGLAS:
 //  · `lista: true` solo si la función está construida de punta a punta y encenderla hoy hace algo útil. Si no, `porque` dice
 //    qué falta, y el script se niega a encenderla salvo que la nombren una por una.
+//  · `soloAMano: true` deja la función fuera de «listas» (el botón de GitHub): se enciende solo nombrándola o desde el panel.
 //  · `gasta: true` si encenderla ABRE la puerta a gastar dinero. Nunca gasta por encenderse (los topes y los dos clics del
 //    dueño siguen intactos): abre la puerta, nada más. El panel lo advierte y pide un segundo clic.
 //  · `panel` dice dónde SE CAMBIA YA desde la pantalla: esa función no se toca desde aquí (dos interruptores para un mismo
@@ -121,12 +122,20 @@ export const FUNCIONES = [
     porque: 'Ya tiene su propio interruptor en la pantalla, así que no se toca desde aquí.',
     gasta: false,
   },
+  {
+    id: 'mcp',
+    titulo: 'Conectar Claude (MCP)',
+    que: 'Abre el conector MCP de la oficina: un administrador conecta Claude (claude.ai, Claude Code o Desktop) y elige si puede leer, escribir sin gastar o preparar un gasto. Apagado, el conector no existe.',
+    donde: 'mcp.config', ruta: 'activo',
+    lista: true, soloAMano: true, gasta: false,
+    nota: 'Es acceso desde FUERA de la oficina, así que no entra por «listas»: se enciende aquí, a propósito. Las conexiones se ven y se cortan en Ajustes → Conectar Claude. Nunca confirma un gasto: eso es siempre una persona en la oficina o en Telegram.',
+  },
 ];
 
 /** Las que tienen su interruptor en esta herramienta (las que ya se cambian desde una pantalla, no). */
 export const MANEJABLES = FUNCIONES.filter((f) => !f.panel);
 /** Las que se encienden con «listas»: construidas de punta a punta y útiles hoy. */
-export const LISTAS = MANEJABLES.filter((f) => f.lista);
+export const LISTAS = MANEJABLES.filter((f) => f.lista && !f.soloAMano); // `soloAMano`: lista y manejable desde el panel, pero NUNCA entra por «listas» (abre acceso desde fuera: se enciende a propósito)
 
 export const porId = (id) => FUNCIONES.find((f) => f.id === String(id || '').trim()) || null;
 

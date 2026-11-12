@@ -374,7 +374,7 @@ test('las páginas del acceso son públicas; la oficina lleva nube.js SOLO con s
   assert.equal((await t('/invitacion/' + 'a'.repeat(48))).t, 'ASSET:/invitacion.html', 'el enlace de invitación abre la página nativa sin sesión');
   assert.equal((await t('/invitacion/no-hex-!!')).s, 404);
   assert.equal((await t('/')).t, 'ASSET:/login.html');
-  assert.equal((await t('/nube.js')).s, 401); assert.equal((await t('/nube.css')).s, 401); assert.equal((await t('/nube-modelos.js')).s, 401); assert.equal((await t('/nube-conectores.js')).s, 401); assert.equal((await t('/nube-funciones.js')).s, 401); assert.equal((await t('/nube-series.js')).s, 401); assert.equal((await t('/dictado.js')).s, 401);
+  assert.equal((await t('/nube.js')).s, 401); assert.equal((await t('/nube.css')).s, 401); assert.equal((await t('/nube-modelos.js')).s, 401); assert.equal((await t('/nube-conectores.js')).s, 401); assert.equal((await t('/nube-funciones.js')).s, 401); assert.equal((await t('/nube-conectar-claude.js')).s, 401); assert.equal((await t('/nube-series.js')).s, 401); assert.equal((await t('/dictado.js')).s, 401);
   assert.equal((await t('/nube.js', cookie)).t, 'ASSET:/nube.js');
   assert.equal((await t('/dictado.js', cookie)).t, 'ASSET:/oficina/dictado.js');
 });

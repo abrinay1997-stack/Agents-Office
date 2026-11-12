@@ -18,6 +18,8 @@ export function cacheDePaquete(p, url, resp) {
 }
 const NUBE = new Set(['/nube.js', '/nube.css', '/nube-modelos.js', '/nube-conectores.js', '/nube-funciones.js', '/nube-series.js', '/nube-cerebro.js', '/nube-notas.js', '/nube-chat.js']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión (/nube-cerebro.js no se inyecta: lo trae nube.js la primera vez que alguien abre «Actualizar conexiones»)
 const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script><script src="/ajustes-extra.js" defer></script><script src="/nube-modelos.js" defer></script><script src="/nube-conectores.js" defer></script><script src="/nube-funciones.js" defer></script><script src="/nube-series.js" defer></script>'; // + «Restablecer oficina» y «Revisar lo que leí» (src/ajustes-extra.js)
+NUBE.add('/nube-conectar-claude.js'); // Ajustes → «Conectar Claude» (el conector MCP): solo con sesión, como los demás
+const INYECCION_CONECTAR = '<script src="/nube-conectar-claude.js" defer></script>';
 
 /** La oficina real con las dos líneas de la nube añadidas al final del <body>. La página local NO las lleva: sin Worker no hay presencia ni equipo. */
 async function conNube(resp, req) {
@@ -30,8 +32,8 @@ async function conNube(resp, req) {
     if ((req?.headers.get('if-none-match') || '').split(',').map((x) => x.trim()).includes(etag)) { try { await resp.body?.cancel(); } catch { /* ya está */ } return new Response(null, { status: 304, headers: { etag, 'cache-control': h.get('cache-control') || 'private, no-cache' } }); }
     h.set('etag', etag);
   }
-  if (typeof HTMLRewriter !== 'undefined') return new HTMLRewriter().on('body', { element(e) { e.append(INYECCION, { html: true }); } }).transform(new Response(resp.body, { status: resp.status, headers: h }));
-  return new Response((await resp.text()).replace('</body>', INYECCION + '</body>'), { status: resp.status, headers: h }); // pruebas en Node
+  if (typeof HTMLRewriter !== 'undefined') return new HTMLRewriter().on('body', { element(e) { e.append(INYECCION + INYECCION_CONECTAR, { html: true }); } }).transform(new Response(resp.body, { status: resp.status, headers: h }));
+  return new Response((await resp.text()).replace('</body>', INYECCION + INYECCION_CONECTAR + '</body>'), { status: resp.status, headers: h }); // pruebas en Node
 }
 const PANEL = new Set(['/panel', '/panel.html', '/app.js']);
 

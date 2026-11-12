@@ -24,6 +24,7 @@ import * as notasPersonales from './notas-personales.js';
 import * as series from './series.js';
 import * as funciones from './funciones.js';
 import * as vinculoTelegram from './vinculo-telegram.js';
+import * as mcp from './mcp.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -50,5 +51,6 @@ export const MODULOS = [
   notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
   series, // Series en la nube (N2/N3): solo lectura y propuesta, detrás de dimitri.seriesNube (apagado); no genera ni gasta
   funciones, // Ajustes → Funciones nuevas: encender y apagar lo ya construido (solo administradores)
+  mcp, // P2: Ajustes → «Conectar Claude» (/api/conectar-claude/*, solo administradores); las rutas públicas del conector las llama lib/rutas.js antes de pedir sesión
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
