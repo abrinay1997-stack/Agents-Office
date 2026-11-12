@@ -3,7 +3,7 @@
 // Ningún carril toca modulos/mcp.js, lib/sesion.js, wrangler.jsonc ni las migraciones: si lo necesita, PARA y lo dice.
 import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio (capa1.js)
 // import './cerebro.js';
-// import './tareas.js';
+import './tareas.js'; // P5 carril 2: tareas y rutinas
 // import './contenido.js';
 // import './anuncios.js';
 import './estudio.js'; // P5 carril 5: galería (ver y ordenar) del Estudio
