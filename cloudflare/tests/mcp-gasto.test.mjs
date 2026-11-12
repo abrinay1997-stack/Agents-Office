@@ -233,3 +233,54 @@ test('SENTENCIAS: pedir y aprobar caben en el plan gratuito (≤ 50 por petició
   o.m.d1.prepare = orig;
   assert.ok(pedir <= 50, 'pedir usó ' + pedir); assert.ok(aprobar <= 50, 'aprobar usó ' + aprobar);
 });
+
+test('CARRERA: dos aprobaciones a la vez no se pisan (la perdedora no marca «rechazada» sobre una ejecutada) y la auditoría dice quién pidió y quién aprobó', { skip: SALTAR }, async () => {
+  const o = await oficina(); await o.pedir(IMG); const [f] = o.tarjetas(), ruta = `/api/conectar-claude/solicitudes/${f.id}`;
+  await Promise.all([o.m.admin('POST', `${ruta}/aprobar`, {}), o.m.admin('POST', `${ruta}/aprobar`, {}), o.m.admin('POST', `${ruta}/rechazar`, {})]);
+  const fin = o.tarjetas()[0]; assert.ok(['ejecutada', 'rechazada'].includes(fin.estado)); assert.equal(o.trabajos(), fin.estado === 'ejecutada' ? 1 : 0, 'el estado final cuenta lo que pasó de verdad');
+  const ev = o.m.db.prepare("select detalle from auditoria where tipo = 'mcp-gasto' order by id").all().map((x) => JSON.parse(x.detalle));
+  assert.equal(ev.filter((e) => e.evento === 'aprueba').length <= 1, true); const ap = ev.find((e) => e.evento === 'aprueba'); if (ap) { assert.equal(ap.pidio.persona, 'dueno@panaclaw.test'); assert.ok(ap.pidio.conexion); }
+  assert.equal(ev.some((e) => e.evento === 'rechazada') && fin.estado === 'ejecutada', false, 'la auditoría no miente');
+});
+
+test('FALLA A MEDIAS → «incierta»: no se reabre el mismo pedido en 30 min, y un «ejecutando» que muere se da por interrumpido y no ofrece Aprobar', { skip: SALTAR }, async () => {
+  const o = await oficina(); await o.pedir(IMG); const [f] = o.tarjetas();
+  // el Estudio de mentira se cae DESPUÉS del compare-and-set: se rompe la tabla de trabajos
+  o.m.db.exec("create trigger cae_el_estudio before insert on estudio_trabajos begin select raise(abort, 'se cayó'); end");
+  const a = await o.m.admin('POST', `/api/conectar-claude/solicitudes/${f.id}/aprobar`, {});
+  o.m.db.exec('drop trigger cae_el_estudio');
+  assert.equal(a.j.estado, 'incierta'); assert.match(a.j.texto, /revisa el Estudio/); assert.equal(o.tarjetas()[0].estado, 'incierta');
+  assert.match(texto(await o.pedir(IMG)), /quedó a medias[\s\S]*30 minutos/, 'el mismo pedido no se reabre'); assert.equal(o.tarjetas().length, 1);
+  assert.equal((await o.m.admin('POST', `/api/conectar-claude/solicitudes/${f.id}/aprobar`, {})).status, 409, 'no se vuelve a aprobar');
+  // un «ejecutando» abandonado pasa a «incierta» a los 10 min
+  await o.pedir({ prompt: 'otro pedido' }); const g = o.tarjetas()[1];
+  o.m.db.prepare("update mcp_solicitudes set estado = 'ejecutando', resuelta_at = ? where id = ?").run(o.m.ahora(), g.id);
+  assert.equal((await o.m.admin('GET', '/api/conectar-claude/solicitudes')).j.esperan.some((x) => x.id === g.id), true, 'recién empezada: aún se ve');
+  o.m.avanzar(11 * 60e3); const l = (await o.m.admin('GET', '/api/conectar-claude/solicitudes')).j;
+  assert.equal(l.esperan.some((x) => x.id === g.id), false); assert.equal(l.hechas.find((x) => x.id === g.id).estado, 'incierta'); assert.match(l.hechas.find((x) => x.id === g.id).motivo, /Estudio/);
+});
+
+test('TOPE ATÓMICO: ocho pedidos a la vez de una conexión abren como mucho 5 tarjetas', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  await Promise.all(Array.from({ length: 8 }, (_, i) => o.pedir({ prompt: 'a la vez ' + i })));
+  assert.ok(o.tarjetas().length <= MAX_ABIERTAS, 'abrió ' + o.tarjetas().length);
+});
+
+test('SESIÓN, ORIGEN Y CONFIRMACIÓN: un Bearer de MCP no es sesión en ninguna ruta /api/; un Origin ajeno no aprueba; ≥ US$0,50 se aprueba porque la persona vio la cifra; Telegram firma con su id', { skip: SALTAR }, async () => {
+  const o = await oficina({ extraEnv: { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG } });
+  // a) el Bearer no sirve como sesión
+  for (const ruta of ['/api/yo', '/api/media/models', '/api/conectar-claude', '/api/conectar-claude/solicitudes', '/api/tasks']) assert.equal((await o.m.crudo(ruta, { cabeceras: { authorization: 'Bearer ' + o.t } })).status, 401, ruta);
+  // un pedido caro (un video): pasa de US$0,50
+  await o.pedir({ prompt: 'un recorrido por la tienda', segundos: 10 }, 'generar_video'); const [f] = o.tarjetas(); assert.ok(f.cifra_usd >= 0.5, 'cifra ' + f.cifra_usd);
+  const ruta = `/api/conectar-claude/solicitudes/${f.id}/aprobar`;
+  // d) Origen ajeno: no
+  assert.equal((await o.m.crudo(ruta, { metodo: 'POST', cuerpo: {}, cookie: o.m.cookies.admin, cabeceras: { origin: 'https://evil.example' } })).status, 403); assert.equal(o.tarjetas()[0].estado, 'espera');
+  // b) la persona que la aprueba con la cifra delante la ejecuta (el servidor del Estudio no exige otro paso)
+  const a = await o.m.admin('POST', ruta, {}); assert.equal(a.status, 200); assert.equal(a.j.ok, true, JSON.stringify(a.j)); assert.equal(o.trabajos(), 1);
+  // c) por Telegram: el nombre de quien pulsó, nunca vacío
+  await o.pedir({ prompt: 'otra para el teléfono' }); const g = o.tarjetas()[1];
+  const fetchFn = async () => new Response(JSON.stringify({ ok: true, result: {} }), { headers: { 'content-type': 'application/json' } });
+  const t = await armar({ env: o.m.env, db: o.m.d1, modulos: MODULOS_BOT, fetchFn });
+  await t.bot.procesar({ update_id: 9, callback_query: { id: 'cb9', from: { id: +DUENO_TG, first_name: 'Abrinay' }, data: 'mg:' + g.id, message: { message_id: 5, chat: { id: +DUENO_TG, type: 'private' } } } });
+  assert.equal(o.tarjetas()[1].estado, 'ejecutada'); assert.equal(o.tarjetas()[1].resuelta_por, 'telegram: Abrinay');
+});

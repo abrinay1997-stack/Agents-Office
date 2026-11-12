@@ -13,8 +13,8 @@ create table if not exists mcp_solicitudes (
   cifra_nota text,                                                   -- cuándo la cifra es por foto o aproximada
   topes text not null check (json_valid(topes)),                     -- los topes de ese momento (solo números)
   hash text not null,                                                -- SHA-256 de herramienta + args: la misma petición no abre dos tarjetas
-  estado text not null check (estado in ('espera','ejecutando','ejecutada','rechazada','vencida','descartada')),
-  motivo text,
+  estado text not null check (estado in ('espera','ejecutando','ejecutada','rechazada','vencida','descartada','incierta')),
+  motivo text,                                                       -- «incierta» = salió algo mal DESPUÉS de empezar: puede haberse gastado; la persona revisa el Estudio
   creada_at integer not null,
   vence_at integer not null,
   resuelta_at integer,

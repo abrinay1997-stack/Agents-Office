@@ -12,7 +12,8 @@ import { restringir } from './capa1/restringir.js';
 
 export const VENCE_MS = 24 * 3600e3;
 export const MAX_ABIERTAS = 5, MAX_POR_DIA = 20;
-export const ESTADOS_FINALES = ['ejecutada', 'rechazada', 'vencida', 'descartada'];
+export const ESTADOS_FINALES = ['ejecutada', 'rechazada', 'vencida', 'descartada', 'incierta'];
+export const INTERRUMPIDA_MS = 10 * 60e3, REABRIR_MS = 30 * 60e3; // un «ejecutando» que lleva 10 min se da por interrumpido; el mismo pedido no se reabre en 30 min si quedó dudoso
 const clip = (t, n) => String(t ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const MUERTA = 'La conexión que la pidió ya no existe (se cortó o se restableció la oficina).';
 
@@ -33,6 +34,7 @@ async function auditarGasto(db, ms, quien, detalle) {
 /** Pone al día los estados que dependen del tiempo y de la conexión: lo vencido pasa a «vencida» y lo de una conexión cortada, a «descartada». Idempotente; dos sentencias. */
 export async function barrer(db, ms) {
   await db.prepare(`update mcp_solicitudes set estado = 'vencida', resuelta_at = ?, motivo = 'Venció sin que nadie la aprobara.' where estado = 'espera' and vence_at <= ?`).bind(ms, ms).run();
+  await db.prepare(`update mcp_solicitudes set estado = 'incierta', motivo = 'Se interrumpió a mitad (¿se cayó el servidor?). Puede que sí se haya pedido: revisa el Estudio antes de volver a pedirlo.' where estado = 'ejecutando' and resuelta_at <= ?`).bind(ms - INTERRUMPIDA_MS).run();
   await db.prepare(`update mcp_solicitudes set estado = 'descartada', resuelta_at = ?, motivo = ? where estado = 'espera'
      and not exists (select 1 from mcp_tokens t where t.familia = mcp_solicitudes.familia and t.revocado_at is null and t.rotado_at is null and t.refresh_caduca_at > ?)`).bind(ms, MUERTA, ms).run();
 }
@@ -65,16 +67,20 @@ export async function crearSolicitud(db, { conexion, usuario, ms, herramienta, a
   const hash = await sha256(`${herramienta}|${canonico(args)}`);
   const ya = await db.prepare(`${SELECT} where s.familia = ? and s.hash = ? and s.estado = 'espera' and s.vence_at > ?`).bind(conexion.id, hash, ms).first();
   if (ya) return { repetida: publica(ya) };
-  const abiertas = (await db.prepare(`select count(*) n from mcp_solicitudes where familia = ? and estado = 'espera'`).bind(conexion.id).first())?.n || 0;
-  if (abiertas >= MAX_ABIERTAS) return { limite: `Ya hay ${abiertas} tarjetas de esta conexión esperando el OK del dueño (el máximo es ${MAX_ABIERTAS}). No se abre otra hasta que las apruebe, las rechace o venzan.` };
-  const hoy = (await db.prepare(`select count(*) n from mcp_solicitudes where familia = ? and creada_at > ?`).bind(conexion.id, ms - 864e5).first())?.n || 0;
-  if (hoy >= MAX_POR_DIA) return { limite: `Esta conexión ya pidió ${hoy} gastos en las últimas 24 horas (el máximo es ${MAX_POR_DIA}). Vuelve a pedir mañana.` };
+  const dudosa = await db.prepare(`select id from mcp_solicitudes where familia = ? and hash = ? and estado in ('ejecutando','incierta') and creada_at > ?`).bind(conexion.id, hash, ms - REABRIR_MS).first();
+  if (dudosa) return { limite: 'Este mismo pedido quedó a medias hace poco y puede haberse gastado: no se abre otra tarjeta en 30 minutos. El dueño lo revisa en el Estudio.' };
   const id = 'g' + testigo(9), resumen = clip(`${ev.que}${ev.idea ? ` — «${ev.idea}»` : ''}`, 400);
-  await db.prepare(`insert into mcp_solicitudes (id, familia, user_id, conexion, herramienta, args, resumen, cifra_usd, cifra_nota, topes, hash, estado, creada_at, vence_at) values (?,?,?,?,?,?,?,?,?,?,?,'espera',?,?)`)
-    .bind(id, conexion.id, usuario.id, clip(conexion.nombre, 80), herramienta, JSON.stringify(args), resumen, Number(ev.usd) || 0, clip(ev.nota, 200) || null, JSON.stringify(numeros(ev.bu)), hash, ms, ms + VENCE_MS).run();
+  // el tope de tarjetas se aplica EN la misma sentencia que inserta: dos pedidos a la vez no pasan los dos
+  const ins = await db.prepare(`insert into mcp_solicitudes (id, familia, user_id, conexion, herramienta, args, resumen, cifra_usd, cifra_nota, topes, hash, estado, creada_at, vence_at)
+      select ?,?,?,?,?,?,?,?,?,?,?,'espera',?,? where (select count(*) from mcp_solicitudes where familia = ? and estado = 'espera') < ? and (select count(*) from mcp_solicitudes where familia = ? and creada_at > ?) < ?`)
+    .bind(id, conexion.id, usuario.id, clip(conexion.nombre, 80), herramienta, JSON.stringify(args), resumen, Number(ev.usd) || 0, clip(ev.nota, 200) || null, JSON.stringify(numeros(ev.bu)), hash, ms, ms + VENCE_MS, conexion.id, MAX_ABIERTAS, conexion.id, ms - 864e5, MAX_POR_DIA).run();
+  if (!ins.meta?.changes) {
+    const abiertas = (await db.prepare(`select count(*) n from mcp_solicitudes where familia = ? and estado = 'espera'`).bind(conexion.id).first())?.n || 0;
+    return { limite: abiertas >= MAX_ABIERTAS ? `Ya hay ${abiertas} tarjetas de esta conexión esperando el OK del dueño (el máximo es ${MAX_ABIERTAS}). No se abre otra hasta que las apruebe, las rechace o venzan.` : `Esta conexión ya pidió ${MAX_POR_DIA} gastos en las últimas 24 horas (el máximo es ${MAX_POR_DIA}). Vuelve a pedir mañana.` };
+  }
   await auditarGasto(db, ms, usuario.email, { evento: 'pide', id, herramienta, conexion: conexion.id, cifra: Number(ev.usd) || 0 });
   // el aviso de la oficina (y, a su paso, de Telegram con ✅ / ↩); el texto lo escribe el servidor, nunca el cliente
-  const texto = `Claude (${clip(conexion.nombre, 40)}) pide gastar ${Number(ev.usd) ? 'unos ' + dinero(ev.usd) : 'nada (gratis)'} en el Estudio: ${resumen.slice(0, 200)}. Espera tu OK en Ajustes → Conectar Claude.`;
+  const texto = `Claude (la aplicación se llama «${clip(conexion.nombre, 40)}»: lo declara ella, no está verificado) pide gastar ${Number(ev.usd) ? 'unos ' + dinero(ev.usd) : 'nada (gratis)'} en el Estudio: ${resumen.slice(0, 200)}. Espera tu OK en Ajustes → Conectar Claude.`;
   await emitirAviso(db, { kind: 'mcp-gasto', level: 'warn', key: `mcp-gasto:${id}`, text: texto }, { ahora: ms }).catch(() => {});
   return { tarjeta: publica(await db.prepare(`${SELECT} where s.id = ?`).bind(id).first()) };
 }
@@ -98,25 +104,27 @@ export async function aprobarSolicitud({ env, db, usuario, ms, id }) {
   const [{ crearOffice }, { MODULOS }, { evaluarGasto, nuevoEstudio }] = await Promise.all([import('../agentes/herramientas.js'), import('../../modulos/index.js'), import('./capa1/estudio.js')]);
   const office = crearOffice({ env, db, usuario: { ...usuario, rol: 'admin' }, modulos: MODULOS });
   const args = JSON.parse(f.args), por = usuario.email;
-  const cerrar = async (estado, motivo) => {
-    await db.prepare(`update mcp_solicitudes set estado = ?, motivo = ?, resuelta_at = ?, resuelta_por = ? where id = ?`).bind(estado, clip(motivo, 400), ms, clip(por, 120), f.id).run();
-    await auditarGasto(db, ms, por, { evento: estado, id: f.id, motivo: clip(motivo, 200) });
+  // cerrar SIEMPRE con el estado en el que se está: quien perdió una carrera no pisa lo que otro ya resolvió (y la auditoría no miente)
+  const cerrar = async (estado, motivo, desde) => {
+    const r = await db.prepare(`update mcp_solicitudes set estado = ?, motivo = ?, resuelta_at = ?, resuelta_por = ? where id = ? and estado = ?`).bind(estado, clip(motivo, 400), ms, clip(por, 120), f.id, desde).run();
+    if (r.meta?.changes) await auditarGasto(db, ms, por, { evento: estado, id: f.id, motivo: clip(motivo, 200), pidio: { conexion: f.familia, persona: f.email } });
+    return !!r.meta?.changes;
   };
   // 1) se vuelve a calcular con lo de ahora (solo GET y compilar un preset: nada de esto gasta)
   let ev;
   try { ev = await evaluarGasto(restringir(office, ['GET', 'POST /api/media/presets/compile']), f.herramienta, args); } catch (e) { ev = { error: true, texto: String(e?.message || e) }; }
   const motivoNo = ev.error ? `Ya no se puede hacer así: ${clip(ev.texto, 200)}` : !ev.cabe ? 'Ya no cabe en los topes de hoy del Estudio.' : ev.usd > f.cifra_usd + 0.005 ? `El costo subió de ${dinero(f.cifra_usd)} a ${dinero(ev.usd)}: no se gasta más de lo que viste. Pídelo otra vez.` : '';
-  if (motivoNo) { await cerrar('rechazada', motivoNo); return { ok: false, estado: 'rechazada', texto: motivoNo }; }
+  if (motivoNo) { if (!(await cerrar('rechazada', motivoNo, 'espera'))) return { error: 'Esa solicitud ya se está resolviendo.', status: 409 }; return { ok: false, estado: 'rechazada', texto: motivoNo }; }
   // 2) un solo uso: solo una persona pasa de «espera» a «ejecutando»
-  const cas = await db.prepare(`update mcp_solicitudes set estado = 'ejecutando', resuelta_por = ? where id = ? and estado = 'espera' and vence_at > ?`).bind(clip(por, 120), f.id, ms).run();
+  const cas = await db.prepare(`update mcp_solicitudes set estado = 'ejecutando', resuelta_at = ?, resuelta_por = ? where id = ? and estado = 'espera' and vence_at > ?`).bind(ms, clip(por, 120), f.id, ms).run();
   if (!cas.meta?.changes) return { error: 'Esa solicitud ya se está resolviendo o venció.', status: 409 };
-  await auditarGasto(db, ms, por, { evento: 'aprueba', id: f.id, herramienta: f.herramienta, cifra: f.cifra_usd });
+  await auditarGasto(db, ms, por, { evento: 'aprueba', id: f.id, herramienta: f.herramienta, cifra: f.cifra_usd, pidio: { conexion: f.familia, persona: f.email } });
   // 3) la herramienta de siempre, con la sesión de la persona (sin esperar el resultado: la oficina avisa cuando termine)
   const sinEspera = (ruta, cuerpo, metodo) => office(ruta, cuerpo && typeof cuerpo === 'object' ? { ...cuerpo, wait: 0 } : cuerpo, metodo);
   try {
     const r = await nuevoEstudio(sinEspera).call(f.herramienta, args), crudo = String(typeof r === 'string' ? r : r?.text ?? '');
     const trabajo = /\b(?:trabajo|lote) ([A-Za-z0-9]{5,30})\b/.exec(crudo)?.[1], texto = `Pedida al Estudio${trabajo ? ` (${trabajo})` : ''}: la oficina te avisa cuando termine.`;
-    await cerrar('ejecutada', texto);
+    await cerrar('ejecutada', texto, 'ejecutando');
     return { ok: true, estado: 'ejecutada', texto };
-  } catch (e) { const m = `No se pudo ejecutar: ${clip(e?.message || e, 250)}`; await cerrar('rechazada', m); return { ok: false, estado: 'rechazada', texto: m }; }
+  } catch (e) { const m = `Algo falló al pedirlo (${clip(e?.message || e, 200)}). Puede haberse pedido igual: revisa el Estudio antes de volver a intentarlo.`; await cerrar('incierta', m, 'ejecutando'); return { ok: false, estado: 'incierta', texto: m }; }
 }
