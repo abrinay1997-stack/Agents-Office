@@ -2,6 +2,7 @@
 // pagina el texto con un cursor y dice los fallos esperados en palabras.
 import { limpiarSecretos } from '../../secretos.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
+import { guardarDoc } from '../../almacen.js';
 import { restringir } from '../capa1/restringir.js';
 
 export const ID_PIEZA = /^[a-z0-9-]{1,60}$/;
@@ -29,3 +30,13 @@ export function paginar(texto, cursor) {
 }
 /** Solo los campos con valor y dentro de la lista (lo demás no llega a la oficina). */
 export function tomar(args, campos) { const o = {}; for (const c of campos) if (args[c] !== undefined && args[c] !== null && args[c] !== '') o[c] = args[c]; return o; }
+
+/** Un tope por minuto y por conexión para lo que llama al modelo (gasta): reserva uno de `max` cupos (insert-if-absent, atómico en D1). → true si había cupo. Los cupos viven bajo `mcp.idem:` (se podan solos). */
+export async function reservarCupo(ctx, herramienta, max) {
+  const minuto = Math.floor(ctx.ahoraMs / 60000);
+  for (let n = 0; n < max; n++) {
+    try { await guardarDoc(ctx.db, `mcp.idem:${ctx.conexion.id}:cupo-${herramienta}:${minuto}:${n}`, { estado: 'hecho', at: ctx.ahoraMs, texto: 'cupo' }, { espera: 0 }); return true; }
+    catch (e) { if (!e?.conflicto) throw e; }
+  }
+  return false;
+}
