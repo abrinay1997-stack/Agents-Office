@@ -39,8 +39,8 @@ const ESQUEMA_CAMBIAR = {
   },
 };
 
-const lineaSerie = (s) => `- ${s.id} · ${s.estado} · «${clip(s.titulo || s.brief?.titulo, 80)}» · ${s.planos ?? s.escaleta?.length ?? '?'} planos`;
-const json = (v, n = 14000) => { try { return JSON.stringify(v).slice(0, n); } catch { return ''; } };
+const lineaSerie = (s) => `- ${s.id} · ${s.estado} · «${clip(s.titulo || s.brief?.titulo, 80)}» · ${s.progreso?.total ?? (Array.isArray(s.planos) ? s.planos.length : s.escaleta?.length ?? '?')} planos${s.progreso ? ` (${s.progreso.listos ?? 0} listos)` : ''}`;
+const json = (v, n = 14000) => { try { const t = JSON.stringify(v) ?? ''; return t.length > n ? `${t.slice(0, n)} … (recortado: la serie es más larga)` : t; } catch { return ''; } };
 
 async function leer(ctx, a) {
   const o = await conOficina(ctx, ['GET']);

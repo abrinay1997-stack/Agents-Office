@@ -3,11 +3,12 @@
 // Lo que NO se sirve (en datos, con motivo; el test lo vigila): borrar carpetas, vaciar o purgar la papelera, subir, editar, generar, variar, animar y todo lo que llama a un motor.
 import { guardarDoc, leerDoc } from '../../almacen.js';
 import { testigo as claveAlAzar } from '../../ids.js';
-import { clip, rutaDeArchivo, ID_CARPETA } from './comun.js';
+import { cleanName, nombreClave } from '../../../../../media/galeria-core.mjs';
+import { clip, conOficina, rutaDeArchivo, ID_CARPETA } from './comun.js';
 
-export const PREFIJO_UNDO_EST = 'mcp.undo:est-';
+export const PREFIJO_UNDO_EST = 'mcp.undo:'; // la clave visible lleva «est-» (así capa1/deshacer la rechaza con un mensaje claro y esta no acepta las de la oficina)
 export const DESHACER_MS = 10 * 60e3;
-export const MAX_ARCHIVOS = 12; // pocas lecturas y escrituras por llamada (límite de consultas de D1 por invocación)
+export const MAX_ARCHIVOS = 8; // pocas lecturas y escrituras por llamada (límite de consultas de D1 por invocación)
 export const ACCIONES_CAMBIAR = Object.freeze(['carpeta_crear', 'carpeta_renombrar', 'mover', 'papelera_mandar', 'papelera_restaurar', 'deshacer']);
 export const EXCLUSIONES = Object.freeze({
   generar: 'POST /api/media/jobs, /generate, /edit y /enhance: gastan en un motor de imágenes o video. El clic GENERAR y la confirmación desde US$0,50 son de una persona en el Estudio.',
@@ -25,12 +26,12 @@ export const EXCLUSIONES = Object.freeze({
   anotar_usado: 'PATCH /api/media/item/<id>: marcar favorita o «usada» enseña a la memoria de la oficina; lo hace la persona.',
 });
 
-/** Un tramo de entrada: texto no vacío y corto. */
-const texto = (v, max) => (typeof v === 'string' && v.trim() && v.trim().length <= max ? v.trim() : null);
+/** El nombre de una carpeta con LA MISMA regla que la galería (media/galeria-core.mjs → cleanName: sin controles ni «<>», espacios juntos, 60 letras); null si queda vacío. */
+const nombreCarpeta = (v) => (typeof v === 'string' && v.length <= 200 ? cleanName(v) || null : null);
 
 /** Apunta cómo deshacer y devuelve la clave (o null si no se pudo guardar: el efecto ya ocurrió y la llamada no falla por eso). */
 async function apuntarDeshacer(ctx, que) {
-  const clave = claveAlAzar(9);
+  const clave = `est-${claveAlAzar(9)}`;
   try { await guardarDoc(ctx.db, PREFIJO_UNDO_EST + clave, { ...que, at: ctx.ahoraMs, por: ctx.usuario.id }); return clave; }
   catch (e) { console.warn('[mcp:estudio] no se pudo guardar la clave de deshacer:', e?.message ?? e); return null; }
 }
@@ -39,14 +40,16 @@ const pieDeshacer = (clave) => (clave ? `\nPara deshacerlo (10 minutos): galeria
 /** → { permitidas, hacer(office) }: lo que esa acción puede pedir y cómo lo hace. null si los argumentos no valen (con `error`). */
 export function preparar(accion, a, ctx) {
   if (accion === 'carpeta_crear') {
-    const nombre = texto(a.nombre, 60); if (!nombre) return { error: 'Falta «nombre» (hasta 60 letras).' };
-    return { permitidas: ['POST /api/media/folders'], async hacer(office) {
+    const nombre = nombreCarpeta(a.nombre); if (!nombre) return { error: 'Falta «nombre» (hasta 60 letras; sin «<» ni «>» ni saltos de línea).' };
+    return { permitidas: ['GET', 'POST /api/media/folders'], async hacer(office) {
+      const igual = ((await office('/api/media?n=1')).folders || []).find((f) => nombreClave(f.name) === nombreClave(nombre));
+      if (igual) throw new Error(`ya existe la carpeta ${igual.id} con ese nombre («${clip(igual.name, 60)}»): úsala, o elige otro nombre`);
       const r = await office('/api/media/folders', { name: nombre });
       return `Carpeta creada: ${r.folder?.id} · «${clip(r.folder?.name, 60)}». Para mover archivos: accion «mover» con carpeta «${r.folder?.id}». Borrar una carpeta se hace en la oficina.`;
     } };
   }
   if (accion === 'carpeta_renombrar') {
-    const id = String(a.carpeta || ''), nombre = texto(a.nombre, 60);
+    const id = String(a.carpeta || ''), nombre = nombreCarpeta(a.nombre);
     if (!ID_CARPETA.test(id) || !nombre) return { error: 'Falta «carpeta» (su id, de la acción carpetas) y «nombre» (hasta 60 letras).' };
     return { permitidas: ['GET', `PATCH /api/media/folders/${id}`], async hacer(office) {
       const antes = ((await office('/api/media?n=1')).folders || []).find((f) => f.id === id);
@@ -63,10 +66,11 @@ export function preparar(accion, a, ctx) {
     const destino = a.carpeta === null || a.carpeta === undefined || a.carpeta === '' ? null : String(a.carpeta);
     if (destino !== null && !ID_CARPETA.test(destino)) return { error: '«carpeta» es el id de una carpeta (c…) o null para «sin carpeta».' };
     return { permitidas: ['GET', 'POST /api/media/move'], async hacer(office) {
+      if (destino !== null && !((await office('/api/media?n=1')).folders || []).some((f) => f.id === destino)) throw new Error(`la carpeta ${destino} no existe (mira las carpetas con galeria → carpetas)`);
       const grupos = new Map(); // carpeta de la que salen → archivos (para poder devolverlos a donde estaban)
       for (const f of archivos) { const it = await office(`/api/media/item/${rutaDeArchivo(f)}`); const k = it.folder || ''; grupos.set(k, [...(grupos.get(k) || []), it.file]); }
       const r = await office('/api/media/move', { files: archivos, folder: destino });
-      const clave = await apuntarDeshacer(ctx, { t: 'mover', grupos: [...grupos].map(([de, files]) => ({ de: de || null, files })) });
+      const clave = await apuntarDeshacer(ctx, { t: 'mover', destino, grupos: [...grupos].map(([de, files]) => ({ de: de || null, files })) });
       return `Movidos ${r.moved} de ${archivos.length} archivos a ${destino ? `la carpeta ${destino}` : '«sin carpeta»'}. Nada se borró: solo cambian de carpeta.${pieDeshacer(clave)}`;
     } };
   }
@@ -95,18 +99,22 @@ export function preparar(accion, a, ctx) {
 export async function deshacer(ctx, clave) {
   const k = String(clave || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
   const vencida = 'Esa clave ya no sirve: pasaron más de 10 minutos, ya se deshizo o no es tuya. Corrígelo con otra acción.';
+  if (k && !k.startsWith('est-')) return { texto: 'Esa clave no es de la galería del Estudio: para las de la oficina usa la herramienta «deshacer».', esError: true };
   const { valor } = k ? await leerDoc(ctx.db, PREFIJO_UNDO_EST + k) : { valor: null };
   if (!valor || ctx.ahoraMs - (valor.at || 0) > DESHACER_MS || valor.por !== ctx.usuario.id) return { texto: vencida, esError: true };
   const r = await ctx.db.prepare('delete from docs where clave = ?').bind(PREFIJO_UNDO_EST + k).run();
   if (!r.meta?.changes) return { texto: vencida, esError: true };
   const reponer = async () => { try { await guardarDoc(ctx.db, PREFIJO_UNDO_EST + k, valor, { espera: 0 }); } catch { /* ya hay otra */ } };
-  const { conOficina } = await import('./comun.js');
   try {
     if (valor.t === 'renombrar') { const o = await conOficina(ctx, [`PATCH /api/media/folders/${valor.id}`]); await o(`/api/media/folders/${valor.id}`, { name: valor.nombre }, 'PATCH'); return { texto: `Deshecho: la carpeta ${valor.id} vuelve a llamarse «${clip(valor.nombre, 60)}».` }; }
     if (valor.t === 'mover') {
-      const o = await conOficina(ctx, ['POST /api/media/move']); let n = 0;
-      for (const g of valor.grupos || []) n += (await o('/api/media/move', { files: g.files, folder: g.de })).moved || 0;
-      return { texto: `Deshecho: ${n} archivos volvieron a su carpeta de antes.` };
+      const o = await conOficina(ctx, ['GET', 'POST /api/media/move']); let n = 0, omitidos = 0;
+      for (const g of valor.grupos || []) {
+        const siguen = []; // solo vuelve lo que sigue donde lo dejó este cambio: si alguien lo movió después, no se pisa
+        for (const f of g.files) { const it = await o(`/api/media/item/${rutaDeArchivo(f)}`).catch(() => null); if (it && (it.folder || null) === (valor.destino ?? null)) siguen.push(f); else omitidos++; }
+        if (siguen.length) n += (await o('/api/media/move', { files: siguen, folder: g.de })).moved || 0;
+      }
+      return { texto: `Deshecho: ${n} archivos volvieron a su carpeta de antes.${omitidos ? ` ${omitidos} no se tocaron porque ya estaban en otra carpeta (alguien los movió después).` : ''}` };
     }
     if (valor.t === 'papelera') {
       const o = await conOficina(ctx, ['POST /api/media/restore']); await o('/api/media/restore', valor.undo);

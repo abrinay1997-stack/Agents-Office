@@ -8,6 +8,7 @@ import { SALTAR } from './d1-memoria.mjs';
 import { mundo } from './mcp-ayudas.mjs';
 import { herramientas, PROPIEDADES_PROHIBIDAS } from '../worker/lib/mcp/registro.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
+import { serializarBiblia } from '../../biblia-core.mjs';
 import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
 import { restringir } from '../worker/lib/mcp/capa1/restringir.js';
 import { RUTAS, EXCLUSIONES, ACCIONES_LEER } from '../worker/lib/mcp/dominios/estudio.js';
@@ -27,7 +28,10 @@ function cuentaD1(d1) {
 }
 async function montar({ series = false } = {}) {
   const m = await mundo();
-  if (series) await guardarDoc(m.d1, 'config-local', { dimitri: { seriesNube: true } });
+  if (series) {
+    await guardarDoc(m.d1, 'config-local', { dimitri: { seriesNube: true } });
+    m.db.prepare('insert or replace into notas (nombre, grupo, oficina, texto, bytes, actualizado) values (?,?,?,?,?,?)').run('biblia-visual', 'Marca', 0, serializarBiblia({ tono: 'cálido', luz: 'natural', composicion: 'centrado', nunca: ['neón'], paleta: [{ rol: 'primario', hex: '#336699' }] }, { version: 1, estado: 'aprobada', aprobada_por: 'dueño' }), 100, 1);
+  }
   const t = {}; for (const a of ['lectura', 'oficina']) t[a] = (await m.conectar({ alcance: a })).tokens.access_token;
   const A = ['2031-01/aaa-uno.png', '2031-01/bbb-dos.png', '2031-02/ccc-tres.png'];
   A.forEach((f, i) => m.db.prepare('insert into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)').run(f, 1_000_000 + i, 'image', JSON.stringify({ id: f, file: f, kind: 'image', at: 1_000_000 + i, prompt: `una cama queen ${i}`, modelName: 'Prueba', model: 'prueba', by: 'you' })));
@@ -208,4 +212,52 @@ test('PRESUPUESTO: las cuatro herramientas del dominio pesan poco en tools/list 
   const total = JSON.stringify(mias.map((h) => ({ name: h.nombre, description: h.descripcion, inputSchema: h.esquema }))).length;
   assert.equal(mias.length, 4); assert.ok(total <= 7000, `las cuatro pesan ${total} letras (presupuesto 7.000)`);
   assert.ok(Math.max(...mias.map((h) => h.descripcion.length)) <= 700, 'ninguna descripción pasa de 700 letras');
+});
+
+test('DESHACER SIN CRUCES: capa1 rechaza una clave «est-», galería rechaza las de la oficina, y una clave de galería vence a los 10 minutos', { skip: SALTAR }, async () => {
+  const { m, t, A, llamar } = await montar();
+  const mv = await llamar(t.oficina, 'galeria_cambiar', { accion: 'papelera_mandar', archivo: A[0] }), k = /deshacer «(est-[A-Za-z0-9_-]+)»/.exec(texto(mv))?.[1]; assert.ok(k, texto(mv));
+  const cruce = await llamar(t.oficina, 'deshacer', { clave: k }); assert.equal(cruce.j.result.isError, true); assert.match(texto(cruce), /galeria_cambiar/);
+  assert.notEqual(m.db.prepare('select papelera_at from estudio_archivos where file = ?').get(A[0]).papelera_at, null, 'la clave de galería no se gastó en capa1');
+  const otra = await llamar(t.oficina, 'galeria_cambiar', { accion: 'deshacer', deshacer: 'abcdef123456' }); assert.equal(otra.j.result.isError, true); assert.match(texto(otra), /herramienta «deshacer»/);
+  m.avanzar(10 * 60e3 + 1000);
+  const tarde = await llamar(t.oficina, 'galeria_cambiar', { accion: 'deshacer', deshacer: k }); assert.equal(tarde.j.result.isError, true); assert.match(texto(tarde), /ya no sirve/);
+  assert.notEqual(m.db.prepare('select papelera_at from estudio_archivos where file = ?').get(A[0]).papelera_at, null, 'vencida: no deshace');
+});
+
+test('MOVER: la carpeta destino debe existir, DESHACER no pisa lo que otra persona movió después, y 8 archivos caben en las consultas de D1', { skip: SALTAR }, async () => {
+  const { m, t, A, llamar, carpeta } = await montar(); const c1 = await carpeta('Uno'), c2 = await carpeta('Dos');
+  const carpetaDe = (f) => JSON.parse(m.db.prepare('select json from estudio_archivos where file = ?').get(f).json).folder ?? null;
+  const no = await llamar(t.oficina, 'galeria_cambiar', { accion: 'mover', archivos: [A[0]], carpeta: 'cnoexiste1' }); assert.equal(no.j.result.isError, true); assert.match(texto(no), /no existe/); assert.equal(carpetaDe(A[0]), null);
+  const mv = await llamar(t.oficina, 'galeria_cambiar', { accion: 'mover', archivos: [A[0], A[1]], carpeta: c1 }), k = /deshacer «(est-[A-Za-z0-9_-]+)»/.exec(texto(mv))[1];
+  await m.admin('POST', '/api/media/move', { files: [A[1]], folder: c2 }); // alguien lo movió después
+  const d = await llamar(t.oficina, 'galeria_cambiar', { accion: 'deshacer', deshacer: k }); assert.equal(d.j.result.isError, false, texto(d));
+  assert.match(texto(d), /1 archivos volvieron/); assert.match(texto(d), /1 no se tocaron/); assert.equal(carpetaDe(A[0]), null); assert.equal(carpetaDe(A[1]), c2, 'lo que otra persona movió no se pisa');
+  const nueve = Array.from({ length: 9 }, (_, i) => `2031-03/n${i}.png`), mucho = await llamar(t.oficina, 'galeria_cambiar', { accion: 'mover', archivos: nueve, carpeta: c1 }); assert.equal(mucho.j.result.isError, true);
+  const ocho = Array.from({ length: 8 }, (_, i) => `2031-03/m${i}.png`);
+  ocho.forEach((f, i) => m.db.prepare('insert into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)').run(f, 2_000_000 + i, 'image', JSON.stringify({ id: f, file: f, kind: 'image', at: 2_000_000 + i, prompt: 'x', model: 'prueba' })));
+  const c = cuentaD1(m.d1); try { const r = await llamar(t.oficina, 'galeria_cambiar', { accion: 'mover', archivos: ocho, carpeta: c1 }); assert.equal(r.j.result.isError, false, texto(r)); assert.ok(c.v.n <= 50, `mover 8 archivos hizo ${c.v.n} consultas a D1`); } finally { c.parar(); }
+});
+
+test('NOMBRES DE CARPETA: la misma regla que la galería (controles y «<>» fuera, espacios juntos, 60 letras) y un nombre repetido se dice', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await montar();
+  const crear = (nombre) => llamar(t.oficina, 'galeria_cambiar', { accion: 'carpeta_crear', nombre });
+  const r = await crear('  Sala\u0007   <b>de</b>\n  estar  '); assert.equal(r.j.result.isError, false, texto(r)); assert.match(texto(r), /«Sala bde\/b estar»/); assert.ok(!/[<>\u0007]/.test(texto(r)));
+  const nombres = JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.map((f) => f.name); assert.ok(nombres.every((n) => n === n.trim() && !/[<>\u0000-\u001f]|\s{2}/.test(n) && n.length <= 60), JSON.stringify(nombres));
+  assert.equal((await crear('<>\n')).j.result.isError, true, 'un nombre que queda vacío no vale');
+  assert.equal((await crear('x'.repeat(201))).j.result.isError, true);
+  const largo = await crear('y'.repeat(60)); assert.equal(largo.j.result.isError, false); assert.equal((await crear('z'.repeat(80))).j.result.isError, true, 'más de 60 letras no vale'); assert.ok(JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.every((f) => f.name.length <= 60));
+  const dup = await crear('SALA BDE/B ESTAR'); assert.equal(dup.j.result.isError, true); assert.match(texto(dup), /ya existe la carpeta/);
+  assert.equal(JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.length, 2, 'no se creó un duplicado');
+});
+
+test('SERIES: una serie guardada se lista y se ve con su contenido real, y un recorte lo dice', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await montar({ series: true });
+  const p = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief: { titulo: 'Sala de verano', objetivo: 'mostrar el sofá', formato: 'carrusel' }, planos: [{ descripcion: 'plano 1', prompt: 'un sofá gris en una sala luminosa', modelo: 'prueba' }, { descripcion: 'plano 2', prompt: 'el sofá visto de lado', modelo: 'prueba' }], guardar: true });
+  assert.equal(p.j.result.isError, false, texto(p)); assert.match(texto(p), /Nada se generó/);
+  const fila = m.db.prepare('select id from series').get(); assert.ok(fila, 'la propuesta se guardó');
+  const lista = texto(await llamar(t.lectura, 'series', { accion: 'listar' })); assert.ok(lista.includes(fila.id) && /2 planos/.test(lista) && /Sala de verano/.test(lista), lista);
+  const ver = texto(await llamar(t.lectura, 'series', { accion: 'ver', id: fila.id })); assert.ok(ver.includes('plano 1') && ver.includes('plano 2') && ver.includes('Sala de verano'), ver.slice(0, 400));
+  assert.match(texto(await llamar(t.lectura, 'series', { accion: 'libro', id: fila.id })), /Libro de gasto/);
+  assert.equal(m.db.prepare("select count(*) n from estudio_trabajos").get().n, 0); assert.equal(libro(m), 0);
 });

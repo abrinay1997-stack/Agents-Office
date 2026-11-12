@@ -87,7 +87,7 @@ const ESQUEMA_CAMBIAR = {
     deshacer: { type: 'string', maxLength: 40, description: 'deshacer: la clave que dio mover, carpeta_renombrar o papelera_mandar (vale 10 minutos).' },
   },
 };
-const DESC_CAMBIAR = 'Ordena el Estudio sin gastar ni borrar nada: crea y renombra carpetas, mueve archivos de carpeta y manda a la papelera (30 días) o recupera. Cada cambio da una clave para DESHACER 10 minutos. ' +
+const DESC_CAMBIAR = 'Ordena el Estudio sin gastar ni borrar nada: crea y renombra carpetas, mueve archivos de carpeta y manda a la papelera (30 días) o recupera. Mover, renombrar y mandar a la papelera dan una clave para DESHACER 10 minutos. ' +
   'No genera, no edita con IA, no borra carpetas ni archivos para siempre, no vacía la papelera: eso lo hace una persona en la oficina. Un archivo usado por una pieza de Contenido no se manda a la papelera.';
 
 registrarHerramienta({
