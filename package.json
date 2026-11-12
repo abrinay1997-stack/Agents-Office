@@ -22,21 +22,21 @@
     "node": ">=22"
   },
   "dependencies": {
-    "d3-force": "^3.0.0",
+    "d3-force": "^3.0.1",
     "exceljs": "^4.4.0",
-    "mammoth": "^1.12.3",
-    "pdfjs-dist": "^6.3.289",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.5.438",
     "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
-    "oxlint": "^1.90.0",
-    "playwright-core": "^1.62.0",
-    "three": "^0.185.1",
-    "typescript": "^5.9.3"
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.91.0",
+    "playwright-core": "^1.65.0",
+    "three": "^0.187.0",
+    "typescript": "^7.0.2"
   },
   "optionalDependencies": {
-    "@anthropic-ai/sdk": "^0.91.1"
+    "@anthropic-ai/sdk": "^1.6.0"
   },
   "overrides": {
     "uuid": "^11.1.1"
