@@ -12,7 +12,7 @@ export const ACCIONES_SERIES_CAMBIAR = Object.freeze(['proponer', 'tanda']);
 export const EXCLUSIONES_SERIES = Object.freeze({
   generar: 'POST /api/series/<id>/presupuesto, /generar y /continuar: «GENERAR SERIE» autoriza gasto con un token de un solo uso atado a la cifra; el segundo paso es de una persona (y la bomba solo corre con lo autorizado).',
   pausar_cancelar: 'POST /api/series/<id>/pausar y /cancelar: tocan una serie VIVA (la bomba); se hacen en la oficina junto a la cifra que se lleva gastada.',
-  resolver_incierto: 'POST /api/series/<id>/resolver y /api/series/libro/resolver: decidir si un paso en duda se cobró es contabilidad del dinero, con dos clics y su token.',
+  resolver_incierto: 'POST /api/series/<id>/resolver y el «resolver» de las líneas huérfanas del libro: decidir si un paso en duda se cobró es contabilidad del dinero, con dos clics y su token.',
   huerfanas: 'GET /api/series/libro/huerfanas: las líneas del libro sin serie solo sirven para resolverlas (excluido arriba); se miran en la oficina.',
 });
 export const RUTAS = Object.freeze(['GET /api/series', 'GET /api/series/:id', 'GET /api/series/:id/libro', 'POST /api/series/proponer', 'POST /api/series/:id/tanda']);
