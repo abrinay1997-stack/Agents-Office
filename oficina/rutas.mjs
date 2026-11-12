@@ -11,35 +11,12 @@
 // —son del dueño, con dos clics—; el asistente puede pausar y bajar presupuestos, y no deshacerlo (deshacer vuelve a gastar).
 // Lo que propone Dimitri espera el OK en una rutina nueva y aquí también (el asistente no es el dueño pulsando la casilla).
 import crypto from 'node:crypto';
-import { MAPA, REGLAS_ASISTENTE } from './mapa.mjs';
+import { MAPA, REGLAS_ASISTENTE, ACCIONES } from './mapa.mjs';
 
 export const DESHACER_MS = 10 * 60e3; // un asistente tarda más que un clic en pensarlo: 10 minutos (Dimitri, 30 s en la tarjeta)
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Lo que cada acción lleva, para el esquema del MCP y la guía (la validación de verdad es sub.parseOps). */
-export const ACCIONES = {
-  rutina_crear: 'dept, text, when {kind daily|weekdays|weekly|monthly, at "HH:MM", days [0-6] o day/nth+weekday}, agent? — espera el OK siempre',
-  rutina_saltar: 'id, at "YYYY-MM-DDTHH:MM" (una ejecución exacta)',
-  rutina_pausar: 'id', rutina_reanudar: 'id', rutina_ahora: 'id (la corre ahora)',
-  rutina_editar: 'id, when?, text?',
-  tarea_mover: 'id (de un agente, sin empezar), at "YYYY-MM-DDTHH:MM"', tarea_cancelar: 'id (de un agente, sin empezar)',
-  tarea_editar: 'id, prioridad? alta|media|baja, limite? "YYYY-MM-DD[THH:MM]" o null', tarea_repetir: 'id (hecha o que falló)',
-  mia_delegar: 'id (del dueño), dept, agent? | persona, nota?', mia_hecha: 'id (del dueño)',
-  pieza_crear: 'titulo, texto, fecha?, hora?, formato? post|reel|carrusel|historia, redes? — nace BORRADOR',
-  pieza_mover: 'id, fecha, hora? — si estaba aprobada pierde el OK',
-  contenido_llenar: 'dias? 1-14, redes?, pide? — los días sin publicación, como «Llenar la semana»',
-  // 27 oct 2026: el Cerebro. Una nota nueva o añadir a una que existe; nunca reemplazar ni borrar (eso es del dueño, en el Cerebro)
-  nota_crear: 'nombre, texto, grupo? — una nota NUEVA en el Cerebro', nota_agregar: 'nombre (EXACTO, de una nota que existe), texto, seccion? — añade al final sin tocar lo que decía',
-  // Fase A2 de Anuncios: bajar el gasto, sí; gastar, no (403 aquí: lo hace el dueño con dos clics)
-  anuncio_pausar: 'id (campaña, conjunto o anuncio de ver_anuncios) — deja de gastar; no se deshace desde aquí',
-  anuncio_bajar_presupuesto: 'id (campaña o conjunto con presupuesto), valor (US$, menos que el de ahora) — no se deshace desde aquí',
-  anuncio_activar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics, en Anuncios o Telegram)',
-  anuncio_reanudar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
-  anuncio_subir_presupuesto: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
-  anuncio_relanzar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
-  // Fase A3 (9 oct 2026): un borrador de campaña EN LA OFICINA (nada en Meta; crearlo allí, en pausa, es un clic del dueño en Anuncios)
-  anuncio_borrador: 'nombre, objetivo? mensajes|web|ventas|contactos|conocer, destino? whatsapp|instagram|messenger, usd? (al día), texto?, media? [ids de la galería] — nace BORRADOR en Anuncios; nada va a Meta',
-};
+export { ACCIONES }; // 12 nov 2026: viven en mapa.mjs (puro) para que el conector remoto las importe sin traer `node:crypto`
 
 export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, estadoTexto, calendarioTexto, etiqueta = o => o.type, auditar = () => {}, ahora = () => Date.now() }) {
   const hechas = new Map(); // token → { o, at }: lo que se puede deshacer (en memoria: un reinicio lo olvida, y lo dice)
