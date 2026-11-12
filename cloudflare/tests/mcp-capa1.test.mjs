@@ -7,7 +7,13 @@ import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
 import { mundo } from './mcp-ayudas.mjs';
 import { herramientas } from '../worker/lib/mcp/registro.js';
-import { guardarFila } from '../worker/lib/almacen.js';
+import { guardarFila, guardarDoc, leerDoc } from '../worker/lib/almacen.js';
+import { validarArgumentos } from '../worker/lib/mcp/servidor.js';
+import { podar } from '../worker/lib/mantenimiento.js';
+import { CONSERVA_PREFIJOS_DOCS } from '../worker/lib/restablecer.js';
+import { PREFIJO_IDEM } from '../worker/lib/mcp/capa1/idempotencia.js';
+import { DESHACER_MS, PREFIJO_UNDO } from '../worker/lib/mcp/capa1/oficina.js';
+import { ACCIONES } from '../../oficina/mapa.mjs';
 import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
 import { OFICINA_FUERA, RUTAS } from '../worker/lib/mcp/dominios/capa1.js';
 import { nuevoEstudio, ESTUDIO_LEE, ESTUDIO_GASTA, ESTUDIO_FUERA, esquemaRemoto } from '../worker/lib/mcp/capa1/estudio.js';
@@ -119,6 +125,12 @@ test('LA OFICINA POR MCP: crear, hacer y deshacer con las reglas de siempre, y l
   assert.match(texto(otra), /no se repitió/); assert.equal(piezas(), 1, 'la misma clave no duplica');
   const desh = await llamar(t.oficina, 'deshacer', { clave }); assert.match(texto(desh), /Deshecho/); assert.equal(piezas(), 0);
   const dos = await llamar(t.oficina, 'deshacer', { clave }); assert.match(texto(dos), /ya no sirve/, 'la clave se gasta'); // una sola vez
+  assert.equal(dos.j.result.isError, true);
+  // M3: el cambio concreto (op + id, sin contenido) queda en la auditoría
+  const ops = m.db.prepare("select detalle from auditoria where tipo = 'mcp'").all().map((x) => JSON.parse(x.detalle)).filter((d) => d.evento);
+  assert.ok(ops.some((d) => d.evento === 'oficina-op' && d.op === 'pieza_crear' && /^p-/.test(d.id) && d.via === 'mcp'), JSON.stringify(ops));
+  assert.ok(ops.some((d) => d.evento === 'oficina-deshacer' && d.op === 'pieza_crear'));
+  assert.ok(!JSON.stringify(ops).includes('Una pieza de prueba'), 'sin el contenido');
   // «tus» claves: un token de otra persona no las usa (una clave de otro usuario no deshace nada)
   const h2 = await llamar(t.oficina, 'hacer', { type: 'pieza_crear', titulo: 'Otra MCP', texto: 'Otra pieza.', fecha, formato: 'post' });
   const clave2 = /clave ([A-Za-z0-9_-]+)/.exec(texto(h2))[1];
@@ -136,6 +148,8 @@ test('UNA ESCRITURA REPETIDA con la misma clave no se duplica (y sin clave, sí 
   await llamar(t.oficina, 'crear_mi_tarea', { titulo: 'Llamar a Ana por MCP', clave_idempotencia: 'tarea-mcp-002' }); assert.equal(n(), 2, 'otra clave, otra tarea');
   // un fallo suelta la clave: se puede reintentar
   const mala = await llamar(t.oficina, 'crear_mi_tarea', { titulo: '', clave_idempotencia: 'tarea-mcp-003' }); assert.match(texto(mala), /No se pudo/);
+  assert.equal(mala.j.result.isError, true, 'un fallo esperado llega con isError');
+  assert.ok(m.db.prepare("select detalle from auditoria where tipo = 'mcp'").all().some((x) => JSON.parse(x.detalle).resultado === 'error-esperado'), 'y la auditoría lo anota como error esperado, no como ok');
   assert.equal(m.db.prepare("select count(*) n from docs where clave like 'mcp.idem:%:crear_mi_tarea:tarea-mcp-003'").get().n, 0, 'la clave de un fallo no queda reclamada');
 });
 
@@ -172,4 +186,64 @@ test('EL ESTUDIO: una instancia NUEVA por llamada (nada de estado compartido ent
   const e = esquemaRemoto({ type: 'object', properties: { modelo: { type: 'string', enum: ['a'] }, ejes: { type: 'object' }, presets: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } } } } } });
   assert.equal(e.additionalProperties, false); assert.equal(e.properties.modelo.enum, undefined, 'la lista de modelos de este instante no se congela en el esquema');
   assert.equal(e.properties.ejes.additionalProperties, true, 'un objeto libre queda abierto (el validador rechazaría cualquier clave)'); assert.equal(e.properties.presets.items.additionalProperties, false);
+});
+
+test('H1: `hacer` acepta TODO campo que ACCIONES documenta (persona, grupo, seccion…) y nada de gasto', () => {
+  const h = herramientas().find((x) => x.nombre === 'hacer'), props = new Set(Object.keys(h.esquema.properties));
+  const SERVIDAS = h.esquema.properties.type.enum;
+  assert.ok(SERVIDAS.length >= 18 && !SERVIDAS.some((o) => OPS_GASTO.includes(o)));
+  const falta = [];
+  for (const [op, texto] of Object.entries(ACCIONES)) {
+    if (!SERVIDAS.includes(op)) continue;
+    const limpio = texto.split(' — ')[0].replace(/\([^)]*\)/g, '').replace(/\{[^}]*\}/g, ' ');
+    // «agent? | persona» son dos campos; «prioridad? alta|media|baja» es UN campo con sus valores
+    const campos = limpio.split(',').flatMap((c) => [/^\s*([a-z_]+)/.exec(c)?.[1], /\?\s*\|\s*([a-z_]+)/.exec(c)?.[1]]).filter(Boolean);
+    for (const c of campos) if (!props.has(c) && !['para', 'solo'].includes(c)) falta.push(`${op}.${c}`);
+  }
+  assert.deepEqual(falta, [], 'campos documentados en ACCIONES que `hacer` no declara');
+  for (const c of ['persona', 'grupo', 'seccion']) assert.equal(h.esquema.properties[c].type, 'string');
+  assert.equal(validarArgumentos(h.esquema, { type: 'mia_delegar', id: 'x', persona: 'Ana' }), null);
+  assert.equal(validarArgumentos(h.esquema, { type: 'nota_agregar', nombre: 'n', texto: 't', seccion: 's' }), null);
+  assert.equal(validarArgumentos(h.esquema, { type: 'nota_crear', nombre: 'n', texto: 't', grupo: 'g' }), null);
+});
+
+test('B1: un tipo en forma de lista (`limite`: string o null) se valida de verdad', () => {
+  const e = herramientas().find((x) => x.nombre === 'hacer').esquema;
+  assert.equal(validarArgumentos(e, { type: 'tarea_editar', id: 'x', limite: '2031-01-01' }), null);
+  assert.equal(validarArgumentos(e, { type: 'tarea_editar', id: 'x', limite: null }), null, 'null quita la fecha límite');
+  assert.match(validarArgumentos(e, { type: 'tarea_editar', id: 'x', limite: 5 }), /no es de un tipo/);
+  assert.match(validarArgumentos(e, { type: 'tarea_editar', id: 'x', limite: { a: 1 } }), /no es de un tipo/);
+});
+
+test('M2: si deshacer FALLA, la clave se repone (no se pierde la única forma de volver atrás)', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const yo = m.db.prepare('select id from users limit 1').get().id;
+  const k = 'claveprueba01';
+  await guardarDoc(m.d1, PREFIJO_UNDO + k, { o: { type: 'tarea_mover', id: 'no-existe', undo: { state: 'next', dueAt: null } }, at: m.ahora(), por: yo });
+  const r = await llamar(t.oficina, 'deshacer', { clave: k });
+  assert.equal(r.j.result.isError, true, texto(r));
+  assert.equal(m.db.prepare('select count(*) n from docs where clave = ?').get(PREFIJO_UNDO + k).n, 1, 'la fila sigue ahí para reintentar');
+  // y vencida (más de 10 minutos) no se usa ni se repone
+  await guardarDoc(m.d1, PREFIJO_UNDO + 'clavevieja001', { o: { type: 'tarea_mover', id: 'x', undo: {} }, at: m.ahora() - DESHACER_MS - 1000, por: yo });
+  assert.match(texto(await llamar(t.oficina, 'deshacer', { clave: 'clavevieja001' })), /ya no sirve/);
+});
+
+test('B2: las claves mcp.idem:* y mcp.undo:* están clasificadas (restablecer las conserva) y la poda diaria las barre sin necesidad de tráfico', { skip: SALTAR }, async () => {
+  for (const p of [PREFIJO_IDEM, PREFIJO_UNDO]) assert.ok(CONSERVA_PREFIJOS_DOCS.includes(p), `${p} sin decidir en restablecer.js`);
+  const m = await mundo();
+  const viejo = new Date(Date.now() - 3 * 864e5).toISOString(), nuevo = new Date().toISOString();
+  const poner = (clave, ts) => m.db.prepare('insert into docs (clave, json, version, actualizado) values (?,?,1,?)').run(clave, '{}', ts);
+  poner('mcp.idem:a:b:viejo', viejo); poner('mcp.undo:viejo', viejo); poner('mcp.idem:a:b:nuevo', nuevo); poner('mcp.undo:nuevo', nuevo); poner('mcp.config.otra', viejo);
+  const n = await podar(m.d1, Date.now());
+  assert.equal(n.docs_mcp, 2);
+  const quedan = m.db.prepare("select clave from docs where clave like 'mcp.%' order by clave").all().map((x) => x.clave).filter((c) => c !== 'mcp.config');
+  assert.deepEqual(quedan, ['mcp.config.otra', 'mcp.idem:a:b:nuevo', 'mcp.undo:nuevo'], 'solo las vencidas de esos dos prefijos');
+});
+
+test('LISTAS EXACTAS: lo que ve un token de «lectura» y uno de «oficina» (si cambia, el cambio es a propósito)', { skip: SALTAR }, async () => {
+  const { m, t } = await conectados();
+  const nombres = async (tok) => (await m.rpc(tok, 'tools/list')).j.result.tools.map((x) => x.name).sort();
+  assert.deepEqual(await nombres(t.lectura), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'ver_calendario']);
+  assert.deepEqual(await nombres(t.oficina), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'crear_mi_tarea', 'crear_tarea', 'deshacer', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'hablar_con_dimitri', 'hacer', 'ver_calendario']);
+  assert.deepEqual(await nombres(t.gasto), [...await nombres(t.oficina), 'aplicar_preset', 'crear_lote', 'generar_imagen', 'generar_musica', 'generar_video', 'generar_voz'].sort());
 });

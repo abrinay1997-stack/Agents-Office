@@ -10,11 +10,13 @@ import { MAPA, REGLAS_ASISTENTE, ACCIONES } from '../../../../../oficina/mapa.mj
 import * as sub from '../../../../../sub-core.mjs';
 import { guardarDoc, leerDoc } from '../../almacen.js';
 import { testigo } from '../../ids.js';
+import { auditar } from '../auditoria.js';
 
 export const DESHACER_MS = 10 * 60e3; // como el asistente local: un asistente tarda más que un clic en pensarlo
 export const PREFIJO_UNDO = 'mcp.undo:';
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const idDe = (o) => String(o.id || o.pieza || o.routineId || o.task || o.borrador || '').slice(0, 80) || null;
 const etiqueta = (o) => String(o.desc || o.title || o.titulo || o.type).slice(0, 160);
 const claveNueva = () => testigo(9);
 class Rechazo extends Error { constructor(msg, status) { super(msg); this.status = status; } }
@@ -60,6 +62,8 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
     const { ops: [v], motivos } = sub.parseOps([op], { ...ctx, owner: false }); // lo que propone un asistente espera el OK en una rutina nueva: no es el dueño pulsando la casilla
     if (!v) throw new Rechazo(`no se puede: ${motivos[0]?.why || 'algo no cuadra con la oficina'}`, 409);
     await ejecutor.runOp(v, { por: 'asistente' }); // lanza Error con el motivo en español si no se pudo
+    // el cambio concreto queda en la auditoría (op + id, sin contenido), como en la oficina local (`auditar` de oficina/rutas.mjs)
+    await auditar(db0, ahoraMs, persona.email, { evento: 'oficina-op', op: v.type, id: idDe(v), ok: true, via: 'mcp' });
     let clave = null;
     if (v.undo) {
       clave = claveNueva();
@@ -78,8 +82,12 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
     // se reclama ANTES de deshacer (borrar la fila es atómico): dos llamadas a la vez no pueden deshacer dos veces
     const r = await db0.prepare('delete from docs where clave = ?').bind(PREFIJO_UNDO + k).run();
     if (!r.meta?.changes) throw new Rechazo(vencida, 409);
-    const x = await ejecutor.undoOp(valor.o, { por: 'asistente' });
-    if (x?.error) throw new Rechazo(x.error, 409);
+    // si deshacer falla, la clave se REPONE: no se pierde la única forma de volver atrás (insert-if-absent, atómico)
+    const reponer = async () => { try { await guardarDoc(db0, PREFIJO_UNDO + k, valor, { espera: 0 }); } catch { /* ya hay otra: no se pisa */ } };
+    let x;
+    try { x = await ejecutor.undoOp(valor.o, { por: 'asistente' }); } catch (e) { await reponer(); throw e; }
+    if (x?.error) { await reponer(); throw new Rechazo(x.error, 409); }
+    await auditar(db0, ahoraMs, persona.email, { evento: 'oficina-deshacer', op: valor.o.type, id: idDe(valor.o), ok: true, via: 'mcp' });
     return { ok: true, deshecho: etiqueta(valor.o) };
   }
 

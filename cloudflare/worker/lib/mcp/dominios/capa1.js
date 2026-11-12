@@ -31,22 +31,30 @@ export const RUTAS = Object.freeze([
 /** Un fallo esperado se vuelve texto claro; lo inesperado, además, se registra. Nunca lleva un secreto. */
 function fallo(nombre, e) {
   console.error(`[mcp:capa1] ${nombre}:`, e?.message ?? e);
-  return { texto: `No se pudo: ${limpiarSecretos(String(e?.message || e)).replace(/\s+/g, ' ').slice(0, 300)}` };
+  return { texto: `No se pudo: ${limpiarSecretos(String(e?.message || e)).replace(/\s+/g, ' ').slice(0, 300)}`, esError: true };
 }
 async function conOficina(ctx) { const { crearOficinaMcp } = await import('../capa1/oficina.js'); return crearOficinaMcp({ env: ctx.env, db: ctx.db, usuario: ctx.usuario, ahoraMs: ctx.ahoraMs }); }
 const idem = (ctx, herramienta, fn) => conIdempotencia(ctx.db, { conexionId: ctx.conexion.id, herramienta, clave: ctx.claveIdempotencia, ms: ctx.ahoraMs, fn });
 
 /* ---------- la oficina ---------- */
 const ordenes = Object.entries(ACCIONES).filter(([k]) => !/^anuncio_(activar|reanudar|subir_presupuesto|relanzar)$/.test(k)).map(([k, v]) => `${k}: ${v}`).join(' | ');
+/** Los campos de `ACCIONES` (oficina/mapa.mjs) que el `inputSchema` de oficina-tools.mjs no trae: sin ellos, el esquema cerrado del remoto impediría delegar a una persona o escribir en el Cerebro. */
+export const CAMPOS_EXTRA_HACER = Object.freeze({
+  persona: { type: 'string', maxLength: 80, description: 'mia_delegar: el nombre de una persona del equipo (en vez de dept/agent).' },
+  grupo: { type: 'string', maxLength: 80, description: 'nota_crear: la carpeta del Cerebro (opcional).' },
+  seccion: { type: 'string', maxLength: 120, description: 'nota_agregar: la sección a la que se añade (opcional).' },
+});
 const EXTRA = { hacer: ` Campos de cada tipo → ${ordenes}. Las ops que gastan en anuncios no están aquí: las confirma el dueño en dos pasos.` };
 for (const t of OFICINA) {
   const lee = OFICINA_LEE.includes(t.name), cambia = OFICINA_CAMBIA.includes(t.name);
   if (OFICINA_FUERA[t.name]) continue;
   if (!lee && !cambia) throw new Error(`oficina-tools tiene una herramienta nueva sin decidir (${t.name}): añádela a OFICINA_LEE, OFICINA_CAMBIA u OFICINA_FUERA.`);
   const descripcion = String(t.description).replace(/`como_funciona` dice los campos de cada tipo\.\s*/, '') + (EXTRA[t.name] || '');
+  const esquema = esquemaRemoto(t.inputSchema);
+  if (t.name === 'hacer') Object.assign(esquema.properties, CAMPOS_EXTRA_HACER); // lo que ACCIONES documenta y el esquema del stdio no declara
   registrarHerramienta({
-    nombre: t.name, descripcion, esquema: esquemaRemoto(t.inputSchema), alcance: lee ? 'lectura' : 'oficina', soloLectura: lee,
-    ...(lee ? {} : { destructiva: !!t.destructiva, idempotente: !!t.idempotente }),
+    nombre: t.name, descripcion, esquema, alcance: lee ? 'lectura' : 'oficina', soloLectura: lee,
+    destructiva: lee ? false : !!t.destructiva, ...(lee ? {} : { idempotente: !!t.idempotente }),
     ejecutar: async (ctx, args) => {
       try {
         const office = await conOficina(ctx), llamar = crearLlamador({ office });

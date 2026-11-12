@@ -39,6 +39,10 @@ export function validarArgumentos(esquema, args, ruta = '') {
     }
     return null;
   }
+  if (Array.isArray(esquema?.type)) { // tipos en forma de lista (p. ej. ['string', 'null']): vale si cumple alguno
+    const algunoVale = esquema.type.some((t) => (t === 'null' ? args === null : !validarArgumentos({ ...esquema, type: t }, args, ruta)));
+    return algunoVale ? null : `«${ruta}» no es de un tipo que esta herramienta acepte (${esquema.type.join(' o ')})`;
+  }
   const tipo = esquema?.type;
   if (tipo === 'string') {
     if (typeof args !== 'string') return `«${ruta}» debe ser texto`;
@@ -91,6 +95,7 @@ async function llamarHerramienta({ id, params, db, env, conexion, usuario, regis
     return exito(id, resultadoError('Esa herramienta falló por dentro. Inténtalo otra vez; si sigue, avisa a un administrador.'));
   }
   const objeto = typeof salida === 'string' ? { texto: salida } : (salida || {});
+  const esError = objeto.esError === true; // un fallo ESPERADO (la ruta contestó un error, una op vetada): texto claro para el modelo, pero con isError y anotado como tal en la auditoría
   let texto = String(objeto.texto ?? '');
   const siguienteBruto = typeof objeto.siguiente === 'string' ? objeto.siguiente : '';
   let estructuradoTxt = ''; try { estructuradoTxt = objeto.estructurado === undefined ? '' : JSON.stringify(objeto.estructurado) ?? ''; } catch { estructuradoTxt = ''; }
@@ -104,7 +109,8 @@ async function llamarHerramienta({ id, params, db, env, conexion, usuario, regis
   const siguiente = typeof objeto.siguiente === 'string' && objeto.siguiente.length <= 200 ? objeto.siguiente : null;
   if (recortado) texto += '\n\n[recortado: la respuesta pasaba de 20.000 letras; pide algo más concreto' + (siguiente ? ' o sigue con el cursor' : '') + ']';
   if (siguiente) texto += `\n\nsiguiente: ${siguiente}`;
-  await auditar(db, ms, usuario.email, { ...base, permitida: true, resultado: 'ok', ...(recortado ? { recortado: true } : {}) });
+  await auditar(db, ms, usuario.email, { ...base, permitida: true, resultado: esError ? 'error-esperado' : 'ok', ...(recortado ? { recortado: true } : {}) });
+  if (esError) return exito(id, resultadoError(texto));
   const extra = {};
   if (objeto.estructurado !== undefined || siguiente) extra.structuredContent = { ...(objeto.estructurado && typeof objeto.estructurado === 'object' ? objeto.estructurado : {}), ...(siguiente ? { siguiente } : {}) };
   return exito(id, resultadoTexto(texto, extra));

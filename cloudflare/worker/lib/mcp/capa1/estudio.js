@@ -57,7 +57,7 @@ export function definicionesEstudio() {
     if (!gasta && !lee) throw new Error(`estudio-tools tiene una herramienta nueva sin decidir (${d.name}): añádela a ESTUDIO_LEE, ESTUDIO_GASTA o ESTUDIO_FUERA.`);
     out.push({
       nombre: d.name, descripcion: gasta ? `${String(d.description).split('. ').slice(0, 2).join('. ').replace(/\.$/, '')}.${DESC_PREPARA}` : d.description,
-      esquema: esquemaRemoto(d.inputSchema), alcance: gasta ? 'gasto' : 'lectura', soloLectura: lee, ...(gasta ? { soloPrepara: true, idempotente: true } : {}),
+      esquema: esquemaRemoto(d.inputSchema), alcance: gasta ? 'gasto' : 'lectura', soloLectura: lee, destructiva: false, ...(gasta ? { soloPrepara: true, idempotente: true } : {}),
     });
   }
   return out;
