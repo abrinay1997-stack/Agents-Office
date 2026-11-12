@@ -80,7 +80,10 @@ test('CREAR por departamento: nace con la marca de origen en la primera línea, 
 test('CONFIRMADO: para TODOS, o ensanchar/reemplazar lo que ya llega a un departamento, da 409 sin él; con false tampoco pasa; con true sí', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
   const todos = nueva({ nombre: 'estilo-casa', departamentos: undefined, todos: true });
-  for (const c of [undefined, false]) { const r = await llamar(t.oficina, 'skills_cambiar', { ...todos, ...(c === undefined ? {} : { confirmado: c }) }); assert.equal(r.j.result.isError, true); assert.match(texto(r), /EXPRESA del dueño/); assert.match(texto(r), /TODOS los agentes/); assert.equal(filaSkill(m, 'estilo-casa'), undefined, 'no se escribió'); }
+  for (const c of [undefined, false]) {
+    const r = await llamar(t.oficina, 'skills_cambiar', { ...todos, ...(c === undefined ? {} : { confirmado: c }) });
+    assert.equal(r.j.result.isError, true); assert.match(texto(r), /EXPRESA del dueño/); assert.match(texto(r), /TODOS los agentes/); assert.equal(filaSkill(m, 'estilo-casa'), undefined, 'no se escribió');
+  }
   const ok = await llamar(t.oficina, 'skills_cambiar', { ...todos, confirmado: true }); assert.equal(ok.j.result.isError, false, texto(ok)); assert.match(texto(ok), /TODOS los agentes/);
   // una de departamento: crear no pide confirmación; reemplazarla sí
   await llamar(t.oficina, 'skills_cambiar', nueva());
@@ -119,14 +122,19 @@ test('PAPELERA: borrar va a la papelera y se restaura; las de fábrica no se bor
   const { m, t, llamar } = await conectados();
   await llamar(t.oficina, 'skills_cambiar', { accion: 'crear', nombre: 'solo-newt', descripcion: 'd', texto: 'Texto uno.', agentes: ['newt'] });
   await llamar(t.oficina, 'skills_cambiar', nueva());
-  for (const f of SKILLS_DE_FABRICA) { await m.admin('PUT', `/api/skills/${f}`, { description: 'd', text: 't', agents: ['newt'] }); const r = await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: f }); assert.equal(r.j.result.isError, true, f); assert.match(texto(r), /de fábrica/); assert.ok(filaSkill(m, f), `${f} sigue`); }
+  for (const f of SKILLS_DE_FABRICA) {
+    await m.admin('PUT', `/api/skills/${f}`, { description: 'd', text: 't', agents: ['newt'] });
+    const r = await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: f });
+    assert.equal(r.j.result.isError, true, f); assert.match(texto(r), /de fábrica/); assert.ok(filaSkill(m, f), `${f} sigue`);
+  }
   const b = await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: 'solo-newt' }); assert.equal(b.j.result.isError, false, texto(b)); assert.equal(filaSkill(m, 'solo-newt'), undefined);
   const id = /id (solo-newt:\d{13})/.exec(texto(b))[1];
   const pap = texto(await llamar(t.lectura, 'skills', { accion: 'papelera' })); assert.match(pap, new RegExp(id));
   const rest = await llamar(t.oficina, 'skills_cambiar', { accion: 'restaurar', id }); assert.equal(rest.j.result.isError, false, texto(rest)); assert.ok(filaSkill(m, 'solo-newt'));
   // una para TODOS: restaurarla pide confirmación
   await llamar(t.oficina, 'skills_cambiar', { accion: 'crear', nombre: 'estilo-casa', descripcion: 'd', texto: 'Texto.', todos: true, confirmado: true });
-  await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: 'estilo-casa' });
+  assert.equal((await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: 'estilo-casa' })).j.result.isError, true, 'borrar la de todos pide confirmado');
+  await llamar(t.oficina, 'skills_cambiar', { accion: 'borrar', nombre: 'estilo-casa', confirmado: true });
   const id2 = /(estilo-casa:\d{13})/.exec(texto(await llamar(t.lectura, 'skills', { accion: 'papelera' })))[1];
   const sin = await llamar(t.oficina, 'skills_cambiar', { accion: 'restaurar', id: id2 }); assert.equal(sin.j.result.isError, true); assert.match(texto(sin), /EXPRESA del dueño/); assert.equal(filaSkill(m, 'estilo-casa'), undefined);
   assert.equal((await llamar(t.oficina, 'skills_cambiar', { accion: 'restaurar', id: id2, confirmado: true })).j.result.isError, false);
@@ -152,16 +160,16 @@ test('LEER no escribe: listar, ver, versiones, biblioteca y habilidad; ≤ 50 se
   await llamar(t.oficina, 'skills_cambiar', nueva());
   const grande = 'Línea de instrucciones de la skill.\n'.repeat(150);
   for (let i = 0; i < 4; i++) await m.admin('PUT', `/api/skills/larga-${i}`, { description: 'd', text: grande.slice(0, 5000), agents: ['newt'], files: [{ name: 'r.md', text: 'archivo\n'.repeat(480) }] });
-  const antes = JSON.stringify(m.db.prepare("select id, json from filas where coleccion like 'skills%' order by id").all()), aud = m.db.prepare('select count(*) n from auditoria').get().n;
+  const antes = JSON.stringify(m.db.prepare("select id, json from filas where coleccion like 'skills%' order by id").all()), audSkill = m.db.prepare('select count(*) n from auditoria where tipo = \'skill\'').get().n;
   const c = contarD1(m.d1);
   const lista = texto(await llamar(t.lectura, 'skills', { accion: 'listar' })); assert.match(lista, /tono-correos · llega a departamentos emails/); assert.ok(lista.length <= TOPE_SALIDA + 300);
-  const ver = texto(await llamar(t.lectura, 'skills', { accion: 'ver', nombre: 'tono-correos' })); assert.match(ver, /escrita vía MCP/); assert.match(ver, /actualizado: 2/);
+  const ver = texto(await llamar(t.lectura, 'skills', { accion: 'ver', nombre: 'tono-correos' })); assert.match(ver, /escrita vía MCP/); assert.match(ver, /actualizado: 2/); assert.match(ver, /sin cabecera/); assert.ok(!/^name: /m.test(ver), 'ver no pega la cabecera YAML');
   const larga = await llamar(t.lectura, 'skills', { accion: 'ver', nombre: 'larga-0' }); assert.ok(texto(larga).length <= TOPE_SALIDA + 300);
   const bib = await llamar(t.lectura, 'skills', { accion: 'biblioteca' }); assert.equal(bib.j.result.isError, false, texto(bib));
   const nada = await llamar(t.lectura, 'skills', { accion: 'habilidad', nombre: 'no-existe-xyz' }); assert.equal(nada.j.result.isError, true);
   const lim = c.parar(); assert.ok(lim.n <= 50, `${lim.n} sentencias: ${lim.sql.join(' | ')}`);
   assert.equal(JSON.stringify(m.db.prepare("select id, json from filas where coleccion like 'skills%' order by id").all()), antes, 'leer no cambió nada');
-  assert.equal(m.db.prepare('select count(*) n from auditoria where tipo = \'skill\'').get().n >= 0, true); void aud;
+  assert.equal(m.db.prepare('select count(*) n from auditoria where tipo = \'skill\'').get().n, audSkill, 'leer no audita');
   const pag = paginar('x\n'.repeat(20000), undefined); assert.ok(pag.siguiente && pag.texto.length <= 15000); assert.ok(paginar('x\n'.repeat(20000), pag.siguiente).texto.length > 0);
   for (const mal of [{ accion: 'ver' }, { accion: 'ver', nombre: '../x' }, { accion: 'habilidad', nombre: 'A/B' }]) { const r = await llamar(t.lectura, 'skills', mal); assert.equal(r.j.result.isError, true, JSON.stringify(mal)); }
 });
@@ -249,4 +257,60 @@ test('DETALLES: confirmado sin «repite con»; nombres reservados; sospecha en n
   const S = await import('../worker/lib/skills-api.js'); await m.admin('PUT', '/api/skills/carrera', { description: 'd', text: 'De la otra persona.', agents: ['newt'] });
   const r = await S.guardar(m.d1, 'carrera', { description: 'd', text: 'Mía.', agents: ['newt'], soloNueva: true }, { email: 'x' }); assert.equal(r.status, 409);
   assert.match(JSON.parse(filaSkill(m, 'carrera').json).text, /otra persona/);
+});
+
+// ---- Revisión independiente #2 (12 nov 2026) ----
+import { readdirSync } from 'node:fs';
+import { guardarFila } from '../worker/lib/almacen.js';
+
+test('FÁBRICA = los directorios del repositorio (skills/ y el Cerebro de PanaClaw): la lista del conector no se queda atrás', () => {
+  const dirs = (r) => readdirSync(new URL(r, import.meta.url), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+  const repo = [...new Set([...dirs('../../skills/'), ...dirs('../../brain-panaclaw/Agents Office/skills/')])].sort();
+  assert.deepEqual([...SKILLS_DE_FABRICA].sort(), repo);
+});
+
+test('EXISTENCIA: solo el 404 es «no existe»; un fallo del GET se relanza y NO se crea nada', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const orig = m.d1.prepare; let roto = true;
+  m.d1.prepare = (sql) => { if (roto && /from filas/.test(sql)) throw new Error('D1 caída de mentira'); return orig.call(m.d1, sql); };
+  const r = await llamar(t.oficina, 'skills_cambiar', nueva({ clave_idempotencia: 'falla-get-01' })); roto = false; m.d1.prepare = orig;
+  assert.equal(r.j.result.isError, true); assert.match(texto(r), /No se pudo/); assert.doesNotMatch(texto(r), /creada/); assert.equal(nSkills(m), 0);
+  assert.equal((await llamar(t.oficina, 'skills_cambiar', nueva({ clave_idempotencia: 'falla-get-01' }))).j.result.isError, false, 'la clave se soltó: el reintento sí crea');
+});
+
+test('SIN «actualizado» (semilla o migrada): se reemplaza sin base, sin un 409 engañoso; con fecha, la base sigue siendo obligatoria', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  await guardarFila(m.d1, 'skills', 'sembrada', { name: 'sembrada', description: 'd', agents: ['newt'], departments: [], everyone: false, text: 'De la semilla.', files: [] });
+  const ver = texto(await llamar(t.lectura, 'skills', { accion: 'ver', nombre: 'sembrada' })); assert.match(ver, /SIN «base»/);
+  const r = await llamar(t.oficina, 'skills_cambiar', { accion: 'reemplazar', nombre: 'sembrada', descripcion: 'd', texto: 'Cambiada.', agentes: ['newt'] }); assert.equal(r.j.result.isError, false, texto(r));
+  const sin = await llamar(t.oficina, 'skills_cambiar', { accion: 'reemplazar', nombre: 'sembrada', descripcion: 'd', texto: 'Otra.', agentes: ['newt'] }); assert.equal(sin.j.result.isError, true); assert.match(texto(sin), /exige «base»/);
+});
+
+test('ESCRITURAS: ≤ 50 sentencias D1 en crear, reemplazar, borrar, volver y restaurar; agente o departamento inexistente → 422 sin escribir; tope de 150', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  const medir = async (nombre, args) => { const c = contarD1(m.d1); const r = await llamar(t.oficina, 'skills_cambiar', args); const v = c.parar(); assert.equal(r.j.result.isError, false, `${nombre}: ${texto(r)}`); assert.ok(v.n <= 50, `${nombre}: ${v.n} sentencias`); return r; };
+  await medir('crear', { accion: 'crear', nombre: 'medida', descripcion: 'd', texto: 'Uno.', agentes: ['newt'] });
+  const b = base1(m, 'medida'); await new Promise((r) => setTimeout(r, 5));
+  await medir('reemplazar', { accion: 'reemplazar', nombre: 'medida', descripcion: 'd', texto: 'Dos.', agentes: ['newt'], base: b });
+  const at = (await m.admin('GET', '/api/skills/medida/versiones')).j.versions.at(-1).at;
+  await medir('volver', { accion: 'volver', nombre: 'medida', at: String(at) });
+  const del = await medir('borrar', { accion: 'borrar', nombre: 'medida' });
+  await medir('restaurar', { accion: 'restaurar', id: /(medida:\d{13})/.exec(texto(del))[1] });
+  for (const x of [{ agentes: ['no-existe-xyz'] }, { departamentos: ['inventado'] }]) {
+    const r = await llamar(t.oficina, 'skills_cambiar', { accion: 'crear', nombre: 'inv', descripcion: 'd', texto: 'x', ...x }); assert.equal(r.j.result.isError, true, JSON.stringify(x)); assert.equal(filaSkill(m, 'inv'), undefined);
+  }
+  for (let i = 0; filaSkill(m, 'x0') === undefined && i < 1; i++) for (let k = 0; k < 150; k++) await guardarFila(m.d1, 'skills', `x${k}`, { name: `x${k}`, description: 'd', agents: ['newt'], departments: [], everyone: false, text: 't', files: [] });
+  const tope = await llamar(t.oficina, 'skills_cambiar', { accion: 'crear', nombre: 'otra-mas', descripcion: 'd', texto: 'x', agentes: ['newt'] }); assert.equal(tope.j.result.isError, true); assert.match(texto(tope), /tope|Ya hay/);
+});
+
+test('PAGINACIÓN: ida y vuelta por el servidor con el cursor; la suma de las páginas trae todas las skills', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  for (let k = 0; k < 120; k++) await guardarFila(m.d1, 'skills', `pag-${String(k).padStart(3, '0')}`, { name: `pag-${String(k).padStart(3, '0')}`, description: 'D'.repeat(150), agents: ['newt'], departments: [], everyone: false, text: 't', files: [] });
+  let cursor, paginas = 0, todo = '';
+  do {
+    const r = await llamar(t.lectura, 'skills', { accion: 'listar', ...(cursor ? { cursor } : {}) }); assert.equal(r.j.result.isError, false, texto(r)); todo += texto(r); paginas++;
+    cursor = r.j.result.structuredContent?.siguiente ?? /siguiente: (\S+)/.exec(texto(r))?.[1];
+  } while (cursor && paginas < 10);
+  assert.ok(paginas >= 2, `${paginas} páginas`);
+  for (const k of [0, 59, 119]) assert.match(todo, new RegExp(`pag-${String(k).padStart(3, '0')}`));
 });

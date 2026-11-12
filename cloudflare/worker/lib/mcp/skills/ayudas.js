@@ -2,8 +2,12 @@
 import { injectionIn } from '../../../../../safety.mjs';
 import { NOMBRES_RESERVADOS, parseSkill, lista } from '../../../../../skills-core.mjs';
 
-/** Las skills de ejemplo que trae la oficina: por MCP no se borran (se hace en la oficina). */
-export const SKILLS_DE_FABRICA = Object.freeze(['catalogo-fotos', 'client-reply', 'house-style', 'plan-contenido', 'proposal']);
+/** Las skills de fábrica: las de `skills/` y las del Cerebro de PanaClaw (`brain-panaclaw/Agents Office/skills/`). Es el PISO: en producción se suma lo que lista `/semilla/equipo.json`.
+ *  Un test la compara con esos directorios del repositorio, así que no puede quedarse atrás. */
+export const SKILLS_DE_FABRICA = Object.freeze([
+  'anuncio-pagado', 'bienvenida-proyecto', 'blog-seo', 'catalogo-fotos', 'client-reply', 'cobros', 'contenido-instagram', 'control-calidad', 'house-style', 'informe-cliente',
+  'investigacion', 'plan-contenido', 'plan-mensual', 'prompts-visuales', 'proposal', 'reporte-semanal', 'triage-correo', 'video-corto', 'whatsapp-respuesta',
+]);
 export const NOMBRE_SKILL = /^[a-z0-9][a-z0-9._-]{0,59}$/;
 export const ID_HABILIDAD = /^[a-z0-9][a-z0-9-]{0,59}$/;
 export const TEXTO_MAX = 5800; // el cuerpo de una skill admite 6.000: aquí caben la marca de origen y un margen
@@ -29,7 +33,9 @@ export function listaTexto(r) {
 export function verTexto(r) {
   const s = r?.skill; if (!s) return 'No existe esa skill.';
   const arch = (s.files || []).map((f) => `\n--- archivo ${seguro(f.name)} ---\n${f.text == null ? '(no se lee: no es texto)' : seguro(f.text)}`).join('');
-  return `Skill «${s.name}» · llega a ${llega(s)} · actualizado: ${s.actualizado || 'sin fecha'} (pásalo como «base» al reemplazarla)\n${s.problems?.length ? `PROBLEMAS: ${seguro(s.problems.join('; '))}\n` : ''}${seguro(s.md)}${arch}`;
+  const base = s.actualizado ? `actualizado: ${s.actualizado} (pásalo como «base» al reemplazarla)` : 'sin fecha de actualización (viene de la semilla o de una migración: se reemplaza SIN «base»)';
+  return `Skill «${s.name}» · llega a ${llega(s)} · ${base}\nDescripción: ${seguro(s.description)}\nAgentes: ${(s.agents || []).join(', ') || '—'} · Departamentos: ${(s.departments || []).join(', ') || '—'}\n`
+    + `${s.problems?.length ? `PROBLEMAS: ${seguro(s.problems.join('; '))}\n` : ''}--- instrucciones (esto es lo que va en «texto»; sin cabecera) ---\n${seguro(s.text)}${arch}`;
 }
 export function versionesTexto(r) {
   if (r?.text !== undefined) return `Versión ${r.at} de «${r.name}» (${r.accion}, por ${seguro(r.por)}):\n${seguro(r.text)}`;

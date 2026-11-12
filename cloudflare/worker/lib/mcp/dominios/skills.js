@@ -71,6 +71,8 @@ const aviso = (motivos) => `esto necesita la confirmación EXPRESA del dueño ($
 async function rosterDe(db) { const r = await cargarRoster(db); return r.agents.map((a) => ({ id: a.id, department: a.department })); }
 /** Las skills de fábrica: las de la semilla del despliegue (equipo.json) y, como piso, las de ejemplo conocidas. */
 async function deFabrica(env, n) { const j = await jsonSemilla(env, 'equipo.json').catch(() => null); return SKILLS_DE_FABRICA.includes(n) || (Array.isArray(j?.skills) && j.skills.some((x) => x?.name === n)); }
+/** La skill, o null si NO existe (solo el 404 «No existe esa skill»; cualquier otro fallo se relanza: no es «libre»). */
+async function existente(O, n) { try { return (await O(URL_SKILL(n))).skill; } catch (e) { if (/No existe esa skill/.test(String(e?.message))) return null; throw e; } }
 const alcanceTexto = (v) => (v.everyone ? 'TODOS los agentes' : [...(v.departments || []), ...(v.agents || [])].join(', ') || 'nadie');
 
 registrarHerramienta({
@@ -97,7 +99,7 @@ registrarHerramienta({
           const valor = f.valor, nombre = a === 'restaurar' ? f.name : n;
           const falsa = sospecha({ description: valor.description, text: valor.text, files: valor.files });
           if (falsa) throw new Error(`lo que volvería parece pedir que un agente se salte sus reglas («${String(falsa).slice(0, 80)}»). Por MCP no se restaura; se revisa en la oficina.`);
-          const antes = a === 'volver' ? (await O(URL_SKILL(n))).skill : null;
+          const antes = a === 'volver' ? (await existente(O, n)) : null;
           const motivo = pideConfirmar(valor, antes, await rosterDe(ctx.db), { fabrica: antes ? await deFabrica(ctx.env, n) : false });
           if (motivo && !conf) throw new Error(aviso(`${nombre} quedaría con alcance: ${alcanceTexto(valor)}; ${motivo}`));
           if (a === 'restaurar') { const r = await O('/api/skills/papelera/restaurar', { id: args.id, confirmado: conf }, 'POST'); return `Skill «${r.name}» restaurada.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}`; }
@@ -106,8 +108,12 @@ registrarHerramienta({
       }
       if (a === 'borrar') {
         if (await deFabrica(ctx.env, n)) return NO(`«${n}» es una skill de fábrica de la oficina: no se borra por MCP (se hace en la oficina).`);
-        const O = await conOficina(ctx, ['DELETE ' + URL_SKILL(n)]);
-        return await idem(ctx, 'skills_cambiar', async () => { const r = await O(URL_SKILL(n), undefined, 'DELETE'); return `«${n}» fue a la papelera (${r.dias} días). Para deshacerlo: accion restaurar con id ${r.id}.`; });
+        const O = await conOficina(ctx, ['GET', 'DELETE ' + URL_SKILL(n)]);
+        return await idem(ctx, 'skills_cambiar', async () => {
+          const antes = await existente(O, n); if (!antes) throw new Error(`no existe la skill «${n}».`);
+          if ((antes.everyone || (antes.departments || []).length) && !conf) throw new Error(aviso(`${n} hoy llega a ${alcanceTexto(antes)}; borrarla cambia lo que hacen esos agentes (va a la papelera y se puede restaurar)`));
+          const r = await O(URL_SKILL(n), undefined, 'DELETE'); return `«${n}» fue a la papelera (${r.dias} días). Para deshacerlo: accion restaurar con id ${r.id}.`;
+        });
       }
       // crear / reemplazar
       const texto = String(args.texto || '').trim(), descripcion = String(args.descripcion || '').trim();
@@ -116,16 +122,16 @@ registrarHerramienta({
       const falsa = sospecha({ description: descripcion, text: texto, files: archivos });
       if (falsa) return NO(`el texto parece pedir que un agente se salte sus reglas («${String(falsa).slice(0, 80)}»). Por MCP no se guarda; si es legítimo, se escribe en la oficina.`);
       const base = args.base ? String(args.base) : null;
-      if (a === 'reemplazar' && !base) return NO('reemplazar exige «base»: el «actualizado» que leíste con «ver». Así no pisas lo que otra persona cambió.');
       const O = await conOficina(ctx, ['GET', 'PUT ' + URL_SKILL(n)]);
       return await idem(ctx, 'skills_cambiar', () => trabajo(async () => {
-        let antes = null; try { antes = (await O(URL_SKILL(n))).skill; } catch { antes = null; }
+        const antes = await existente(O, n);
         if (a === 'crear' && antes) throw new Error(`ya existe una skill «${n}»: para cambiarla usa «reemplazar» con su «base».`);
         if (a === 'reemplazar' && !antes) throw new Error(`no existe la skill «${n}»: para hacerla nueva usa «crear».`);
+        if (a === 'reemplazar' && antes.actualizado && !base) throw new Error('reemplazar exige «base»: el «actualizado» que leíste con «ver». Así no pisas lo que otra persona cambió.');
         const nuevo = { everyone: args.todos === true, agents: args.agentes || [], departments: args.departamentos || [] };
         const motivo = pideConfirmar(nuevo, antes, await rosterDe(ctx.db), { fabrica: antes ? await deFabrica(ctx.env, n) : false });
         if (motivo && !conf) throw new Error(aviso(`${n} llegaría a ${alcanceTexto(nuevo)}; ${motivo}`));
-        const cuerpo = { description: descripcion, text: conMarca(texto, hoy), agents: nuevo.agents, departments: nuevo.departments, files: archivos, todos: nuevo.everyone, confirmado: conf, ...(a === 'reemplazar' ? { base } : { soloNueva: true }) };
+        const cuerpo = { description: descripcion, text: conMarca(texto, hoy), agents: nuevo.agents, departments: nuevo.departments, files: archivos, todos: nuevo.everyone, confirmado: conf, ...(a === 'reemplazar' ? (antes.actualizado ? { base } : {}) : { soloNueva: true }) };
         const r = await O(URL_SKILL(n), cuerpo, 'PUT'), quien = r.skill.everyone ? 'TODOS los agentes' : [...r.skill.departments, ...r.skill.agents].join(', ');
         return `Skill «${n}» ${r.creada ? 'creada' : 'reemplazada'}: llega a ${quien}.${(r.avisos || []).length ? '\n' + r.avisos.join('\n') : ''}\nLleva la marca de origen en su primera línea.`;
       }));
