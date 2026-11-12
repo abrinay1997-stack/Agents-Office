@@ -68,7 +68,7 @@ test('TAMAÑO: tools/list de un token de gasto cabe en el presupuesto, y cada he
   assert.ok(tools.length <= 23, `${tools.length} herramientas`);
   assert.ok(Math.max(...tools.map((x) => x.description.length)) <= 2200, 'ninguna descripción pasa de 2.200 letras');
   const lectura = (await m.rpc(t.lectura, 'tools/list')).j.result.tools.map((x) => x.name).sort();
-  assert.deepEqual(lectura, ['como_funciona', ...LEE].sort(), 'un token de lectura ve SOLO lo de lectura');
+  assert.deepEqual(lectura, ['como_funciona', 'cerebro', ...LEE].sort(), 'un token de lectura ve SOLO lo de lectura');
   for (const x of tools) assert.equal(x.annotations.readOnlyHint, LEE.includes(x.name) || x.name === 'como_funciona', `${x.name}: readOnlyHint`);
 });
 
