@@ -136,3 +136,8 @@ test('LÍMITES: ≤ 50 sentencias de D1 por llamada, salida ≤ 20.000 con curso
   n = 0; await llamar(t.oficina, 'cerebro_cambiar', { accion: 'agregar', nombre: 'Largo', texto: 'fin' }); assert.ok(n <= 50, `agregar: ${n}`);
   d1.prepare = orig;
 });
+
+test('PRESUPUESTO DEL DOMINIO: cada herramienta ≤ 2.000 letras entre esquema y descripción, las dos ≤ 4.500', () => {
+  const mias = herramientas().filter((h) => h.nombre.startsWith('cerebro')), pesos = mias.map((h) => JSON.stringify(h.esquema).length + h.descripcion.length);
+  assert.equal(mias.length, 2); assert.ok(pesos.every((p) => p <= 2000), pesos.join(', ')); assert.ok(pesos[0] + pesos[1] <= 4500);
+});

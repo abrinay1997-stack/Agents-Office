@@ -63,12 +63,13 @@ test('EL REGISTRO: cada herramienta de la Capa 1 cumple el contrato (alcance, so
 test('TAMAÑO: tools/list de un token de gasto cabe en el presupuesto, y cada herramienta es corta', { skip: SALTAR }, async () => {
   const { m, t } = await conectados();
   const r = await m.rpc(t.gasto, 'tools/list'); const tools = r.j.result.tools;
-  const total = JSON.stringify(tools).length;
-  assert.ok(total <= 28000, `tools/list pesa ${total} letras (presupuesto 28.000: sube con cada dominio de la P5; el del Cerebro suma ~1.900): cada herramienta nueva pesa en cada conversación`);
-  assert.ok(tools.length <= 23, `${tools.length} herramientas`);
+  const P5 = ['cerebro', 'cerebro_cambiar']; // las herramientas de dominio de la P5 se miden en su propio test (mcp-cerebro.test.mjs: ≤ 4.500 letras las dos)
+  const propias = tools.filter((x) => !P5.includes(x.name)), total = JSON.stringify(propias).length;
+  assert.ok(total <= 24000, `tools/list (sin las de dominio) pesa ${total} letras (presupuesto 24.000): cada herramienta nueva pesa en cada conversación`);
+  assert.ok(propias.length <= 21, `${propias.length} herramientas`);
   assert.ok(Math.max(...tools.map((x) => x.description.length)) <= 2200, 'ninguna descripción pasa de 2.200 letras');
-  const lectura = (await m.rpc(t.lectura, 'tools/list')).j.result.tools.map((x) => x.name).sort();
-  assert.deepEqual(lectura, ['como_funciona', 'cerebro', ...LEE].sort(), 'un token de lectura ve SOLO lo de lectura');
+  const lectura = (await m.rpc(t.lectura, 'tools/list')).j.result.tools.map((x) => x.name).filter((n) => n !== 'cerebro').sort();
+  assert.deepEqual(lectura, ['como_funciona', ...LEE].sort(), 'un token de lectura ve SOLO lo de lectura');
   for (const x of tools) assert.equal(x.annotations.readOnlyHint, LEE.includes(x.name) || ['como_funciona', 'cerebro'].includes(x.name), `${x.name}: readOnlyHint`);
 });
 
@@ -245,9 +246,10 @@ test('B2: las claves mcp.idem:* y mcp.undo:* están clasificadas (restablecer la
 
 test('LISTAS EXACTAS: lo que ve un token de «lectura» y uno de «oficina» (si cambia, el cambio es a propósito)', { skip: SALTAR }, async () => {
   const { m, t } = await conectados();
-  const nombres = async (tok) => (await m.rpc(tok, 'tools/list')).j.result.tools.map((x) => x.name).sort();
-  assert.deepEqual(await nombres(t.lectura), ['buscar_en_galeria', 'buscar_presets', 'cerebro', 'como_funciona', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'ver_calendario']);
-  assert.deepEqual(await nombres(t.oficina), ['buscar_en_galeria', 'buscar_presets', 'cerebro', 'cerebro_cambiar', 'como_funciona', 'crear_mi_tarea', 'crear_tarea', 'deshacer', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'hablar_con_dimitri', 'hacer', 'ver_calendario']);
+  const DOMINIOS_P5 = ['cerebro', 'cerebro_cambiar']; // cada carril de la P5 añade los suyos a esta lista (y su test los comprueba aparte)
+  const nombres = async (tok) => (await m.rpc(tok, 'tools/list')).j.result.tools.map((x) => x.name).filter((n) => !DOMINIOS_P5.includes(n)).sort();
+  assert.deepEqual(await nombres(t.lectura), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'ver_calendario']);
+  assert.deepEqual(await nombres(t.oficina), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'crear_mi_tarea', 'crear_tarea', 'deshacer', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'hablar_con_dimitri', 'hacer', 'ver_calendario']);
   assert.deepEqual(await nombres(t.gasto), [...await nombres(t.oficina), 'aplicar_preset', 'crear_lote', 'generar_imagen', 'generar_musica', 'generar_video', 'generar_voz'].sort());
 });
 

@@ -95,7 +95,8 @@ async function estado(ctx) {
 }
 registrarHerramienta({
   nombre: 'cerebro', alcance: 'lectura', soloLectura: true,
-  descripcion: 'Lee el Cerebro (las notas de la empresa). accion: buscar (q) · leer (nombre; devuelve el `modified` que luego hace falta como base y avisa si es nota CLAVE; páginas con cursor) · listar (carpeta?, cursor) · papelera · estado (cuántas notas, el mapa y las que conviene revisar). Solo lee.',
+  descripcion: 'Lee el Cerebro (las notas de la empresa). accion: buscar (q) · leer (nombre; devuelve el `modified` que luego hace falta como base y avisa si es nota CLAVE; '
+    + 'páginas con cursor) · listar (carpeta?, cursor) · papelera · estado (cuántas notas, el mapa y las que conviene revisar). Solo lee.',
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: {
     accion: { type: 'string', enum: ['buscar', 'leer', 'listar', 'papelera', 'estado'] },
     q: { type: 'string', maxLength: 120, description: 'buscar: lo que buscas.' }, nombre: { type: 'string', maxLength: 80, description: 'leer: el nombre exacto de la nota.' },
@@ -140,7 +141,8 @@ async function cambiar(ctx, a) {
 }
 registrarHerramienta({
   nombre: 'cerebro_cambiar', alcance: 'oficina', soloLectura: false, destructiva: true, idempotente: false,
-  descripcion: 'Escribe en el Cerebro. accion: crear (nombre, texto, carpeta?) · editar (nombre, texto, base: REEMPLAZA el texto; base = el `modified` que leíste, si otra persona la cambió da 409) · agregar (nombre, texto, seccion?: añade sin tocar lo que había) · a_la_papelera (nombre; vuelve 30 días) · restaurar (id de la papelera). '
+  descripcion: 'Escribe en el Cerebro. accion: crear (nombre, texto, carpeta?) · editar (nombre, texto, base: REEMPLAZA el texto; base = el `modified` que leíste, '
+    + 'si otra persona la cambió da 409) · agregar (nombre, texto, seccion?: añade sin tocar lo que había) · a_la_papelera (nombre; vuelve 30 días) · restaurar (id de la papelera). '
     + 'Una nota CLAVE (voice, index, CLAUDE, business-model, contexto-marketing) pide confirmado:true. Todo lo escrito lleva «(escrita vía MCP el …)» al inicio. Un texto con órdenes escondidas no se guarda. Borrar para siempre no existe.',
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: {
     accion: { type: 'string', enum: ['crear', 'editar', 'agregar', 'a_la_papelera', 'restaurar'] },
