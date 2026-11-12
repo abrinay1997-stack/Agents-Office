@@ -71,6 +71,17 @@ test('EL CÓDIGO: lo único que cambia Meta es pausar y bajar_presupuesto, con u
   assert.match(fuente, /\{ tipo: 'pausar', id \}/); assert.match(fuente, /\{ tipo: 'bajar_presupuesto', id, valor:/);
   assert.ok(!/office\('\/api\/anuncios\/accion'/.test(fuente), 'ya no se manda la acción por el módulo HTTP');
   assert.ok(!/por: 'dueno'|por: 'dimitri'|confirmacion/.test(fuente), 'ni el dueño ni Dimitri ni un testigo');
+  // (1) de `x.acc` solo existe `accion(`: ni deshacer ni ningún otro método
+  assert.deepEqual([...new Set((fuente.match(/\bx\.acc\.\w+/g) || []))], ['x.acc.accion'], 'solo x.acc.accion');
+  assert.equal((fuente.match(/\.acc\b/g) || []).length, 1, 'una sola referencia a `acc`');
+  // (2) ninguno de sus imports ESTÁTICOS llega al ejecutor de gasto: solo el import perezoso (dinámico) de conAnuncios/asegurarCuentas
+  const estaticos = fuente.split('\n').filter((l) => /^\s*import\s/.test(l));
+  assert.ok(estaticos.length >= 5 && estaticos.every((l) => !/anuncios\/acciones|anuncios-nube|lib\/anuncios/.test(l)), `imports estáticos: ${estaticos.join(' | ')}`);
+  assert.equal((fuente.match(/await import\('\.\.\/\.\.\/anuncios-nube\.js'\)/g) || []).length, 1, 'un solo import perezoso');
+  // (3) los tipos del cuerpo son EXACTAMENTE pausar y bajar_presupuesto, escritos en el código (nunca una variable del cliente)
+  assert.deepEqual([...new Set([...fuente.matchAll(/tipo: '([a-z_]+)'/g)].map((x) => x[1]))].sort(), ['bajar_presupuesto', 'pausar']);
+  const lineaCuerpo = fuente.split('\n').find((l) => /const cuerpo =/.test(l)); assert.ok(lineaCuerpo);
+  assert.deepEqual([...lineaCuerpo.matchAll(/tipo: ?(.)/g)].map((x) => x[1]), ["'", "'"], 'en el cuerpo, cada `tipo:` es un literal escrito en el código');
   // ninguna ruta de gasto, de creación en Meta, de impulso, de confirmación o de deshacer aparece en el código ni en las listas blancas
   assert.ok(!/\/(deshacer|impulsar|sincronizar|aplicar|crear|validar|vista-previa|variaciones|indicadores|conversiones\/(probar|webhook))['"`\/]/.test(fuente.replace(/'GET \/api\/anuncios\/conversiones'/g, '')), 'ninguna ruta de gasto en el código');
   for (const [accion, rutas] of Object.entries(A.PERMITIDAS_CAMBIAR)) for (const r of rutas) assert.ok(/^((GET \/api\/anuncios\/sugerencias)|POST \/api\/anuncios\/(borradores|sugerencias\/<id>\/(descartar|posponer))|PATCH \/api\/anuncios\/borradores\/<id>)$/.test(r), `${accion}: ${r}`);
