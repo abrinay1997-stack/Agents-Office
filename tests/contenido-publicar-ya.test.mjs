@@ -131,7 +131,7 @@ test('publicar-ya no está al alcance de Dimitri, el asistente, los agentes ni T
   for (const f of fs.readdirSync(raiz).filter(x => /\.m?js$/.test(x))) if (/publicar-ya|publicarYa/.test(lee(f))) hallados.push(f);
   const raros = hallados.filter(f => !/^(src\/|contenido\/|settings\.mjs$|serve\.mjs$|cloudflare\/(worker\/lib\/contenido\/|worker\/modulos\/contenido\.js$|worker\/lib\/funciones\.js$|public\/))/.test(f));
   assert.deepEqual(raros, [], 'publicar-ya solo vive en el controlador, la sesión, la página y los ajustes');
-  for (const f of ['sub.mjs', 'oficina/rutas.mjs', 'oficina-mcp.mjs', 'contenido-mcp.mjs', 'telegram.mjs']) assert.ok(!/publicar-ya|publicarYa/.test(lee(f)), f);
+  for (const f of ['sub.mjs', 'oficina/rutas.mjs', 'oficina-mcp.mjs', 'oficina-tools.mjs', 'contenido-mcp.mjs', 'telegram.mjs']) assert.ok(!/publicar-ya|publicarYa/.test(lee(f)), f);
   assert.match(lee('cloudflare/worker/modulos/contenido.js'), /repetir\|publicar-ya/, 'solo administrador en la nube');
 });
 
