@@ -140,7 +140,11 @@ export function crearAvisador({ tg, notify, who, approvers, st, saveSt, send, se
   };
   const aviso = n => { if (n.kind === 'bandeja-comentario') { if (notify.comentarios) toOwners(esc(n.text)); return; } // B1: ya agrupados (uno cada 15 min, «y N más»); el no molestar los guarda
     if (n.kind === 'bandeja-mensaje') { if (notify.mensajes) toOwners(esc(n.text)); return; } // B2: los mensajes privados, igual (sin el texto completo del cliente; un 🛡 no se cita)
-    if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? botonesAnuncio(n) : n.kind === 'mcp-gasto' ? gastoMcpDeAviso(n) : {}, { urgent: n.level === 'error' }); }; // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
+    if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(
+      `${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`,
+      n.kind === 'anuncios' ? botonesAnuncio(n) : n.kind === 'mcp-gasto' ? gastoMcpDeAviso(n) : {},
+      { urgent: n.level === 'error' },
+    ); }; // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
   const esperar = async f => { pend.length = 0; try { f(); } finally { await Promise.allSettled(pend.splice(0)); } };
   return { toOwners, flushHeld, piezaAOwners, tarea: t => esperar(() => tarea(t)), aviso: n => esperar(() => aviso(n)), esperar };
 }

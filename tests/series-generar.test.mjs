@@ -252,7 +252,8 @@ test('18 · DINERO: ni agentes, ni Dimitri, ni los MCP, ni las ops de la oficina
 
 test('18c · DINERO: ningún otro módulo (telegram, disparadores, rutinas, cola, MCP…) llama al generador ni a /api/series, y nadie que no sea el dueño puede escribir dimitri.serieGenerar', () => {
   const raiz = ['telegram.mjs', 'triggers.mjs', 'routines.mjs', 'settings.mjs', 'serve.mjs'], carpetas = ['.', 'oficina', 'contenido', 'tareas', 'anuncios', 'media', 'cloudflare/worker'];
-  const permitido = new Set(['serve.mjs', 'serie-local.mjs', 'series.mjs', 'series-generar.mjs', 'series-bomba-core.mjs', 'series-vista-core.mjs', 'cloudflare/worker/modulos/series.js', 'cloudflare/worker/lib/mcp/dominios/series.js', 'serie-core.mjs', 'serie-topes-core.mjs', 'serie-propuesta-core.mjs', 'serie-vision-core.mjs', 'serie-deriva-core.mjs', 'biblia-core.mjs', 'media/trabajos.mjs']);
+  const permitido = new Set(['serve.mjs', 'serie-local.mjs', 'series.mjs', 'series-generar.mjs', 'series-bomba-core.mjs', 'series-vista-core.mjs', 'cloudflare/worker/modulos/series.js', 'cloudflare/worker/lib/mcp/dominios/series.js',
+    'serie-core.mjs', 'serie-topes-core.mjs', 'serie-propuesta-core.mjs', 'serie-vision-core.mjs', 'serie-deriva-core.mjs', 'biblia-core.mjs', 'media/trabajos.mjs']);
   const baja = d => d.startsWith('cloudflare') || ['oficina', 'contenido', 'tareas', 'anuncios', 'media'].includes(d);
   const walk = d => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap(e => {
     if (e.isDirectory()) return baja(d) ? walk(path.join(d, e.name)) : [];

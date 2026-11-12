@@ -95,7 +95,9 @@ async function abrirTarjeta(ctx, office, nombre, args0) {
   const r = await crearSolicitud(ctx.db, { conexion: ctx.conexion, usuario: ctx.usuario, ms: ctx.ahoraMs, herramienta: nombre, args, ev });
   if (r.limite) return `${r.limite}\nNo se abrió ninguna tarjeta. Este conector no genera ni gasta.`;
   const t = r.tarjeta || r.repetida, horas = Math.round(VENCE_MS / 3600e3);
-  return `${cuerpo}\n${r.repetida ? 'Esta misma petición ya tiene una tarjeta esperando (no abrí otra)' : 'Dejé una tarjeta «espera tu OK»'}: ${t.id}. El dueño la ve en la oficina (Ajustes → Conectar Claude) y en Telegram, con la cifra exacta (${ev.usd ? dinero(ev.usd) : 'gratis'}) y los topes; vence en ${horas} h. Solo una persona la aprueba y la oficina vuelve a mirar los topes al ejecutar. Este conector no genera ni gasta: no esperes el resultado aquí.`;
+  return `${cuerpo}\n${r.repetida ? 'Esta misma petición ya tiene una tarjeta esperando (no abrí otra)' : 'Dejé una tarjeta «espera tu OK»'}: ${t.id}. El dueño la ve en la oficina (Ajustes → Conectar Claude) y en Telegram, `
+    + `con la cifra exacta (${ev.usd ? dinero(ev.usd) : 'gratis'}) y los topes; vence en ${horas} h. `
+    + 'Solo una persona la aprueba y la oficina vuelve a mirar los topes al ejecutar. Este conector no genera ni gasta: no esperes el resultado aquí.';
 }
 for (const d of definicionesEstudio()) {
   const lee = ESTUDIO_LEE.includes(d.nombre);

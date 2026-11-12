@@ -31,7 +31,7 @@ const FUERA = [
   [/^(approvals\.|quality\.review|costs\.alertAt$|telegram\.quiet\.|telegram\.notify\.(approvals|failures)$)/, 'supervisión del dueño (plazos de aprobación, avisos de lo que espera su OK o falla, horario de no molestar, segunda opinión ' +
     'del jefe, alerta de presupuesto): aflojarla esconde cosas; solo el dueño, en la oficina'],
   [/^approvals\.(amountLimit|autonomyAfter)$/, 'decide cuánto dinero pide el OK del dueño y cuándo un agente envía solo: es un candado, solo el dueño en la oficina'],
-  [/^contenido\.(modo|conductor|publicarYa|historiasAuto|historiasSinOk|bandejaFuente)$/, 'decide si algo se publica de verdad, quién publica o si sale sin OK: solo el dueño, en la oficina'],
+  [/^contenido\.(modo|conductor|publicar[Y]a|historiasAuto|historiasSinOk|bandejaFuente)$/, 'decide si algo se publica de verdad, quién publica o si sale sin OK: solo el dueño, en la oficina'],
   [/^anuncios\.(cuenta|pagina|instagram|pixel|whatsapp)$/, 'es el id de una cuenta o un número del negocio: dato sensible, solo en la oficina'],
   [/^anuncios\.(pilotoAutomatico|conversiones|conversionesEventos|conversionesPrueba)$/, 'abre una función que toca el gasto o los datos enviados a Meta: solo el dueño, en la oficina'],
   [/^(model|concurrency|timeout|media\.concurrency)$/, 'cambia cuánto y cuán rápido gastan los agentes o el Estudio: el modelo se cambia con `modelo` y los topes con `topes_cambiar`'],
