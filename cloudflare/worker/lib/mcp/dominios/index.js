@@ -6,7 +6,8 @@ import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio 
 // import './tareas.js';
 // import './contenido.js';
 // import './anuncios.js';
-// import './estudio.js';
+import './estudio.js'; // P5 carril 5: galería (ver y ordenar) del Estudio
+import './series.js'; // P5 carril 5: series de imágenes (leer y proponer)
 // import './agentes.js';
 // import './skills.js';
 // import './empresa.js';
