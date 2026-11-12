@@ -23,28 +23,8 @@ import { DEPT_KEYS } from './src/data.js';
 
 export const SHIPPED = path.join(ROOT, 'skills');
 export const brainDir = brainPath => path.join(brainPath, 'Agents Office', 'skills');
-const LIMITS = { body: 6000, files: 8000, perFile: 4000 };
-const TEXT = /\.(md|txt|csv|json|ya?ml|html?|xml|tsv)$/i;
-
-/** Parse the front-matter block of a SKILL.md → { meta, body }. Values: text, [a, b], or "- a" lines. */
-export function parseSkill(text) {
-  const meta = {}; let body = text;
-  const m = text.match(/^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-  if (m) {
-    body = text.slice(m[0].length);
-    let key = null;
-    for (const line of m[1].split(/\r?\n/)) {
-      const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);
-      if (kv) {
-        key = kv[1].toLowerCase(); const v = kv[2].trim();
-        if (v.startsWith('[')) meta[key] = v.replace(/^\[|\]$/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
-        else if (v === '') meta[key] = [];
-        else meta[key] = v.replace(/^["']|["']$/g, '');
-      } else if (key && /^\s*-\s+/.test(line)) { if (!Array.isArray(meta[key])) meta[key] = []; meta[key].push(line.replace(/^\s*-\s+/, '').trim().replace(/^["']|["']$/g, '')); }
-    }
-  }
-  return { meta, body: body.trim() };
-}
+import { LIMITS, TEXT, parseSkill } from './skills-core.mjs'; // las reglas puras (también las usa la nube: cloudflare/worker/lib/skills-api.js)
+export { parseSkill };
 
 function readOne(where, entry, agents, problems) {
   const p = path.join(where, entry.name);
