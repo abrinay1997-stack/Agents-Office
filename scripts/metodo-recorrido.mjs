@@ -49,11 +49,13 @@ const ficha = (i, extra = {}) => ({ id: 'A' + i, pagina: 'Muebles El Roble', pag
   texto: `¿Tu sala ya no te gusta? Cámbiala este mes con 20 % de descuento.\nEscríbenos y te mandamos el catálogo (${i}).`, titulo: 'Sala nueva en 48 horas', cta: 'Enviar mensaje', destino: 'WhatsApp', destinoTipo: 'whatsapp',
   versiones: i, relacionados: 0, enlace: 'https://www.facebook.com/ads/library/?id=' + i, dias: 100 - i * 20, senal: 200 - i * 30, miniatura: '', video: false, ...extra });
 const ANUNCIOS = { consulta: {}, anuncios: [ficha(1), ficha(2, { formato: 'video' }), ficha(3, { activo: false, destinoTipo: 'web', cta: 'Comprar' })], cache: false, at: new Date().toISOString(), vieja: false, de: 'Muebles El Roble · PA', semana: { usados: 2, tope: 10 },
-  lectura: { total: 3, activos: 2, formatos: [['imagen', 2], ['video', 1]], destinos: [['whatsapp', 2], ['web', 1]], llamados: [['Enviar mensaje', 2]], plataformas: [['FACEBOOK', 3]], diasMediana: 60, anunciantes: [['Muebles El Roble', 3]], ganadores: [], ganchos: ['¿Tu sala ya no te gusta?', 'Sala nueva en 48 horas'] } };
+  lectura: { total: 3, activos: 2, formatos: [['imagen', 2], ['video', 1]], destinos: [['whatsapp', 2], ['web', 1]], 
+    llamados: [['Enviar mensaje', 2]], plataformas: [['FACEBOOK', 3]], diasMediana: 60, anunciantes: [['Muebles El Roble', 3]], ganadores: [], ganchos: ['¿Tu sala ya no te gusta?', 'Sala nueva en 48 horas'] } };
 
 const medir = page => page.evaluate(() => {
   const ov = document.getElementById('anuOv'), vis = b => b.offsetParent && b.getClientRects().length;
-  const peq = [...ov.querySelectorAll('.anu-main button, .anu-main select, .anu-main input, .anu-main a.anu-btn, .anu-main summary')].filter(vis).map(b => [b, b.getBoundingClientRect()]).filter(([, r]) => r.height < 24 || r.width < 24).map(([b]) => (b.textContent || b.name || b.tagName).trim().slice(0, 30));
+  const peq = [...ov.querySelectorAll('.anu-main button, .anu-main select, .anu-main input, .anu-main a.anu-btn, .anu-main summary')]
+    .filter(vis).map(b => [b, b.getBoundingClientRect()]).filter(([, r]) => r.height < 24 || r.width < 24).map(([b]) => (b.textContent || b.name || b.tagName).trim().slice(0, 30));
   const letra = [...ov.querySelectorAll('.anu-main *')].filter(n => n.offsetParent && [...n.childNodes].some(c => c.nodeType === 3 && c.textContent.trim())).filter(n => parseFloat(getComputedStyle(n).fontSize) < 10.5).map(n => n.className || n.tagName);
   const main = ov.querySelector('.anu-main');
   return { peq, letra: letra.slice(0, 5), hs: document.documentElement.scrollWidth > innerWidth + 1 || main.scrollWidth > main.clientWidth + 1 };

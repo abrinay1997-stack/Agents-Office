@@ -25,7 +25,8 @@ function numeroHTML(r) {
     return `<div class="anu-vacio"><b>Todavía no hay número mágico</b><span>Escribe tu ticket, tus costos y cuánto de la venta inviertes en «Números del negocio»: con eso la oficina sabe cuánto puede costar un resultado. Mientras tanto, cada campaña se compara solo con su propio mes.</span>
       <button type="button" class="anu-btn pri" data-mparte="numeros">Escribir mis números</button></div>`;
   }
-  const filas = q ? VENTANAS.map(([d, t]) => { const v = q.ventanas?.[d] || {}; return `<tr><th scope="row">${t}</th><td class="anu-n">${plata(v.gasto, m)}</td><td class="anu-n">${num(v.conversaciones || v.compras)}</td><td class="anu-n">${plata(v.real, m)}</td><td>${q1Chip(v.estado)}</td></tr>`; }).join('') : '';
+  const filas = q ? VENTANAS.map(([d, t]) => { const v = q.ventanas?.[d] || {}; 
+    return `<tr><th scope="row">${t}</th><td class="anu-n">${plata(v.gasto, m)}</td><td class="anu-n">${num(v.conversaciones || v.compras)}</td><td class="anu-n">${plata(v.real, m)}</td><td>${q1Chip(v.estado)}</td></tr>`; }).join('') : '';
   return `<section class="anu-met-num" aria-label="El número mágico">
     <div class="anu-kpis">
       <div class="anu-kpi"><span>${esc(n.metrica || 'Costo por resultado')} · objetivo</span><b>${plata(n.objetivo, m)}</b><small>lo que estás dispuesto a pagar</small></div>
@@ -34,14 +35,16 @@ function numeroHTML(r) {
       <div class="anu-kpi"><span>La cuenta, últimos 7 días</span><b>${plata(q?.ventanas?.[7]?.real, m)}</b><small>${q ? q1Chip(q.estado) : ''}</small></div>
     </div>
     ${n.alarma ? `<p class="anu-aviso-error" role="alert">${esc(n.textoAlarma)}</p>` : ''}
-    ${filas ? `<details class="anu-met-det"><summary>Q1 · ¿la cuenta está dentro del número? (30, 14 y 7 días completos)</summary><div class="anu-tabla-caja"><table class="anu-tabla"><thead><tr><th>Ventana</th><th class="anu-n">Gasto</th><th class="anu-n">Resultados</th><th class="anu-n">${esc(q.metrica || 'Costo')}</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div></details>` : ''}
+    ${filas ? `<details class="anu-met-det"><summary>Q1 · ¿la cuenta está dentro del número? (30, 14 y 7 días completos)</summary>
+      <div class="anu-tabla-caja"><table class="anu-tabla"><thead><tr><th>Ventana</th><th class="anu-n">Gasto</th><th class="anu-n">Resultados</th><th class="anu-n">${esc(q.metrica || 'Costo')}</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div></details>` : ''}
   </section>`;
 }
 
 function q2HTML(q2, m) {
   const l = (q2?.metricas || []).filter(x => x.valor != null);
   if (!l.length) return '';
-  return `<ul class="anu-met-q2" aria-label="Q2 · qué métrica falla (últimos ${esc(q2.ventana)} días)">${l.map(x => `<li class="${x.mal ? 'mal' : ''}"><span>${esc(x.nombre)}</span><b>${valorDe(x, m)}</b>${x.mal ? chip('revisar', 'ambar') : chip('bien', 'verde')}${x.texto ? `<small>${esc(x.texto)}</small>` : ''}</li>`).join('')}</ul>`;
+  return `<ul class="anu-met-q2" aria-label="Q2 · qué métrica falla (últimos ${esc(q2.ventana)} días)">
+    ${l.map(x => `<li class="${x.mal ? 'mal' : ''}"><span>${esc(x.nombre)}</span><b>${valorDe(x, m)}</b>${x.mal ? chip('revisar', 'ambar') : chip('bien', 'verde')}${x.texto ? `<small>${esc(x.texto)}</small>` : ''}</li>`).join('')}</ul>`;
 }
 
 function hijoHTML(x, m, tipo) {
@@ -60,7 +63,8 @@ function campanaHTML(c, r, { puedeEtapa }) {
   return `<li class="anu-tarj anu-met-camp t-${esc(v.tono || 'neutro')}">
     <div class="anu-met-cab"><h3>${esc(c.nombre)}</h3>${chip(v.nombre || 'Sin veredicto', tono(v.tono))}${etapa}</div>
     ${v.motivo ? `<p class="anu-met-motivo">${esc(v.motivo)}</p>` : ''}
-    <p class="anu-met-cifra">7 días: ${plata(w.gasto, m)} · ${num(w.resultados)} ${esc(c.nombreResultado || 'resultados')} · ${plata(w.costoPorResultado, m)} c/u${ref.ref != null ? ` · aguanta hasta ${plata(ref.ref, m)}` : ''}${w.frecuencia != null ? ` · frecuencia ${num(w.frecuencia)}` : ''}</p>
+    <p class="anu-met-cifra">7 días: ${plata(w.gasto, m)} · ${num(w.resultados)} ${esc(c.nombreResultado || 'resultados')} · ${plata(w.costoPorResultado, m)} c/u
+      ${ref.ref != null ? ` · aguanta hasta ${plata(ref.ref, m)}` : ''}${w.frecuencia != null ? ` · frecuencia ${num(w.frecuencia)}` : ''}</p>
     ${c.exigencia ? `<p class="anu-ayuda">${esc(c.exigencia)}</p>` : ''}
     ${q2HTML(c.q2, m)}
     ${acciones ? `<div class="anu-met-q3"><h4>Q3 · qué hacer</h4><ul>${acciones}</ul></div>` : ''}
@@ -77,7 +81,8 @@ function revisionHTML(S, ctx) {
   const res = r.resumen || {}, pv = res.porVeredicto || {};
   const leido = r.leidoCon === 'diario' ? 'Sale de las cifras diarias ya guardadas (sin clics únicos ni rankings). «Leer de Meta ahora» trae la lectura completa.'
     : r.leidoCon && r.leidoCon !== 'completo' ? `Meta no entregó todos los campos (lectura «${r.leidoCon}»): lo que falta sale como «${SIN}».` : '';
-  const cab = `<div class="anu-barra"><p class="anu-ayuda">Días completos, hasta ayer${r.leidoAt ? ` · leído ${esc(haceCuanto(r.leidoAt, ctx.ahora()))}` : ''}. ${res.campanas || 0} ${res.campanas === 1 ? 'campaña' : 'campañas'}${res.pendientes ? ` · ${res.pendientes} cosas por mirar` : ''}${pv.sano ? ` · ${pv.sano} sanas` : ''}.</p>
+  const cab = `<div class="anu-barra"><p class="anu-ayuda">Días completos, hasta ayer${r.leidoAt ? ` · leído ${esc(haceCuanto(r.leidoAt, ctx.ahora()))}` : ''}. ${res.campanas || 0} ${res.campanas === 1 ? 'campaña' : 'campañas'}
+    ${res.pendientes ? ` · ${res.pendientes} cosas por mirar` : ''}${pv.sano ? ` · ${pv.sano} sanas` : ''}.</p>
     <button type="button" class="anu-btn" data-ma="fresco"${S.leyendo ? ' disabled aria-busy="true"' : ''}>${S.leyendo ? 'Leyendo de Meta…' : 'Leer de Meta ahora'}</button></div>`;
   const lista = (r.campanas || []).length ? `<ul class="anu-tarjs anu-met-lista">${r.campanas.map(c => campanaHTML(c, r, { puedeEtapa: ctx.servida })).join('')}</ul>`
     : '<div class="anu-vacio"><b>No hay campañas encendidas que revisar</b><span>La revisión mira lo que está activo en tu cuenta. Cuando enciendas una campaña, aparecerá aquí con su veredicto.</span></div>';
@@ -96,11 +101,13 @@ function numerosHTML(S) {
       <input type="number" inputmode="decimal" step="any" min="0" name="c:${esc(c.id)}" value="${propio ? esc(c.valor) : ''}" placeholder="${c.valor != null && !propio ? esc(c.valor) + ' · ' + esc(c.origenTexto.toLowerCase()) : ''}" data-origen="${esc(propio ? c.origen : '')}">
       <small>${esc(c.ayuda || '')}</small></label>`;
   }).join('');
-  const costos = [...(n.costos || []), { nombre: '', pct: '' }, { nombre: '', pct: '' }].slice(0, 8).map((c, i) => `<div class="anu-met-costo"><input type="text" name="cn:${i}" value="${esc(c.nombre)}" maxlength="60" placeholder="Producción, envío, comisión…" aria-label="Costo ${i + 1}: nombre">
+  const costos = [...(n.costos || []), { nombre: '', pct: '' }, { nombre: '', pct: '' }].slice(0, 8)
+    .map((c, i) => `<div class="anu-met-costo"><input type="text" name="cn:${i}" value="${esc(c.nombre)}" maxlength="60" placeholder="Producción, envío, comisión…" aria-label="Costo ${i + 1}: nombre">
     <input type="number" inputmode="decimal" step="any" min="0" max="100" name="cp:${i}" value="${esc(c.pct)}" placeholder="%" aria-label="Costo ${i + 1}: porcentaje de cada venta"></div>`).join('');
   const salida = `<div class="anu-kpis">
       <div class="anu-kpi"><span>Objetivo · por venta</span><b>${plata(o.costoCompra, m)}</b><small>${o.costoConversacion != null ? `${plata(o.costoConversacion, m)} por conversación` : 'falta el ticket y cuánto inviertes'}</small></div>
-      <div class="anu-kpi"><span>Equilibrio · por venta</span><b>${plata(e.cac, m)}</b><small>${e.costoConversacion != null ? `${plata(e.costoConversacion, m)} por conversación · ROAS ${e.roas != null ? e.roas.toLocaleString('es', { maximumFractionDigits: 2 }) : SIN}` : 'faltan los costos'}</small></div>
+      <div class="anu-kpi"><span>Equilibrio · por venta</span><b>${plata(e.cac, m)}</b>
+        <small>${e.costoConversacion != null ? `${plata(e.costoConversacion, m)} por conversación · ROAS ${e.roas != null ? e.roas.toLocaleString('es', { maximumFractionDigits: 2 }) : SIN}` : 'faltan los costos'}</small></div>
       <div class="anu-kpi"><span>Inversión del mes</span><b>${plata(o.inversion, m)}</b><small>${o.ventasNecesarias != null ? `para ${num(o.ventasNecesarias)} ventas` : 'con tu meta de ventas'}</small></div>
       <div class="anu-kpi"><span>${esc(g.metrica || 'Número mágico')} · real</span><b>${plata(g.real, m)}</b><small>últimos 30 días en Meta</small></div>
     </div>
@@ -152,8 +159,10 @@ function cicloHTML(S) {
 // ───────────────────────────── Competencia ─────────────────────────────
 const NOMBRE_DESTINO = { whatsapp: 'WhatsApp', mensajes: 'Mensajes', instagram: 'Instagram', web: 'Web' };
 function anuncioHTML(a) {
-  return `<li class="anu-tarj anu-comp-anuncio"><div class="anu-met-cab"><h3>${esc(a.pagina || 'Anunciante')}</h3>${chip(a.activo ? 'Activo' : 'Ya no corre', a.activo ? 'verde' : 'gris')}${chip(`${num(a.dias)} días`, a.dias >= 30 ? 'verde' : 'gris')}${a.versiones > 1 ? chip(`${a.versiones} versiones`, 'ambar') : ''}</div>
-    <p class="anu-met-cifra">${esc(a.formato || 'anuncio')}${a.cta ? ` · botón «${esc(a.cta)}»` : ''}${a.destinoTipo ? ` · lleva a ${esc(NOMBRE_DESTINO[a.destinoTipo] || a.destinoTipo)}` : ''}${(a.plataformas || []).length ? ` · ${esc(a.plataformas.join(', ').toLowerCase())}` : ''}${a.inicio ? ` · desde ${esc(a.inicio)}` : ''}</p>
+  return `<li class="anu-tarj anu-comp-anuncio"><div class="anu-met-cab"><h3>${esc(a.pagina || 'Anunciante')}</h3>${chip(a.activo ? 'Activo' : 'Ya no corre', a.activo ? 'verde' : 'gris')}
+    ${chip(`${num(a.dias)} días`, a.dias >= 30 ? 'verde' : 'gris')}${a.versiones > 1 ? chip(`${a.versiones} versiones`, 'ambar') : ''}</div>
+    <p class="anu-met-cifra">${esc(a.formato || 'anuncio')}${a.cta ? ` · botón «${esc(a.cta)}»` : ''}
+      ${a.destinoTipo ? ` · lleva a ${esc(NOMBRE_DESTINO[a.destinoTipo] || a.destinoTipo)}` : ''}${(a.plataformas || []).length ? ` · ${esc(a.plataformas.join(', ').toLowerCase())}` : ''}${a.inicio ? ` · desde ${esc(a.inicio)}` : ''}</p>
     ${a.titulo ? `<p><b>${esc(a.titulo)}</b></p>` : ''}${a.texto ? `<p class="anu-comp-texto">${esc(a.texto)}</p>` : ''}
     ${a.enlace ? `<p class="anu-met-pie"><a class="anu-btn" href="${esc(a.enlace)}" target="_blank" rel="noopener noreferrer">Verlo en la Biblioteca de Meta</a></p>` : ''}</li>`;
 }
@@ -179,7 +188,8 @@ function competenciaHTML(S, ctx) {
   const s = r.semana || {}, sin = !r.configurado, agotado = s.tope != null && s.usados >= s.tope;
   const estado = sin ? `<div class="anu-vacio"><b>Falta conectar la Biblioteca de anuncios</b><span>${esc(r.motivo || '')} La llave se pone como variable de entorno (SCRAPECREATORS_API_KEY); nunca en un archivo.</span></div>`
     : `<p class="anu-ayuda" data-creditos>Créditos de esta semana: <b>${num(s.usados)} de ${num(s.tope)}</b>. Cada búsqueda nueva gasta uno; repetirla en 12 horas no gasta. El tope se cambia en Ajustes → Anuncios.</p>`;
-  const guardados = (r.competidores || []).length ? `<div class="anu-comp-guard" role="group" aria-label="Competidores que sigues">${r.competidores.map(c => `<span class="anu-comp-g"><button type="button" class="anu-btn" data-cver="${esc(c.pageId || '')}" data-cnombre="${esc(c.nombre)}">${esc(c.nombre)}</button>
+  const guardados = (r.competidores || []).length ? `<div class="anu-comp-guard" role="group" aria-label="Competidores que sigues">
+    ${r.competidores.map(c => `<span class="anu-comp-g"><button type="button" class="anu-btn" data-cver="${esc(c.pageId || '')}" data-cnombre="${esc(c.nombre)}">${esc(c.nombre)}</button>
       ${ctx.servida ? `<button type="button" class="anu-btn anu-comp-x" data-cquitar="${esc(c.pageId ? 'p:' + c.pageId : 'n:' + c.nombre.toLowerCase())}" aria-label="Dejar de seguir a ${esc(c.nombre)}">×</button>` : ''}</span>`).join('')}</div>`
     : '<p class="anu-ayuda">Todavía no sigues a ningún competidor: busca una empresa y guárdala.</p>';
   const form = `<form class="anu-comp-form" data-mform="buscar" novalidate>

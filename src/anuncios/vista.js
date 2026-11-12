@@ -472,7 +472,8 @@ function init(ov, ctx) {
     return primerClic(S.dlg);
   });
   ov.addEventListener('input', e => { if (S.tab === 'borradores' && main.contains(e.target)) ctl.input(e); });
-  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; if (esMet(S.tab) && main.contains(e.target) && met.change(e)) return; if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; guarda.set('cuenta', S.cuenta); pintar(); return; } if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
+  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; 
+    if (esMet(S.tab) && main.contains(e.target) && met.change(e)) return; if (e.target.matches('[data-cuenta]')) { S.cuenta = e.target.value; guarda.set('cuenta', S.cuenta); pintar(); return; } if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
   ov.addEventListener('keydown', e => {
     const el = e.target;
     if (S.tab === 'borradores' && main.contains(el) && ctl.keydown(e)) return;
