@@ -511,3 +511,67 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 .anu-cta{max-width:100%;white-space:normal}
 .anu-dcuenta{margin:4px 0 0;font-size:var(--fs-sm,13px)}
 .anu-cta-h{color:var(--tx2,inherit)}
+
+/* 11 nov 2026: las pestañas Método (revisión 3Q, números del negocio, ciclo de ventas) y Competencia — src/anuncios/metodo.js */
+#anuOv .anu-met { display: flex; flex-direction: column; gap: 12px; }
+#anuOv .anu-met > .anu-barra { justify-content: space-between; align-items: center; margin: 0; }
+#anuOv .anu-met > .anu-barra .anu-ayuda { margin: 0; flex: 1 1 260px; }
+#anuOv .anu-met h3 { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+#anuOv .anu-met h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--anu-mut); }
+#anuOv .anu-met p { margin: 0; overflow-wrap: anywhere; }
+#anuOv .anu-met .anu-kpi small { display: block; color: var(--anu-mut); font-size: 12px; margin-top: 2px; }
+#anuOv .anu-met-lista, #anuOv .anu-met-ciclo { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+#anuOv .anu-met-ciclo { padding: 0; }
+#anuOv .anu-met .anu-tarj { display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; line-height: 1.45; }
+#anuOv .anu-met-camp { border-left: 4px solid var(--anu-line); }
+#anuOv .anu-met-camp.t-bien { border-left-color: var(--t-verde); }
+#anuOv .anu-met-camp.t-mal { border-left-color: var(--t-rojo); }
+#anuOv .anu-met-camp.t-aviso { border-left-color: var(--t-ambar); }
+#anuOv .anu-met-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+#anuOv .anu-met-cab h3 { flex: 1 1 200px; }
+#anuOv .anu-met-etapa { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--anu-mut); }
+#anuOv .anu-met select, #anuOv .anu-met input { min-height: 34px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--anu-line); background: var(--anu-card); color: inherit; font: inherit; font-size: 14px; max-width: 100%; }
+#anuOv .anu-met select:focus-visible, #anuOv .anu-met input:focus-visible, #anuOv .anu-met summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anuOv .anu-met-motivo { font-weight: 600; }
+#anuOv .anu-met-cifra { color: var(--anu-mut); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+#anuOv .anu-met-q2 { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+#anuOv .anu-met-q2 li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 7px 9px; border-radius: 10px; background: var(--anu-soft); border: 1px solid transparent; font-size: 12.5px; }
+#anuOv .anu-met-q2 li.mal { border-color: var(--t-ambar); }
+#anuOv .anu-met-q2 li span { color: var(--anu-mut); flex: 1 1 100%; }
+#anuOv .anu-met-q2 li b { font-size: 15px; font-variant-numeric: tabular-nums; flex: 1 1 auto; }
+#anuOv .anu-met-q2 li .anu-chip { flex: 0 0 auto; }
+#anuOv .anu-met-q2 li small { flex: 1 1 100%; color: var(--anu-mut); font-size: 11.5px; }
+#anuOv .anu-met-q3 ul, #anuOv .anu-met-hijos, #anuOv .anu-comp-ganchos, #anuOv .anu-comp-emp { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-met-q3 li { display: flex; flex-direction: column; gap: 1px; padding-left: 10px; border-left: 2px solid var(--anu-line); }
+#anuOv .anu-met-q3 li span { color: var(--anu-mut); }
+#anuOv .anu-met-det summary { cursor: pointer; min-height: 28px; display: flex; align-items: center; font-size: 13px; font-weight: 600; }
+#anuOv .anu-met-det[open] summary { margin-bottom: 8px; }
+#anuOv .anu-met-hijos li { padding: 8px 10px; border-radius: 10px; background: var(--anu-soft); display: flex; flex-direction: column; gap: 4px; }
+#anuOv .anu-met-hl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#anuOv .anu-met-hl .anu-met-cifra { flex: 1 1 100%; }
+#anuOv .anu-met-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; }
+#anuOv .anu-met-pie .anu-ayuda { margin: 0; }
+#anuOv .anu-met a.anu-btn { text-decoration: none; color: inherit; }
+#anuOv .anu-met-form { display: flex; flex-direction: column; gap: 14px; }
+#anuOv .anu-met-form fieldset { border: 1px solid var(--anu-line); border-radius: 14px; padding: 12px 14px; margin: 0; background: var(--anu-card); min-width: 0; }
+#anuOv .anu-met-form legend { font-weight: 600; font-size: 13.5px; padding: 0 6px; }
+#anuOv .anu-met-fila { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px 14px; }
+#anuOv .anu-met-campo { display: flex; flex-direction: column; gap: 3px; font-size: 13px; min-width: 0; }
+#anuOv .anu-met-campo > span { font-weight: 600; }
+#anuOv .anu-met-campo small { color: var(--anu-mut); font-size: 11.5px; font-weight: 400; }
+#anuOv .anu-met-costos { display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-met-costo { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; }
+#anuOv .anu-comp-form { display: grid; grid-template-columns: minmax(0, 1fr) 180px auto; gap: 10px; align-items: end; }
+#anuOv .anu-comp-guard { display: flex; flex-wrap: wrap; gap: 8px; }
+#anuOv .anu-comp-g { display: inline-flex; gap: 2px; }
+#anuOv .anu-comp-x { padding: 0 10px; min-width: 34px; justify-content: center; }
+#anuOv .anu-comp-emp li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--anu-line); border-radius: 12px; background: var(--anu-card); }
+#anuOv .anu-comp-emp li > span { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#anuOv .anu-comp-emp small { color: var(--anu-mut); flex: 1 1 100%; }
+#anuOv .anu-comp-res { display: flex; flex-direction: column; gap: 10px; }
+#anuOv .anu-comp-ganchos li { padding-left: 10px; border-left: 2px solid var(--anu-line); font-size: 13.5px; }
+#anuOv .anu-comp-texto { white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+@container anuview (max-width: 640px) {
+  #anuOv .anu-comp-form { grid-template-columns: minmax(0, 1fr); }
+  #anuOv .anu-met select, #anuOv .anu-met input { min-height: 44px; font-size: 16px; }
+}
