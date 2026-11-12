@@ -9,7 +9,7 @@ const DOS_DIAS = 2 * 864e5;
 const CORRIENDO_MS = 120_000;
 
 async function podar(db) {
-  try { await db.prepare("delete from docs where clave like 'mcp.idem:%' and actualizado < ?").bind(new Date(Date.now() - DOS_DIAS).toISOString()).run(); } catch { /* la poda nunca tumba una llamada */ }
+  try { await db.prepare("delete from docs where clave >= 'mcp.idem:' and clave < 'mcp.idem;' and actualizado < ?").bind(new Date(Date.now() - DOS_DIAS).toISOString()).run(); } catch { /* la poda nunca tumba una llamada */ }
 }
 
 /** `fn()` → texto o { texto }. Devuelve siempre { texto }. */
@@ -28,7 +28,8 @@ export async function conIdempotencia(db, { conexionId, herramienta, clave, ms, 
   let r;
   try { r = await normal(); }
   catch (e) { try { await db.prepare('delete from docs where clave = ?').bind(k).run(); } catch { /* la clave caduca sola */ } throw e; }
-  await guardarDoc(db, k, { estado: 'hecho', at: ms, texto: String(r.texto ?? '').slice(0, 6000) });
+  // el efecto YA ocurrió: si apuntar «hecho» falla, no se falla la llamada ni se suelta la clave (queda «corriendo» y un reintento no repite nada)
+  try { await guardarDoc(db, k, { estado: 'hecho', at: ms, texto: String(r.texto ?? '').slice(0, 6000) }); } catch (e) { console.warn('[mcp] no se pudo apuntar la clave de idempotencia:', e?.message ?? e); }
   await podar(db);
   return r;
 }

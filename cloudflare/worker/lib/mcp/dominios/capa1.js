@@ -11,6 +11,8 @@ import { ACCIONES } from '../../../../../oficina/mapa.mjs';
 import { registrarHerramienta } from '../registro.js';
 import { limpiarSecretos } from '../../secretos.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
+import { restringir } from '../capa1/restringir.js';
+import { OPS_FUERA_HACER } from '../capa1/oficina.js';
 import { definicionesEstudio, esquemaRemoto, nuevoEstudio, prepararGasto, ESTUDIO_LEE } from '../capa1/estudio.js';
 
 const OFICINA_LEE = ['estado_oficina', 'ver_calendario'];
@@ -33,32 +35,50 @@ function fallo(nombre, e) {
   console.error(`[mcp:capa1] ${nombre}:`, e?.message ?? e);
   return { texto: `No se pudo: ${limpiarSecretos(String(e?.message || e)).replace(/\s+/g, ' ').slice(0, 300)}`, esError: true };
 }
-async function conOficina(ctx) { const { crearOficinaMcp } = await import('../capa1/oficina.js'); return crearOficinaMcp({ env: ctx.env, db: ctx.db, usuario: ctx.usuario, ahoraMs: ctx.ahoraMs }); }
+/** `permitidas`: lo que ESA herramienta puede pedirle a la oficina (ver capa1/restringir.js). */
+async function conOficina(ctx, permitidas) {
+  const { crearOficinaMcp } = await import('../capa1/oficina.js');
+  return restringir(await crearOficinaMcp({ env: ctx.env, db: ctx.db, usuario: ctx.usuario, ahoraMs: ctx.ahoraMs }), permitidas);
+}
+/** Qué puede pedir cada herramienta de la oficina: las lecturas, solo GET; las escrituras, solo el POST que usan. */
+export const PERMITIDAS = Object.freeze({
+  estado_oficina: ['GET'], ver_calendario: ['GET'], crear_tarea: ['POST /api/tasks'], crear_mi_tarea: ['POST /api/tareas/mias'],
+  hacer: ['POST /api/oficina/accion'], deshacer: ['POST /api/oficina/deshacer'], hablar_con_dimitri: ['POST /api/sub/chat'],
+});
+/** La tarea que crea un asistente nace con la marca `by: 'mcp'` (el servidor de tareas no la admite en el cuerpo): se apunta después, sobre la fila. */
+async function marcarOrigen(db, texto) {
+  const id = /Tarea creada: (\S+)/.exec(texto)?.[1];
+  if (id) { try { await db.prepare("update filas set json = json_set(json, '$.by', 'mcp') where coleccion = 'tareas' and id = ?").bind(id).run(); } catch (e) { console.warn('[mcp:capa1] no se pudo marcar el origen:', e?.message ?? e); } }
+}
 const idem = (ctx, herramienta, fn) => conIdempotencia(ctx.db, { conexionId: ctx.conexion.id, herramienta, clave: ctx.claveIdempotencia, ms: ctx.ahoraMs, fn });
 
 /* ---------- la oficina ---------- */
-const ordenes = Object.entries(ACCIONES).filter(([k]) => !/^anuncio_(activar|reanudar|subir_presupuesto|relanzar)$/.test(k)).map(([k, v]) => `${k}: ${v}`).join(' | ');
-/** Los campos de `ACCIONES` (oficina/mapa.mjs) que el `inputSchema` de oficina-tools.mjs no trae: sin ellos, el esquema cerrado del remoto impediría delegar a una persona o escribir en el Cerebro. */
+const ordenes = Object.entries(ACCIONES).filter(([k]) => !/^anuncio_(activar|reanudar|subir_presupuesto|relanzar)$/.test(k) && !OPS_FUERA_HACER[k]).map(([k, v]) => `${k}: ${v}`).join(' | ');
+/** Los campos de `ACCIONES` (oficina/mapa.mjs) que el `inputSchema` de oficina-tools.mjs no trae: sin `persona`, el esquema cerrado del remoto impediría delegar a una persona del equipo. */
 export const CAMPOS_EXTRA_HACER = Object.freeze({
   persona: { type: 'string', maxLength: 80, description: 'mia_delegar: el nombre de una persona del equipo (en vez de dept/agent).' },
-  grupo: { type: 'string', maxLength: 80, description: 'nota_crear: la carpeta del Cerebro (opcional).' },
-  seccion: { type: 'string', maxLength: 120, description: 'nota_agregar: la sección a la que se añade (opcional).' },
 });
-const EXTRA = { hacer: ` Campos de cada tipo → ${ordenes}. Las ops que gastan en anuncios no están aquí: las confirma el dueño en dos pasos.` };
+const EXTRA = { hacer: ` Campos de cada tipo → ${ordenes}. Las ops que gastan en anuncios no están aquí: las confirma el dueño en dos pasos. Tampoco ${Object.keys(OPS_FUERA_HACER).join(', ')}: se hacen en la oficina. rutina_editar solo cambia el horario o la pausa.` };
 for (const t of OFICINA) {
   const lee = OFICINA_LEE.includes(t.name), cambia = OFICINA_CAMBIA.includes(t.name);
   if (OFICINA_FUERA[t.name]) continue;
   if (!lee && !cambia) throw new Error(`oficina-tools tiene una herramienta nueva sin decidir (${t.name}): añádela a OFICINA_LEE, OFICINA_CAMBIA u OFICINA_FUERA.`);
   const descripcion = String(t.description).replace(/`como_funciona` dice los campos de cada tipo\.\s*/, '') + (EXTRA[t.name] || '');
   const esquema = esquemaRemoto(t.inputSchema);
-  if (t.name === 'hacer') Object.assign(esquema.properties, CAMPOS_EXTRA_HACER); // lo que ACCIONES documenta y el esquema del stdio no declara
+  if (t.name === 'hacer') { // lo que ACCIONES documenta y el stdio no declara; y fuera lo que se hace en la oficina (OPS_FUERA_HACER)
+    Object.assign(esquema.properties, CAMPOS_EXTRA_HACER);
+    esquema.properties.type = { ...esquema.properties.type, enum: esquema.properties.type.enum.filter((o) => !OPS_FUERA_HACER[o]) };
+  }
   registrarHerramienta({
     nombre: t.name, descripcion, esquema, alcance: lee ? 'lectura' : 'oficina', soloLectura: lee,
     destructiva: lee ? false : !!t.destructiva, ...(lee ? {} : { idempotente: !!t.idempotente }),
     ejecutar: async (ctx, args) => {
       try {
-        const office = await conOficina(ctx), llamar = crearLlamador({ office });
-        return lee ? { texto: await llamar(t.name, args) } : await idem(ctx, t.name, async () => ({ texto: await llamar(t.name, args) }));
+        const office = await conOficina(ctx, PERMITIDAS[t.name]), llamar = crearLlamador({ office });
+        // «[vía MCP]»: lo que un asistente le dice a Dimitri se distingue de lo que escribió la persona (el mensaje ya va firmado con su cuenta)
+        const a = t.name === 'hablar_con_dimitri' ? { ...args, texto: `[vía MCP] ${args.texto}` } : args;
+        const hacerla = async () => { const texto = await llamar(t.name, a); if (t.name === 'crear_tarea') await marcarOrigen(ctx.db, texto); return { texto }; };
+        return lee ? { texto: await llamar(t.name, args) } : await idem(ctx, t.name, hacerla);
       } catch (e) { return fallo(t.name, e); }
     },
   });
@@ -71,7 +91,7 @@ for (const d of definicionesEstudio()) {
     ...d,
     ejecutar: async (ctx, args) => {
       try {
-        const office = await conOficina(ctx);
+        const office = await conOficina(ctx, lee ? ['GET'] : ['GET', 'POST /api/media/presets/compile']);
         if (!lee) return { texto: await prepararGasto(office, d.nombre, args) }; // paso 1: costo y topes; no genera
         const r = await nuevoEstudio(office).call(d.nombre, args); // una instancia nueva por llamada
         return { texto: typeof r === 'string' ? r : String(r?.text ?? '') };

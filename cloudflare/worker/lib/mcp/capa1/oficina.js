@@ -19,10 +19,19 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 const idDe = (o) => String(o.id || o.pieza || o.routineId || o.task || o.borrador || '').slice(0, 80) || null;
 const etiqueta = (o) => String(o.desc || o.title || o.titulo || o.type).slice(0, 160);
 const claveNueva = () => testigo(9);
+/** Lo que `hacer` NO ejecuta por MCP (con su motivo): cada una pone a un agente a trabajar o escribe en lo que leen todos los agentes sin que una persona lo vea. Se servirán cuando exista el paso humano. */
+export const OPS_FUERA_HACER = Object.freeze({
+  rutina_ahora: 'corre una rutina YA: pone a un agente a trabajar (y a gastar en el Estudio antes del OK) sin la confirmación de la página. Se hace en la oficina (Calendario → la rutina → Ejecutar).',
+  contenido_llenar: 'crea una tarea para Marketing que genera piezas (y puede pedir imágenes) sin la confirmación de la página. Se hace en Contenido → «Llenar la semana».',
+  nota_crear: 'escribe en el Cerebro, que leen todos los agentes sin que una persona lo vea: un texto con órdenes escondidas quedaría guardado. Lo retoma el carril del Cerebro con marca de origen.',
+  nota_agregar: 'escribe en el Cerebro, que leen todos los agentes sin que una persona lo vea. Lo retoma el carril del Cerebro con marca de origen.',
+});
+/** `rutina_editar` por MCP solo cambia el horario: lo que la rutina PIDE y si espera el OK es del dueño en la oficina. */
+export const CAMPOS_RUTINA_VEDADOS = Object.freeze(['text', 'needsOk', 'autonomous']);
 class Rechazo extends Error { constructor(msg, status) { super(msg); this.status = status; } }
 
 async function podarUndo(db) {
-  try { await db.prepare("delete from docs where clave like 'mcp.undo:%' and actualizado < ?").bind(new Date(Date.now() - 2 * DESHACER_MS).toISOString()).run(); } catch { /* nunca tumba */ }
+  try { await db.prepare("delete from docs where clave >= 'mcp.undo:' and clave < 'mcp.undo;' and actualizado < ?").bind(new Date(Date.now() - 2 * DESHACER_MS).toISOString()).run(); } catch { /* nunca tumba */ }
 }
 
 /** → `office(ruta, cuerpo?, método?)`. `usuario`: { id, email, nombre, rol } de la persona del token. */
@@ -55,6 +64,8 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
   async function accion(op) {
     if (!op || typeof op !== 'object' || Array.isArray(op)) throw new Rechazo('falta la acción: { op: { type, … } }', 400);
     if (!sub.OPS.includes(op.type)) throw new Rechazo(`«${String(op.type || '?').slice(0, 40)}» no se puede hacer desde aquí. Aprobar, enviar, publicar, pagar o borrar lo hace el dueño en la oficina o en Telegram.`, 403);
+    if (OPS_FUERA_HACER[op.type]) throw new Rechazo(`«${op.type}» no se hace desde aquí: ${OPS_FUERA_HACER[op.type]}`, 403);
+    if (op.type === 'rutina_editar' && CAMPOS_RUTINA_VEDADOS.some((c) => op[c] !== undefined)) throw new Rechazo(`«rutina_editar» por este conector solo cambia el horario (when) o la pausa: lo que la rutina pide (${CAMPOS_RUTINA_VEDADOS.join(', ')}) lo cambia el dueño en la oficina.`, 403);
     if ((sub.OPS_GASTO || []).includes(op.type)) throw new Rechazo(`«${op.type}» gasta dinero en anuncios: solo lo hace el dueño, con dos pasos y dentro de sus topes, en Anuncios (J) o en Telegram. `
       + 'Desde aquí puedes pausar (anuncio_pausar) o bajar un presupuesto (anuncio_bajar_presupuesto).', 403);
     const C = await leerContexto(db);
@@ -67,11 +78,11 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
     let clave = null;
     if (v.undo) {
       clave = claveNueva();
-      await guardarDoc(db0, PREFIJO_UNDO + clave, { o: v, at: ahoraMs, por: persona.id });
-      await podarUndo(db0);
+      // el efecto YA ocurrió: si no se puede guardar la clave de deshacer, se dice, pero la llamada no falla (fallar invitaría a repetir lo ya hecho)
+      try { await guardarDoc(db0, PREFIJO_UNDO + clave, { o: v, at: ahoraMs, por: persona.id }); await podarUndo(db0); } catch (e) { console.warn('[mcp] no se pudo guardar la clave de deshacer:', e?.message ?? e); clave = null; }
     }
     const { undo, antes, k, state, ...vista } = v; // eslint-disable-line no-unused-vars
-    return { ok: true, hecho: etiqueta(v), op: vista, ...(clave ? { deshacer: clave, hasta: new Date(ahoraMs + DESHACER_MS).toISOString() } : { aviso: 'esto no se puede deshacer desde aquí' }) };
+    return { ok: true, hecho: etiqueta(v), op: vista, ...(clave ? { deshacer: clave, hasta: new Date(ahoraMs + DESHACER_MS).toISOString() } : { aviso: v.undo ? 'se hizo, pero no pude guardar la clave para deshacerlo: cámbialo con otra acción' : 'esto no se puede deshacer desde aquí' }) };
   }
 
   async function deshacer(clave) {

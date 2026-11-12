@@ -12,7 +12,10 @@ import { validarArgumentos } from '../worker/lib/mcp/servidor.js';
 import { podar } from '../worker/lib/mantenimiento.js';
 import { CONSERVA_PREFIJOS_DOCS } from '../worker/lib/restablecer.js';
 import { PREFIJO_IDEM } from '../worker/lib/mcp/capa1/idempotencia.js';
-import { DESHACER_MS, PREFIJO_UNDO } from '../worker/lib/mcp/capa1/oficina.js';
+import { DESHACER_MS, PREFIJO_UNDO, OPS_FUERA_HACER } from '../worker/lib/mcp/capa1/oficina.js';
+import { rutaOk, restringir } from '../worker/lib/mcp/capa1/restringir.js';
+import { conIdempotencia } from '../worker/lib/mcp/capa1/idempotencia.js';
+import { LOTE_MAX_ESCRIBEN, LOTE_MAX_LEEN } from '../worker/lib/mcp/servidor.js';
 import { ACCIONES } from '../../oficina/mapa.mjs';
 import { TOPE_SALIDA } from '../worker/lib/mcp/constantes.js';
 import { OFICINA_FUERA, RUTAS } from '../worker/lib/mcp/dominios/capa1.js';
@@ -188,10 +191,10 @@ test('EL ESTUDIO: una instancia NUEVA por llamada (nada de estado compartido ent
   assert.equal(e.properties.ejes.additionalProperties, true, 'un objeto libre queda abierto (el validador rechazaría cualquier clave)'); assert.equal(e.properties.presets.items.additionalProperties, false);
 });
 
-test('H1: `hacer` acepta TODO campo que ACCIONES documenta (persona, grupo, seccion…) y nada de gasto', () => {
+test('H1: `hacer` acepta TODO campo que ACCIONES documenta de lo que sirve (persona…) y nada de gasto', () => {
   const h = herramientas().find((x) => x.nombre === 'hacer'), props = new Set(Object.keys(h.esquema.properties));
   const SERVIDAS = h.esquema.properties.type.enum;
-  assert.ok(SERVIDAS.length >= 18 && !SERVIDAS.some((o) => OPS_GASTO.includes(o)));
+  assert.ok(SERVIDAS.length >= 14 && !SERVIDAS.some((o) => OPS_GASTO.includes(o)));
   const falta = [];
   for (const [op, texto] of Object.entries(ACCIONES)) {
     if (!SERVIDAS.includes(op)) continue;
@@ -201,10 +204,10 @@ test('H1: `hacer` acepta TODO campo que ACCIONES documenta (persona, grupo, secc
     for (const c of campos) if (!props.has(c) && !['para', 'solo'].includes(c)) falta.push(`${op}.${c}`);
   }
   assert.deepEqual(falta, [], 'campos documentados en ACCIONES que `hacer` no declara');
-  for (const c of ['persona', 'grupo', 'seccion']) assert.equal(h.esquema.properties[c].type, 'string');
+  assert.equal(h.esquema.properties.persona.type, 'string');
+  for (const fuera of Object.keys(OPS_FUERA_HACER)) assert.ok(!SERVIDAS.includes(fuera), `${fuera} no se sirve`);
   assert.equal(validarArgumentos(h.esquema, { type: 'mia_delegar', id: 'x', persona: 'Ana' }), null);
-  assert.equal(validarArgumentos(h.esquema, { type: 'nota_agregar', nombre: 'n', texto: 't', seccion: 's' }), null);
-  assert.equal(validarArgumentos(h.esquema, { type: 'nota_crear', nombre: 'n', texto: 't', grupo: 'g' }), null);
+  assert.match(validarArgumentos(h.esquema, { type: 'nota_agregar', nombre: 'n', texto: 't' }), /uno de/, 'las notas por MCP esperan al carril del Cerebro');
 });
 
 test('B1: un tipo en forma de lista (`limite`: string o null) se valida de verdad', () => {
@@ -246,4 +249,77 @@ test('LISTAS EXACTAS: lo que ve un token de «lectura» y uno de «oficina» (si
   assert.deepEqual(await nombres(t.lectura), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'ver_calendario']);
   assert.deepEqual(await nombres(t.oficina), ['buscar_en_galeria', 'buscar_presets', 'como_funciona', 'crear_mi_tarea', 'crear_tarea', 'deshacer', 'estado_estudio', 'estado_lote', 'estado_oficina', 'estado_trabajo', 'hablar_con_dimitri', 'hacer', 'ver_calendario']);
   assert.deepEqual(await nombres(t.gasto), [...await nombres(t.oficina), 'aplicar_preset', 'crear_lote', 'generar_imagen', 'generar_musica', 'generar_video', 'generar_voz'].sort());
+});
+
+test('D1: lo que pone a un agente a trabajar sin la confirmación de la página no se hace por MCP; las tareas nacen con OK y con su marca; rutina_editar solo cambia el horario', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  for (const tipo of ['rutina_ahora', 'contenido_llenar', 'nota_crear', 'nota_agregar']) {
+    const r = await llamar(t.oficina, 'hacer', { type: tipo, id: 'x' }); assert.equal(r.j.result.isError, true, tipo); assert.match(texto(r), /uno de/, tipo);
+  }
+  for (const motivo of Object.values(OPS_FUERA_HACER)) assert.ok(motivo.length > 40, 'cada una dice por qué');
+  const yo = m.db.prepare('select id, email from users limit 1').get();
+  const office = await crearOficinaMcp({ env: m.env, db: m.d1, usuario: { id: yo.id, email: yo.email, nombre: 'Dueño', rol: 'admin' } });
+  for (const tipo of Object.keys(OPS_FUERA_HACER)) await assert.rejects(office('/api/oficina/accion', { op: { type: tipo, id: 'x', nombre: 'n', texto: 't' } }), /no se hace desde aquí/, tipo);
+  for (const campo of [{ text: 'otra cosa' }, { needsOk: false }, { autonomous: true }]) await assert.rejects(office('/api/oficina/accion', { op: { type: 'rutina_editar', id: 'r1', ...campo } }), /solo cambia el horario/, JSON.stringify(campo));
+  // una tarea creada por MCP: espera el OK siempre, lleva by:'mcp', y por MCP no hay cómo quitarle el OK
+  const c = await llamar(t.oficina, 'crear_tarea', { dept: 'marketing', texto: 'Redacta un post sobre las camas' });
+  assert.equal(c.j.result.isError, false, texto(c));
+  const id = /Tarea creada: (\S+)/.exec(texto(c))[1];
+  const fila = JSON.parse(m.db.prepare("select json from filas where coleccion = 'tareas' and id = ?").get(id).json);
+  assert.equal(fila.by, 'mcp'); assert.equal(fila.needsOk, true);
+  const quitar = await llamar(t.oficina, 'hacer', { type: 'tarea_editar', id, needsOk: false }); assert.equal(quitar.j.result.isError, true); assert.match(texto(quitar), /no existe en esta herramienta/);
+});
+
+test('D3: un lote JSON-RPC admite como mucho 1 tools/call que escriba y 5 de lectura; el resto, un error claro', { skip: SALTAR }, async () => {
+  const { m, t } = await conectados();
+  const lote = (llamadas) => m.crudo('/mcp', { metodo: 'POST', cuerpo: llamadas.map(([name, args], i) => ({ jsonrpc: '2.0', id: i + 1, method: 'tools/call', params: { name, arguments: args } })), cabeceras: { authorization: 'Bearer ' + t.oficina } }).then((r) => r.json());
+  const lee = await lote(Array.from({ length: 7 }, () => ['estado_estudio', {}]));
+  assert.equal(lee.filter((x) => x.result).length, LOTE_MAX_LEEN); assert.equal(lee.filter((x) => x.error).length, 2);
+  assert.match(lee.at(-1).error.message, /como mucho 1 llamada que escriba y 5 de lectura/);
+  const escribe = await lote([['crear_mi_tarea', { titulo: 'a' }], ['crear_mi_tarea', { titulo: 'b' }], ['estado_estudio', {}]]);
+  assert.equal(escribe.filter((x) => x.result).length, LOTE_MAX_ESCRIBEN + 1); assert.ok(escribe[1].error, 'la segunda escritura no se hace');
+  assert.equal(m.db.prepare("select count(*) n from filas where coleccion = 'tareas' and json like '%\"title\":\"b\"%'").get().n, 0);
+});
+
+test('D4: office() en proceso solo llega a /api/ sin trucos, y cada herramienta solo usa sus métodos', async () => {
+  for (const mala of ['/api/../etc', '/api/%2e%2e/x', '/api/a%2Fb', '/api//x', '/api/a\\b', '/otra/ruta', '/api', 'api/x', '/api/x\n', '/api/%5cx']) assert.equal(rutaOk(mala).ok, false, mala);
+  for (const buena of ['/api/media?n=1', '/api/tasks?light=1', '/api/oficina/estado']) assert.equal(rutaOk(buena).ok, true, buena);
+  const visto = []; const o = restringir(async (r, c, mt) => { visto.push([r, mt]); return { ok: true }; }, ['GET', 'POST /api/tasks']);
+  await o('/api/media'); await o('/api/tasks', { x: 1 });
+  await assert.rejects(o('/api/tasks', undefined, 'DELETE'), /no puede hacer DELETE/); await assert.rejects(o('/api/otra', { x: 1 }), /no puede hacer POST/);
+  await assert.rejects(o('/api/%2e%2e/x'), /ruta no permitida/); await assert.rejects(o('/api/tasks/../x', { a: 1 }), /ruta no permitida/);
+  assert.equal(visto.length, 2, 'lo rechazado no llegó a la oficina');
+  const lectura = restringir(async () => ({}), ['GET']); await assert.rejects(lectura('/api/tasks', { a: 1 }), /no puede hacer POST/);
+});
+
+test('D5: una clave de idempotencia cuyo «hecho» no se pudo apuntar no falla la llamada ni se suelta; la poda usa rango, no LIKE', { skip: SALTAR }, async () => {
+  const m = await mundo();
+  let efectos = 0; const CLAVE_D5 = 'idem-d5-0001';
+  const falla = { ...m.d1, prepare: (sql) => (/update docs set json=\?/.test(String(sql).replace(/\s+/g, ' ')) ? { bind: () => ({ run: async () => { throw new Error('D1 cayó'); } }) } : m.d1.prepare(sql)) };
+  const r = await conIdempotencia(falla, { conexionId: 'c1', herramienta: 'crear_mi_tarea', clave: CLAVE_D5, ms: Date.now(), fn: async () => { efectos++; return 'hecho de verdad'; } });
+  assert.equal(r.texto, 'hecho de verdad'); assert.equal(efectos, 1);
+  assert.equal(m.db.prepare("select count(*) n from docs where clave like 'mcp.idem:c1:%'").get().n, 1, 'la clave NO se soltó');
+  const otra = await conIdempotencia(m.d1, { conexionId: 'c1', herramienta: 'crear_mi_tarea', clave: CLAVE_D5, ms: Date.now(), fn: async () => { efectos++; return 'otra vez'; } });
+  assert.equal(efectos, 1, 'un reintento no repite el efecto'); assert.match(otra.texto, /sigue en curso|se interrumpió|no se repitió/);
+  const fuentes = ['../worker/lib/mantenimiento.js', '../worker/lib/mcp/capa1/idempotencia.js', '../worker/lib/mcp/capa1/oficina.js'].map((f) => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n');
+  assert.ok(!/like 'mcp\.(idem|undo):/.test(fuentes), 'sin LIKE sobre los prefijos');
+  assert.match(fuentes, /clave >= 'mcp\.idem:' and clave < 'mcp\.idem;'/);
+});
+
+test('D6: lo que un asistente le dice a Dimitri va marcado «[vía MCP]»', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  m.env.ANTHROPIC_API_KEY = ['sk', 'ant', 'prueba'].join('-'); // una llave de mentira: el modelo es un fetch simulado que solo apunta lo que recibe
+  const real = globalThis.fetch, cuerpos = [];
+  const respuesta = { id: 'm', type: 'message', role: 'assistant', model: 'x', stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'text', text: '{"mode":"charla","text":"Todo bien."}' }] };
+  globalThis.fetch = async (url, init) => { cuerpos.push(String(init?.body ?? '')); return new Response(JSON.stringify(respuesta), { headers: { 'content-type': 'application/json' } }); };
+  try { await llamar(t.oficina, 'hablar_con_dimitri', { texto: 'hola, ¿cómo vamos?' }); } finally { globalThis.fetch = real; }
+  assert.ok(cuerpos.some((c) => c.includes('[vía MCP] hola')), 'el mensaje llegó al modelo marcado como venido de MCP');
+});
+
+test('D7: un administrador degradado a editor con el token vivo: la llamada da 401 y la conexión queda cortada (también en las herramientas de la Capa 1)', { skip: SALTAR }, async () => {
+  const { m, t, llamar } = await conectados();
+  assert.equal((await llamar(t.oficina, 'estado_oficina')).j.result.isError, false);
+  m.db.prepare("update users set rol = 'editor' where rol = 'admin'").run();
+  for (const [n, a] of [['estado_oficina', {}], ['crear_mi_tarea', { titulo: 'x' }], ['generar_imagen', { prompt: 'x' }]]) assert.equal((await llamar(t[n === 'generar_imagen' ? 'gasto' : 'oficina'], n, a)).status, 401, n);
+  assert.ok(m.db.prepare('select count(*) n from mcp_tokens where revocado_at is not null').get().n >= 1, 'la conexión quedó cortada');
 });
