@@ -23,6 +23,7 @@ import * as chat from './chat.js';
 import * as notasPersonales from './notas-personales.js';
 import * as series from './series.js';
 import * as funciones from './funciones.js';
+import * as skills from './skills.js';
 import * as vinculoTelegram from './vinculo-telegram.js';
 export const MODULOS = [
   tareas,
@@ -49,6 +50,7 @@ export const MODULOS = [
   vinculoTelegram, // N2: «Conectar mi Telegram» (/api/vinculo-telegram/*)
   notasPersonales, // N1: notas para cuando entres y «mientras no estabas» (/api/notas-personales/*)
   series, // Series en la nube (N2/N3): solo lectura y propuesta, detrás de dimitri.seriesNube (apagado); no genera ni gasta
+  skills, // las skills de los agentes: leer y (solo administradores) crear, editar, borrar a la papelera y volver a una versión
   funciones, // Ajustes → Funciones nuevas: encender y apagar lo ya construido (solo administradores)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
