@@ -13,5 +13,9 @@ import './series.js'; // P5 carril 5: series de imágenes (leer y proponer)
 import './contenido.js'; // P5 carril 3: contenido y bandeja
 import './bandeja.js';
 // import './skills.js';
-// import './empresa.js';
+import './empresa.js'; // P5 empresa: la radiografía
+import './ajustes.js'; // P5 empresa: ajustes, cifras, modelos, avisos, disparadores
+import './costos.js'; // P5 empresa: costos y topes de gasto
+import './conectores.js'; // P5 empresa: conectores MCP de los agentes
+import './equipo.js'; // P5 empresa: equipo y cuentas (solo lectura)
 export {};
