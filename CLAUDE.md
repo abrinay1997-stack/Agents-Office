@@ -974,4 +974,14 @@ enviar desde la Bandeja, publicar, pagar ni restablecer. **El «ningún cabo sue
 está en la lista de exclusiones con su motivo. Hay que CONSTRUIR cuatro cosas antes de puentearlas:
 `/api/skills` en la nube (las skills viven en D1 pero no tienen ruta HTTP), separar `oficina-mcp.mjs`
 y `estudio-mcp.mjs` en `*-tools.mjs`, el mapa de la oficina (`como_funciona`) y la herramienta
-`radiografia`. El chat del equipo existe (C0) pero con su interruptor apagado.
+`radiografia`, y la pantalla mínima del chat del equipo. **Decisiones del dueño (12 nov 2026), que ya
+no se preguntan:** el subdominio es `oficina.panaclaw.com`; workers.dev se queda ENCENDIDO (apagarlo
+rompe vueltas de OAuth registradas); los tres alcances (`lectura` · `oficina` · `gasto`) entran en la
+P2, no al final; **solo un administrador puede conectar** (un editor o un lector no obtiene token, y
+el rol se sigue comprobando en el servidor como defensa en profundidad); la P5 va en **ocho carriles
+EN PARALELO** —cerebro, tareas, contenido, anuncios, estudio, agentes, skills y empresa— con un
+**contrato anti-choque** (un carril = un archivo `lib/mcp/dominios/<dominio>.js` con sus rutas
+declaradas dentro; ningún carril toca `modulos/mcp.js`, `lib/sesion.js`, `wrangler.jsonc` ni las
+migraciones; el índice es una línea por carril); y **el chat del equipo entra en el plan**, pero su
+pantalla mínima (C1–C2 de `docs/plan-chat-interno.md`) va ANTES de encender `chat.config.activo`:
+un mensaje que nadie puede abrir en la oficina es peor que no tenerlo.

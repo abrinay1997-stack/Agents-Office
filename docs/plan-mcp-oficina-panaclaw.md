@@ -34,7 +34,7 @@ aquí no queda alcanzable por MCP al final, el plan falló.
 | «**lectura completa de cómo está el negocio**» | `/api/business`, `/api/cifras`, `/api/costs`, `/api/quality`, `/api/status`, `/api/anuncios` | ✅ existe, pero **disperso en 6 rutas** → se añade **una** herramienta `radiografia` que lo junta en una lectura | P5 |
 | «**modificar la empresa**… hacer **ajustes en los ajustes**» | `/api/settings` (todos los grupos), `/api/funciones` (interruptores), `/api/modelos`, `/api/equipo` | ✅ existe | P5 |
 | «poder **dejar notas**» | `/api/notas-personales` (dejarle una nota a una persona, con color, enlace y vencimiento) y el cerebro | ✅ existe | P5 |
-| «poder **dejar los mensajes**» | **cuatro sitios**: el chat del equipo (`/api/chat/*`), los comentarios de una tarea (con `@mención`), las notas personales y los avisos | ⚠️ el chat existe (C0) pero con **el interruptor apagado** | P5 + decisión 6 |
+| «poder **dejar los mensajes**» | **cuatro sitios**: el chat del equipo (`/api/chat/*`), los comentarios de una tarea (con `@mención`), las notas personales y los avisos | el chat existe (C0) con el interruptor apagado; **el dueño decidió encenderlo** (§11.6), así que el carril 8 le construye su pantalla mínima y luego lo enciende | P5, carril 8 |
 
 **Sobre «dejar los mensajes».** Hay cuatro superficies y conviene que elijas, porque no son lo mismo:
 
@@ -47,8 +47,9 @@ aquí no queda alcanzable por MCP al final, el plan falló.
 4. **Aviso** (`/api/notificaciones`): lo que el sistema avisa. Por MCP, solo leer y marcar leído:
    fabricar avisos del sistema a mano los volvería ruido.
 
-Mi recomendación: por MCP, los cuatro para **leer**; para **escribir**, el comentario de tarea y la
-nota personal desde el principio, y el chat del equipo cuando decidas encenderlo.
+**Decidido (§11.6):** los cuatro se leen y los cuatro se escriben, salvo los avisos del sistema (solo
+leer y marcar leído: fabricarlos a mano los volvería ruido). El chat entra con su pantalla mínima
+delante, porque un mensaje que nadie puede abrir en la oficina es peor que no tenerlo.
 ---
 
 ## 1. Lo que comprobé antes de escribir esto
@@ -159,16 +160,18 @@ Un token de MCP es **una persona con su rol**, no un agente. Los candados del gu
 |---|---|
 | **El dinero pide dos pasos, siempre** | Las 4 operaciones de `sub.OPS_GASTO` (activar, reanudar, subir presupuesto, relanzar) devuelven la cifra y un testigo de un solo uso; la segunda llamada con ese testigo aplica. Lo exige `anuncios/acciones.mjs` **en el servidor**: el MCP no tiene atajo. |
 | **El Estudio no gasta a ciegas** | Desde US$0,50 el servidor pide `confirmado: true`; los topes de día y mes se miran antes de cada imagen. Igual para Suno, ElevenLabs y las series. |
-| **`lectura` no escribe** | El servidor rechaza toda herramienta sin `readOnlyHint` si el rol es `lectura`, como ya hace el calendario. |
+| **Solo un administrador conecta** | `/conectar-claude` y `/oauth/token` solo emiten para un `admin` (decisión del dueño, §11.4). Un editor o un lector recibe un «no» explicado, no un error genérico. |
+| **`lectura` no escribe** | El servidor rechaza toda herramienta sin `readOnlyHint` si el rol es `lectura`, como ya hace el calendario. Se mantiene aunque solo conecte un admin: defensa en profundidad. |
 | **`editor` no decide lo del dueño** | La matriz `SOLO_ADMIN` de `auditoria-transversal.test.mjs` se aplica igual por MCP. |
 | **Nunca por MCP: aprobar un borrador, enviar desde la Bandeja, publicar ya, pagar, borrar una cuenta, restablecer la oficina** | No se declaran como herramientas y van en la lista de exclusiones con su motivo. Eso se hace en la aplicación, con la cara delante. |
 | **Lo que escribió un tercero no manda** | Todo texto de fuera (resultados de agentes, notas, comentarios, galería, conectores, competencia) pasa por `safety.injectionIn` antes de llegar al modelo, como ya hacen las consultas de Dimitri. |
 | **El MCP de la oficina no llega a un agente** | `esDeLaOficina` en `mcp-estado.js` ya lo impide: un agente con los controles del dueño saldría de sus propias reglas. |
 
-**Alcances por conexión.** La pantalla de permiso deja elegir qué puede ese conector:
-`lectura` · `oficina` (escribir sin gastar) · `gasto` (habilita el segundo paso del dinero). Así
-puedes tener un conector de solo lectura en el teléfono y otro completo en tu computadora. El alcance
-viaja en el token y se comprueba en cada llamada.
+**Alcances por conexión** (los tres desde la P2, §11.3). La pantalla de permiso deja elegir qué puede
+ese conector: `lectura` · `oficina` (escribir sin gastar) · `gasto` (habilita el segundo paso del
+dinero). Así puedes tener un conector de solo lectura en el teléfono y otro completo en tu
+computadora, los dos tuyos. El alcance viaja en el token y se comprueba en cada llamada, **antes** del
+rol: un alcance `lectura` no gasta aunque quien conectó sea administrador.
 
 **Rastro.** Cada llamada deja una fila en `auditoria` con la herramienta, la persona, el conector y si
 se permitió. Las conexiones se ven y se cortan desde Ajustes.
@@ -228,7 +231,7 @@ que no se puede puentear hasta que exista.
 | 25 | **Disparadores** | `/api/triggers`, `/api/hook/<id>` | `disparadores` (ver, crear, editar, apagar) | el secreto nunca sale |
 | 26 | **Estado y salud** | `/api/status`, `/api/notices/read`, `/api/health`, `/api/ejecuciones` | `estado` (semáforo, avisos, ejecuciones) | — |
 | 27 | **Telegram** | `/api/settings/telegram`, `/api/vinculo-telegram` | `telegram` (estado, vincular) | el webhook no se expone |
-| 28 | **Chat del equipo** | `/api/chat/resumen`, `/personas`, `/canales`, `/directo`, `/canales/<id>/mensajes` | `chat` (canales, leer, escribir, directo) | ⚠️ construido pero con `chat.config.activo` **apagado**; sin pantalla ni sockets |
+| 28 | **Chat del equipo** | `/api/chat/resumen`, `/personas`, `/canales`, `/directo`, `/canales/<id>/mensajes` | `chat` (canales, leer, escribir, directo) | **CONSTRUIR su pantalla mínima** (§7.5) y luego encender `chat.config.activo` |
 | 29 | **Radiografía del negocio** | junta `/api/business`, `/api/cifras`, `/api/costs`, `/api/quality`, `/api/status`, `/api/anuncios` | `radiografia` (una lectura: caja, pauta, contenido, tareas, costos, salud) | **CONSTRUIR**: es una herramienta nueva que compone, no una ruta nueva |
 
 **Exclusiones, con su motivo** (van en la lista del test de cobertura):
@@ -247,7 +250,7 @@ que no se puede puentear hasta que exista.
 
 ## 7. Lo que hay que construir antes de poder puentearlo
 
-Cuatro cosas. Son trabajo real, no plomería del MCP.
+Cinco cosas. Son trabajo real, no plomería del MCP.
 
 1. **`/api/skills` en la nube** (§6, fila 13). Las skills ya viven en D1 (`filas/skills`) y las leen
    los agentes y `salud.js`, pero no hay ruta para listarlas, leerlas, crearlas ni editarlas. Sin
@@ -271,12 +274,18 @@ Cuatro cosas. Son trabajo real, no plomería del MCP.
    aprobaciones esperando, gasto de IA contra el presupuesto, y el semáforo— en el orden en que tú
    preguntas. Es composición, no una ruta nueva: va en `cloudflare/worker/lib/radiografia.js`, pura
    salvo las lecturas, con su test.
+5. **La pantalla mínima del chat del equipo** (decisión §11.6). El chat está construido por dentro
+   (C0: modelo `0143_chat.sql`, rutas, flag) pero **no tiene interfaz**. Encender solo el interruptor
+   dejaría a Claude escribiendo mensajes que nadie puede abrir en la oficina. Lo mínimo: la lista de
+   canales y el hilo en escritorio y en el teléfono (releyendo, sin sockets) y el contador de no
+   leídos junto a la campanita. Es C1–C2 de `docs/plan-chat-interno.md`, y va **antes** del flag.
 
 ---
 
 ## 8. Las fases
 
-Cada fase deja la oficina funcionando y se puede desplegar sola.
+P0 a P4 van **en serie** (cada una necesita la anterior). La P5 son **ocho carriles a la vez**
+(decisión §11.5). P6 y P7 cierran.
 
 **P0 · Verificar el dominio (tú y la gente de Cloudflare).** La zona `panaclaw.com` activa en la
 cuenta correcta, sin registro `oficina` previo, y el token de despliegue con
@@ -286,35 +295,68 @@ cuenta correcta, sin registro `oficina` previo, y el token de despliegue con
 que exija los dos, y desplegar. Resultado: la oficina abre en `https://oficina.panaclaw.com` y sigue
 abriendo en workers.dev. Riesgo bajo, y deja el dominio probado antes de montarle nada encima.
 
-**P2 · OAuth y el servidor MCP vacío.** Migración `0400_mcp.sql`; `cloudflare/worker/modulos/mcp.js`
-portado de `worker/rutas/mcp.js` del calendario; la pantalla de permiso `/conectar-claude` (una página
-de la oficina, para entrar con la sesión de siempre); `initialize`, `ping`, `tools/list` con **una**
-herramienta (`como_funciona`). Se añade el conector en claude.ai y se comprueba el baile entero.
-Tests: el flujo OAuth contra workerd real (como `vivo.test.mjs`), PKCE obligatorio, código de un solo
-uso, renovación rotada, un token de otra persona no ve nada.
+**P2 · OAuth, el servidor MCP y los tres alcances.** Migración `0400_mcp.sql`;
+`cloudflare/worker/modulos/mcp.js` portado de `worker/rutas/mcp.js` del calendario; la pantalla de
+permiso `/conectar-claude` **con el selector de alcance** (§11.3) y el veto a quien no es
+administrador (§11.4); `initialize`, `ping`, `tools/list` con **una** herramienta (`como_funciona`).
+Se añade el conector en claude.ai y se comprueba el baile entero. Tests: el flujo OAuth contra
+workerd real (como `vivo.test.mjs`), PKCE obligatorio, código de un solo uso, renovación rotada, un
+editor no obtiene token, un alcance `lectura` no escribe.
 
-**P3 · Capa 1: las herramientas que ya existen.** Separar las dos que faltan (§7.2) y servir las
-~20 finas. Aquí ya puedes hacer cosas de verdad desde cualquier sesión.
+**P3 · Capa 1: las herramientas que ya existen.** Separar `oficina-mcp.mjs` y `estudio-mcp.mjs` en
+`*-tools.mjs` (§7.2) y servir las ~20 finas. Aquí ya puedes hacer cosas de verdad desde cualquier
+sesión. **Es la última fase en serie: lo que sale de aquí es lo que los ocho carriles usan de base.**
 
 **P4 · Capa 3: `hacer` y `deshacer`.** Las 24 operaciones vetadas por el ejecutor de Dimitri, con el
 segundo paso del dinero y los 30 segundos de DESHACER. Test: ninguna op nueva entra sin estar en
 `sub.OPS`; las 4 de gasto no se aplican sin testigo.
 
-**P5 · Capa 2: las 24 herramientas de dominio.** Una por área, con su `accion` cerrada. Es la fase
-más larga y la que de verdad cubre «todo». Se hace dominio por dominio, en el orden que tú digas; mi
-orden sería: cerebro → tareas → contenido → anuncios → estudio → agentes → skills → el resto.
+### P5 · Los ocho carriles, a la vez
 
-**P6 · Construir lo que falta.** `/api/skills` (§7.1), el mapa de la oficina (§7.3) y la herramienta
-`radiografia` (§7.4). Si decides encender el chat del equipo, su interruptor va aquí.
+Ocho ramas, ocho PR, al mismo tiempo. Cada carril entrega su herramienta de dominio con su `accion`
+cerrada, sus tests y su línea en `CLAUDE.md`.
 
-**P7 · Capa 4: el puente con tabla blanca.** `mcp-superficie.mjs` y `oficina_ruta`. Con esto se cierra
-el test de cobertura: ya no queda ninguna ruta sin camino.
+| Carril | Rama | Entrega | Trabajo extra dentro del carril |
+|---|---|---|---|
+| 1 | `carril-mcp-cerebro` | `cerebro` (buscar, leer, crear, agregar, conectar, calidad, mapa, papelera, restaurar) | — |
+| 2 | `carril-mcp-tareas` | `tareas` + `rutinas` (pasos, bitácora, bloqueos, proyectos, tablero, cronómetro, repetir, asignar a cualquier agente) | — |
+| 3 | `carril-mcp-contenido` | `contenido` + `bandeja` (piezas, cola, llenar la semana, plantillas, historias) | — |
+| 4 | `carril-mcp-anuncios` | `anuncios` + `analiticas` (método, competencia, 3Q, sugerencias, impulsar, indicadores) | — |
+| 5 | `carril-mcp-estudio` | `estudio` + `series` (galería, generar, editar, carpetas, presets, lotes, voces, música, papelera) | — |
+| 6 | `carril-mcp-agentes` | `agentes` + `dimitri` (ficha, brief, modelo, esfuerzo, lecciones, versiones; hablar, ops, conversaciones) | — |
+| 7 | `carril-mcp-skills` | `skills` + `habilidades` | **construir `/api/skills`** (§7.1): hoy no existe |
+| 8 | `carril-mcp-empresa` | `ajustes` · `funciones` · `equipo` · `conectores` · `modelos` · `costos` · `negocio` · `onboard` · `notificaciones` · `notas` · `disparadores` · `estado` · `telegram` · `chat` | **la `radiografia`** (§7.4) y **la pantalla mínima del chat** (§11.6) |
 
-**P8 · Alcances, rastro y la pantalla de conexiones.** Los tres alcances, la fila de `auditoria` por
-llamada, Ajustes → Conectar Claude con la lista de conexiones y su botón de cortar, y los topes por
-token.
+El 8 es el más cargado, pero sus catorce áreas son casi todas una ruta y una acción; el 7 y el 8
+llevan el trabajo de construir. Si hay que repartir, lo que sale del 8 es `chat` como noveno carril.
 
----
+**El contrato anti-choque.** Ocho carriles sobre el mismo registro de herramientas se pisan en cada
+PR. Las reglas que lo evitan, y hay que respetarlas:
+
+1. **Un carril, un archivo propio:** `cloudflare/worker/lib/mcp/dominios/<dominio>.js`. Nadie más lo
+   toca. Ahí van la herramienta, su `accion`, su ejecutor y **la lista de rutas `/api/` que cubre**.
+2. **Nada de tabla compartida durante la P5.** Cada dominio declara sus rutas **en su propio
+   archivo** (`export const RUTAS = [...]`), y el test de cobertura las lee de todos. Así no hay un
+   `mcp-superficie.mjs` que ocho ramas editen a la vez. Esa tabla solo existe en la P6, para la cola
+   larga.
+3. **El índice es una línea por carril:** `mcp/dominios/index.js` con un `export` por dominio. Es el
+   único punto de choque y se resuelve en diez segundos.
+4. **Prohibido a los carriles:** `modulos/mcp.js`, `lib/sesion.js`, `wrangler.jsonc` y las
+   migraciones. Eso es P2 y ya está cerrado. Un carril que necesite tocarlos **para y lo dice**.
+5. **Cada carril añade su línea a `CLAUDE.md` al final de su sección**, no en medio: así el conflicto
+   es de una línea y no de un párrafo.
+6. **Se unen de uno en uno**, en el orden en que queden verdes, y cada uno trae `main` antes de pedir
+   el merge. El test de cobertura estará rojo hasta la P6 (faltará la cola larga): eso es esperado, y
+   por eso nace en la P6 y no antes.
+
+**P6 · Capa 4 y el invariante.** `mcp-superficie.mjs` (la tabla blanca), `oficina_ruta` y
+`mcp-cobertura.test.mjs`. Con esto se cierra el «ningún cabo suelto»: ya no queda ninguna ruta sin
+camino ni exclusión escrita. **No se puede hacer antes de que los ocho carriles estén unidos**,
+porque hasta entonces no se sabe qué queda fuera.
+
+**P7 · Rastro y la pantalla de conexiones.** La fila de `auditoria` por llamada, Ajustes → Conectar
+Claude con la lista de conexiones y su botón de cortar, los topes por token, y el mapa de la oficina
+(`como_funciona`, §7.3) si no entró en la P2.
 
 ## 9. Tests e invariantes
 
@@ -360,26 +402,28 @@ Para que no haya sorpresas:
 
 ---
 
-## 11. Decisiones que espero de ti
+## 11. Decisiones tomadas (12 nov 2026)
 
-Cinco, y con tus respuestas el plan queda cerrado:
+Las seis, contestadas por el dueño. **Esto ya no se pregunta: es el plan.**
 
-1. **El subdominio.** ¿`oficina.panaclaw.com`, como propones? (Me parece bien: dice lo que es.)
-2. **¿Mantener workers.dev?** Mi recomendación: sí, encendido, como red de seguridad y porque apagarlo
-   rompe vueltas de OAuth ya registradas. El dominio nuevo sería el oficial.
-3. **Los alcances.** ¿Quieres los tres (`lectura`, `oficina`, `gasto`) o con uno te basta al principio?
-   Mi recomendación: los tres desde el principio, porque añadirlos después obliga a reconectar.
-4. **Quién puede conectar.** ¿Solo tú (admin), o también los editores de PanaClaw con su propia cuenta?
-   Mi recomendación: admin y editor, cada uno con su token y su rol; `lectura` solo con alcance de
-   lectura.
-5. **El orden de la P5.** ¿Te sirve mi orden (cerebro → tareas → contenido → anuncios → estudio →
-   agentes → skills → resto) o prefieres otro?
-6. **El chat del equipo.** ¿Lo enciendo (`chat.config.activo`) para poder dejar mensajes por MCP, o
-   prefieres que «dejar un mensaje» sea solo un comentario en una tarea y una nota personal? Mi
-   recomendación: empezar sin el chat (comentario + nota cubren el 90 %) y encenderlo cuando tenga
-   pantalla, para que nadie reciba mensajes que no puede ver desde la oficina.
+| | Decisión | Qué implica |
+|---|---|---|
+| 1 | **`oficina.panaclaw.com`** | el dominio propio de la P1 |
+| 2 | **workers.dev se queda encendido** | `workers_dev: true` escrito y vigilado por un test; el dominio nuevo es el oficial, workers.dev la red de seguridad |
+| 3 | **Los tres alcances desde el principio** (`lectura` · `oficina` · `gasto`) | entran en la **P2**, no al final: añadirlos después obligaría a reconectar cada conector |
+| 4 | **Solo un administrador puede conectar** | más estrecho de lo que recomendé (yo decía admin y editor). Un `editor` o un `lectura` que abra `/conectar-claude` recibe un «no» explicado, y `/oauth/token` no emite nada para ellos |
+| 5 | **La P5, los ocho dominios EN PARALELO** | ocho carriles a la vez, cada uno su rama y su PR. Exige el contrato anti-choque de la §8 |
+| 6 | **El chat del equipo entra en el plan** | su interruptor se enciende y además hay que darle con qué leerlo (ver abajo) |
 
----
+**Sobre la 4 (solo admin).** Es la decisión más conservadora y me parece la correcta: un token de MCP vive fuera de la oficina, en claude.ai, y basta uno para tocar la empresa. El rol sigue comprobándose en el servidor de todas formas (defensa en profundidad), pero la puerta la abre solo un administrador. Lo que varía entre conectores no es el rol, es el **alcance**: puedes tener uno de `lectura` en el teléfono y otro de `gasto` en tu computadora, los dos tuyos.
+
+**Sobre la 6 (el chat), y esto es importante.** Encender el interruptor hace que Claude pueda **escribir** mensajes en el chat del equipo. Pero hoy el chat **no tiene pantalla** (C0: modelo, rutas y flag; sin interfaz ni sockets, ver `docs/plan-chat-interno.md`). Si se enciende solo el flag, Claude dejaría mensajes que **nadie puede leer desde la oficina**, y eso es peor que no tenerlo. Así que el carril del chat de la P5 incluye lo mínimo para leerlos:
+
+- la lista de canales y el hilo de mensajes en escritorio y en el teléfono (lo que el plan del chat llama C1–C2, sin sockets: se relee);
+- el contador de no leídos donde ya está la campanita;
+- y solo entonces el interruptor.
+
+Sin eso, el carril no se considera terminado. Lo digo porque es la única de las seis decisiones que **añade trabajo fuera del MCP**.
 
 ## 12. Prompt para la gente de Cloudflare (la parte del DNS que no puedo ver)
 
@@ -425,8 +469,11 @@ Cuando te contesten, pégame la respuesta y ajusto la P1 con lo que digan.
 - **Es posible, y el camino está probado:** el calendario ya tiene este mismo conector funcionando
   (`worker/rutas/mcp.js`, 272 líneas, con OAuth, PKCE y la pantalla de permiso). Se porta, no se
   inventa.
-- **El trabajo grande no es el MCP, es la cobertura:** 148 rutas en 29 áreas, y cuatro cosas que hay que
-  construir antes (skills, el mapa, separar dos MCP).
+- **El trabajo grande no es el MCP, es la cobertura:** 148 rutas en 29 áreas, y cinco cosas que hay
+  que construir (`/api/skills`, el mapa de la oficina, separar dos MCP, la `radiografia` y la pantalla
+  mínima del chat).
+- **La P5 va en paralelo, y por eso el contrato anti-choque de la §8 no es opcional:** un carril, un
+  archivo propio; nadie toca `modulos/mcp.js`, `sesion.js`, `wrangler.jsonc` ni las migraciones.
 - **El «ningún cabo suelto» es un test**, no una promesa: `mcp-cobertura.test.mjs` falla si queda una
   ruta sin camino.
 - **La regla del dinero no se toca.** Ni por MCP, ni desde el teléfono, ni desde otra sesión.
