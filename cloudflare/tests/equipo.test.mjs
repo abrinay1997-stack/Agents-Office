@@ -383,7 +383,7 @@ test('la oficina servida con sesión recibe las dos líneas de la nube (y solo a
   const o = await oficina(); const cookie = await o.galleta(o.ana);
   o.env.ASSETS = { fetch: async (req) => new Response(new URL(req.url).pathname === '/oficina/index.html' ? '<html><body><div id="topbar"></div><script>x</script></body></html>' : 'otro', { headers: { 'content-type': 'text/html; charset=utf-8', 'content-length': '999' } }) };
   const t = await (await o.llamar('/', { cookie })).text();
-  assert.match(t, /<script src="\/nube\.js" defer><\/script><script src="\/ajustes-extra\.js" defer><\/script><script src="\/nube-modelos\.js" defer><\/script><script src="\/nube-conectores\.js" defer><\/script><script src="\/nube-funciones\.js" defer><\/script><script src="\/nube-series\.js" defer><\/script><\/body>/); assert.match(t, /<link rel="stylesheet" href="\/nube\.css">/);
+  assert.match(t, /<script src="\/nube\.js" defer><\/script><script src="\/ajustes-extra\.js" defer><\/script><script src="\/nube-modelos\.js" defer><\/script><script src="\/nube-conectores\.js" defer><\/script><script src="\/nube-funciones\.js" defer><\/script><script src="\/nube-series\.js" defer><\/script><script src="\/nube-conectar-claude\.js" defer><\/script><\/body>/); assert.match(t, /<link rel="stylesheet" href="\/nube\.css">/);
   assert.equal((await (await o.llamar('/login.html')).text()), 'otro', 'el login no se toca');
 });
 

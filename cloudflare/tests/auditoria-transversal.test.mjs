@@ -208,7 +208,7 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
   for (const [d, nombre] of [[RETENCION_DIAS.notas_papelera + 5, 'n-vieja'], [2, 'n-nueva']]) db.prepare("insert into notas_papelera (nombre, grupo, texto, borrada) values (?, 'Notas', 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0, mcp_codigos: 0, mcp_tokens: 0, mcp_clientes: 0 });
   assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from notas_papelera where nombre = 'n-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
@@ -237,7 +237,7 @@ test('SECRETOS: todo env.X que leen los módulos COMPARTIDOS que importa el Work
   const decl = JSON.parse(readFileSync(join(RAIZ, 'secretos.json'), 'utf8')); const declarados = new Set([...decl.obligatorios, ...decl.opcionales]);
   const wr = readFileSync(join(RAIZ, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''); const vars = new Set(Object.keys(JSON.parse(wr).vars));
   // Bindings de Cloudflare, ganchos de pruebas (siempre funciones: un secreto es un texto), y desvíos de servidor que NO se pueden poner desde los secretos (solo con una variable en wrangler.jsonc, o sea con acceso al despliegue).
-  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'FETCH_ICONO_CONECTOR', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
+  const permitidos = new Set(['HOST_MCP', 'MCP_ESCRITURAS_MINUTO', 'MCP_ESCRITURAS_DIA', 'DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'FETCH_ICONO_CONECTOR', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
   const vistos = new Set(), cola = [resolve(RAIZ, 'worker/index.js')], faltan = {};
   while (cola.length) {
     const f = cola.pop(); if (vistos.has(f)) continue; vistos.add(f); let s; try { s = readFileSync(f, 'utf8'); } catch { continue; }

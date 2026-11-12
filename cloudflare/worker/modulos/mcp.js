@@ -12,7 +12,7 @@ import { listar, revocarFamilia, revocarTodas } from '../lib/mcp/tokens.js';
 import { auditar } from '../lib/mcp/auditoria.js';
 
 export const nombre = 'mcp';
-export const grupos = [];
+export const grupos = ['conectar-claude'];
 
 /** ¿Esta ruta es de las públicas del conector? (lib/rutas.js la llama antes de nada; un test la compara con la lista de excepciones). */
 export const RUTAS_PUBLICAS_MCP = Object.freeze(['/mcp', '/oauth/register', '/oauth/authorize', '/oauth/token', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude']);
