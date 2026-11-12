@@ -198,3 +198,11 @@ test('SALIDA Y CONSULTAS: cada lectura cabe en 20.000 letras y no pasa de 50 con
     c.v.n = 0; const e = await llamar(t.oficina, 'agentes_cambiar', { accion: 'brief', id: AGENTE, texto: 'Un brief.', confirmado: true }); assert.equal(e.j.result.isError, false, texto(e)); assert.ok(c.v.n <= 50, `cambiar el brief hizo ${c.v.n} consultas`);
   } finally { c.parar(); }
 });
+
+test('TAMAÑO DEL DOMINIO: cada descripción ≤ 2.000 letras y las cuatro herramientas de este dominio ≤ 7.000 en tools/list', { skip: SALTAR }, async () => {
+  const { m, t } = await conectados();
+  const mias = (await m.rpc(t.oficina, 'tools/list')).j.result.tools.filter((x) => /^(agentes|dimitri_chats)(_cambiar)?$/.test(x.name));
+  assert.equal(mias.length, 4);
+  for (const x of mias) assert.ok(x.description.length <= 2000, `${x.name}: ${x.description.length}`);
+  const total = JSON.stringify(mias).length; assert.ok(total <= 7000, `el dominio pesa ${total} letras`);
+});
