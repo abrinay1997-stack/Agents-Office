@@ -287,7 +287,7 @@ test('COSTO: cada llamada cabe en 50 sentencias de D1 y ninguna salida pasa del 
   }
   const tools = (await m.rpc(t.oficina, 'tools/list')).j.result.tools.filter((x) => [...LEE, ...CAMBIA].includes(x.name));
   assert.equal(tools.length, 8);
-  assert.ok(JSON.stringify(tools).length <= 12000, `tools/list de la empresa pesa ${JSON.stringify(tools).length} letras (presupuesto 12.000)`);
+  assert.ok(JSON.stringify(tools).length <= 9000, `tools/list de la empresa pesa ${JSON.stringify(tools).length} letras (presupuesto 9.000)`);
 });
 
 test('LA AUDITORÍA: cada llamada queda en el rastro (herramienta y conexión) y el rastro no lleva contenido sensible', { skip: SALTAR }, async () => {
