@@ -218,14 +218,14 @@ test('B1: un tipo en forma de lista (`limite`: string o null) se valida de verda
 test('M2: si deshacer FALLA, la clave se repone (no se pierde la única forma de volver atrás)', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
   const yo = m.db.prepare('select id from users limit 1').get().id;
-  const k = 'claveprueba01';
+  const k = 'undo-prueba-01', VIEJA = 'undo-vieja-001';
   await guardarDoc(m.d1, PREFIJO_UNDO + k, { o: { type: 'tarea_mover', id: 'no-existe', undo: { state: 'next', dueAt: null } }, at: m.ahora(), por: yo });
   const r = await llamar(t.oficina, 'deshacer', { clave: k });
   assert.equal(r.j.result.isError, true, texto(r));
   assert.equal(m.db.prepare('select count(*) n from docs where clave = ?').get(PREFIJO_UNDO + k).n, 1, 'la fila sigue ahí para reintentar');
   // y vencida (más de 10 minutos) no se usa ni se repone
-  await guardarDoc(m.d1, PREFIJO_UNDO + 'clavevieja001', { o: { type: 'tarea_mover', id: 'x', undo: {} }, at: m.ahora() - DESHACER_MS - 1000, por: yo });
-  assert.match(texto(await llamar(t.oficina, 'deshacer', { clave: 'clavevieja001' })), /ya no sirve/);
+  await guardarDoc(m.d1, PREFIJO_UNDO + VIEJA, { o: { type: 'tarea_mover', id: 'x', undo: {} }, at: m.ahora() - DESHACER_MS - 1000, por: yo });
+  assert.match(texto(await llamar(t.oficina, 'deshacer', { clave: VIEJA })), /ya no sirve/);
 });
 
 test('B2: las claves mcp.idem:* y mcp.undo:* están clasificadas (restablecer las conserva) y la poda diaria las barre sin necesidad de tráfico', { skip: SALTAR }, async () => {
