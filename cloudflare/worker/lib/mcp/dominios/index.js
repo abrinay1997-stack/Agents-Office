@@ -5,7 +5,8 @@ import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio 
 // import './cerebro.js';
 // import './tareas.js';
 // import './contenido.js';
-// import './anuncios.js';
+import './anuncios.js'; // P5 · carril anuncios: Anuncios de Meta (leer, borradores y lo que baja el gasto)
+import './analiticas.js'; // P5 · carril anuncios: Analíticas de las redes (leer)
 // import './estudio.js';
 // import './agentes.js';
 // import './skills.js';

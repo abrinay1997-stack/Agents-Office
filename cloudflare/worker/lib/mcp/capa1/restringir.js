@@ -12,13 +12,19 @@ export function rutaOk(ruta) {
   return { ok: true };
 }
 
-/** `permitidas`: 'GET' (cualquier ruta por GET) o 'POST /api/tasks' (método + ruta exacta, sin la consulta). → un `office` que rechaza lo demás. */
+/** Un segmento `<id>` en una ruta permitida (P5, carril anuncios): UN solo segmento de [A-Za-z0-9_~-] (1 a 90), nada más; el resto de la ruta se compara exacto. */
+const ID = '[A-Za-z0-9_~-]{1,90}';
+const regexDe = (p) => new RegExp('^' + p.split('<id>').map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join(ID) + '$');
+
+/** `permitidas`: 'GET' (cualquier ruta por GET) o 'POST /api/tasks' (método + ruta exacta, sin la consulta; `<id>` vale por un segmento). → un `office` que rechaza lo demás. */
 export function restringir(office, permitidas) {
-  const sueltos = new Set(permitidas.filter((p) => !p.includes(' '))), exactos = new Set(permitidas.filter((p) => p.includes(' ')));
+  const sueltos = new Set(permitidas.filter((p) => !p.includes(' '))), todos = permitidas.filter((p) => p.includes(' '));
+  const exactos = new Set(todos.filter((p) => !p.includes('<id>'))), conId = todos.filter((p) => p.includes('<id>')).map((p) => { const i = p.indexOf(' '); return { m: p.slice(0, i), re: regexDe(p.slice(i + 1)) }; });
   return async function officeRestringido(ruta, cuerpo, metodo) {
     const m = String(metodo || (cuerpo ? 'POST' : 'GET')).toUpperCase();
     const r = rutaOk(ruta); if (!r.ok) throw new Error(`ruta no permitida: ${r.motivo}`);
-    if (!(sueltos.has(m) || exactos.has(`${m} ${ruta.split('?')[0]}`))) throw new Error(`esta herramienta no puede hacer ${m} ${ruta.split('?')[0].slice(0, 80)}`);
+    const camino = ruta.split('?')[0];
+    if (!(sueltos.has(m) || exactos.has(`${m} ${camino}`) || conId.some((x) => x.m === m && x.re.test(camino)))) throw new Error(`esta herramienta no puede hacer ${m} ${ruta.split('?')[0].slice(0, 80)}`);
     return office(ruta, cuerpo, metodo);
   };
 }
