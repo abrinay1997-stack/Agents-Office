@@ -7,7 +7,8 @@ import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio 
 // import './contenido.js';
 // import './anuncios.js';
 // import './estudio.js';
-// import './agentes.js';
+import './agentes.js'; // P5: agentes (roster, ficha, actividad, brief)
+import './dimitri.js'; // P5: las conversaciones de Dimitri de cada cuenta
 // import './skills.js';
 // import './empresa.js';
 export {};
