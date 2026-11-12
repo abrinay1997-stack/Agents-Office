@@ -36,7 +36,7 @@ export const CONSERVA_TABLAS = ['users', 'sessions', 'sesiones_uso', 'conectores
   'series_libro', // series (N1): el libro del dinero es contabilidad: un restablecimiento no lo toca (lo reservado o en duda sigue contando contra los topes)
   'notas_vectores']; // los vectores de significado son datos derivados que se reconocen por el hash del texto: no entran al respaldo (pesan mucho) y se podan solos al indexar
 export const CONSERVA_DOCS = ['mcp.config', 'config', 'notificaciones.config', 'chat.config', 'notas.config', 'ajustes', 'config-local', 'config.contenido', 'estudio.config', 'estudio.uso', 'estudio.voces', 'triggers', 'telegram.estado', 'tareas.config', 'notices', 'meta.freno', 'bandeja.abierta', 'contenido.meta.cuentas', 'contenido.meta.freno', 'contenido.metricool.subidas', 'contenido.mejores-horas', 'contenido.redes', 'contenido.modo', 'arranque.estado', 'sesion.estado', 'dimitri-ia-estado', DOC_RESPALDOS, DOC_PASO];
-export const CONSERVA_PREFIJOS_DOCS = ['fs:', 'anuncios.', 'meta.', 'bandeja.', 'restablecer.', 'telegram.', 'config.', 'presencia.'];
+export const CONSERVA_PREFIJOS_DOCS = ['mcp.idem:', 'mcp.undo:', 'fs:', 'anuncios.', 'meta.', 'bandeja.', 'restablecer.', 'telegram.', 'config.', 'presencia.'];
 export const CONSERVA_FILAS = ['avisos', 'contenido-dias', 'contenido-pubs']; // estas dos son el paso de la foto de Meta (Analíticas): se conservan
 
 const dest = (ambitos) => {

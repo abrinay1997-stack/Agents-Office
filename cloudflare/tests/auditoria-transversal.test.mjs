@@ -210,7 +210,7 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
   for (const [d, nombre] of [[RETENCION_DIAS.notas_papelera + 5, 'n-vieja'], [2, 'n-nueva']]) db.prepare("insert into notas_papelera (nombre, grupo, texto, borrada) values (?, 'Notas', 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0, mcp_codigos: 0, mcp_tokens: 0, mcp_clientes: 0 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1, notas_papelera: 1, notificaciones: 0, notas_personales: 0, chat_mensajes: 0, estudio_lotes: 0, series: 0, series_libro: 0, series_tokens: 0, docs_mcp: 0, mcp_codigos: 0, mcp_tokens: 0, mcp_clientes: 0 });
   assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from notas_papelera where nombre = 'n-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);

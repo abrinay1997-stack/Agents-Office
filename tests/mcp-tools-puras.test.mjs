@@ -38,8 +38,11 @@ for (const archivo of ['oficina-tools.mjs', 'estudio-tools.mjs']) {
     const { vistos, malos } = cierre(archivo);
     assert.deepEqual(malos, []);
     assert.ok(vistos.length >= 2, 'el recorrido debe seguir las importaciones relativas');
-    const t = fs.readFileSync(path.join(ROOT, archivo), 'utf8');
-    assert.ok(!/\bprocess\.|\brequire\(|\b__dirname\b|readFileSync|child_process/.test(t.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')), 'sin process, require ni lectura de archivos');
+    // y lo mismo para TODO el cierre de imports, no solo el archivo de entrada: un `process.env` o un `readFileSync` en una dependencia rompe el Worker igual
+    for (const f of vistos) {
+      const t = fs.readFileSync(path.join(ROOT, f), 'utf8');
+      assert.ok(!/\bprocess\.|\brequire\(|\b__dirname\b|readFileSync|child_process/.test(t.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n').replace(/\/\/ .*$/gm, '')), `${f}: sin process, require ni lectura de archivos`);
+    }
   });
 }
 
