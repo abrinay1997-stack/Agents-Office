@@ -4,11 +4,8 @@
 
 /** Ajustes que un token de alcance `oficina` puede poner con `ajustes_cambiar` → `poner`. Ninguno lleva un secreto, un id de cuenta, un candado de seguridad ni abre gasto. */
 export const AJUSTES_PERMITIDOS = Object.freeze([
-  'name', 'approvals.undoSeconds', 'approvals.remindAfterHours', 'approvals.expireAfterDays', 'costs.alertAt', 'costs.hourlyRate',
-  'contenido.redes', 'contenido.departments', 'contenido.entregarHorasAntes', 'contenido.historiasHora', 'contenido.historiasPorDia',
-  'anuncios.cpaObjetivo', 'anuncios.competenciaPais', 'telegram.quiet.from', 'telegram.quiet.to',
-  'telegram.notify.approvals', 'telegram.notify.failures', 'telegram.notify.done', 'telegram.notify.comentarios', 'telegram.notify.mensajes', 'telegram.notify.notices',
-  'deputy.weekly', 'quality.review.enabled', 'quality.review.departments',
+  'name', 'costs.hourlyRate', 'contenido.redes', 'contenido.departments', 'contenido.entregarHorasAntes', 'contenido.historiasHora', 'contenido.historiasPorDia',
+  'anuncios.cpaObjetivo', 'anuncios.competenciaPais', 'telegram.notify.done', 'telegram.notify.comentarios', 'telegram.notify.mensajes', 'telegram.notify.notices', 'deputy.weekly',
 ]);
 
 /**
@@ -31,6 +28,8 @@ export const PATH_DE_TOPE = Object.freeze(Object.fromEntries(Object.entries(TOPE
 
 const FUERA = [
   [/^safety\./, 'candado de seguridad de los envíos: solo el dueño, en la oficina'], [/^hooks\./, 'abre o cierra el acceso de los webhooks: solo el dueño, en la oficina'],
+  [/^(approvals\.|quality\.review|costs\.alertAt$|telegram\.quiet\.|telegram\.notify\.(approvals|failures)$)/, 'supervisión del dueño (plazos de aprobación, avisos de lo que espera su OK o falla, horario de no molestar, segunda opinión ' +
+    'del jefe, alerta de presupuesto): aflojarla esconde cosas; solo el dueño, en la oficina'],
   [/^approvals\.(amountLimit|autonomyAfter)$/, 'decide cuánto dinero pide el OK del dueño y cuándo un agente envía solo: es un candado, solo el dueño en la oficina'],
   [/^contenido\.(modo|conductor|publicarYa|historiasAuto|historiasSinOk|bandejaFuente)$/, 'decide si algo se publica de verdad, quién publica o si sale sin OK: solo el dueño, en la oficina'],
   [/^anuncios\.(cuenta|pagina|instagram|pixel|whatsapp)$/, 'es el id de una cuenta o un número del negocio: dato sensible, solo en la oficina'],

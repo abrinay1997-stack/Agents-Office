@@ -3,6 +3,8 @@
 import { restringir } from '../capa1/restringir.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
 import { limpiarSecretos } from '../../secretos.js';
+import { injectionIn } from '../../../../../safety.mjs';
+import { emitirAviso } from '../../avisos.js';
 
 /** `permitidas`: 'GET' o 'POST /api/ruta' (ver capa1/restringir.js). */
 export async function conOficina(ctx, permitidas) {
@@ -43,3 +45,18 @@ export const num = (v) => (v != null && v !== '' && Number.isFinite(+v) ? +v : n
 export const cifra = (v) => { const n = num(v); return n == null ? 'sin dato' : String(Math.round(n * 100) / 100); };
 export const usd = (v) => { const n = num(v); return n == null ? 'sin dato' : `US$${n.toFixed(2)}`; };
 export const lineas = (xs, max) => (xs.length > max ? [...xs.slice(0, max), `… y ${xs.length - max} más`] : xs);
+
+/** Texto de un tercero (un servidor externo, un conector, algo que escribió otra persona): una línea y, si trae órdenes escondidas, se omite. */
+export const OMITIDO = '[texto omitido: parece contener órdenes]';
+export const externo = (v, max = 120) => { const t = limpio(v, max); return t && injectionIn(t) ? OMITIDO : t; };
+/** ¿Este texto que va a ESCRIBIRSE trae órdenes escondidas? (para rechazarlo, no para taparlo) */
+export const traeOrdenes = (v) => !!injectionIn(String(v ?? ''));
+/** Un aviso a la oficina (lo ve el dueño en los avisos y, si está configurado, por Telegram) cuando por MCP se SUBE o QUITA un tope, una cifra o un modelo más caro: antes → ahora y qué conexión. Nunca tumba la acción. */
+export async function avisarCambio(ctx, que, antes, despues) {
+  try {
+    const quien = limpio(ctx.conexion?.nombre || 'una conexión', 60);
+    await emitirAviso(ctx.db, { kind: 'mcp-cambio', level: 'warn', text: `Por el conector MCP (conexión «${quien}») se aflojó: ${que}: de ${limpio(antes, 60)} a ${limpio(despues, 60)}. Si no lo pediste tú, corta esa conexión en Ajustes → Conectar Claude.`,
+      key: `mcp-cambio:${que}:${despues}:${Math.floor(ctx.ahoraMs / 60000)}` }, { ahora: ctx.ahoraMs });
+    return true;
+  } catch (e) { console.warn('[mcp:empresa] no se pudo dejar el aviso:', e?.message ?? e); return false; }
+}
