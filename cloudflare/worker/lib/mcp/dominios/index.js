@@ -8,6 +8,6 @@ import './capa1.js'; // P3b: las herramientas finas de la oficina y del Estudio 
 // import './anuncios.js';
 // import './estudio.js';
 // import './agentes.js';
-// import './skills.js';
+import './skills.js';
 // import './empresa.js';
 export {};
