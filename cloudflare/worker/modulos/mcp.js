@@ -10,6 +10,7 @@ import { permiso } from '../lib/mcp/permiso.js';
 import { manejarMcp } from '../lib/mcp/servidor.js';
 import { listar, revocarFamilia, revocarTodas } from '../lib/mcp/tokens.js';
 import { auditar } from '../lib/mcp/auditoria.js';
+import { listarSolicitudes, aprobarSolicitud, rechazarSolicitud } from '../lib/mcp/gasto.js';
 
 export const nombre = 'mcp';
 export const grupos = ['conectar-claude'];
@@ -52,6 +53,16 @@ export async function manejar(ctx) {
     const n = await revocarTodas(db, ms);
     await auditar(db, ms, usuario.email, { evento: 'cortar-todas', testigos: n });
     return json({ ok: true, cortadas: n, conexiones: await listar(db, ms) });
+  }
+  // P4 (plan MCP §14.2): las tarjetas «espera tu OK» de lo que Claude pidió gastar. Aprobar ES el paso 2 y es de una persona: esta ruta pide la sesión de un administrador (arriba) y un testigo de MCP no llega aquí.
+  if (ruta === '/api/conectar-claude/solicitudes' && req.method === 'GET') return json(await mcpActivo(db) ? await listarSolicitudes(db, ms) : { esperan: [], hechas: [], apagado: true });
+  const sm = ruta.match(/^\/api\/conectar-claude\/solicitudes\/(g[0-9a-f]{9,40})\/(aprobar|rechazar)$/);
+  if (sm && req.method === 'POST') {
+    if (!(await mcpActivo(db))) return error('El conector está apagado: no se aprueba nada hasta encenderlo.', 409);
+    if (sm[2] === 'rechazar') return (await rechazarSolicitud(db, sm[1], { ms, por: usuario.email })) ? json({ ok: true, ...(await listarSolicitudes(db, ms)) }) : error('Esa solicitud ya no espera.', 409);
+    const r = await aprobarSolicitud({ env, db, usuario, ms, id: sm[1] });
+    if (r.error) return error(r.error, r.status || 400);
+    return json({ ...r, ...(await listarSolicitudes(db, ms)) });
   }
   const m = ruta.match(/^\/api\/conectar-claude\/([0-9a-f]{32})$/);
   if (m && req.method === 'DELETE') {

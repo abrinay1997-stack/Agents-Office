@@ -24,7 +24,7 @@ export const DESTINOS = {
   tareas: { filas: ['tareas', 'tareas-archivo'], tablas: ['tarea_bitacora', 'corridas', 'ejecuciones'], docs: ['tareas.proyectos', 'tareas.etiquetas', 'enrutador.correcciones'], prefijosDocs: ['feedback.', 'ejemplos.'] },
   dimitri: { tablas: ['series'], filas: ['subgerente', 'subgerente-hilo'], prefijosFilas: ['subgerente:', 'subgerente-arch:'], docs: ['subgerente.archivo', 'dimitri.semanal'], prefijosDocs: ['subgerente.archivo:'] }, // desde el 27 oct 2026 cada cuenta tiene su sala (`subgerente:<cuenta>`) y su historial (`subgerente.archivo:<cuenta>`)
   estudio: { tablas: ['estudio_archivos', 'estudio_trabajos', 'estudio_lotes'], filas: ['estudio-fichas'], docs: ['estudio.rev', 'estudio.carpetas', 'estudio.carpetas-borradas'] },
-  mcp: { tablas: ['mcp_clientes', 'mcp_codigos', 'mcp_tokens'] }, // NO es un ámbito que se elija en la pantalla: CUALQUIER restablecimiento (o restauración) corta todas las conexiones de Claude (sentenciasDeQuitar). Un respaldo no las lleva: restaurar no las resucita.
+  mcp: { tablas: ['mcp_clientes', 'mcp_codigos', 'mcp_tokens', 'mcp_solicitudes'] }, // NO es un ámbito que se elija en la pantalla: CUALQUIER restablecimiento (o restauración) corta todas las conexiones de Claude (sentenciasDeQuitar). Un respaldo no las lleva: restaurar no las resucita.
   contenido: { tablas: ['contenido_piezas', 'contenido_cola', 'contenido_candado', 'contenido_papelera'], docs: ['contenido.simulacro', 'contenido.meta.agenda', 'contenido.historias'], filas: ['contenido-piezas', 'contenido-cola', 'contenido-docs'] }, // las filas `contenido-*` son el paso de la migración (lib/contenido/migracion.js): de ahí pasan a las tablas
 };
 /** Lo que NO se restablece nunca (por tabla / clave / colección / prefijo): personas, accesos, llaves, auditoría, ajustes, Meta, respaldos. */
@@ -151,7 +151,7 @@ async function sentenciasDeFabrica(env, db, modo, ambitos, ahora) {
 function sentenciasDeQuitar(db, ambitos) {
   const t = dest(ambitos), f = filtros(t), s = [];
   for (const tabla of t.tablas) s.push(db.prepare(`delete from ${tabla}`));
-  s.push(db.prepare('delete from mcp_tokens'), db.prepare('delete from mcp_codigos')); // un restablecimiento cambia la oficina por debajo de Claude: se corta TODA conexión (Claude vuelve a pedir permiso)
+  s.push(db.prepare('delete from mcp_tokens'), db.prepare('delete from mcp_codigos'), db.prepare('delete from mcp_solicitudes')); // un restablecimiento cambia la oficina por debajo de Claude: se corta TODA conexión (Claude vuelve a pedir permiso)
   if (f.docs) s.push(db.prepare(`delete from docs where ${f.docs.sql}`).bind(...f.docs.args));
   if (f.filas) s.push(db.prepare(`delete from filas where ${f.filas.sql}`).bind(...f.filas.args));
   return s;
