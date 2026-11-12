@@ -30,14 +30,17 @@ async function montar({ series = false } = {}) {
   const m = await mundo();
   if (series) {
     await guardarDoc(m.d1, 'config-local', { dimitri: { seriesNube: true } });
-    m.db.prepare('insert or replace into notas (nombre, grupo, oficina, texto, bytes, actualizado) values (?,?,?,?,?,?)').run('biblia-visual', 'Marca', 0, serializarBiblia({ tono: 'cálido', luz: 'natural', composicion: 'centrado', nunca: ['neón'], paleta: [{ rol: 'primario', hex: '#336699' }] }, { version: 1, estado: 'aprobada', aprobada_por: 'dueño' }), 100, 1);
+    m.db.prepare('insert or replace into notas (nombre, grupo, oficina, texto, bytes, actualizado) values (?,?,?,?,?,?)').run('biblia-visual', 'Marca', 0, serializarBiblia({ tono: 'cálido',
+      luz: 'natural', composicion: 'centrado', nunca: ['neón'], paleta: [{ rol: 'primario', hex: '#336699' }] }, { version: 1, estado: 'aprobada', aprobada_por: 'dueño' }), 100, 1);
   }
   const t = {}; for (const a of ['lectura', 'oficina']) t[a] = (await m.conectar({ alcance: a })).tokens.access_token;
   const A = ['2031-01/aaa-uno.png', '2031-01/bbb-dos.png', '2031-02/ccc-tres.png'];
-  A.forEach((f, i) => m.db.prepare('insert into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)').run(f, 1_000_000 + i, 'image', JSON.stringify({ id: f, file: f, kind: 'image', at: 1_000_000 + i, prompt: `una cama queen ${i}`, modelName: 'Prueba', model: 'prueba', by: 'you' })));
+  A.forEach((f, i) => m.db.prepare('insert into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)').run(f, 1_000_000 + i, 'image',
+    JSON.stringify({ id: f, file: f, kind: 'image', at: 1_000_000 + i, prompt: `una cama queen ${i}`, modelName: 'Prueba', model: 'prueba', by: 'you' })));
   return { m, t, A, llamar: m.llamar, carpeta: async (nombre) => (await m.admin('POST', '/api/media/folders', { name: nombre })).j.folder.id };
 }
-const antes = (m) => JSON.stringify([m.db.prepare('select file, json, papelera_at from estudio_archivos order by file').all(), m.db.prepare('select count(*) n from estudio_trabajos').get(), m.db.prepare("select count(*) n from docs where clave like 'estudio.%' or clave like 'mcp.undo:%' or clave like 'mcp.idem:%'").get()]);
+const antes = (m) => JSON.stringify([m.db.prepare('select file, json, papelera_at from estudio_archivos order by file').all(), m.db.prepare('select count(*) n from estudio_trabajos').get(),
+  m.db.prepare("select count(*) n from docs where clave like 'estudio.%' or clave like 'mcp.undo:%' or clave like 'mcp.idem:%'").get()]);
 const libro = (m) => { try { return m.db.prepare('select count(*) n from series_libro').get().n; } catch { return 0; } };
 
 test('EL REGISTRO: galeria, series y sus _cambiar cumplen el contrato; ninguna acción suena a gasto ni a aprobar/enviar/publicar', () => {
@@ -68,7 +71,9 @@ test('POR ESCRITO: el código del dominio no llama a nada que genere, inicie un 
   const codigo = fuentes.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n').replace(/\/\/ .*$/gm, '').replace(/\/\*\*[\s\S]*?\*\//g, '');
   // quitado lo escrito en datos de EXCLUSIONES (cadenas que NOMBRAN las rutas excluidas): lo que queda no puede llamarlas
   const sinExcl = codigo.replace(/export const EXCLUSIONES(_SERIES)?[\s\S]*?\}\);/g, '');
-  for (const mala of ['/api/media/jobs', '/api/media/generate', '/api/media/edit', '/api/media/enhance', 'presets/apply', 'trash/purge', '/api/voces/design', '/api/voces/clone', '/presupuesto', '/generar', '/continuar', '/resolver', '/api/media/upload', '/api/media/limites\', {', '/pausar', '/cancelar', 'huerfanas', '/api/series/libro', '/libro`']) {
+  for (const mala of ['/api/media/jobs', '/api/media/generate', '/api/media/edit', '/api/media/enhance', 'presets/apply', 'trash/purge', '/api/voces/design',
+    '/api/voces/clone', '/presupuesto', '/generar', '/continuar', '/resolver', '/api/media/upload', '/api/media/limites\', {', '/pausar', '/cancelar', 'huerfanas',
+    '/api/series/libro', '/libro`']) {
     assert.ok(!sinExcl.includes(mala), `el dominio menciona ${mala}`);
   }
   assert.ok(!/\/api\/media\/lotes[`'"][^)]*,\s*\{/.test(sinExcl), 'ningún POST a /lotes');
@@ -168,7 +173,9 @@ test('RUTAS FUERA DE LA LISTA: cada acción solo puede pedir sus rutas exactas; 
   for (const [a, args] of casos) {
     const p = preparar(a, args, quien); assert.ok(!p.error, `${a}: ${p.error}`);
     const of = trampa(async () => { n++; return {}; }, p.permitidas);
-    for (const [met, ruta] of [['POST', '/api/media/trash/purge'], ['POST', '/api/media/jobs'], ['POST', '/api/media/generate'], ['POST', '/api/media/presets/apply'], ['POST', '/api/media/lotes'], ['POST', '/api/voces/clone'], ['DELETE', '/api/media/folders/cabc123'], ['PUT', '/api/media/limites'], ['GET', '/api/../x'], ['GET', '/api/media/item/%2e%2e/x']]) {
+    for (const [met, ruta] of [['POST', '/api/media/trash/purge'], ['POST', '/api/media/jobs'], ['POST', '/api/media/generate'], ['POST', '/api/media/presets/apply'],
+      ['POST', '/api/media/lotes'], ['POST', '/api/voces/clone'], ['DELETE', '/api/media/folders/cabc123'], ['PUT', '/api/media/limites'], ['GET', '/api/../x'],
+      ['GET', '/api/media/item/%2e%2e/x']]) {
       await assert.rejects(of(ruta, met === 'GET' ? undefined : {}, met), /no puede hacer|no permitida/, `${a} no puede ${met} ${ruta}`);
     }
   }
@@ -250,14 +257,19 @@ test('NOMBRES DE CARPETA: la misma regla que la galería (controles y «<>» fue
   const nombres = JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.map((f) => f.name); assert.ok(nombres.every((n) => n === n.trim() && !/[<>\u0000-\u001f]|\s{2}/.test(n) && n.length <= 60), JSON.stringify(nombres));
   assert.equal((await crear('<>\n')).j.result.isError, true, 'un nombre que queda vacío no vale');
   assert.equal((await crear('x'.repeat(201))).j.result.isError, true);
-  const largo = await crear('y'.repeat(60)); assert.equal(largo.j.result.isError, false); assert.equal((await crear('z'.repeat(80))).j.result.isError, true, 'más de 60 letras no vale'); assert.ok(JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.every((f) => f.name.length <= 60));
+  const largo = await crear('y'.repeat(60));
+  assert.equal(largo.j.result.isError, false);
+  assert.equal((await crear('z'.repeat(80))).j.result.isError, true, 'más de 60 letras no vale');
+  assert.ok(JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.every((f) => f.name.length <= 60));
   const dup = await crear('SALA BDE/B ESTAR'); assert.equal(dup.j.result.isError, true); assert.match(texto(dup), /ya existe la carpeta/);
   assert.equal(JSON.parse(m.db.prepare("select json from docs where clave like 'estudio.carpetas%'").get().json).folders.length, 2, 'no se creó un duplicado');
 });
 
 test('SERIES: una serie guardada se lista y se ve con su contenido real, y un recorte lo dice', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await montar({ series: true });
-  const p = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief: { titulo: 'Sala de verano', objetivo: 'mostrar el sofá', formato: 'carrusel' }, planos: [{ descripcion: 'plano 1', prompt: 'un sofá gris en una sala luminosa', modelo: 'prueba' }, { descripcion: 'plano 2', prompt: 'el sofá visto de lado', modelo: 'prueba' }], guardar: true });
+  const p = await llamar(t.oficina, 'series_cambiar', { accion: 'proponer', brief: { titulo: 'Sala de verano', objetivo: 'mostrar el sofá', formato: 'carrusel' },
+    planos: [{ descripcion: 'plano 1', prompt: 'un sofá gris en una sala luminosa', modelo: 'prueba' }, { descripcion: 'plano 2', prompt: 'el sofá visto de lado',
+    modelo: 'prueba' }], guardar: true });
   assert.equal(p.j.result.isError, false, texto(p)); assert.match(texto(p), /Nada se generó/);
   const fila = m.db.prepare('select id from series').get(); assert.ok(fila, 'la propuesta se guardó');
   const lista = texto(await llamar(t.lectura, 'series', { accion: 'listar' })); assert.ok(lista.includes(fila.id) && /2 planos/.test(lista) && /Sala de verano/.test(lista), lista);

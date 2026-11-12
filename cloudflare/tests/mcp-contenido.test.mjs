@@ -67,7 +67,8 @@ test('EL REGISTRO: contenido y bandeja cumplen el contrato (lectura/oficina, esq
   const peso = (n) => JSON.stringify({ d: por.get(n).descripcion, i: por.get(n).esquema }).length;
   for (const n of [...LEE_C, ...CAMBIA_C]) assert.ok(peso(n) <= 2000, `${n} pesa ${peso(n)} letras (tope 2.000)`);
   assert.ok([...LEE_C, ...CAMBIA_C].reduce((a, n) => a + peso(n), 0) <= 6000, 'las cuatro herramientas no pasan de 6.000 letras');
-  const abiertos = []; (function ver(o, ruta) { if (!o || typeof o !== 'object') return; if (o.type === 'object' && o.properties && o.additionalProperties !== false) abiertos.push(ruta); for (const [k, v] of Object.entries(o)) ver(v, ruta + '.' + k); })(por.get('contenido_cambiar').esquema, 'cambiar');
+  const abiertos = []; (function ver(o, ruta) { if (!o || typeof o !== 'object') return; if (o.type === 'object' && o.properties && o.additionalProperties !== false) abiertos.push(ruta); for (const [k,
+    v] of Object.entries(o)) ver(v, ruta + '.' + k); })(por.get('contenido_cambiar').esquema, 'cambiar');
   assert.deepEqual(abiertos, [], 'todo objeto con propiedades lleva additionalProperties:false');
   assert.ok(!por.get('contenido_cambiar').esquema.properties.estado.enum.includes('revision'), 'a_revision no existe');
 });
@@ -79,7 +80,8 @@ test('LÍMITES POR ESCRITO: ninguna ruta de aprobar, programar, publicar, entreg
   for (const r of sirve) assert.ok(!/^(DELETE|PUT) /.test(r), `${r}: nada de borrar ni reemplazar`);
   for (const [r, motivo] of [...Object.entries(C.EXCLUIDAS), ...Object.entries(B.EXCLUIDAS)]) { assert.ok(motivo.length > 25, `${r}: falta el motivo`); assert.ok(!sirve.includes(r), `${r} está excluida y servida a la vez`); }
   for (const r of ['POST /api/contenido/bandeja/:id/descartar', 'POST /api/contenido/bandeja/:id/reabrir']) assert.ok(r in B.EXCLUIDAS, `${r}: un agente no cierra ni reabre lo que espera al dueño`);
-  for (const r of ['POST /api/contenido/piezas/:id/aprobar', 'POST /api/contenido/piezas/:id/publicar-ya', 'POST /api/contenido/piezas/:id/entregar', 'POST /api/contenido/piezas/:id/reintentar', 'POST /api/contenido/llenar', 'POST /api/contenido/bandeja/:id/enviar', 'POST /api/contenido/bandeja/:id/ocultar']) assert.ok(r in C.EXCLUIDAS || r in B.EXCLUIDAS, `${r}: debe estar excluida con su motivo`);
+  for (const r of ['POST /api/contenido/piezas/:id/aprobar', 'POST /api/contenido/piezas/:id/publicar-ya', 'POST /api/contenido/piezas/:id/entregar', 'POST /api/contenido/piezas/:id/reintentar',
+    'POST /api/contenido/llenar', 'POST /api/contenido/bandeja/:id/enviar', 'POST /api/contenido/bandeja/:id/ocultar']) assert.ok(r in C.EXCLUIDAS || r in B.EXCLUIDAS, `${r}: debe estar excluida con su motivo`);
   // y en el código de los dos dominios no aparece ninguna de esas rutas como destino (las líneas de comentario y las exclusiones no cuentan)
   const codigo = ['contenido', 'bandeja'].map((f) => readFileSync(new URL(`../worker/lib/mcp/dominios/${f}.js`, import.meta.url), 'utf8')).join('\n').split('\n').filter((l) => !/^\s*\/\//.test(l) && !/^\s*'(GET|POST|PUT|DELETE|PATCH) /.test(l)).join('\n').replace(/\/\/ .*$/gm, '');
   assert.ok(!/\/aprobar|publicar-ya|\/entregar|\/reintentar|\/quitar|\/enviar|\/devolver|['"`]\/api\/contenido\/llenar|\/ocultar['"`]|cola\/tick|estado['"]?\s*:\s*['"]aprobada/.test(codigo), 'el código no llama a nada de eso ni deja un estado aprobada');
@@ -91,7 +93,8 @@ test('ALCANCES Y ROLES: un token de lectura solo ve y llama lo de lectura; los d
   for (const n of LEE_C) assert.ok(ve.includes(n), n); for (const n of CAMBIA_C) assert.ok(!ve.includes(n), `${n} no es visible con lectura`);
   const oficina = (await m.rpc(t.oficina, 'tools/list')).j.result.tools; for (const n of [...LEE_C, ...CAMBIA_C]) assert.ok(oficina.some((x) => x.name === n), n);
   for (const x of oficina.filter((y) => CAMBIA_C.includes(y.name))) assert.equal(x.annotations.readOnlyHint, false);
-  for (const [n, a] of [['contenido_cambiar', { accion: 'crear', campos: { texto: 'x' } }], ['bandeja_cambiar', { accion: 'guardar_borrador', id: 'x', texto: 'x' }]]) { const r = await llamar(t.lectura, n, a); assert.equal(r.j.result.isError, true, n); assert.match(texto(r), /alcance «lectura»/, n); }
+  for (const [n, a] of [['contenido_cambiar', { accion: 'crear', campos: { texto: 'x' } }], ['bandeja_cambiar', { accion: 'guardar_borrador', id: 'x', texto: 'x' }]]) { const r = await llamar(t.lectura,
+    n, a); assert.equal(r.j.result.isError, true, n); assert.match(texto(r), /alcance «lectura»/, n); }
   assert.equal(piezasDb(m).length, 0);
   for (const q of ['editor', 'lectura']) await assert.rejects(m.conectar({ q, alcance: 'oficina' }), /no hubo código/, q);
   // las acciones inventadas (aprobar, publicar, enviar…) ni siquiera pasan el esquema
@@ -152,7 +155,8 @@ test('LECTURAS: calendario, pieza, cola, plantillas, guardados y cuentas leen si
   }
   assert.match(texto(await llamar(t.lectura, 'contenido', { accion: 'calendario', desde: fecha, hasta: fecha })), new RegExp(id));
   assert.match(texto(await llamar(t.lectura, 'contenido', { accion: 'pieza', id })), /Texto para leer por MCP/);
-  for (const a of [{ accion: 'huecos' }, { accion: 'resultados' }, { accion: 'mejor_hora' }, { accion: 'informe' }, { accion: 'analiticas' }]) { const r = await llamar(t.lectura, 'contenido', a); assert.ok(r.j.result, `${a.accion} contesta (con datos o con el motivo)`); assert.doesNotMatch(texto(r), /falló por dentro/, a.accion); }
+  for (const a of [{ accion: 'huecos' }, { accion: 'resultados' }, { accion: 'mejor_hora' }, { accion: 'informe' }, { accion: 'analiticas' }]) { const r = await llamar(t.lectura,
+    'contenido', a); assert.ok(r.j.result, `${a.accion} contesta (con datos o con el motivo)`); assert.doesNotMatch(texto(r), /falló por dentro/, a.accion); }
   assert.equal(filas(), antes, 'leer no escribe');
   assert.equal((await llamar(t.lectura, 'contenido', { accion: 'pieza' })).j.result.isError, true);
 });
@@ -205,7 +209,8 @@ test('SALIDA Y CONSULTAS: una lista larga se pagina (≤ 20.000 letras con «sig
   const { m, t, llamar } = await conectados();
   const fecha = dia(40);
   // (las piezas las deja el dueño por la API: el conector tiene su tope de escrituras por minuto)
-  for (let i = 0; i < 90; i++) await m.admin('POST', '/api/contenido/piezas', { titulo: `Pieza larga ${i} ` + 'x'.repeat(300), texto: `Texto ${i}`, fecha, hora: `${String(i % 24).padStart(2, '0')}:${String(Math.floor(i / 24) * 15).padStart(2, '0')}`, formato: 'post', redes: ['facebook'], estado: 'borrador' });
+  for (let i = 0; i < 90; i++) await m.admin('POST', '/api/contenido/piezas', { titulo: `Pieza larga ${i} ` + 'x'.repeat(300), texto: `Texto ${i}`, fecha,
+    hora: `${String(i % 24).padStart(2, '0')}:${String(Math.floor(i / 24) * 15).padStart(2, '0')}`, formato: 'post', redes: ['facebook'], estado: 'borrador' });
   const c = contarD1(m.d1);
   try {
     const r = await llamar(t.lectura, 'contenido', { accion: 'calendario', desde: fecha, hasta: fecha }); assert.equal(r.j.result.isError, false, texto(r));
