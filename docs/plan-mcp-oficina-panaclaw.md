@@ -158,10 +158,10 @@ Un token de MCP es **una persona con su rol**, no un agente. Los candados del gu
 
 | Regla | Cómo se impone |
 |---|---|
-| **El dinero pide dos pasos, siempre** | Las 4 operaciones de `sub.OPS_GASTO` (activar, reanudar, subir presupuesto, relanzar) devuelven la cifra y un testigo de un solo uso; la segunda llamada con ese testigo aplica. Lo exige `anuncios/acciones.mjs` **en el servidor**: el MCP no tiene atajo. |
+| **El dinero pide dos pasos, siempre** | Las 4 operaciones de `sub.OPS_GASTO` (activar, reanudar, subir presupuesto, relanzar) devuelven la cifra y un testigo de un solo uso. Lo exige `anuncios/acciones.mjs` **en el servidor**. **Enmienda §14.2:** por MCP solo se llega al paso 1 (preparar); el paso 2 lo da un humano en la oficina o Telegram, nunca un token de MCP. |
 | **El Estudio no gasta a ciegas** | Desde US$0,50 el servidor pide `confirmado: true`; los topes de día y mes se miran antes de cada imagen. Igual para Suno, ElevenLabs y las series. |
 | **Solo un administrador conecta** | `/conectar-claude` y `/oauth/token` solo emiten para un `admin` (decisión del dueño, §11.4). Un editor o un lector recibe un «no» explicado, no un error genérico. |
-| **`lectura` no escribe** | El servidor rechaza toda herramienta sin `readOnlyHint` si el rol es `lectura`, como ya hace el calendario. Se mantiene aunque solo conecte un admin: defensa en profundidad. |
+| **`lectura` no escribe** | El servidor rechaza toda herramienta sin `readOnlyHint` si el rol es `lectura`, como ya hace el calendario. Se mantiene aunque solo conecte un admin: defensa en profundidad. Por eso cada dominio son dos herramientas (leer / cambiar, §14.1). |
 | **`editor` no decide lo del dueño** | La matriz `SOLO_ADMIN` de `auditoria-transversal.test.mjs` se aplica igual por MCP. |
 | **Nunca por MCP: aprobar un borrador, enviar desde la Bandeja, publicar ya, pagar, borrar una cuenta, restablecer la oficina** | No se declaran como herramientas y van en la lista de exclusiones con su motivo. Eso se hace en la aplicación, con la cara delante. |
 | **Lo que escribió un tercero no manda** | Todo texto de fuera (resultados de agentes, notas, comentarios, galería, conectores, competencia) pasa por `safety.injectionIn` antes de llegar al modelo, como ya hacen las consultas de Dimitri. |
@@ -301,7 +301,7 @@ permiso `/conectar-claude` **con el selector de alcance** (§11.3) y el veto a q
 administrador (§11.4); `initialize`, `ping`, `tools/list` con **una** herramienta (`como_funciona`).
 Se añade el conector en claude.ai y se comprueba el baile entero. Tests: el flujo OAuth contra
 workerd real (como `vivo.test.mjs`), PKCE obligatorio, código de un solo uso, renovación rotada, un
-editor no obtiene token, un alcance `lectura` no escribe.
+editor no obtiene token, un alcance `lectura` no escribe. **Enmienda §14.3:** la P2 incluye también la pantalla de conexiones (ver y cortar cada una), el rastro de auditoría por llamada, los topes por token (escrituras por minuto y por día) y el interruptor general: desde la P3 hay tokens que escriben y no se concede poder sin poder quitarlo.
 
 **P3 · Capa 1: las herramientas que ya existen.** Separar `oficina-mcp.mjs` y `estudio-mcp.mjs` en
 `*-tools.mjs` (§7.2) y servir las ~20 finas. Aquí ya puedes hacer cosas de verdad desde cualquier
@@ -313,7 +313,7 @@ segundo paso del dinero y los 30 segundos de DESHACER. Test: ninguna op nueva en
 
 ### P5 · Los ocho carriles, a la vez
 
-Ocho ramas, ocho PR, al mismo tiempo. Cada carril entrega su herramienta de dominio con su `accion`
+Ocho ramas, ocho PR, al mismo tiempo. Cada carril entrega sus herramientas de dominio (`<dominio>`, `<dominio>_cambiar` y, donde toque, `<dominio>_gastar`, §14.1) con su `accion`
 cerrada, sus tests y su línea en `CLAUDE.md`.
 
 | Carril | Rama | Entrega | Trabajo extra dentro del carril |
@@ -354,9 +354,8 @@ PR. Las reglas que lo evitan, y hay que respetarlas:
 camino ni exclusión escrita. **No se puede hacer antes de que los ocho carriles estén unidos**,
 porque hasta entonces no se sabe qué queda fuera.
 
-**P7 · Rastro y la pantalla de conexiones.** La fila de `auditoria` por llamada, Ajustes → Conectar
-Claude con la lista de conexiones y su botón de cortar, los topes por token, y el mapa de la oficina
-(`como_funciona`, §7.3) si no entró en la P2.
+**P7 · Cierre.** Lo de rastro, conexiones y topes **pasó a la P2** (§14.3). Aquí queda el mapa de la
+oficina (`como_funciona`, §7.3) si no entró antes, y el repaso final.
 
 ## 9. Tests e invariantes
 
@@ -477,3 +476,63 @@ Cuando te contesten, pégame la respuesta y ajusto la P1 con lo que digan.
 - **El «ningún cabo suelto» es un test**, no una promesa: `mcp-cobertura.test.mjs` falla si queda una
   ruta sin camino.
 - **La regla del dinero no se toca.** Ni por MCP, ni desde el teléfono, ni desde otra sesión.
+
+---
+
+## 14. Revisión del plan (12 nov 2026, Sonnet 5.5)
+
+Lo que el orquestador encontró al cuestionar el plan. Manda sobre lo anterior donde se contradigan.
+
+1. **Dos (o tres) herramientas por dominio, no una.** Un solo `accion` mezcla leer y escribir, pero
+   el MCP solo tiene `readOnlyHint` por herramienta; el §4 dice que el servidor rechaza para el rol
+   `lectura` toda herramienta sin él, así que un token de solo lectura no podría llamar `cerebro` ni
+   `tareas`, y claude.ai no podría auto-permitir las lecturas. Corrección: `<dominio>` (solo lectura,
+   `readOnlyHint: true`), `<dominio>_cambiar` (escribe; `destructiveHint` donde borre o reemplace,
+   `idempotentHint` donde aplique) y `<dominio>_gastar` solo en anuncios y estudio (exige alcance
+   `gasto`). El test de roles comprueba que ninguna herramienta de solo lectura escriba.
+2. **El alcance `gasto` solo prepara.** Hoy `oficina/rutas.mjs` veta el gasto al asistente por MCP y el
+   dueño exige dos clics SUYOS con la cifra delante. Si Claude hiciera los dos pasos con el mismo
+   token, un texto de un tercero que lo manipule gastaría dinero sin un humano. Decisión: `gasto`
+   permite PREPARAR (paso 1: devuelve cifra y topes y deja una tarjeta «espera tu OK» en la oficina y
+   en Telegram); el paso 2 (canjear el testigo) solo lo hace un humano desde la oficina o Telegram,
+   NUNCA un token de MCP. Aplica a las 4 `OPS_GASTO` y a todo lo que cueste ≥ US$0,50 en el Estudio
+   (Suno, ElevenLabs, series). Relajarlo después es un cambio explícito de esta decisión.
+3. **Orden de fases.** Pantalla de conexiones (ver y CORTAR cada conector), rastro de auditoría por
+   llamada y topes por token (límite de escrituras por minuto y por día, interruptor general) van en
+   la P2, no en la P7: desde la P3 hay tokens con poder de escribir.
+4. **Revocación por cambios de la persona.** Quitar a un administrador, bajarle el rol, cambiarle la
+   contraseña o cerrarle todas las sesiones revoca sus tokens de MCP (no solo al restablecer la
+   oficina). Se reusa el mecanismo de `cerrarDe` de SEG-05.
+5. **Tokens en huella.** El testigo de acceso y el de renovación se guardan como SHA-256, nunca en
+   claro; el de renovación rota en cada uso y detecta reutilización (uno viejo reusado revoca toda la
+   familia).
+6. **OAuth abierto.** `/oauth/register` es público por estándar: lista cerrada de `redirect_uri`
+   (claude.ai y claude.com, `https://claude.ai/api/mcp/auth_callback` y equivalentes, y
+   `localhost`/`127.0.0.1` para Claude Code y Desktop), tope de registros por hora, poda de clientes
+   sin uso, y la pantalla de permiso muestra siempre nombre del cliente y alcance.
+7. **Un solo emisor.** Con `workers.dev` encendido, `/mcp`, `/oauth/*` y `/.well-known/*` anuncian UN
+   host canónico (variable `HOST_MCP`, por defecto `oficina.panaclaw.com`) y no sirven un segundo
+   issuer. Si Cloudflare filtra por bots el tráfico de claude.ai al dominio propio, se cambia
+   `HOST_MCP` a workers.dev sin tocar código.
+8. **Rutas públicas del Worker.** `run_worker_first: ["/*"]` y `lib/rutas.js` exigen sesión para todo;
+   `/mcp`, `/oauth/*` y `/.well-known/oauth-*` son excepciones declaradas y probadas que contestan 401
+   con `WWW-Authenticate` y sus metadatos (RFC 9728 y 8414). `/oauth/token` y `/oauth/register`
+   reciben POST de otro origen: se eximen de la comprobación de Origen/CSRF de las rutas con cookie.
+9. **La pantalla de permiso NO va en la página de la oficina** (está a pocos KB de su tope de 2,2 MB):
+   es una página nativa del Worker con CSP estricta, como el acceso y la invitación
+   (`worker/lib/paginas.js`).
+10. **Tamaño.** Con ~50 herramientas la descripción pesa en cada conversación. Se quitan de la
+    superficie REMOTA las de la Capa 1 que dupliquen una acción de dominio (`ver_tareas` frente a
+    `tareas`/ver; `buscar_en_cerebro` frente a `cerebro`/buscar); la compatibilidad con el stdio local
+    no obliga al remoto. Un test mide `tools/list` (presupuesto en caracteres) y el contrato de salida:
+    todo resultado ≤ ~20.000 caracteres con cursor `siguiente`; las listas largas se paginan.
+11. **Idempotencia.** Los clientes MCP reintentan: las escrituras que crean algo (tarea, nota, pieza,
+    rutina, mensaje) aceptan un `clave_idempotencia` opcional y no duplican.
+12. **Hecho verificable.** El `wrangler.jsonc` de `main` NO tiene `routes` y SÍ `workers_dev: true`
+    (confirmado). La P1 está en el PR #141 (en borrador).
+13. **Del lado de Cloudflare (lo revisa un humano con la extensión de Chrome).** Además de la §12:
+    Seguridad → Bots (Bot Fight Mode y «Block AI bots»), Browser Integrity Check y nivel de
+    seguridad, que pueden bloquear las llamadas del servidor de claude.ai a `/mcp`; confirmar si el
+    token de despliegue necesita «Zone → Zone → Read» (la doc oficial confirma «Workers Routes → Edit»
+    y no aclara lo demás; ver PR #141) y anotar el Zone ID. NO conectar el dominio a mano desde el
+    panel: lo crea el despliegue con `routes` (una sola fuente de verdad en el repositorio).
