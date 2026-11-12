@@ -35,7 +35,9 @@ test('…ni un nombre que suene a aprobar, enviar, publicar, pagar o restablecer
 
 test('el registro REAL del Worker cumple lo mismo: ninguna herramienta que gaste hoy, ninguna con esos argumentos ni esos nombres', () => {
   const todas = herramientas(); assert.ok(todas.length >= 1);
-  assert.deepEqual(todas.filter((h) => h.alcance === 'gasto').map((h) => h.nombre), [], 'en la P2 no hay ninguna herramienta que gaste');
+  // P3b: las del Estudio que gastan existen, pero SOLO PREPARAN (alcance «gasto» + soloPrepara); ninguna otra lleva ese alcance
+  assert.deepEqual(todas.filter((h) => h.alcance === 'gasto').map((h) => h.nombre).sort(), ['aplicar_preset', 'crear_lote', 'generar_imagen', 'generar_musica', 'generar_video', 'generar_voz']);
+  for (const h of todas.filter((x) => x.alcance === 'gasto')) assert.equal(h.soloPrepara, true, `${h.nombre}: por MCP solo prepara`);
   for (const h of todas) {
     const json = JSON.stringify(h.esquema).toLowerCase();
     for (const p of PROPIEDADES_PROHIBIDAS) assert.ok(!json.includes(`"${p}"`), `${h.nombre} lleva «${p}»`);

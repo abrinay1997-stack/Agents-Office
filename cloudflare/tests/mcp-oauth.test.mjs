@@ -163,7 +163,8 @@ test('EL BAILE COMPLETO: registro → permiso → código → token → /mcp; el
   assert.equal((await m.rpc(tokens.access_token, 'initialize', { protocolVersion: '1999-01-01' })).j.result.protocolVersion, '2025-06-18', 'una versión que no conoce: propone la suya');
   assert.deepEqual((await m.rpc(tokens.access_token, 'ping')).j.result, {});
   const lista = (await m.rpc(tokens.access_token, 'tools/list')).j.result.tools;
-  assert.deepEqual(lista.map((t) => t.name), ['como_funciona']);
+  assert.ok(lista.some((t) => t.name === 'como_funciona'), 'como_funciona sigue ahí'); // desde la P3b hay más; un token de «oficina» no ve las que preparan gastos
+  assert.ok(!lista.some((t) => /^(generar_|aplicar_preset$|crear_lote$)/.test(t.name)), 'un token de «oficina» no ve las herramientas de alcance «gasto»');
   assert.equal(lista[0].annotations.readOnlyHint, true); assert.equal(lista[0].inputSchema.type, 'object');
   const c = await m.llamar(tokens.access_token, 'como_funciona', {});
   assert.equal(c.j.result.isError, false); assert.match(c.j.result.content[0].text, /MAPA DE LA OFICINA/); assert.match(c.j.result.content[0].text, /NUNCA por aquí/);

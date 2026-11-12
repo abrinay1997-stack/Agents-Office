@@ -18,6 +18,7 @@ export const LOTE = 2000, TANDAS = 5;
 export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30, notas_papelera: 30, notificaciones: 60, notas_personales: 30, chat_mensajes: 365, estudio_lotes: 90, series: 180, series_libro: 400, series_tokens: 1,
   mcp_codigos: 1, mcp_tokens: 30, mcp_clientes: 30 });
 export const NOTIFICACIONES_SIN_LEER_DIAS = 180;
+export const MCP_DOCS_DIAS = 2; // las claves de idempotencia (`mcp.idem:*`) y de deshacer (`mcp.undo:*`) del conector: viven en `docs`, no son una tabla (por eso no están en RETENCION_DIAS)
 
 const iso = (ms) => new Date(ms).toISOString();
 const dia = (ms) => iso(ms).slice(0, 10);
@@ -42,6 +43,7 @@ export async function podar(db, ahoraMs = Date.now()) {
     ['mcp_codigos', 'delete from mcp_codigos where codigo_hash in (select codigo_hash from mcp_codigos where caduca_at < ? limit ?)', ahoraMs - R.mcp_codigos * DIA_MS],
     ['mcp_tokens', 'delete from mcp_tokens where id in (select id from mcp_tokens where refresh_caduca_at < ? or rotado_at < ? or revocado_at < ? limit ?)', Array(3).fill(ahoraMs - R.mcp_tokens * DIA_MS)],
     ['mcp_clientes', 'delete from mcp_clientes where client_id in (select c.client_id from mcp_clientes c where coalesce(c.ultimo_uso_at, c.creado_at) < ? and not exists (select 1 from mcp_tokens t where t.client_id = c.client_id) limit ?)', ahoraMs - R.mcp_clientes * DIA_MS],
+    ['docs_mcp', "delete from docs where clave in (select clave from docs where ((clave >= 'mcp.idem:' and clave < 'mcp.idem;') or (clave >= 'mcp.undo:' and clave < 'mcp.undo;')) and actualizado < ? limit ?)", iso(ahoraMs - MCP_DOCS_DIAS * DIA_MS)],
     ['notificaciones', 'delete from notificaciones where id in (select id from notificaciones where (leida_at is not null and leida_at < ?) or creada_at < ? limit ?)', [ahoraMs - R.notificaciones * DIA_MS, ahoraMs - NOTIFICACIONES_SIN_LEER_DIAS * DIA_MS]],
     ['notas_personales', 'delete from notas_personales where id in (select id from notas_personales where vence_at < ? limit ?)', ahoraMs - R.notas_personales * DIA_MS],
   ];
