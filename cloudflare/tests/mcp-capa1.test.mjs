@@ -69,7 +69,7 @@ test('TAMAÑO: tools/list de un token de gasto cabe en el presupuesto, y cada he
   assert.ok(Math.max(...tools.map((x) => x.description.length)) <= 2200, 'ninguna descripción pasa de 2.200 letras');
   const lectura = (await m.rpc(t.lectura, 'tools/list')).j.result.tools.map((x) => x.name).sort();
   assert.deepEqual(lectura, ['como_funciona', 'cerebro', ...LEE].sort(), 'un token de lectura ve SOLO lo de lectura');
-  for (const x of tools) assert.equal(x.annotations.readOnlyHint, LEE.includes(x.name) || x.name === 'como_funciona', `${x.name}: readOnlyHint`);
+  for (const x of tools) assert.equal(x.annotations.readOnlyHint, LEE.includes(x.name) || ['como_funciona', 'cerebro'].includes(x.name), `${x.name}: readOnlyHint`);
 });
 
 test('ALCANCES: «lectura» no cambia nada, «oficina» no prepara gastos, «gasto» prepara pero no genera', { skip: SALTAR }, async () => {
