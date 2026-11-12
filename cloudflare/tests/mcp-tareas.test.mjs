@@ -148,7 +148,8 @@ test('RUTINAS: listar, crear (espera OK), horario (solo eso), pausar, reanudar, 
   const antes = crudo();
   const h = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1, 3], at: '07:30' } }); assert.equal(h.j.result.isError, false, texto(h));
   const desp = crudo(); assert.deepEqual(desp.when, { kind: 'weekly', days: [1, 3], at: '07:30' }); assert.equal(desp.text, antes.text); assert.equal(desp.needsOk, true);
-  for (const extra of [{ text: 'otra cosa' }, { needsOk: false }, { autonomous: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1], at: '08:00' }, ...extra }); assert.equal(r.j.result.isError, true, JSON.stringify(extra));
+  for (const extra of [{ text: 'otra cosa' }, { needsOk: false }, { autonomous: true }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekly', days: [1], at: '08:00' }, ...extra });
+    assert.equal(r.j.result.isError, true, JSON.stringify(extra));
     assert.match(texto(r), /no|Unexpected|propiedad|additional|permit/i); }
   assert.equal(crudo().text, antes.text); assert.equal(crudo().autonomous, undefined);
   assert.equal((await llamar(t.oficina, 'rutinas_cambiar', { accion: 'pausar', id: rid })).j.result.isError, false); assert.equal(crudo().paused, true);
@@ -173,7 +174,8 @@ test('FRECUENCIA: nada de «cada minuto», nada que corra más a menudo que ante
   for (const mal of [{ kind: 'hourly', every: 1 }, { kind: 'hourly', from: '09:00', to: '17:00' }, { kind: 'hourly', every: 0, from: '09:00', to: '17:00' }]) { const r = await crear(mal); assert.equal(r.j.result.isError, true, JSON.stringify(mal)); }
   const hh = await crear({ kind: 'hourly', every: 2, from: '09:00', to: '17:00', weekdaysOnly: true }); assert.equal(hh.j.result.isError, false, texto(hh)); const rid = /Rutina creada: (\S+)/.exec(texto(hh))[1];
   const crudo = (id) => JSON.parse(m.db.prepare("select json from filas where coleccion = 'rutinas' and id = ?").get(id).json);
-  for (const mas of [{ kind: 'hourly', every: 1, from: '09:00', to: '17:00', weekdaysOnly: true }, { kind: 'hourly', every: 3, from: '00:00', to: '23:00' }, { kind: 'hourly', every: 2, from: '09:00', to: '17:00' }]) { const r = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: mas }); assert.equal(r.j.result.isError, true, JSON.stringify(mas)); assert.match(texto(r), /más a menudo/); }
+  for (const mas of [{ kind: 'hourly', every: 1, from: '09:00', to: '17:00', weekdaysOnly: true }, { kind: 'hourly', every: 3, from: '00:00', to: '23:00' }, { kind: 'hourly', every: 2, from: '09:00', to: '17:00' }]) { const r = await llamar(t.oficina, 'rutinas_cambiar',
+    { accion: 'horario', id: rid, cuando: mas }); assert.equal(r.j.result.isError, true, JSON.stringify(mas)); assert.match(texto(r), /más a menudo/); }
   const menos = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rid, cuando: { kind: 'weekdays', at: '10:00' } }); assert.equal(menos.j.result.isError, false, texto(menos));
   const conFin = await crear({ kind: 'weekly', days: [1, 2], at: '09:00', end: '2031-12-31', count: 20 }); const rf = /Rutina creada: (\S+)/.exec(texto(conFin))[1];
   const sc = await llamar(t.oficina, 'rutinas_cambiar', { accion: 'horario', id: rf, cuando: { kind: 'weekly', days: [1], at: '09:00', end: '2040-01-01' } }); assert.equal(sc.j.result.isError, true); assert.match(texto(sc), /start, end ni count/);

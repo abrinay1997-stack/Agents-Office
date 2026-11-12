@@ -209,7 +209,8 @@ async function cambiarRutinas(office, a) {
 /* ---------- el registro ---------- */
 const cursor = { type: 'string', maxLength: 200, description: 'La página que sigue (el `siguiente` de la respuesta anterior).' };
 const comun = { id: { type: 'string', pattern: '^[A-Za-z0-9_-]{3,40}$', description: 'El id de la tarea o la rutina.' }, dept: { type: 'string', enum: DEPTS }, agente: { type: 'string', maxLength: 40, description: 'El id de un agente de ese departamento.' } };
-const cuando = { type: 'object', additionalProperties: false, description: 'Horario: {kind:daily|weekdays|weekly|monthly|hourly (hourly pide every≥1, from y to; como mucho una vez por hora), at:"HH:MM", days:[0-6] (0=domingo), day:1..31|-1, nth/weekday, every, from, to, weekdaysOnly, start/end:"AAAA-MM-DD", count}.',
+const cuando = { type: 'object', additionalProperties: false, description: 'Horario: {kind:daily|weekdays|weekly|monthly|hourly (hourly pide every≥1, from y to; ' +
+    'como mucho una vez por hora), at:"HH:MM", days:[0-6] (0=domingo), day:1..31|-1, nth/weekday, every, from, to, weekdaysOnly, start/end:"AAAA-MM-DD", count}.',
   properties: { kind: { type: 'string', enum: ['daily', 'weekdays', 'weekly', 'monthly', 'hourly'] }, at: { type: 'string' }, days: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 }, maxItems: 7 }, day: { type: 'integer', minimum: -1, maximum: 31 },
     nth: { type: 'integer', minimum: -1, maximum: 5 }, weekday: { type: 'integer', minimum: 0, maximum: 6 }, every: { type: 'integer', minimum: 1, maximum: 1440 }, from: { type: 'string' }, to: { type: 'string' }, weekdaysOnly: { type: 'boolean' },
     start: { type: 'string' }, end: { type: 'string' }, count: { type: 'integer', minimum: 1, maximum: 1000 } }, required: ['kind'] };
@@ -253,5 +254,6 @@ definir({
   nombre: 'rutinas_cambiar', lee: false, destructiva: true, ejecutar: (_c, office, a) => cambiarRutinas(office, a),
   descripcion: 'Cambia RUTINAS. `accion`: crear (`dept`, `texto`, `cuando`, `agente?`: SIEMPRE espera el OK del dueño), horario (`id`, `cuando`: es lo ÚNICO que se edita y nunca corre más a menudo que antes), pausar y reanudar (`id`; reanudar pide `confirmado: true`), '
     + 'saltar y no_saltar (`id`, `at`: una ejecución concreta). No ejecuta una rutina ya, no borra rutinas y no toca una rutina autónoma.',
-  props: { accion: { type: 'string', enum: [...ACCIONES_RUTINAS_CAMBIAR] }, id: comun.id, dept: comun.dept, texto: { type: 'string', maxLength: 3900 }, cuando, agente: comun.agente, at: { type: 'string', description: 'ISO de la ejecución.' }, confirmado: { type: 'boolean', description: 'Solo para reanudar: true si el dueño pidió reanudarla.' } },
+  props: { accion: { type: 'string', enum: [...ACCIONES_RUTINAS_CAMBIAR] }, id: comun.id, dept: comun.dept, texto: { type: 'string', maxLength: 3900 }, cuando, agente: comun.agente, at: { type: 'string', description: 'ISO de la ejecución.' }, confirmado: { type: 'boolean',
+    description: 'Solo para reanudar: true si el dueño pidió reanudarla.' } },
 });
