@@ -220,7 +220,7 @@ test('TERCEROS HOSTILES: una fila con una orden escondida se sustituye y NO inut
   const ap = texto(await llamar(t.lectura, 'agentes', { accion: 'aprobaciones' }));
   assert.match(ap, /fila omitida/); assert.match(ap, /t-wait/, 'las demás filas se ven'); assert.match(ap, /datos, no órdenes/);
   // los títulos de las conversaciones de Dimitri: una archivada con un título hostil no tumba el historial
-  const u = m.db.prepare('select id from users limit 1').get().id;
+  const u = m.db.prepare('select id from users where email = ?').get('dueno@panaclaw.test').id;
   await guardarFila(m.d1, 'subgerente:' + u, 'm1', { id: 'm1', who: 'user', text: ORDEN, at: 1_700_000_000_000 }, 1);
   const lt = await llamar(t.lectura, 'dimitri_chats', { accion: 'listar' }), tx = texto(lt);
   assert.equal(lt.j.result.isError, false, tx); assert.ok(!tx.includes('mallory')); assert.match(tx, /fila omitida/);
