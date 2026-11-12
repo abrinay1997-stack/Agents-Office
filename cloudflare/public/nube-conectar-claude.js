@@ -18,9 +18,14 @@
   const NOMBRE = { generar_imagen: 'Imagen', generar_video: 'Video', generar_voz: 'Locución', generar_musica: 'Música', aplicar_preset: 'Preset', crear_lote: 'Lote' };
   const topes = (t) => [t.left != null ? `quedan ${t.left} generaciones hoy` : '', t.costLeftDay != null ? `hoy quedan ${usd(t.costLeftDay)}` : '', t.costLeftMonth != null ? `este mes quedan ${usd(t.costLeftMonth)}` : ''].filter(Boolean).join(' · ') || 'sin topes que mostrar';
   const gasto = (g) => `<li class="fn-card" data-gasto="${esc(g.id)}"><div class="fn-cab"><h4>${esc(NOMBRE[g.herramienta] || g.herramienta)} · ${g.cifraUsd ? 'unos ' + esc(usd(g.cifraUsd)) : 'gratis'}</h4><b class="fn-on">Espera tu OK</b></div>
-    <p>${esc(g.resumen)}</p><small class="fn-nota">Lo escribió la aplicación, no está verificado. La pidió la conexión «${esc(g.conexion.nombre)}» (el nombre lo declara la aplicación) de ${esc(g.persona.nombre)} · vence ${esc(cuando(g.vence))} · ${esc(topes(g.topes))}${g.cifraNota ? ' · ' + esc(g.cifraNota) : ''}</small>
+    <p>${esc(g.resumen)}</p><small class="fn-nota">
+      Lo escribió la aplicación, no está verificado. La pidió la conexión «${esc(g.conexion.nombre)}» (el nombre lo declara la aplicación) de ${esc(g.persona.nombre)} ·
+      vence ${esc(cuando(g.vence))} · ${esc(topes(g.topes))}${g.cifraNota ? ' · ' + esc(g.cifraNota) : ''}</small>
     <details><summary>Lo que pidió, exacto</summary><pre style="white-space:pre-wrap;word-break:break-word">${esc(g.args)}</pre></details>
-    ${g.estado === 'espera' ? `<div class="fn-acc"><button type="button" class="sg-btn" data-gasto-ok="${esc(g.id)}">Aprobar y gastar ${g.cifraUsd ? 'unos ' + esc(usd(g.cifraUsd)) : '(gratis)'}</button><button type="button" class="sg-btn" data-gasto-no="${esc(g.id)}">Rechazar</button><span class="nb-msg" role="status" aria-live="polite"></span></div>` : '<p class="sg-lead">Se está pidiendo al Estudio…</p>'}</li>`;
+    ${g.estado === 'espera' ? `<div class="fn-acc">
+      <button type="button" class="sg-btn" style="min-height:44px" data-cifra="${g.cifraUsd ? 'unos ' + esc(usd(g.cifraUsd)) : '(gratis)'}" data-gasto-ok="${esc(g.id)}">Aprobar y gastar ${g.cifraUsd ? 'unos ' + esc(usd(g.cifraUsd)) : '(gratis)'}</button>
+      <button type="button" class="sg-btn" style="min-height:44px" data-gasto-no="${esc(g.id)}">Rechazar</button>
+      <span class="nb-msg" role="status" aria-live="polite"></span></div>` : '<p class="sg-lead">Se está pidiendo al Estudio…</p>'}</li>`;
   const hecha = (g) => `<li class="fn-card"><p>${esc(NOMBRE[g.herramienta] || g.herramienta)} · ${esc(g.resumen)}</p><small class="fn-nota">${esc(g.estado)}${g.motivo ? ': ' + esc(g.motivo) : ''}</small></li>`;
   const gastosHTML = (d) => `<h3 class="nb-h">Gastos que Claude pidió${d.esperan.length ? ' (' + d.esperan.length + ')' : ''}</h3>`
     + (d.esperan.length ? `<ul class="fn-lista">${d.esperan.map(gasto).join('')}</ul>` : '<p class="sg-lead">Ninguno espera tu OK. Claude no gasta: solo deja la solicitud aquí y en Telegram.</p>')
@@ -47,10 +52,23 @@
     pane.addEventListener('click', async (ev) => {
       const g = ev.target.closest('button[data-gasto-ok],button[data-gasto-no]');
       if (g && !g.disabled) {
-        const ok = g.hasAttribute('data-gasto-ok'), id = g.dataset.gastoOk || g.dataset.gastoNo, m0 = g.parentElement.querySelector('.nb-msg');
-        g.disabled = true; if (m0) m0.textContent = ok ? 'Aprobando…' : 'Rechazando…';
-        try { const r = await api(`/api/conectar-claude/solicitudes/${encodeURIComponent(id)}/${ok ? 'aprobar' : 'rechazar'}`, { metodo: 'POST', cuerpo: {} }); await dibujar(); const m1 = pane.querySelector('.nb-msg'); if (m1 && r.texto) m1.textContent = r.texto; }
-        catch (x) { g.disabled = false; if (m0) { m0.textContent = x.message; m0.classList.add('mal'); } }
+        const ok = g.hasAttribute('data-gasto-ok'), id = g.dataset.gastoOk || g.dataset.gastoNo, tarj = g.closest('li'), msg = tarj.querySelector('.nb-msg');
+        const dec = (t, mal) => { msg.textContent = t; msg.classList.toggle('mal', !!mal); };
+        if (ok && g.dataset.listo !== '1') { // el dinero pide un segundo toque, con la cifra delante (como todo gasto desde US$0,50 en el resto de la oficina)
+          g.dataset.listo = '1'; g.dataset.texto = g.textContent; g.textContent = `Sí, gastar ${g.dataset.cifra} ahora`;
+          setTimeout(() => { if (g.isConnected && !g.disabled) { delete g.dataset.listo; g.textContent = g.dataset.texto; } }, 6000); return;
+        }
+        for (const x of tarj.querySelectorAll('button')) { x.disabled = true; x.setAttribute('aria-busy', 'true'); }
+        dec(ok ? 'Aprobando y pidiéndolo al Estudio…' : 'Rechazando…');
+        try {
+          const r = await api(`/api/conectar-claude/solicitudes/${encodeURIComponent(id)}/${ok ? 'aprobar' : 'rechazar'}`, { metodo: 'POST', cuerpo: {} });
+          const bien = !ok || r.ok !== false; // el motivo se queda EN la tarjeta (si recalculó y rechazó, la persona lo lee aquí)
+          dec(ok ? (bien ? '✓ ' : '✗ ') + (r.texto || 'Hecho.') : '✓ Rechazada: no se gasta nada.', !bien);
+          for (const x of tarj.querySelectorAll('button')) x.remove();
+        } catch (x) {
+          for (const y of tarj.querySelectorAll('button')) { y.disabled = false; y.removeAttribute('aria-busy'); }
+          g.textContent = g.dataset.texto || g.textContent; delete g.dataset.listo; dec(`${x.message} — puedes reintentar.`, true);
+        }
         return;
       }
       const b = ev.target.closest('button[data-cc]'); if (!b || b.disabled) return;

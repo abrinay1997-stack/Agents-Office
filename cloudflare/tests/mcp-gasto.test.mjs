@@ -8,9 +8,9 @@ import { mundo } from './mcp-ayudas.mjs';
 import { guardarDoc } from '../worker/lib/almacen.js';
 import { podar } from '../worker/lib/mantenimiento.js';
 import { herramientas } from '../worker/lib/mcp/registro.js';
-import { MAX_ABIERTAS, MAX_POR_DIA, VENCE_MS } from '../worker/lib/mcp/gasto.js';
+import { MAX_ABIERTAS, MAX_POR_DIA, VENCE_MS, veredicto } from '../worker/lib/mcp/gasto.js';
 import { armar, salientes } from '../worker/lib/telegram.js';
-import { MODULOS_BOT } from '../worker/modulos/telegram.js';
+import { MODULOS_BOT, mcpSoloSolicitudes } from '../worker/modulos/telegram.js';
 import { gastoMcpDeAviso } from '../../telegram-core.mjs';
 import { TOKEN_BOT, DUENO_TG, EXTRANO_TG } from './fase6-ayudas.mjs';
 import { IDS_AMBITOS, PALABRA } from '../../restablecer-core.mjs';
@@ -283,4 +283,25 @@ test('SESIÓN, ORIGEN Y CONFIRMACIÓN: un Bearer de MCP no es sesión en ninguna
   const t = await armar({ env: o.m.env, db: o.m.d1, modulos: MODULOS_BOT, fetchFn });
   await t.bot.procesar({ update_id: 9, callback_query: { id: 'cb9', from: { id: +DUENO_TG, first_name: 'Abrinay' }, data: 'mg:' + g.id, message: { message_id: 5, chat: { id: +DUENO_TG, type: 'private' } } } });
   assert.equal(o.tarjetas()[1].estado, 'ejecutada'); assert.equal(o.tarjetas()[1].resuelta_por, 'telegram: Abrinay');
+});
+
+test('VEREDICTO de lo que contesta la herramienta: con trabajo = ejecutada; un error escrito = rechazada; sin nada = incierta (nunca «ejecutada» a ciegas)', { skip: SALTAR }, () => {
+  assert.equal(veredicto('Sigue en proceso con X (queued). ⏳ Estudio: una cama (trabajo jmwdmxotm5a1)').estado, 'ejecutada');
+  assert.equal(veredicto('Listo: 2 imágenes con X (aprox. US$0.01).').estado, 'ejecutada');
+  assert.equal(veredicto('En marcha: lote «A», 3 fotos').estado, 'ejecutada');
+  assert.equal(veredicto('⛔ El modelo está apagado').estado, 'rechazada');
+  assert.equal(veredicto({ text: 'lo que sea', isError: true }).estado, 'rechazada');
+  assert.equal(veredicto('Hecho.').estado, 'incierta'); assert.equal(veredicto(undefined).estado, 'incierta'); assert.match(veredicto('').texto, /Historial del Estudio/);
+});
+
+test('TELEGRAM solo ve las tarjetas: del módulo mcp el bot no llega a cortar conexiones ni a nada más de /api/conectar-claude', { skip: SALTAR }, async () => {
+  const o = await oficina({ extraEnv: { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG } }); await o.pedir(IMG); const [f] = o.tarjetas();
+  const { crearOffice } = await import('../worker/lib/agentes/herramientas.js');
+  const office = crearOffice({ env: o.m.env, db: o.m.d1, usuario: { id: 'telegram', email: 'telegram: x', rol: 'admin' }, modulos: MODULOS_BOT });
+  assert.ok((await office('/api/conectar-claude/solicitudes')).esperan.length >= 1);
+  const cx = (await o.m.admin('GET', '/api/conectar-claude')).j.conexiones[0];
+  for (const [r, m] of [['/api/conectar-claude', 'GET'], ['/api/conectar-claude/cortar-todas', 'POST'], [`/api/conectar-claude/${cx.id}`, 'DELETE']]) await assert.rejects(office(r, {}, m), /todavía no está/, r);
+  assert.equal((await o.m.admin('GET', '/api/conectar-claude')).j.conexiones.length >= 1, true, 'nada se cortó');
+  assert.equal(mcpSoloSolicitudes.manejar({ ruta: '/api/conectar-claude/cortar-todas' }), null);
+  assert.equal(o.tarjetas()[0].id, f.id);
 });
