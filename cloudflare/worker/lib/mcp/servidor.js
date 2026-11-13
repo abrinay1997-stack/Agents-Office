@@ -154,7 +154,6 @@ async function procesar(msg, ctx) {
 /** POST /mcp. `registro`: el de las herramientas (las pruebas pasan uno propio). */
 export async function manejarMcp(req, env, db, { registro = REGISTRO } = {}) {
   if (req.method === 'OPTIONS') return conCors(new Response(null, { status: 204 }));
-  if (req.method !== 'POST') return conCors(new Response(JSON.stringify({ error: 'Este servidor solo contesta POST (Streamable HTTP sin estado).' }), { status: 405, headers: { ...cabecerasJson, allow: 'POST, OPTIONS' } }));
   const ms = reloj(env);
   // Un navegador que llama a /mcp manda su Origin: solo claude.ai, claude.com o la propia máquina (Claude Code y Desktop). Sin Origin (un programa) pasa y se autentica con su Bearer.
   if (!origenPermitido(req.headers.get('origin'))) return conCors(new Response(JSON.stringify({ error: 'Origen no permitido.' }), { status: 403, headers: cabecerasJson }));
@@ -166,6 +165,8 @@ export async function manejarMcp(req, env, db, { registro = REGISTRO } = {}) {
     if (a.motivo !== 'forma' && !(await tasa(db, 'mcp:malo:' + ipDe(req), 120, ms)).ok) return conCors(new Response(JSON.stringify({ error: 'Demasiados intentos.' }), { status: 429, headers: cabecerasJson }));
     return sinPermiso(env, true);
   }
+  // Un GET (el cliente abre el canal SSE) solo se rechaza con 405 DESPUÉS de autenticar: sin testigo el 401 con WWW-Authenticate es lo que le dice al cliente dónde iniciar sesión.
+  if (req.method !== 'POST') return conCors(new Response(JSON.stringify({ error: 'Este servidor solo contesta POST (Streamable HTTP sin estado).' }), { status: 405, headers: { ...cabecerasJson, allow: 'POST, OPTIONS' } }));
   if (Number(req.headers.get('content-length') || 0) > TOPE_CUERPO_MCP) return rpcError(null, -32600, 'La petición es demasiado grande.', 413);
   const texto = await req.text();
   if (texto.length > TOPE_CUERPO_MCP) return rpcError(null, -32600, 'La petición es demasiado grande.', 413);
