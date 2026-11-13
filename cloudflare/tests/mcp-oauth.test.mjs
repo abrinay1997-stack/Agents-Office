@@ -184,6 +184,8 @@ test('JSON-RPC: notificación → 202; JSON roto → -32700; método y herramien
   assert.equal((await m.rpc(b, 'resources/list')).j.error.code, -32601);
   assert.equal((await m.llamar(b, 'no_existe')).j.error.code, -32602);
   const g = await m.crudo('/mcp', { metodo: 'GET', cabeceras: { authorization: 'Bearer ' + b } }); assert.equal(g.status, 405); assert.match(g.headers.get('allow'), /POST/);
+  const gSin = await m.crudo('/mcp', { metodo: 'GET' }); assert.equal(gSin.status, 401, 'un GET sin testigo: 401 (así el cliente descubre el OAuth), no 405'); assert.match(gSin.headers.get('www-authenticate'), /resource_metadata=/);
+  assert.equal((await m.crudo('/mcp', { metodo: 'DELETE' })).status, 401);
   const lote = await m.crudo('/mcp', { metodo: 'POST', cuerpo: [{ jsonrpc: '2.0', id: 1, method: 'ping' }, { jsonrpc: '2.0', method: 'notifications/initialized' }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }], cabeceras: { authorization: 'Bearer ' + b } });
   assert.equal((await lote.json()).length, 2);
   const sobra = await m.llamar(b, 'como_funciona', { otra: 1 }); assert.equal(sobra.j.result.isError, true); assert.match(sobra.j.result.content[0].text, /no existe en esta herramienta/);
