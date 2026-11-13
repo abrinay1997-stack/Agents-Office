@@ -13,7 +13,7 @@ export async function pkce() {
 
 export async function mundo({ activo = true, extraEnv = {} } = {}) {
   const d1 = crearD1(); let t = Date.UTC(2031, 0, 1, 12, 0, 0);
-  const env = envDePrueba(d1, { HOST_MCP: 'oficina.test', RELOJ_MS: () => t, ...extraEnv });
+  const env = envDePrueba(d1, { HOST_MCP: 'oficina.test', RELOJ_MS: () => t, MCP_BITACORA_SINK: () => {}, ...extraEnv });
   const cuentas = { admin: await sembrar(d1), editor: await sembrar(d1, { email: 'ed@panaclaw.test', rol: 'editor' }), lectura: await sembrar(d1, { email: 'le@panaclaw.test', rol: 'lectura' }) };
   const db = d1._db;
   const cookies = {};
