@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
 import { mundo, pkce, REDIRECT } from './mcp-ayudas.mjs';
-import { lineaDe, direccionCorta, redirectsDeRegistro } from '../worker/lib/mcp/bitacora.js';
+import { lineaDe, direccionCorta, redirectsDeRegistro, leerAcotado, admitirLinea, MAX_OTRO_HOST_POR_MINUTO } from '../worker/lib/mcp/bitacora.js';
 
 const opts = { skip: SALTAR };
 const SENT = { bearer: 'mcpa_' + 'a1'.repeat(32), estado: 'ESTADO-SECRETO-777', cookie: 'sesion=COOKIE-SECRETA-888', ip: '203.0.113.77', secreto: 'CLIENT-SECRET-999', cuerpo: 'CUERPO-SECRETO-555' };
@@ -70,7 +70,8 @@ test('BITÁCORA: el motivo sale del CÓDIGO de error y dice qué pasó (sin toke
     assert.equal(ultima(lineas).motivo, 'metodo'); assert.equal(ultima(lineas).estado, 405);
     await m.crudo('/oauth/token', { metodo: 'POST', form: { grant_type: 'authorization_code', client_id: 'no' } });
     assert.equal(ultima(lineas).motivo, 'invalid_client');
-    const r = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { client_name: 'Claude', redirect_uris: ['claude://oauth/callback?x=1'] } });
+    const cuerpoRegistro = JSON.stringify({ client_name: 'Claude', redirect_uris: ['claude://oauth/callback?x=1'] });
+    const r = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: cuerpoRegistro, cabeceras: { 'content-length': String(cuerpoRegistro.length) } });
     assert.equal(r.status, 400);
     const l = ultima(lineas);
     assert.equal(l.motivo, 'invalid_redirect_uri'); assert.deepEqual(l.redirects, ['claude://oauth/callback'], 'la dirección rechazada, sin consulta');
@@ -106,4 +107,53 @@ test('DESCUBRIMIENTO: las variantes con la ruta del recurso y OIDC dan la misma 
     const rec = await (await m.crudo('/.well-known/oauth-protected-resource/mcp')).json();
     assert.deepEqual(rec.authorization_servers, [base.issuer]); assert.deepEqual(rec.bearer_methods_supported, ['header']);
   });
+});
+
+test('BITÁCORA: el cuerpo de un registro rechazado se lee con tope y solo si declara un tamaño razonable; sin tamaño o demasiado grande, la línea sale igual sin direcciones', opts, async () => {
+  await conBitacora(async (m, lineas) => {
+    const malo = JSON.stringify({ client_name: 'x', redirect_uris: ['https://evil.test/cb?t=SECRETO'] });
+    // sin content-length (cuerpo por trozos): no se guarda copia
+    const a = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: malo });
+    assert.equal(a.status, 400); assert.equal(ultima(lineas).motivo, 'invalid_redirect_uri'); assert.equal(ultima(lineas).redirects, undefined);
+    // un tamaño declarado mayor que el tope: tampoco
+    const b = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: malo, cabeceras: { 'content-length': '9000000' } });
+    assert.ok(b.status >= 400); assert.equal(ultima(lineas).redirects, undefined);
+    // con su tamaño: la dirección sale sin consulta
+    const c = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: malo, cabeceras: { 'content-length': String(malo.length) } });
+    assert.equal(c.status, 400); assert.deepEqual(ultima(lineas).redirects, ['https://evil.test/cb']);
+    assert.ok(!lineas.join('\n').includes('SECRETO'));
+    // un registro bueno no lee nada para la bitácora
+    const d = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] }, cabeceras: { 'content-length': '60' } });
+    assert.equal(d.status, 201); assert.equal(ultima(lineas).redirects, undefined);
+  });
+});
+
+test('BITÁCORA: leerAcotado nunca lee más del tope aunque el cuerpo sea enorme', opts, async () => {
+  let leidos = 0;
+  const flujo = new ReadableStream({ pull(c) { leidos += 1000; c.enqueue(new Uint8Array(1000).fill(65)); } });
+  const copia = { body: flujo };
+  const t = await leerAcotado(copia, 8000);
+  assert.equal(t.length, 8000);
+  assert.ok(leidos <= 8000 + 2000, 'solo se tiró de lo necesario: ' + leidos);
+  assert.equal(await leerAcotado({ body: null }), '');
+});
+
+test('BITÁCORA: las peticiones de «otro host» se limitan por minuto (la siguiente línea dice cuántas se omitieron); lo demás se escribe siempre', opts, async () => {
+  await conBitacora(async (m, lineas) => {
+    const otro = () => m.crudo('/mcp', { metodo: 'POST', host: 'otro.workers.dev', cuerpo: {} });
+    for (let i = 0; i < MAX_OTRO_HOST_POR_MINUTO + 7; i++) assert.equal((await otro()).status, 404);
+    assert.equal(lineas.length, MAX_OTRO_HOST_POR_MINUTO, 'solo las primeras');
+    // el ruido no tapa lo demás: un 401 de verdad se escribe aunque «otro host» esté callado
+    await m.crudo('/mcp', { metodo: 'POST', cuerpo: { jsonrpc: '2.0', id: 1, method: 'initialize' } });
+    assert.equal(ultima(lineas).motivo, 'sin-token');
+    m.avanzar(61_000);
+    await otro();
+    const l = ultima(lineas); assert.equal(l.motivo, 'otro-host'); assert.equal(l.omitidas, 7, 'dice cuántas se callaron');
+    await otro(); assert.equal(ultima(lineas).omitidas, undefined, 'y no lo repite');
+  });
+  // el estado es de cada instancia (env), no del módulo
+  const e1 = {}, e2 = {};
+  for (let i = 0; i < MAX_OTRO_HOST_POR_MINUTO; i++) assert.ok(admitirLinea(e1, 'otro-host', 1000).ok);
+  assert.ok(!admitirLinea(e1, 'otro-host', 1000).ok); assert.ok(admitirLinea(e2, 'otro-host', 1000).ok);
+  assert.ok(admitirLinea(e1, 'apagado', 1000).ok, 'solo «otro host» se limita');
 });

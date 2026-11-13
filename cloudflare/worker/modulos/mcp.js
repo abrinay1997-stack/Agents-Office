@@ -4,13 +4,13 @@
 //  · `manejar(ctx)`: /api/conectar-claude/* — la lista de conexiones y el botón de cortarlas (Ajustes → «Conectar Claude»). SOLO administradores; el rol se mira antes que la ruta.
 // Las herramientas de dominio NO van aquí: cada carril añade su archivo en lib/mcp/dominios/.
 import { json, error, prohibido } from '../lib/respuesta.js';
-import { hostValido, mcpActivo, plano, conCors, urlMcp, hostMcp, ALCANCES, ahoraMs as reloj } from '../lib/mcp/config.js';
+import { hostValido, mcpActivo, plano, conCors, urlMcp, hostMcp, ALCANCES, TOPE_CUERPO_OAUTH, ahoraMs as reloj } from '../lib/mcp/config.js';
 import { metadatosServidor, metadatosRecurso, registrar, token, revocar, jsonOAuth } from '../lib/mcp/oauth.js';
 import { permiso } from '../lib/mcp/permiso.js';
 import { manejarMcp } from '../lib/mcp/servidor.js';
 import { listar, revocarFamilia, revocarTodas } from '../lib/mcp/tokens.js';
 import { auditar } from '../lib/mcp/auditoria.js';
-import { lineaDe, motivoDe, redirectsDeRegistro, escribir } from '../lib/mcp/bitacora.js';
+import { lineaDe, motivoDe, redirectsDeRegistro, escribir, leerAcotado, admitirLinea } from '../lib/mcp/bitacora.js';
 import { listarSolicitudes, aprobarSolicitud, rechazarSolicitud } from '../lib/mcp/gasto.js';
 
 export const nombre = 'mcp';
@@ -25,18 +25,22 @@ export async function publicaMcp(req, env) {
   const p = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
   if (!esPublica(p)) return null;
   const t0 = Date.now();
-  let textoRegistro = '';
-  try { if (p === '/oauth/register' && req.method === 'POST') textoRegistro = (await req.clone().text()).slice(0, 8000); } catch { /* sin cuerpo */ }
+  // Las direcciones de vuelta de un registro rechazado: solo se guarda una copia si el cuerpo declara un tamaño razonable (nunca un cuerpo sin tope) y solo se lee, acotada, si la respuesta fue un error.
+  const largo = req.headers.get('content-length');
+  const copiaRegistro = p === '/oauth/register' && req.method === 'POST' && largo !== null && Number.isFinite(Number(largo)) && Number(largo) <= TOPE_CUERPO_OAUTH ? req.clone() : null;
   let resp;
   try { resp = await atender(req, env); } catch (e) {
     escribir(env, lineaDe({ req, ruta: p, estado: 500, ms: Date.now() - t0, motivo: 'excepcion' }));
+    try { await copiaRegistro?.body?.cancel(); } catch { /* ya cerrado */ }
     throw e;
   }
   try {
     const motivo = await motivoDe(resp, { hostCanonico: hostValido(req, env) });
-    const redirects = p === '/oauth/register' && resp.status >= 400 ? redirectsDeRegistro(textoRegistro) : undefined;
-    escribir(env, lineaDe({ req, ruta: p, estado: resp.status, ms: Date.now() - t0, motivo, redirects }));
+    const redirects = copiaRegistro && resp.status >= 400 ? redirectsDeRegistro(await leerAcotado(copiaRegistro, TOPE_CUERPO_OAUTH)) : undefined;
+    const adm = admitirLinea(env, motivo, reloj(env));
+    if (adm.ok) escribir(env, lineaDe({ req, ruta: p, estado: resp.status, ms: Date.now() - t0, motivo, redirects, omitidas: adm.omitidas }));
   } catch { /* la bitácora nunca rompe la petición */ }
+  try { await copiaRegistro?.body?.cancel(); } catch { /* ya cerrado */ }
   return resp;
 }
 
