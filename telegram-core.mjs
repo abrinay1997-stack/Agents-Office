@@ -102,6 +102,12 @@ export const escalarDeAviso = n => { const m = /^anuncios-escalar:([a-z]+-[A-Za-
 /** «anuncios-piloto:<id>» (anuncios/piloto.mjs) → «↶ Deshacer»: reanudar vuelve a gastar, así que pide la cifra y el segundo toque. */
 export const pilotoDeAviso = n => { const m = /^anuncios-piloto:([A-Za-z0-9_]{1,40})$/.exec(String(n?.key || '')); return m ? { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer (vuelve a gastar)', callback_data: 'xr:' + m[1] }]] } } : {}; };
 /** Los botones del aviso de anuncios que toque (rechazado → ⏸, escalar → ✅/Descartar, piloto → ↶). */
+/** P4 (plan MCP §14.2): «mcp-gasto:<id>» (lib/mcp/gasto.js) → ✅ Aprobar / ↩ Rechazar el gasto que pidió Claude. Aprobar es el paso 2: lo da la persona, aquí, con el mismo servidor. */
+export const gastoMcpDeAviso = n => {
+  const m = /^mcp-gasto:(g[0-9a-f]{9,40})$/.exec(String(n?.key || ''));
+  if (!m) return {};
+  return { reply_markup: { inline_keyboard: [[{ text: '✅ Aprobar el gasto', callback_data: 'mg:' + m[1] }, { text: '↩ Rechazar', callback_data: 'mr:' + m[1] }]] } };
+};
 export const botonesAnuncio = n => { for (const f of [pausaDeAviso, escalarDeAviso, pilotoDeAviso]) { const x = f(n); if (x.reply_markup) return x; } return {}; };
 const SI = { activar: '✅ Sí, activar', reanudar: '✅ Sí, reanudar', subir_presupuesto: '✅ Sí, subir' };
 
@@ -134,7 +140,11 @@ export function crearAvisador({ tg, notify, who, approvers, st, saveSt, send, se
   };
   const aviso = n => { if (n.kind === 'bandeja-comentario') { if (notify.comentarios) toOwners(esc(n.text)); return; } // B1: ya agrupados (uno cada 15 min, «y N más»); el no molestar los guarda
     if (n.kind === 'bandeja-mensaje') { if (notify.mensajes) toOwners(esc(n.text)); return; } // B2: los mensajes privados, igual (sin el texto completo del cliente; un 🛡 no se cita)
-    if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? botonesAnuncio(n) : {}, { urgent: n.level === 'error' }); }; // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
+    if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(
+      `${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`,
+      n.kind === 'anuncios' ? botonesAnuncio(n) : n.kind === 'mcp-gasto' ? gastoMcpDeAviso(n) : {},
+      { urgent: n.level === 'error' },
+    ); }; // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
   const esperar = async f => { pend.length = 0; try { f(); } finally { await Promise.allSettled(pend.splice(0)); } };
   return { toOwners, flushHeld, piezaAOwners, tarea: t => esperar(() => tarea(t)), aviso: n => esperar(() => aviso(n)), esperar };
 }
@@ -231,6 +241,12 @@ export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, s
       if (k === 'pv') { const { pieza: p } = await local('GET', `/api/contenido/piezas/${id}`); await done(''); return send(chat, `<b>${esc(p.titulo || 'Sin título')}</b>\n\n${esc(p.texto || '(sin texto)')}${p.comentario ? `\n\n<b>Primer comentario</b>\n${esc(p.comentario)}` : ''}${p.hashtags ? `\n\n${esc(p.hashtags)}` : ''}${(p.revision?.errores || []).length ? `\n\n⚠ <b>Le falta</b>\n${p.revision.errores.map(e => '· ' + esc(e)).join('\n')}` : ''}`); }
       if (k === 'pt') { let ok = 0, mal = 0; for (const p of (await piezasPendientes()).filter(x => piezaLista(x))) { try { await local('POST', `/api/contenido/piezas/${p.id}/aprobar`, { quien: by.slice(0, 40) }, by); ok++; } catch { mal++; } } await strip(); await done('Hecho'); return send(chat, `✅ ${ok} ${ok === 1 ? 'aprobada' : 'aprobadas'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`); }
       // A2: anuncios — ⏸ Pausar (libre) y su ↶ Deshacer; ✅ Activar pide la cifra al servidor y la manda con «Sí, activar» (el segundo toque)
+      if (k === 'mg' || k === 'mr') { // P4: el gasto que pidió Claude por MCP (aprobar es el paso 2: lo da quien pulsa)
+        const r = await local('POST', `/api/conectar-claude/solicitudes/${id}/${k === 'mg' ? 'aprobar' : 'rechazar'}`, {}, by).catch(e => ({ ok: false, texto: e.message }));
+        await strip(); await done(k === 'mg' ? (r.ok ? 'Aprobado' : 'No se pudo') : 'Rechazado');
+        if (k === 'mr') return send(chat, '↩ Rechazado: no se gasta nada.');
+        return send(chat, r.ok ? `✅ Aprobado y pedido al Estudio. ${esc(r.texto || '')}` : `✗ ${esc(r.texto || 'No se pudo aprobar.')}`);
+      }
       if (k === 'xp') { const r = await local('POST', '/api/anuncios/accion', { tipo: 'pausar', id, por: 'dueno' }, by); await strip(); await done('En pausa'); return send(chat, `⏸ ${esc(r.hecho?.texto || 'En pausa.')}`, r.deshacer ? { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer', callback_data: 'xu:' + r.deshacer.token }]] } } : {}); }
       if (k === 'xu') { const r = await local('POST', '/api/anuncios/deshacer', { token: id, por: 'dueno' }, by); await strip(); await done('Deshecho'); return send(chat, `↶ ${esc(r.hecho?.texto || 'Deshecho.')}`); }
       // A5: «xr» deshace una pausa del piloto (reanudar: gasta, dos toques); «sx» aplica la sugerencia de escalar (subir: gasta, dos toques)

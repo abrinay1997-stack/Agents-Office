@@ -81,8 +81,8 @@ async function prepararModelo(office, nombre, a) {
   const id = typeof a.modelo === 'string' && a.modelo ? a.modelo : c.default?.[kind];
   const m = (c.models || []).find((x) => x.id === id && x.kind === kind);
   const lista = (c.models || []).filter((x) => x.on && x.kind === kind).map((x) => x.id).join(', ') || 'ninguno';
-  if (!m) return `No hay un modelo «${clip(id, 60) || '—'}» de ${kind}. Los encendidos: ${lista}. No se preparó nada.`;
-  if (!m.on) return `El modelo ${m.name} (${m.id}) no está encendido (le falta su llave). Los encendidos: ${lista}. No se preparó nada.`;
+  if (!m) return { texto: `No hay un modelo «${clip(id, 60) || '—'}» de ${kind}. Los encendidos: ${lista}. No se preparó nada.`, error: true };
+  if (!m.on) return { texto: `El modelo ${m.name} (${m.id}) no está encendido (le falta su llave). Los encendidos: ${lista}. No se preparó nada.`, error: true };
   const voz = nombre === 'generar_voz', musica = nombre === 'generar_musica';
   const prompt = voz ? a.texto : musica ? (String(a.letra || '').trim() || a.descripcion) : a.prompt;
   const n = voz || musica || kind === 'video' ? 1 : Math.min(8, Math.max(1, Math.round(+a.cantidad || 1)));
@@ -90,14 +90,16 @@ async function prepararModelo(office, nombre, a) {
   const usd = estimate({ model: m.id, n, settings, prompt: String(prompt || '') });
   const peso = weightOf(kind) * n, bu = c.budget;
   const cabe = (bu?.left == null || peso <= bu.left) && (bu?.costLeftDay == null || usd <= bu.costLeftDay) && (bu?.costLeftMonth == null || usd <= bu.costLeftMonth) && (!bu?.maxPerRequest || n <= bu.maxPerRequest);
-  return `PREPARADO — no se generó nada.\n${n} ${kind === 'image' ? (n === 1 ? 'imagen' : 'imágenes') : kind === 'video' ? 'video' : kind === 'audio' ? 'locución' : 'pieza de música'} con ${m.name} (${m.id}): ${usd ? `unos ${dinero(usd)} (estimado)` : 'gratis'}.\n` +
+  const texto = `PREPARADO — no se generó nada.\n${n} ${kind === 'image' ? (n === 1 ? 'imagen' : 'imágenes') : kind === 'video' ? 'video' : kind === 'audio' ? 'locución' : 'pieza de música'} con ${m.name} (${m.id}): ${usd ? `unos ${dinero(usd)} (estimado)` : 'gratis'}.\n` +
     `Idea: «${clip(prompt)}»\n${topesTexto(bu)}\n${cabe ? 'Cabe dentro de los topes.' : 'NO cabe dentro de los topes de hoy: el Estudio lo rechazaría.'}${cola(usd)}`;
+  const que = `${n} ${kind === 'image' ? (n === 1 ? 'imagen' : 'imágenes') : kind === 'video' ? 'video' : kind === 'audio' ? 'locución' : 'pieza de música'} con ${m.name}`;
+  return { texto, usd, cabe, bu, que, idea: clip(prompt, 160) };
 }
 
 async function prepararBanco(office, nombre, a) {
   const b = await office('/api/media/presets').catch(() => null);
   const { pila, fuera, noImagen } = pilaDe(a.presets, b?.presets);
-  if (!pila.length) return `Ningún preset de esa pila existe${fuera?.length ? ` (${fuera.map((x) => clip(x, 40)).join(', ')})` : ''}${noImagen ? '; y los de video, música o voz no se aplican a una imagen' : ''}. Búscalos con buscar_presets. No se preparó nada.`;
+  if (!pila.length) return { error: true, texto: `Ningún preset de esa pila existe${fuera?.length ? ` (${fuera.map((x) => clip(x, 40)).join(', ')})` : ''}${noImagen ? '; y los de video, música o voz no se aplican a una imagen' : ''}. Búscalos con buscar_presets. No se preparó nada.` };
   const escena = escenaDeAgente(a.escena), canal = typeof a.canal === 'string' && /^[a-z0-9-]{2,30}$/.test(a.canal) ? a.canal : undefined;
   const referencias = a.referencia ? [{ id: String(a.referencia), ...(a.ejes && typeof a.ejes === 'object' ? { ejes: a.ejes } : {}) }] : [];
   const cuerpo = { pila, params: canal ? { canal } : {}, entradas: { foto: a.foto ? [String(a.foto)] : [], referencias }, idea: clip(a.idea, 1000), ...(escena ? { escena } : {}), ...(typeof a.modelo === 'string' && a.modelo ? { model: a.modelo } : {}) };
@@ -106,13 +108,19 @@ async function prepararBanco(office, nombre, a) {
   const fotos = lote ? (Array.isArray(a.fotos) ? a.fotos.length : 0) : 1;
   const total = lote && fotos ? ` · ${fotos} fotos ≈ ${dinero(usd * fotos)}` : lote ? ' · por foto (el total depende de cuántas tenga la carpeta)' : '';
   const aviso = [...(plan.avisos || []), ...errores].map((x) => clip(typeof x === 'string' ? x : x?.es || x?.texto || JSON.stringify(x), 160)).filter(Boolean).slice(0, 4);
-  return `PREPARADO — no se ${lote ? 'creó ningún lote' : 'generó nada'}.\n${plan.resumen_es ? `Receta: ${clip(plan.resumen_es, 300)}.\n` : ''}Costo: ${plan.costo?.texto || (usd ? dinero(usd) : 'gratis')}${total}.\n` +
+  const texto = `PREPARADO — no se ${lote ? 'creó ningún lote' : 'generó nada'}.\n${plan.resumen_es ? `Receta: ${clip(plan.resumen_es, 300)}.\n` : ''}Costo: ${plan.costo?.texto || (usd ? dinero(usd) : 'gratis')}${total}.\n` +
     `${aviso.length ? `Avisos: ${aviso.join(' · ')}\n` : ''}${errores.length ? 'NO se puede hacer así: corrige lo de arriba.\n' : ''}${topesTexto(r.budget)}${cola(usd * Math.max(1, fotos))}`;
+  const total$ = usd * Math.max(1, fotos), bu = r.budget;
+  const cabe = !errores.length && (bu?.costLeftDay == null || total$ <= bu.costLeftDay) && (bu?.costLeftMonth == null || total$ <= bu.costLeftMonth);
+  const que = lote ? `lote «${clip(a.nombre, 60)}» (${fotos ? fotos + ' fotos' : 'fotos de la carpeta'})` : `preset ${pila.map((x) => x.id).join(' + ').slice(0, 80)}`;
+  return { texto, usd: total$, cabe, bu, que, idea: clip(a.idea, 160), nota: lote && !fotos ? 'es el costo POR FOTO: el total depende de cuántas tenga la carpeta' : '', errores: errores.length };
 }
 
-/** `preparar(office, nombre, args)` → texto. Lanza si algo no existe. */
-export async function prepararGasto(office, nombre, args = {}) {
+/** `evaluarGasto(office, nombre, args)` → { texto, usd, cabe, bu, que, idea, nota?, error? }: lo que el SERVIDOR calcula (costo por el catálogo, topes de hoy). Lanza si la herramienta no existe. */
+export async function evaluarGasto(office, nombre, args = {}) {
   if (KIND[nombre]) return prepararModelo(office, nombre, args);
   if (nombre === 'aplicar_preset' || nombre === 'crear_lote') return prepararBanco(office, nombre, args);
   throw new Error('herramienta desconocida: ' + nombre);
 }
+/** `preparar(office, nombre, args)` → texto. Lanza si algo no existe. */
+export async function prepararGasto(office, nombre, args = {}) { return (await evaluarGasto(office, nombre, args)).texto; }

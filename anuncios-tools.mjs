@@ -11,7 +11,7 @@ const CREATIVO = { type: 'object', properties: {
   media: { type: 'string', description: 'El id de la imagen o el video en la galería del Estudio.' }, formato: { type: 'string', enum: ['1:1', '4:5', '9:16'], description: '1:1 o 4:5 para el feed; 9:16 para historias y reels.' },
   texto: { type: 'string', description: 'El texto principal: lo que se lee sin «Ver más» son unas 125 letras.' }, titular: { type: 'string', description: 'Hasta 40 letras.' }, descripcion: { type: 'string' },
   llamada: { type: 'string', description: 'El botón (WHATSAPP_MESSAGE, LEARN_MORE, SHOP_NOW, SIGN_UP, CONTACT_US…); vacío = el de por defecto del objetivo.' } }, required: ['media', 'texto'] };
-const CAMPOS_BORRADOR = {
+export const CAMPOS_BORRADOR = {
   nombre: { type: 'string', description: 'El nombre de la campaña (corto).' },
   objetivo: { type: 'string', enum: ['mensajes', 'web', 'ventas', 'contactos', 'conocer'], description: 'mensajes = que escriban (por defecto); web = visitas; ventas y contactos piden el píxel de la web; conocer = alcance.' },
   destino: { type: 'string', enum: ['whatsapp', 'instagram', 'messenger'], description: 'Solo en «mensajes»: por dónde escriben.' },

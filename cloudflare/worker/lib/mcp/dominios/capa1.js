@@ -13,7 +13,8 @@ import { limpiarSecretos } from '../../secretos.js';
 import { conIdempotencia } from '../capa1/idempotencia.js';
 import { restringir } from '../capa1/restringir.js';
 import { OPS_FUERA_HACER } from '../capa1/oficina.js';
-import { definicionesEstudio, esquemaRemoto, nuevoEstudio, prepararGasto, ESTUDIO_LEE } from '../capa1/estudio.js';
+import { definicionesEstudio, esquemaRemoto, nuevoEstudio, evaluarGasto, ESTUDIO_LEE } from '../capa1/estudio.js';
+import { crearSolicitud, VENCE_MS } from '../gasto.js';
 
 const OFICINA_LEE = ['estado_oficina', 'ver_calendario'];
 const OFICINA_CAMBIA = ['crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri'];
@@ -85,6 +86,19 @@ for (const t of OFICINA) {
 }
 
 /* ---------- el Estudio ---------- */
+const dinero = (n) => `US$${(+n || 0).toFixed(2).replace('.', ',')}`;
+// El paso 1 del dinero (P4, plan MCP §14.2): calcula la cifra EL SERVIDOR y deja una tarjeta para el dueño. No genera ni gasta: eso es del paso 2 de una persona (gasto.js).
+async function abrirTarjeta(ctx, office, nombre, args0) {
+  const { clave_idempotencia: _c, ...args } = args0 || {}; // la clave de idempotencia no es parte de lo pedido (ni de su huella)
+  const ev = await evaluarGasto(office, nombre, args), cuerpo = ev.texto.split('\nSegundo paso:')[0];
+  if (ev.error || !ev.cabe) return `${cuerpo}\nNo se abrió ninguna tarjeta: ${ev.error ? 'lo pedido no se puede hacer así.' : 'no cabe dentro de los topes de hoy.'} Este conector no genera ni gasta.`;
+  const r = await crearSolicitud(ctx.db, { conexion: ctx.conexion, usuario: ctx.usuario, ms: ctx.ahoraMs, herramienta: nombre, args, ev });
+  if (r.limite) return `${r.limite}\nNo se abrió ninguna tarjeta. Este conector no genera ni gasta.`;
+  const t = r.tarjeta || r.repetida, horas = Math.round(VENCE_MS / 3600e3);
+  return `${cuerpo}\n${r.repetida ? 'Esta misma petición ya tiene una tarjeta esperando (no abrí otra)' : 'Dejé una tarjeta «espera tu OK»'}: ${t.id}. El dueño la ve en la oficina (Ajustes → Conectar Claude) y en Telegram, `
+    + `con la cifra exacta (${ev.usd ? dinero(ev.usd) : 'gratis'}) y los topes; vence en ${horas} h. `
+    + 'Solo una persona la aprueba y la oficina vuelve a mirar los topes al ejecutar. Este conector no genera ni gasta: no esperes el resultado aquí.';
+}
 for (const d of definicionesEstudio()) {
   const lee = ESTUDIO_LEE.includes(d.nombre);
   registrarHerramienta({
@@ -92,7 +106,7 @@ for (const d of definicionesEstudio()) {
     ejecutar: async (ctx, args) => {
       try {
         const office = await conOficina(ctx, lee ? ['GET'] : ['GET', 'POST /api/media/presets/compile']);
-        if (!lee) return { texto: await prepararGasto(office, d.nombre, args) }; // paso 1: costo y topes; no genera
+        if (!lee) return await idem(ctx, d.nombre, async () => ({ texto: await abrirTarjeta(ctx, office, d.nombre, args) })); // paso 1: costo, topes y una TARJETA «espera tu OK»; no genera
         const r = await nuevoEstudio(office).call(d.nombre, args); // una instancia nueva por llamada
         return { texto: typeof r === 'string' ? r : String(r?.text ?? '') };
       } catch (e) { return fallo(d.nombre, e); }

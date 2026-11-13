@@ -87,6 +87,7 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
 
   async function deshacer(clave) {
     const k = String(clave || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+    if (k.startsWith('est-')) throw new Rechazo('esa clave es de la galería del Estudio: usa galeria_cambiar con accion «deshacer».', 409);
     const { valor } = k ? await leerDoc(db0, PREFIJO_UNDO + k) : { valor: null };
     const vencida = 'esa clave ya no sirve: pasaron más de 10 minutos, ya se deshizo o no es tuya. Cámbialo con otra acción.';
     if (!valor || ahoraMs - (valor.at || 0) > DESHACER_MS || valor.por !== persona.id) throw new Rechazo(vencida, 409);

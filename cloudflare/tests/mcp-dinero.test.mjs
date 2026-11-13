@@ -50,7 +50,11 @@ test('el código del conector no sabe canjear un testigo de gasto: no importa an
   const fuentes = [...arch(join(RAIZ, 'worker/lib/mcp')), join(RAIZ, 'worker/modulos/mcp.js')];
   for (const f of fuentes) {
     const t = readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
-    assert.doesNotMatch(t, /anuncios\/acciones|anuncios-nube|lib\/anuncios/, `${f}: el conector no llama al ejecutor de gasto`);
+    // ÚNICA excepción (P5, carril anuncios): `dominios/anuncios.js` llama a `acc.accion` con `por: 'asistente'` para PAUSAR y BAJAR un presupuesto (el módulo HTTP borraría `por` y trataría el token como el dueño).
+    // El papel «asistente» no puede gastar ni confirmar (anuncios/acciones.mjs: 403) y mcp-anuncios.test.mjs fija que ese archivo solo tiene esa llamada, con tipo literal y sin testigos.
+    const excepcion = /dominios[\\/]anuncios\.js$/.test(f);
+    if (excepcion) assert.equal((t.match(/anuncios-nube/g) || []).length, 1, `${f}: solo el import perezoso de conAnuncios/asegurarCuentas`);
+    else assert.doesNotMatch(t, /anuncios\/acciones|anuncios-nube|lib\/anuncios/, `${f}: el conector no llama al ejecutor de gasto`);
     if (!/registro\.js$/.test(f)) assert.doesNotMatch(t, /\bconfirmacion\b|\bcanjear\b|testigo de gasto/i, `${f}: un token de MCP no maneja el testigo de un gasto`);
   }
 });

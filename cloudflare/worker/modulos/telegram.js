@@ -21,12 +21,16 @@ import * as contenido from './contenido.js';
 import * as anuncios from './anuncios.js';
 import * as estudio from './estudio.js';
 import * as dimitri from './dimitri.js';
+import * as mcp from './mcp.js';
 
 export const nombre = 'telegram';
 export const grupos = ['telegram'];
 
 /** Por dónde entran los comandos del bot (cada ruta, por el módulo que la posee). */
-export const MODULOS_BOT = [tareas, agentes, contenido, anuncios, estudio, dimitri];
+/** Del módulo `mcp` el bot solo ve las TARJETAS de gasto de Claude (lista y aprobar/rechazar): nunca cortar conexiones ni el resto de /api/conectar-claude. */
+const RUTA_SOLICITUDES = /^\/api\/conectar-claude\/solicitudes(?:\/g[0-9a-f]{9,40}\/(?:aprobar|rechazar))?$/;
+export const mcpSoloSolicitudes = { nombre: 'mcp-solicitudes', manejar: (ctx) => (RUTA_SOLICITUDES.test(ctx.ruta) ? mcp.manejar(ctx) : null) };
+export const MODULOS_BOT = [tareas, agentes, contenido, anuncios, estudio, dimitri, mcpSoloSolicitudes];
 const MAX_UPDATE = 256 * 1024, MAX_POR_MINUTO = 120, MAX_EXTRANOS_POR_MINUTO = 20; // el dueño y sus aprobadores tienen su tope; los extraños, uno propio y bajo: no pueden agotar el de nadie
 
 const reenviado = (m) => !!(m && (m.forward_origin || m.forward_from || m.forward_from_chat || m.forward_sender_name || m.forward_date));

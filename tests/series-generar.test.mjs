@@ -252,7 +252,8 @@ test('18 · DINERO: ni agentes, ni Dimitri, ni los MCP, ni las ops de la oficina
 
 test('18c · DINERO: ningún otro módulo (telegram, disparadores, rutinas, cola, MCP…) llama al generador ni a /api/series, y nadie que no sea el dueño puede escribir dimitri.serieGenerar', () => {
   const raiz = ['telegram.mjs', 'triggers.mjs', 'routines.mjs', 'settings.mjs', 'serve.mjs'], carpetas = ['.', 'oficina', 'contenido', 'tareas', 'anuncios', 'media', 'cloudflare/worker'];
-  const permitido = new Set(['serve.mjs', 'serie-local.mjs', 'series.mjs', 'series-generar.mjs', 'series-bomba-core.mjs', 'series-vista-core.mjs', 'cloudflare/worker/modulos/series.js', 'serie-core.mjs', 'serie-topes-core.mjs', 'serie-propuesta-core.mjs', 'serie-vision-core.mjs', 'serie-deriva-core.mjs', 'biblia-core.mjs', 'media/trabajos.mjs']);
+  const permitido = new Set(['serve.mjs', 'serie-local.mjs', 'series.mjs', 'series-generar.mjs', 'series-bomba-core.mjs', 'series-vista-core.mjs', 'cloudflare/worker/modulos/series.js', 'cloudflare/worker/lib/mcp/dominios/series.js',
+    'serie-core.mjs', 'serie-topes-core.mjs', 'serie-propuesta-core.mjs', 'serie-vision-core.mjs', 'serie-deriva-core.mjs', 'biblia-core.mjs', 'media/trabajos.mjs']);
   const baja = d => d.startsWith('cloudflare') || ['oficina', 'contenido', 'tareas', 'anuncios', 'media'].includes(d);
   const walk = d => fs.readdirSync(path.join(ROOT, d), { withFileTypes: true }).flatMap(e => {
     if (e.isDirectory()) return baja(d) ? walk(path.join(d, e.name)) : [];
@@ -260,6 +261,9 @@ test('18c · DINERO: ningún otro módulo (telegram, disparadores, rutinas, cola
   });
   const todos = [...new Set(carpetas.flatMap(walk))].filter(f => !permitido.has(f) && !f.startsWith('tests/'));
   for (const f of todos) assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /series-generar|serie_generar|crearGeneradorSeries|\/api\/series|serieGenerar/, f);
+  // el dominio MCP de series (solo lectura y propuesta) puede nombrar /api/series, pero NUNCA el generador ni los verbos que gastan o deciden dinero (el texto de EXCLUSIONES_SERIES, que los NOMBRA para excluirlos, no cuenta)
+  const mcp = fs.readFileSync(path.join(ROOT, 'cloudflare/worker/lib/mcp/dominios/series.js'), 'utf8').replace(/export const EXCLUSIONES_SERIES[\s\S]*?\}\);/, '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  assert.doesNotMatch(mcp, /series-generar|serie_generar|crearGeneradorSeries|serieGenerar|\/(generar|resolver|pausar|cancelar|presupuesto|continuar)\b/, 'el dominio MCP de series no llama al generador ni a sus verbos');
   assert.ok(raiz.every(f => fs.existsSync(path.join(ROOT, f))) && todos.includes('telegram.mjs') && todos.includes('triggers.mjs'), 'la lista revisó telegram y los disparadores');
   const ajustes = fs.readFileSync(path.join(ROOT, 'settings.mjs'), 'utf8'); assert.doesNotMatch(ajustes, /serieGenerar|['"`]dimitri\./, 'Ajustes (la API de settings) no puede escribir el flag');
   const src = fs.readFileSync(path.join(ROOT, 'serve.mjs'), 'utf8'); assert.doesNotMatch(src, /serieGenerar\s*=[^=]|serieGenerar\s*:\s*(true|false|b\.|body)/, 'serve.mjs solo LEE el flag, nunca lo escribe'); assert.ok((src.match(/\.serieGenerar === true/g) || []).length >= 2);
