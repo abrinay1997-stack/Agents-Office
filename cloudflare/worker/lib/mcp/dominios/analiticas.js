@@ -9,7 +9,7 @@ export const RUTAS = Object.freeze(['GET /api/contenido/analiticas', 'GET /api/c
 export const ACCIONES = Object.freeze(['resumen', 'cuenta', 'mejor_hora', 'informe', 'estado']);
 export const PERMITIDAS = Object.freeze(['GET /api/contenido/analiticas', 'GET /api/contenido/analiticas/resumen', 'GET /api/contenido/mejor-hora', 'GET /api/contenido/informe', 'GET /api/contenido']);
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'analiticas',
   nombre: 'analiticas', titulo: 'Analíticas de las redes (leer)', alcance: 'lectura', soloLectura: true,
   descripcion: 'LEE cómo van las redes; no cambia nada. `accion`: resumen (total por red y una línea por cada cuenta, para compararlas; `dias` 7–90, por defecto 30) · cuenta (una sola, por `cuenta`) · mejor_hora (`redes`, `fecha`) · '
     + 'informe (del `mes`) · estado (Meta conectada, última foto, indicadores). Cita las cifras tal cual; no inventes las que falten.',

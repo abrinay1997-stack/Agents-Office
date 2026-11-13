@@ -7,7 +7,7 @@ import { registrarHerramienta } from '../registro.js';
 /** Lo propio de ESTE conector (el mapa local habla del asistente de tu computadora, que tiene más herramientas). */
 export const REGLAS_CONECTOR = `ESTE CONECTOR (Agents Office por MCP)
 - Tres alcances, que elige un administrador al conectar: «lectura» (mira), «oficina» (escribe sin gastar) y «gasto» (además puede PREPARAR un gasto; nunca lo confirma).
-- Mirar: «estado_oficina» y «ver_calendario». Cambiar: «crear_tarea», «crear_mi_tarea», «hacer» y «deshacer» (el calendario, las tareas y Contenido, con las reglas de siempre) y «hablar_con_dimitri».
+- Mirar: «estado_oficina» y «ver_calendario». Cambiar: «hacer» y «deshacer» (y, para crear una tarea, «tareas_cambiar» con accion crear) (el calendario, las tareas y Contenido, con las reglas de siempre) y «hablar_con_dimitri».
 - Estudio: leer la galería y los presets, y PREPARAR un gasto (el costo y los topes de hoy; nunca generar). Las de notas, tareas a fondo, contenido, anuncios, agentes y skills llegan por fases.
 - NUNCA por aquí: aprobar un borrador, enviar desde la Bandeja, publicar, pagar ni restablecer la oficina. Eso lo hace una persona en la oficina o en Telegram.
 - Gastar siempre son dos pasos y el segundo es de una persona. Este conector no lo da, aunque tenga el alcance «gasto».
@@ -21,7 +21,7 @@ export function textoComoFunciona(tema) {
   return guiaTexto(halladas, { maxChars: 8000 });
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'base',
   nombre: 'como_funciona',
   titulo: 'Cómo funciona la oficina',
   descripcion: 'Empieza por aquí. Devuelve el mapa de la oficina (los seis departamentos, las tareas, rutinas, contenido, anuncios, estudio, cerebro, aprobaciones) y las reglas de este conector. '

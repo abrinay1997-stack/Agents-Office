@@ -84,7 +84,7 @@ async function auditoria(ctx, limite) {
   return lin.length ? `Rastro de auditoría (los ${lin.length} últimos; sin contenido de mensajes):\n${lin.join('\n')}` : 'Todavía no hay nada en el rastro de auditoría.';
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'ajustes',
   nombre: 'ajustes',
   titulo: 'Ajustes de la empresa',
   descripcion: 'Lee la configuración sin secretos. accion: valores (`grupo` opcional) · cifras · modelos (qué IA corre cada función) · avisos · disparadores · telegram (sin ids) · ' +
@@ -209,7 +209,7 @@ async function disparador(office, a, pausar) {
 const PERMITE = { poner: ['GET /api/settings', 'POST /api/settings'], cifra: ['GET /api/cifras', 'POST /api/cifras'], kpi_anotar: ['POST /api/business/value'], modelo: ['GET /api/modelos', 'PUT /api/modelos'], avisos_leidos: ['GET /api/status', 'POST /api/notices/read'],
   pausar_disparador: ['GET /api/triggers', 'PUT /api/triggers'], habilitar_disparador: ['GET /api/triggers', 'PUT /api/triggers'] };
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'ajustes',
   nombre: 'ajustes_cambiar',
   titulo: 'Cambiar ajustes de la empresa',
   descripcion: 'Cambia lo que se puede sin riesgo. accion: poner (`campo`+`valor` de la lista blanca; los topes van con topes_cambiar) · cifra (`nombre`, `valor` numérico, `unidad`) · kpi_anotar (`id`+número) · ' +

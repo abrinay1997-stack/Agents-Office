@@ -8,7 +8,7 @@ import { herramientas } from '../worker/lib/mcp/registro.js';
 
 // Cuatro herramientas YA pasaban de 2.000 antes de integrar (medidas el día de la integración): pueden quedarse como están pero NO crecer; ninguna otra puede pasar de TOPE_UNA. Acortarlas las saca de aquí.
 const GRANDES_CONOCIDAS = { hacer: 3700, aplicar_preset: 2250, tareas_cambiar: 2200, rutinas_cambiar: 2270 };
-const TOPE_LETRAS = 73000, TOPE_HERRAMIENTAS = 55, TOPE_UNA = 2000;
+const TOPE_LETRAS = 71000, TOPE_HERRAMIENTAS = 53, TOPE_UNA = 2000;
 test('PRESUPUESTO TOTAL: tools/list de un token de gasto', { skip: SALTAR }, async () => {
   const m = await mundo();
   const tok = (await m.conectar({ alcance: 'gasto' })).tokens.access_token;

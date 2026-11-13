@@ -8,17 +8,14 @@
 // Todo se importa PEREZOSAMENTE (el módulo `modulos/index.js` importa al conector: un import estático sería un círculo y haría pesado el arranque).
 import { MAPA, REGLAS_ASISTENTE, ACCIONES } from '../../../../../oficina/mapa.mjs';
 import * as sub from '../../../../../sub-core.mjs';
-import { guardarDoc, leerDoc } from '../../almacen.js';
-import { testigo } from '../../ids.js';
 import { auditar } from '../auditoria.js';
 
-export const DESHACER_MS = 10 * 60e3; // como el asistente local: un asistente tarda más que un clic en pensarlo
-export const PREFIJO_UNDO = 'mcp.undo:';
+import { apuntar as apuntarUndo, reclamar as reclamarUndo, PREFIJO_UNDO, DESHACER_MS } from '../deshacer.js';
+export { PREFIJO_UNDO, DESHACER_MS }; // el registro único de deshacer vive en ../deshacer.js
 const FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const idDe = (o) => String(o.id || o.pieza || o.routineId || o.task || o.borrador || '').slice(0, 80) || null;
 const etiqueta = (o) => String(o.desc || o.title || o.titulo || o.type).slice(0, 160);
-const claveNueva = () => testigo(9);
 /** Lo que `hacer` NO ejecuta por MCP (con su motivo): cada una pone a un agente a trabajar o escribe en lo que leen todos los agentes sin que una persona lo vea. Se servirán cuando exista el paso humano. */
 export const OPS_FUERA_HACER = Object.freeze({
   rutina_ahora: 'corre una rutina YA: pone a un agente a trabajar (y a gastar en el Estudio antes del OK) sin la confirmación de la página. Se hace en la oficina (Calendario → la rutina → Ejecutar).',
@@ -76,26 +73,16 @@ export async function crearOficinaMcp({ env: env0, db: db0, usuario, ahoraMs = D
     // el cambio concreto queda en la auditoría (op + id, sin contenido), como en la oficina local (`auditar` de oficina/rutas.mjs)
     await auditar(db0, ahoraMs, persona.email, { evento: 'oficina-op', op: v.type, id: idDe(v), ok: true, via: 'mcp' });
     let clave = null;
-    if (v.undo) {
-      clave = claveNueva();
-      // el efecto YA ocurrió: si no se puede guardar la clave de deshacer, se dice, pero la llamada no falla (fallar invitaría a repetir lo ya hecho)
-      try { await guardarDoc(db0, PREFIJO_UNDO + clave, { o: v, at: ahoraMs, por: persona.id }); await podarUndo(db0); } catch (e) { console.warn('[mcp] no se pudo guardar la clave de deshacer:', e?.message ?? e); clave = null; }
-    }
+    // el efecto YA ocurrió: si no se puede guardar la clave de deshacer, se dice, pero la llamada no falla (fallar invitaría a repetir lo ya hecho)
+    if (v.undo) { clave = await apuntarUndo({ db: db0, ahoraMs, usuarioId: persona.id }, 'oficina', { o: v }); if (clave) await podarUndo(db0); }
     const { undo, antes, k, state, ...vista } = v; // eslint-disable-line no-unused-vars
     return { ok: true, hecho: etiqueta(v), op: vista, ...(clave ? { deshacer: clave, hasta: new Date(ahoraMs + DESHACER_MS).toISOString() } : { aviso: v.undo ? 'se hizo, pero no pude guardar la clave para deshacerlo: cámbialo con otra acción' : 'esto no se puede deshacer desde aquí' }) };
   }
 
   async function deshacer(clave) {
-    const k = String(clave || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
-    if (k.startsWith('est-')) throw new Rechazo('esa clave es de la galería del Estudio: usa galeria_cambiar con accion «deshacer».', 409);
-    const { valor } = k ? await leerDoc(db0, PREFIJO_UNDO + k) : { valor: null };
-    const vencida = 'esa clave ya no sirve: pasaron más de 10 minutos, ya se deshizo o no es tuya. Cámbialo con otra acción.';
-    if (!valor || ahoraMs - (valor.at || 0) > DESHACER_MS || valor.por !== persona.id) throw new Rechazo(vencida, 409);
-    // se reclama ANTES de deshacer (borrar la fila es atómico): dos llamadas a la vez no pueden deshacer dos veces
-    const r = await db0.prepare('delete from docs where clave = ?').bind(PREFIJO_UNDO + k).run();
-    if (!r.meta?.changes) throw new Rechazo(vencida, 409);
-    // si deshacer falla, la clave se REPONE: no se pierde la única forma de volver atrás (insert-if-absent, atómico)
-    const reponer = async () => { try { await guardarDoc(db0, PREFIJO_UNDO + k, valor, { espera: 0 }); } catch { /* ya hay otra: no se pisa */ } };
+    const g = await reclamarUndo({ db: db0, ahoraMs, usuarioId: persona.id }, 'oficina', clave);
+    if (!g.ok) throw new Rechazo(g.texto, 409);
+    const { valor, reponer } = g;
     let x;
     try { x = await ejecutor.undoOp(valor.o, { por: 'asistente' }); } catch (e) { await reponer(); throw e; }
     if (x?.error) { await reponer(); throw new Rechazo(x.error, 409); }

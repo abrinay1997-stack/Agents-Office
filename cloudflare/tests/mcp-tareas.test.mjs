@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
+import { FILA_OMITIDA } from '../worker/lib/mcp/servidor.js';
 import { mundo } from './mcp-ayudas.mjs';
 import { herramientas } from '../worker/lib/mcp/registro.js';
 import { guardarFila, guardarDoc } from '../worker/lib/almacen.js';
@@ -223,15 +224,15 @@ test('LA INYECCIÓN también se corta en `ver`: resultado, borrador, comentarios
   const casos = { r1: { result: ORDEN }, r2: { draft: ORDEN, result: 'ok' }, r3: { comments: [{ at: Date.now(), by: 'Ana', text: ORDEN }] }, r4: { notas: [{ at: Date.now(), por: 'x', texto: ORDEN }] }, r5: { pasos: [{ id: 'p1', texto: ORDEN, hecho: false }] } };
   for (const [id, extra] of Object.entries(casos)) {
     await guardarFila(m.d1, 'tareas', id + 'aaa', { ...base, id: id + 'aaa', title: 'Una tarea normal ' + id, ...extra }, Date.now());
-    const r = await llamar(t.lectura, 'tareas', { accion: 'ver', id: id + 'aaa' }); assert.equal(r.j.result.isError, true, id); assert.match(texto(r), /órdenes escondidas/, id); assert.ok(!texto(r).includes('mallory'));
+    const r = await llamar(t.lectura, 'tareas', { accion: 'ver', id: id + 'aaa' }); assert.ok(!texto(r).includes('mallory'), id); assert.ok(texto(r).includes(FILA_OMITIDA) || (r.j.result.isError === true && /órdenes escondidas/.test(texto(r))), id + ': ' + texto(r)); // P6: fila a fila (o veto total si no queda nada)
   }
 });
 
 test('UN TEXTO CON ÓRDENES ESCONDIDAS en una tarea no llega al modelo', { skip: SALTAR }, async () => {
   const { m, t, llamar } = await conectados();
   await guardarFila(m.d1, 'tareas', 'tinj9', { id: 'tinj9', title: ORDEN, text: '', plan: [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by: 'you', person: 'Tú', prioridad: 'media', v: 2, version: 1 }, Date.now());
-  const r = await llamar(t.lectura, 'tareas', { accion: 'listar' }); assert.equal(r.j.result.isError, true, texto(r)); assert.match(texto(r), /órdenes escondidas/); assert.ok(!texto(r).includes('mallory'));
-  assert.equal(m.db.prepare("select count(*) n from auditoria where tipo = 'mcp' and detalle like '%inyeccion%'").get().n >= 1, true);
+  const r = await llamar(t.lectura, 'tareas', { accion: 'listar' }); assert.ok(!texto(r).includes('mallory')); assert.ok(texto(r).includes(FILA_OMITIDA) || (r.j.result.isError === true && /órdenes escondidas/.test(texto(r))), texto(r)); // P6: fila a fila
+  assert.equal(m.db.prepare("select count(*) n from auditoria where tipo = 'mcp' and (detalle like '%inyeccion%' or detalle like '%filasOmitidas%')").get().n >= 1, true);
 });
 
 test('SALIDA Y CONSULTAS: 120 tareas se paginan con cursor, cada página ≤ 20.000 letras y cada llamada ≤ 50 consultas a D1', { skip: SALTAR }, async () => {

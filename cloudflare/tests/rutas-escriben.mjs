@@ -1,0 +1,25 @@
+// La lista de rutas que ESCRIBEN (cualquier método distinto de GET), con ids de ejemplo. La comparten la matriz de roles (auditoria-transversal.test.mjs) y la cobertura del conector MCP (mcp-cobertura.test.mjs):
+// una ruta nueva que escribe entra aquí UNA vez y las dos pruebas la ven.
+export const ESCRIBEN = [
+  '/api/skills/mi-skill', '/api/skills/papelera/restaurar', '/api/skills/mi-skill/volver',
+  '/api/funciones', '/api/conectar-claude/cortar-todas', '/api/conectar-claude/abc123', '/api/conectar-claude/solicitudes/g0123456789ab/aprobar', '/api/conectar-claude/solicitudes/g0123456789ab/rechazar',
+  '/api/yo/sesiones/cerrar', '/api/yo/sesiones/cerrar-todas',
+  '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
+  '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
+  '/api/tasks', '/api/tasks/abc123', '/api/tasks/abc123/approve', '/api/tasks/abc123/reject', '/api/tasks/approve-batch', '/api/tasks/abc123/revise', '/api/tasks/abc123/undo', '/api/tasks/abc123/draft',
+  '/api/tasks/abc123/run', '/api/tasks/abc123/stop', '/api/tasks/abc123/archive', '/api/tasks/abc123/repeat', '/api/tasks/abc123/example',
+  '/api/tareas/mias', '/api/tareas/abc123/estado', '/api/tareas/abc123/delegar', '/api/tareas/abc123/tomar', '/api/tareas/lote',
+  '/api/routines', '/api/routines/abc123', '/api/routines/abc123/run', '/api/agents/olead', '/api/agents/olead/forget',
+  '/api/contenido/piezas', '/api/contenido/piezas/abc123', '/api/contenido/piezas/abc123/aprobar', '/api/contenido/piezas/abc123/entregar', '/api/contenido/config', '/api/contenido/cola/tick',
+  '/api/contenido/llenar', '/api/contenido/mejorar', '/api/contenido/guardados', '/api/contenido/plantillas', '/api/contenido/bandeja/sincronizar', '/api/contenido/bandeja/abc123/enviar',
+  '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
+  '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
+  '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar',
+  '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
+  '/api/equipo/invitaciones', '/api/notices/read', '/api/notificaciones/leer', '/api/notificaciones/config', '/api/chat/config', '/api/chat/canales', '/api/chat/directo', '/api/chat/canales/abc123/mensajes',
+  '/api/chat/canales/abc123/escribiendo', '/api/notas-personales', '/api/notas-personales/config', '/api/notas-personales/preferencias-conexion', '/api/vinculo-telegram/codigo', '/api/vinculo-telegram/confirmar',
+  '/api/vinculo-telegram/desvincular', '/api/notas-personales/0123abcd-0000-0000-0000-000000000000/cerrar', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar',
+  '/api/contenido/analiticas/indicadores',
+  '/api/series/proponer', '/api/series/abc123/tanda', '/api/series/abc123/presupuesto', '/api/series/abc123/generar', '/api/series/abc123/continuar', '/api/series/abc123/resolver', '/api/series/abc123/pausar', '/api/series/abc123/cancelar', '/api/series/libro/resolver',
+  '/api/media/presets', '/api/media/presets/apply', '/api/media/lotes', '/api/media/lotes/hoja', '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
+];

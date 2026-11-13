@@ -1,7 +1,7 @@
 // El registro de herramientas del conector MCP. Hoy lleva UNA (`como_funciona`); las de dominio llegan en la P3+ y cada carril añade SU archivo en lib/mcp/dominios/ sin tocar el servidor.
 //
 // EL CONTRATO de una herramienta (`registrarHerramienta`):
-//   { nombre, titulo?, descripcion, esquema, alcance, soloLectura, destructiva?, idempotente?, ejecutar }
+//   { dominio, nombre, titulo?, descripcion, esquema, alcance, soloLectura, destructiva?, idempotente?, ejecutar }
 //   · `esquema`: JSON Schema de los argumentos (type: 'object'). Una herramienta de dominio declara su `accion` como un `enum` cerrado.
 //   · `alcance`: el MÍNIMO que hace falta — 'lectura' | 'oficina' | 'gasto'. `soloLectura: true` ⇔ alcance 'lectura' (y es la ÚNICA que un token de alcance «lectura» puede llamar).
 //   · `destructiva` (borra o sobrescribe sin poder volver) e `idempotente` (repetirla da lo mismo): van como anotaciones MCP. Una solo-lectura es idempotente y no destructiva.
@@ -21,6 +21,7 @@ import { ALCANCES } from './constantes.js';
 export const PROPIEDADES_PROHIBIDAS = Object.freeze(['confirmacion', 'confirmation', 'testigo', 'token_confirmacion', 'confirm_token', 'confirmar_gasto', 'canjear', 'token_de_gasto', 'spend_token', 'token', 'confirm', 'ok']);
 const NOMBRE_PROHIBIDO = /(aprobar|aprueba|canjear|canjea|confirmar_gasto|enviar|publicar|pagar|restablecer|borrar_cuenta|gastar|activar|reanudar|relanzar|subir_presupuesto)/;
 const NOMBRE_OK = /^[a-z][a-z0-9_]{2,47}$/;
+const DOMINIO_OK = /^[a-z][a-z0-9_]{1,30}$/;
 export const CLAVE_IDEMPOTENCIA = /^[A-Za-z0-9_-]{8,64}$/;
 
 /** Todas las claves de un esquema, a cualquier profundidad (una propiedad prohibida escondida dentro de otra no pasa). */
@@ -37,6 +38,7 @@ export function crearRegistro() {
     const falla = (m) => { throw new Error(`herramienta MCP «${d.nombre ?? '?'}»: ${m}`); };
     if (typeof d.nombre !== 'string' || !NOMBRE_OK.test(d.nombre)) falla('el nombre debe ser minúsculas, números y «_» (3 a 48).');
     if (NOMBRE_PROHIBIDO.test(d.nombre)) falla('el nombre suena a aprobar, enviar, publicar o pagar: eso se hace en la oficina, nunca por MCP.');
+    if (typeof d.dominio !== 'string' || !DOMINIO_OK.test(d.dominio)) falla('falta `dominio` (el archivo de lib/mcp/dominios/ que la registra: capa1, tareas, cerebro…): las pruebas y los presupuestos agrupan por él, sin listas a mano.');
     if (mapa.has(d.nombre)) falla('ya hay una herramienta con ese nombre.');
     if (typeof d.descripcion !== 'string' || d.descripcion.length < 10 || d.descripcion.length > 4000) falla('la descripción debe tener entre 10 y 4.000 letras.');
     if (!d.esquema || d.esquema.type !== 'object' || typeof d.esquema.properties !== 'object' || d.esquema.properties === null) falla('el esquema debe ser un objeto con `properties`.');
@@ -55,13 +57,13 @@ export function crearRegistro() {
     const dice = 'Opcional: una clave única (8 a 64 letras, números, «-» o «_») para que repetir esta misma llamada no repita el efecto.';
     if (!d.soloLectura && !esquema.properties.clave_idempotencia) esquema.properties.clave_idempotencia = { type: 'string', pattern: CLAVE_IDEMPOTENCIA.source, description: dice };
     const h = Object.freeze({
-      soloPrepara: d.soloPrepara === true, nombre: d.nombre, titulo: String(d.titulo || d.nombre), descripcion: d.descripcion,
+      soloPrepara: d.soloPrepara === true, dominio: d.dominio, nombre: d.nombre, titulo: String(d.titulo || d.nombre), descripcion: d.descripcion,
       esquema, alcance: d.alcance, soloLectura: d.soloLectura, destructiva: d.destructiva === true, idempotente: d.idempotente ?? d.soloLectura, ejecutar: d.ejecutar ,
     });
     mapa.set(h.nombre, h);
     return h;
   }
-  return { registrar, lista: () => [...mapa.values()], buscar: (n) => mapa.get(n) || null };
+  return { registrar, lista: () => [...mapa.values()], buscar: (n) => mapa.get(n) || null, deDominio: (...ds) => [...mapa.values()].filter((h) => ds.includes(h.dominio)) };
 }
 
 /** El registro del Worker: lo llenan los módulos de lib/mcp/base/ y lib/mcp/dominios/ al importarse. */
@@ -69,3 +71,5 @@ export const REGISTRO = crearRegistro();
 export const registrarHerramienta = (def) => REGISTRO.registrar(def);
 export const herramientas = () => REGISTRO.lista();
 export const herramienta = (n) => REGISTRO.buscar(n);
+/** Las herramientas de uno o más dominios (p. ej. `herramientasDe('capa1', 'base')`): lo que usan las pruebas en vez de listas de nombres. */
+export const herramientasDe = (...dominios) => REGISTRO.deDominio(...dominios);

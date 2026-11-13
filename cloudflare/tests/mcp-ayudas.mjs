@@ -87,6 +87,8 @@ export function volcarMcp(db) {
   return JSON.stringify(['mcp_clientes', 'mcp_codigos', 'mcp_tokens'].map((t) => db.prepare(`select * from ${t}`).all()));
 }
 
-// Las herramientas de la Capa 1 (lista cerrada y estable): un carril de dominio NUNCA la edita. Los tests que miden solo la Capa 1 filtran con esto.
-import { ESTUDIO_LEE, ESTUDIO_GASTA } from '../worker/lib/mcp/capa1/estudio.js';
-export const CAPA1 = new Set(['como_funciona', 'estado_oficina', 'ver_calendario', 'crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri', ...ESTUDIO_LEE, ...ESTUDIO_GASTA]);
+// Las herramientas de la Capa 1, SACADAS DEL REGISTRO por su `dominio` (capa1 y base): un carril nuevo no edita ninguna lista. Que la Capa 1 sea exactamente la esperada lo comprueba mcp-capa1.test.mjs.
+import '../worker/lib/mcp/base/index.js';
+import '../worker/lib/mcp/dominios/index.js';
+import { herramientasDe } from '../worker/lib/mcp/registro.js';
+export const CAPA1 = new Set(herramientasDe('capa1', 'base').map((h) => h.nombre));

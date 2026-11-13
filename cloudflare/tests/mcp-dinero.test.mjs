@@ -9,7 +9,7 @@ import { crearRegistro, PROPIEDADES_PROHIBIDAS, herramientas } from '../worker/l
 import '../worker/lib/mcp/servidor.js'; // carga todas las herramientas reales
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ok = (extra = {}) => ({ nombre: 'dinero_prueba', descripcion: 'Una herramienta de prueba.', esquema: { type: 'object', properties: {}, additionalProperties: false }, alcance: 'gasto', soloLectura: false, soloPrepara: true, ejecutar: async () => 'x', ...extra });
+const ok = (extra = {}) => ({ dominio: 'prueba', nombre: 'dinero_prueba', descripcion: 'Una herramienta de prueba.', esquema: { type: 'object', properties: {}, additionalProperties: false }, alcance: 'gasto', soloLectura: false, soloPrepara: true, ejecutar: async () => 'x', ...extra });
 
 test('el registro NO admite una herramienta que canjee un testigo de gasto', () => {
   const r = crearRegistro();
