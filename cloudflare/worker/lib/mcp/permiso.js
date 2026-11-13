@@ -32,6 +32,15 @@ export async function validarPeticion(db, env, p) {
   return { ok: true, cliente, campos: { response_type: 'code', client_id: cliente.id, redirect_uri: uri, code_challenge: dame('code_challenge'), code_challenge_method: 'S256', ...(state ? { state } : {}), ...(recurso ? { resource: recurso } : {}) } };
 }
 
+/** ¿El POST del formulario viene de esta misma oficina? Si el navegador manda Origin, tiene que ser este. Chrome manda `Origin: null` cuando la página pide `no-referrer` (así falló la primera conexión real):
+ *  un `null` solo vale con `Sec-Fetch-Site: same-origin` (una cabecera que el navegador pone y la página no puede falsear: un iframe aislado o un sitio ajeno dan `cross-site`). Sin Origin (un programa) pasa: lo protege el testigo de la sesión. */
+export function origenDelFormularioValido(req) {
+  const origen = req.headers.get('Origin');
+  if (!origen) return true;
+  if (origen === new URL(req.url).origin) return true;
+  return origen === 'null' && req.headers.get('Sec-Fetch-Site') === 'same-origin';
+}
+
 const destinoCorto = (uri) => { try { const u = new URL(uri); return u.origin + u.pathname; } catch { return uri; } };
 
 export async function permiso(req, env, db) {
@@ -59,9 +68,8 @@ export async function permiso(req, env, db) {
     const nonce = testigo(12);
     return html(paginaPermiso({ nonce, cliente: v.cliente, destino: destinoCorto(v.campos.redirect_uri), persona: { nombre: usuario.nombre, email: usuario.email }, campos: v.campos, csrf, nombreSugerido: nombreDeCliente(v.cliente.nombre) }), nonce);
   }
-  // POST: mismo origen (si el navegador manda Origin, tiene que ser este) y el testigo de la sesión
-  const origen = req.headers.get('Origin');
-  if (origen && origen !== new URL(req.url).origin) return mensaje('Petición no válida', 'Esta petición no viene de esta oficina.', 403, {});
+  // POST: mismo origen y el testigo de la sesión
+  if (!origenDelFormularioValido(req)) return mensaje('Petición no válida', 'Esta petición no viene de esta oficina.', 403, {});
   if (!csrf || !igualSeguro(String(params.csrf ?? ''), csrf)) return mensaje('Petición no válida', 'La página caducó. Vuelve a pulsar «Conectar» en Claude.', 403, {});
   const volver = (extra) => { const u = new URL(v.campos.redirect_uri); for (const [k, x] of Object.entries(extra)) if (x !== undefined) u.searchParams.set(k, x); return new Response(null, { status: 303, headers: { location: u.toString(), 'cache-control': 'no-store' } }); };
   if (params.decision === 'cancelar') { await auditar(db, ms, usuario.email, { evento: 'conectar-cancelado', cliente: v.cliente.nombre }); return volver({ error: 'access_denied', state: v.campos.state }); }

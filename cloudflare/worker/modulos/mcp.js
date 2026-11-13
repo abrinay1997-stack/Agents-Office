@@ -10,18 +10,38 @@ import { permiso } from '../lib/mcp/permiso.js';
 import { manejarMcp } from '../lib/mcp/servidor.js';
 import { listar, revocarFamilia, revocarTodas } from '../lib/mcp/tokens.js';
 import { auditar } from '../lib/mcp/auditoria.js';
+import { lineaDe, motivoDe, redirectsDeRegistro, escribir } from '../lib/mcp/bitacora.js';
 import { listarSolicitudes, aprobarSolicitud, rechazarSolicitud } from '../lib/mcp/gasto.js';
 
 export const nombre = 'mcp';
 export const grupos = ['conectar-claude'];
 
 /** ¿Esta ruta es de las públicas del conector? (lib/rutas.js la llama antes de nada; un test la compara con la lista de excepciones). */
-export const RUTAS_PUBLICAS_MCP = Object.freeze(['/mcp', '/oauth/register', '/oauth/authorize', '/oauth/token', '/oauth/revoke', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude']);
+export const RUTAS_PUBLICAS_MCP = Object.freeze(['/mcp', '/oauth/register', '/oauth/authorize', '/oauth/token', '/oauth/revoke', '/.well-known/oauth-authorization-server', '/.well-known/oauth-authorization-server/mcp', '/.well-known/openid-configuration', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude']);
 const esPublica = (p) => RUTAS_PUBLICAS_MCP.includes(p.replace(/\/+$/, '') || '/');
 
+/** Lo que se contesta sin cookie, con UNA línea de bitácora por petición (lib/mcp/bitacora.js: sin cabeceras, cuerpos, testigos ni IP). */
 export async function publicaMcp(req, env) {
-  const url = new URL(req.url), p = url.pathname.replace(/\/+$/, '') || '/';
+  const p = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
   if (!esPublica(p)) return null;
+  const t0 = Date.now();
+  let textoRegistro = '';
+  try { if (p === '/oauth/register' && req.method === 'POST') textoRegistro = (await req.clone().text()).slice(0, 8000); } catch { /* sin cuerpo */ }
+  let resp;
+  try { resp = await atender(req, env); } catch (e) {
+    escribir(env, lineaDe({ req, ruta: p, estado: 500, ms: Date.now() - t0, motivo: 'excepcion' }));
+    throw e;
+  }
+  try {
+    const motivo = await motivoDe(resp, { hostCanonico: hostValido(req, env) });
+    const redirects = p === '/oauth/register' && resp.status >= 400 ? redirectsDeRegistro(textoRegistro) : undefined;
+    escribir(env, lineaDe({ req, ruta: p, estado: resp.status, ms: Date.now() - t0, motivo, redirects }));
+  } catch { /* la bitácora nunca rompe la petición */ }
+  return resp;
+}
+
+async function atender(req, env) {
+  const url = new URL(req.url), p = url.pathname.replace(/\/+$/, '') || '/';
   if (!hostValido(req, env)) return plano('No encontrado', 404); // ni un segundo issuer desde workers.dev
   const db = env.DB;
   if (!(await mcpActivo(db))) return plano('No encontrado', 404); // apagado, el conector no existe
@@ -29,7 +49,8 @@ export async function publicaMcp(req, env) {
   if (req.method === 'OPTIONS') return conCors(new Response(null, { status: 204 }));
   if (p === '/mcp') return manejarMcp(req, env, db);
   const solo = (metodo, hacer) => (req.method === metodo ? hacer() : conCors(plano('Método no permitido', 405, { allow: `${metodo}, OPTIONS` })));
-  if (p === '/.well-known/oauth-authorization-server') return solo('GET', () => conCors(jsonOAuth(metadatosServidor(env))));
+  // Variantes de descubrimiento que algunos clientes prueban (RFC 8414 con la ruta del recurso y OIDC): la misma ficha, nada nuevo que revelar.
+  if (p === '/.well-known/oauth-authorization-server' || p === '/.well-known/oauth-authorization-server/mcp' || p === '/.well-known/openid-configuration') return solo('GET', () => conCors(jsonOAuth(metadatosServidor(env))));
   if (p === '/.well-known/oauth-protected-resource' || p === '/.well-known/oauth-protected-resource/mcp') return solo('GET', () => conCors(jsonOAuth(metadatosRecurso(env))));
   if (p === '/oauth/register') return solo('POST', async () => conCors(await registrar(db, env, req)));
   if (p === '/oauth/token') return solo('POST', async () => conCors(await token(db, env, req)));

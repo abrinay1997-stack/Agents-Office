@@ -370,3 +370,28 @@ test('REVOCAR (RFC 7009): el cliente corta su propia conexión con su testigo; e
   assert.equal((await rev('x', 'mcp_' + '0'.repeat(32))).status, 401);
   assert.equal((await m.crudo('/oauth/revoke', { metodo: 'GET' })).status, 405);
 });
+
+test('PERMISO: el POST del formulario real de Chrome vale (Origin «null» por la política no-referrer SOLO con Sec-Fetch-Site same-origin); lo cross-site sigue rechazado', opts, async () => {
+  const m = await mundo(); const cli = await m.registrar(); const { reto } = await pkce();
+  const p = await m.pantalla('admin', cli, reto);
+  assert.equal(p.headers.get('referrer-policy'), 'same-origin', 'la página ya no pide no-referrer (Chrome mandaría Origin: null)');
+  assert.ok(!/content="no-referrer"/.test(p.html));
+  const aprobar = (cabeceras) => m.aprobar('admin', cli, reto, { cabeceras });
+  // el que mandaba Chrome con no-referrer: antes 403 «no viene de esta oficina»
+  assert.equal((await aprobar({ origin: 'null', 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'navigate' })).status, 303);
+  // el de ahora: Origin propio
+  assert.equal((await aprobar({ origin: 'https://oficina.test', 'sec-fetch-site': 'same-origin' })).status, 303);
+  // lo que el candado debe seguir rechazando
+  for (const [por, cab] of [
+    ['Origin null sin Sec-Fetch-Site (un iframe aislado en un navegador viejo)', { origin: 'null' }],
+    ['Origin null cross-site', { origin: 'null', 'sec-fetch-site': 'cross-site' }],
+    ['Origin null same-site', { origin: 'null', 'sec-fetch-site': 'same-site' }],
+    ['Origin ajeno aunque diga same-origin', { origin: 'https://evil.test', 'sec-fetch-site': 'same-origin' }],
+    ['Origin ajeno cross-site', { origin: 'https://evil.test', 'sec-fetch-site': 'cross-site' }],
+  ]) { const r = await aprobar(cab); assert.equal(r.status, 403, por); assert.equal(r.codigo, null, por + ': no se emite código'); }
+  // y quien no es administrador sigue sin poder, con el Origin que sea
+  const pe = await m.pantalla('editor', cli, reto); assert.equal(pe.csrf, null, 'un editor no ve el formulario');
+  // sin la sesión no hay testigo: el POST de un tercero no pasa aunque acierte el Origin
+  const sin = await m.crudo('/conectar-claude', { metodo: 'POST', cabeceras: { origin: 'https://oficina.test' }, form: { ...m.paramsAut(cli, reto), csrf: 'x'.repeat(64), alcance: 'lectura', decision: 'aprobar' } });
+  assert.equal(sin.status, 401);
+});

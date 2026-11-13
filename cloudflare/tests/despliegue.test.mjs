@@ -51,7 +51,7 @@ test('todo secreto que lee el Worker (env.X) está declarado en secretos.json', 
   const cfg = JSON.parse(leer('secretos.json'));
   const declarados = new Set([...cfg.obligatorios, ...cfg.opcionales]);
   const vars = new Set(Object.keys(wrangler.vars));
-  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'AI', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'FETCH_ICONO_CONECTOR']); // AI: el binding de Workers AI que lee lib/significado.js (opcional: sin él se usan las llaves de Gemini, OpenAI o Voyage, y sin nada la búsqueda sigue por palabras; aún no está declarado en wrangler.jsonc). RELOJ_MS y FETCH_IMAGEN_META: solo los pone una prueba (el reloj de los topes de acceso; el `fetch` del proxy de imágenes de Meta)
+  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'AI', 'RELOJ_MS', 'MCP_BITACORA_SINK', 'FETCH_IMAGEN_META', 'FETCH_ICONO_CONECTOR']); // AI: el binding de Workers AI que lee lib/significado.js (opcional: sin él se usan las llaves de Gemini, OpenAI o Voyage, y sin nada la búsqueda sigue por palabras; aún no está declarado en wrangler.jsonc). RELOJ_MS y FETCH_IMAGEN_META: solo los pone una prueba (el reloj de los topes de acceso; el `fetch` del proxy de imágenes de Meta)
   for (const f of archivos(join(RAIZ, 'worker')).filter((x) => x.endsWith('.js'))) {
     for (const m of leer(f.slice(RAIZ.length + 1)).matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g))
       assert.ok(declarados.has(m[1]) || vars.has(m[1]) || propios.has(m[1]), `${f}: env.${m[1]} no está en secretos.json`);

@@ -13,7 +13,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const opts = { skip: SALTAR };
 
 test('la lista de excepciones es exactamente esta (si cambia, que cambie aquí a propósito)', () => {
-  assert.deepEqual([...RUTAS_PUBLICAS_MCP].sort(), ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude', '/mcp', '/oauth/authorize', '/oauth/register', '/oauth/revoke', '/oauth/token'].sort());
+  assert.deepEqual([...RUTAS_PUBLICAS_MCP].sort(), ['/.well-known/oauth-authorization-server', '/.well-known/oauth-authorization-server/mcp', '/.well-known/openid-configuration', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/conectar-claude', '/mcp', '/oauth/authorize', '/oauth/register', '/oauth/revoke', '/oauth/token'].sort());
   assert.deepEqual(RUTAS_PUBLICAS, ['/api/hook/', '/api/telegram/', '/api/kpi/'], 'los webhooks de siempre no cambiaron');
   const rutas = readFileSync(join(RAIZ, 'worker/lib/rutas.js'), 'utf8');
   assert.equal((rutas.match(/publicaMcp\(/g) || []).length, 1, 'rutas.js llama al conector en UN solo sitio');

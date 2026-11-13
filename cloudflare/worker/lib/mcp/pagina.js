@@ -8,7 +8,7 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 export const csp = (nonce) => `default-src 'none'; style-src 'nonce-${nonce}'; form-action 'self' https://claude.ai https://claude.com http://localhost:* http://127.0.0.1:*; frame-ancestors 'none'; base-uri 'none'`;
 export const cabecerasPagina = (nonce) => ({
   'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': csp(nonce), 'x-frame-options': 'DENY',
-  'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+  'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin',
 });
 
 const ESTILO = `:root{color-scheme:light dark;--fondo:#f6f7f9;--tarjeta:#fff;--texto:#14181f;--suave:#4a5362;--borde:#c9d0da;--azul:#1e4fbf;--rojo:#a61b1b}
@@ -24,7 +24,7 @@ label.o input{margin-top:4px;width:20px;height:20px}label.o b{display:block}labe
 button.p{background:var(--azul);border-color:var(--azul);color:#fff}@media (prefers-color-scheme:dark){button.p{color:#0b1220}}
 .e{color:var(--rojo);font-weight:600}.av{border:2px solid var(--rojo);border-radius:10px;padding:12px;margin:8px 0;color:var(--texto)}.av b{color:var(--rojo)}a{color:var(--azul)}`;
 
-const CABEZA = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer">';
+const CABEZA = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="same-origin">';
 const marco = (nonce, titulo, cuerpo) => `<!doctype html><html lang="es"><head>${CABEZA}<title>${esc(titulo)}</title><style nonce="${esc(nonce)}">${ESTILO}</style></head><body><main><div class="t">${cuerpo}</div></main></body></html>`;
 
 /** Un mensaje sin formulario (error de parámetros, «entra primero», «no eres administrador»). */
