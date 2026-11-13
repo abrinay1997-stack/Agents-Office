@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
-import { mundo } from './mcp-ayudas.mjs';
+import { mundo, CAPA1 } from './mcp-ayudas.mjs';
 import { herramientas } from '../worker/lib/mcp/registro.js';
 import { conMarca, limpiar, RUTAS, CEREBRO_FUERA, CEREBRO_FUERA_OTROS } from '../worker/lib/mcp/dominios/cerebro.js';
 import { restringir } from '../worker/lib/mcp/capa1/restringir.js';
@@ -136,7 +136,8 @@ test('LÍMITES: ≤ 50 sentencias de D1 por llamada, salida ≤ 20.000 con curso
   const p1 = await llamar(t.lectura, 'cerebro', { accion: 'leer', nombre: 'Largo' });
   assert.ok(texto(p1).length <= TOPE_SALIDA); const sig = p1.j.result.structuredContent?.siguiente ?? /siguiente: (\S+)/.exec(texto(p1))?.[1]; assert.ok(sig, 'devuelve cursor');
   assert.match(texto(await llamar(t.lectura, 'cerebro', { accion: 'leer', nombre: 'Largo', cursor: sig })), /Línea/);
-  const lista = herramientas(); assert.ok(JSON.stringify(lista.map((h) => h.esquema)).length < 30000);
+  // El peso del tools/list COMPLETO (todos los dominios) lo vigila mcp-presupuesto-total.test.mjs; aquí solo lo de este dominio y la Capa 1, que es lo que este carril puede mover.
+  const lista = herramientas().filter((h) => h.nombre.startsWith('cerebro') || CAPA1.has(h.nombre)); assert.ok(JSON.stringify(lista.map((h) => h.esquema)).length < 30000);
   const d1 = m.d1, orig = d1.prepare; let n = 0;
   d1.prepare = (sql) => { const s = orig.call(d1, sql); const w = (x) => ({ bind: (...a) => w(x.bind(...a)), first: (...r) => (n++, x.first(...r)), all: (...r) => (n++, x.all(...r)), run: (...r) => (n++, x.run(...r)), raw: (...r) => (n++, x.raw(...r)) }); return w(s); };
   for (const a of [{ accion: 'estado' }, { accion: 'listar' }, { accion: 'buscar', q: 'línea' }]) { n = 0; await llamar(t.lectura, 'cerebro', a); assert.ok(n <= 50, `${a.accion}: ${n} sentencias`); }

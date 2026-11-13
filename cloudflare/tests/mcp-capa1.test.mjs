@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
-import { mundo } from './mcp-ayudas.mjs';
+import { mundo, CAPA1 } from './mcp-ayudas.mjs';
 import { herramientas } from '../worker/lib/mcp/registro.js';
 import { guardarFila, guardarDoc, leerDoc } from '../worker/lib/almacen.js';
 import { validarArgumentos } from '../worker/lib/mcp/servidor.js';
@@ -26,8 +26,7 @@ import { herramientas as defsEstudio } from '../../estudio-tools.mjs';
 import { OPS_GASTO } from '../../sub-core.mjs';
 
 // Los dominios de la P5 (tareas, cerebro…) añaden SUS herramientas al servidor: esta prueba mide solo las de la Capa 1.
-// Definición INVERTIDA y estable: la Capa 1 es una lista cerrada; un carril nuevo NO edita esta línea (antes cada carril ampliaba una regex de exclusión).
-const CAPA1 = new Set(['como_funciona', 'estado_oficina', 'ver_calendario', 'crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri', ...ESTUDIO_LEE, ...ESTUDIO_GASTA]);
+// CAPA1 (lista cerrada y estable) vive en mcp-ayudas.mjs: un carril nuevo no edita esta línea.
 const DE_CAPA1 = (n) => CAPA1.has(n);
 const LEE = ['estado_oficina', 'ver_calendario', ...ESTUDIO_LEE];
 const CAMBIA = ['crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri'];

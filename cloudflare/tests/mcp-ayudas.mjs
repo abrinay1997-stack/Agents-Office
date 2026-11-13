@@ -86,3 +86,7 @@ export async function mundo({ activo = true, extraEnv = {} } = {}) {
 export function volcarMcp(db) {
   return JSON.stringify(['mcp_clientes', 'mcp_codigos', 'mcp_tokens'].map((t) => db.prepare(`select * from ${t}`).all()));
 }
+
+// Las herramientas de la Capa 1 (lista cerrada y estable): un carril de dominio NUNCA la edita. Los tests que miden solo la Capa 1 filtran con esto.
+import { ESTUDIO_LEE, ESTUDIO_GASTA } from '../worker/lib/mcp/capa1/estudio.js';
+export const CAPA1 = new Set(['como_funciona', 'estado_oficina', 'ver_calendario', 'crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri', ...ESTUDIO_LEE, ...ESTUDIO_GASTA]);
