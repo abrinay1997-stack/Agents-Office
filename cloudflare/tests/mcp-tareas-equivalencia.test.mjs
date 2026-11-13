@@ -23,7 +23,8 @@ test('LAS DOS HERRAMIENTAS VIEJAS YA NO ESTÁN en el conector (las cubre tareas_
 test('EQUIVALENCIA — mi tarea: crear_mi_tarea (lógica de oficina-tools) y tareas_cambiar crear dejan la misma tarea', { skip: SALTAR }, async () => {
   const limite = dia(new Date(Date.now() + 5 * 864e5));
   const a = await mundo(), b = await mundo();
-  const office = await crearOficinaMcp({ env: a.env, db: a.d1, usuario: await personaActual(a.d1, a.db.prepare('select id from users limit 1').get().id) }); // la MISMA persona que ve el conector
+  await a.conectar({ alcance: 'oficina' }); const uidConectado = a.db.prepare('select user_id from mcp_tokens limit 1').get().user_id;
+  const office = await crearOficinaMcp({ env: a.env, db: a.d1, usuario: await personaActual(a.d1, uidConectado) }); // la MISMA persona que ve el conector
   const viejo = await crearLlamador({ office })('crear_mi_tarea', { titulo: 'Llamar a Ana', prioridad: 'alta', limite });
   assert.match(viejo, /En la lista del dueño/);
   const t = (await b.conectar({ alcance: 'oficina' })).tokens.access_token;
@@ -36,7 +37,8 @@ test('EQUIVALENCIA — mi tarea: crear_mi_tarea (lógica de oficina-tools) y tar
 test('EQUIVALENCIA — trabajo para un departamento: crear_tarea y tareas_cambiar crear (con dept, límite y hora de arranque) dejan la misma tarea, siempre con el OK del dueño', { skip: SALTAR }, async () => {
   const limite = dia(new Date(Date.now() + 6 * 864e5)), at = `${dia(new Date(Date.now() + 2 * 864e5))}T10:00`;
   const a = await mundo(), b = await mundo();
-  const office = await crearOficinaMcp({ env: a.env, db: a.d1, usuario: await personaActual(a.d1, a.db.prepare('select id from users limit 1').get().id) }); // la MISMA persona que ve el conector
+  await a.conectar({ alcance: 'oficina' }); const uidConectado = a.db.prepare('select user_id from mcp_tokens limit 1').get().user_id;
+  const office = await crearOficinaMcp({ env: a.env, db: a.d1, usuario: await personaActual(a.d1, uidConectado) }); // la MISMA persona que ve el conector
   assert.match(await crearLlamador({ office })('crear_tarea', { dept: 'marketing', texto: 'Redacta un post sobre las camas', prioridad: 'media', limite, at }), /Tarea creada/);
   const t = (await b.conectar({ alcance: 'oficina' })).tokens.access_token;
   assert.match(texto(await b.llamar(t, 'tareas_cambiar', { accion: 'crear', dept: 'marketing', texto: 'Redacta un post sobre las camas', prioridad: 'media', limite, at })), /Tarea creada/);

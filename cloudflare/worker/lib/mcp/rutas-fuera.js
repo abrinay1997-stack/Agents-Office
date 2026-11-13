@@ -22,8 +22,8 @@ const HUMANO = {
   ...por(['/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores'], 'Leer de Meta a la fuerza gasta cuota de la API de Meta (hay freno por uso): lo hace el reloj o el administrador en Analíticas.'),
   ...por(['/api/media/jobs', '/api/media/generate', '/api/media/edit', '/api/media/enhance', '/api/media/presets/apply', '/api/media/lotes', '/api/voces/design', '/api/voces/clone'],
     'Generar, editar, mejorar, aplicar un preset, iniciar un lote o clonar una voz GASTA dinero en un motor: por MCP solo se prepara el costo (alcance «gasto»); GENERAR es el segundo paso de una persona.'),
-  ...por(['/api/series/:id/presupuesto', '/api/series/:id/generar', '/api/series/:id/continuar', '/api/series/:id/resolver', '/api/series/:id/pausar', '/api/series/:id/cancelar', '/api/series/libro/resolver'],
-    'GENERAR SERIE autoriza gasto con un token de un solo uso atado a la cifra; pausar, cancelar y resolver un «incierto» tocan una serie viva y dinero en duda: dos clics de una persona.'),
+  // Las rutas de GENERAR SERIE (presupuesto, generar, continuar, pausar, cancelar, resolver) NO se nombran aquí a propósito: dos pruebas de dinero (la «18c» de las series y la «N6» de las líneas huérfanas) vigilan que ningún archivo
+  // fuera del módulo de series escriba las rutas de las series. Su exclusión y su motivo viven en `EXCLUSIONES_SERIES` (dominios/series.js) y `mcp-cobertura.test.mjs` comprueba que cada una está ahí.
   '/api/sub/ops': 'Las ops de Dimitri se hacen con la herramienta `hacer` (lista cerrada, con DESHACER); esta ruta es la de la tarjeta de la página.',
   '/api/sub/studio': 'Es el clic GENERAR de la tarjeta de Dimitri en el Estudio: gasta.',
   '/api/chat': 'El chat directo con un agente puede gastar modelo y leer conectores del departamento: se abre desde la oficina.',

@@ -22,9 +22,13 @@ async function cubiertas() {
   return out;
 }
 
+// Las rutas que GENERAN o deciden dinero en una serie no se nombran en rutas-fuera.js (dos pruebas de dinero vigilan que nadie fuera del módulo de series escriba esa ruta): su exclusión vive en EXCLUSIONES_SERIES.
+const VERBOS_SERIES = ['presupuesto', 'generar', 'continuar', 'resolver', 'pausar', 'cancelar'];
+const seriesFuera = (r) => /^\/api\/series\//.test(r) && VERBOS_SERIES.includes(r.split('/').at(-1));
+
 test('COBERTURA: toda ruta de escritura está cubierta por una herramienta o excluida con su motivo', async () => {
   const cub = (await cubiertas()).map(([, ruta]) => aRegex(ruta)), fuera = Object.keys(RUTAS_FUERA).map(aRegex);
-  const sueltas = ESCRIBEN.filter((r) => !cub.some((x) => x.test(r)) && !fuera.some((x) => x.test(r)));
+  const sueltas = ESCRIBEN.filter((r) => !cub.some((x) => x.test(r)) && !fuera.some((x) => x.test(r)) && !seriesFuera(r));
   assert.deepEqual(sueltas, [], `rutas que escriben y que ninguna herramienta del conector cubre ni está en RUTAS_FUERA (lib/mcp/rutas-fuera.js) con su motivo:\n${sueltas.join('\n')}`);
 });
 
@@ -47,4 +51,12 @@ test('COBERTURA: lo que cubre un dominio es de escritura de verdad y lo declara 
     assert.ok(registrados.has(dominio), `${f}: ninguna herramienta registrada con dominio «${dominio}»`);
     for (const r of m.RUTAS) assert.match(String(r), /^(GET|POST|PUT|PATCH|DELETE) \/api\/[A-Za-z0-9\-/:._?=&]+( \(.*\))?$/, `${f}: «${r}» no es «MÉTODO /api/ruta» (con una nota entre paréntesis si hace falta)`);
   }
+});
+
+test('COBERTURA: lo que gasta o decide dinero en una serie está excluido con motivo en EXCLUSIONES_SERIES (y ninguna herramienta lo cubre)', async () => {
+  const { EXCLUSIONES_SERIES, RUTAS } = await import('../worker/lib/mcp/dominios/series.js');
+  const texto = Object.values(EXCLUSIONES_SERIES).join('\n');
+  for (const v of VERBOS_SERIES) { assert.match(texto, new RegExp(`/${v}\\b|\\b${v}\\b`), `EXCLUSIONES_SERIES no explica «${v}»`); assert.ok(!RUTAS.some((r) => new RegExp(`/${v}$`).test(String(r).split(' ')[1] || '')), `una herramienta cubre /${v}`); }
+  assert.match(texto, /hu[eé]rfanas/i, 'las líneas huérfanas del libro');
+  for (const k of Object.keys(EXCLUSIONES_SERIES)) assert.ok(EXCLUSIONES_SERIES[k].length >= 40, `${k}: motivo corto`);
 });
