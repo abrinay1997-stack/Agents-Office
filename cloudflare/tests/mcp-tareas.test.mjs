@@ -224,7 +224,8 @@ test('LA INYECCIÓN también se corta en `ver`: resultado, borrador, comentarios
   const casos = { r1: { result: ORDEN }, r2: { draft: ORDEN, result: 'ok' }, r3: { comments: [{ at: Date.now(), by: 'Ana', text: ORDEN }] }, r4: { notas: [{ at: Date.now(), por: 'x', texto: ORDEN }] }, r5: { pasos: [{ id: 'p1', texto: ORDEN, hecho: false }] } };
   for (const [id, extra] of Object.entries(casos)) {
     await guardarFila(m.d1, 'tareas', id + 'aaa', { ...base, id: id + 'aaa', title: 'Una tarea normal ' + id, ...extra }, Date.now());
-    const r = await llamar(t.lectura, 'tareas', { accion: 'ver', id: id + 'aaa' }); assert.ok(!texto(r).includes('mallory'), id); assert.ok(texto(r).includes(FILA_OMITIDA) || (r.j.result.isError === true && /órdenes escondidas/.test(texto(r))), id + ': ' + texto(r)); // P6: fila a fila (o veto total si no queda nada)
+    const r = await llamar(t.lectura, 'tareas', { accion: 'ver', id: id + 'aaa' }); assert.ok(!texto(r).includes('mallory'), id);
+    assert.ok(texto(r).includes(FILA_OMITIDA) || (r.j.result.isError === true && /órdenes escondidas/.test(texto(r))), id + ': ' + texto(r)); // P6: fila a fila (o veto total si no queda nada)
   }
 });
 
