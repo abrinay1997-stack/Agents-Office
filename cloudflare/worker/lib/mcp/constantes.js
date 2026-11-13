@@ -12,9 +12,9 @@ export const VIDA_CODIGO_MS = 60 * 1000;                   // el código de auto
 export const TOPE_SALIDA = 20_000;                          // caracteres que devuelve una herramienta como máximo
 export const TOPE_CUERPO_MCP = 64_000;                      // bytes de una petición JSON-RPC
 export const TOPE_CUERPO_OAUTH = 8_000;                     // bytes del registro, del token y del formulario de permiso
-export const MAX_REGISTROS_HORA = 60;                       // clientes nuevos por hora, en total
+export const MAX_REGISTROS_HORA = 200;                      // clientes nuevos por hora, en total
 export const MAX_REGISTROS_MINUTO_IP = 10;
-export const MAX_REGISTROS_HORA_IP = 10;                    // y ninguna IP puede gastar más de esto del cupo global: un solo origen no lo agota
+export const MAX_REGISTROS_HORA_IP = 60;                    // por IP y hora: las IPs de salida de Anthropic las comparte mucha gente; aun así una sola no agota el cupo global
 export const MAX_ESCRITURAS_MINUTO = 30;                    // escrituras por conexión
 export const MAX_ESCRITURAS_DIA = 500;
 

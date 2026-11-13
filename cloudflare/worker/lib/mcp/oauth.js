@@ -8,7 +8,8 @@ import { auditar } from './auditoria.js';
 
 const JSON_NOCACHE = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', pragma: 'no-cache', 'x-content-type-options': 'nosniff' };
 export const jsonOAuth = (datos, estado = 200) => new Response(JSON.stringify(datos), { status: estado, headers: JSON_NOCACHE });
-const errOAuth = (error, descripcion, estado = 400) => jsonOAuth({ error, error_description: descripcion }, estado);
+// Un 429 lleva `Retry-After` (RFC 6585) y siempre el JSON OAuth estándar: un cliente lo muestra y reintenta en vez de fallar mudo.
+const errOAuth = (error, descripcion, estado = 400) => { const r = jsonOAuth({ error, error_description: descripcion }, estado); if (estado === 429) r.headers.set('retry-after', '60'); return r; };
 
 /* ---------- metadatos ---------- */
 export const metadatosServidor = (env) => ({

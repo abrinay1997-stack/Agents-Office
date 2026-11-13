@@ -69,9 +69,10 @@ test('registro dinámico: lista CERRADA de redirect_uri', opts, async () => {
 test('registro dinámico: tope por hora (en total) y por minuto (por IP); y la poda de clientes sin uso', opts, async () => {
   const m = await mundo();
   const ins = m.db.prepare('insert into mcp_clientes (client_id, nombre, redirect_uris, creado_at) values (?,?,?,?)');
-  for (let i = 0; i < 60; i++) ins.run('mcp_' + String(i).padStart(32, '0'), 'c', JSON.stringify([REDIRECT]), m.ahora() - 1000);
+  for (let i = 0; i < 200; i++) ins.run('mcp_' + String(i).padStart(32, '0'), 'c', JSON.stringify([REDIRECT]), m.ahora() - 1000);
   const r = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } });
   assert.equal(r.status, 429); assert.equal((await r.json()).error, 'temporarily_unavailable');
+  assert.equal(r.headers.get('retry-after'), '60'); assert.match(r.headers.get('content-type'), /application\/json/);
   m.avanzar(3601_000); // una hora después ya caben
   assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201);
   const m2 = await mundo(); // por IP, por minuto: 10
@@ -338,12 +339,12 @@ test('ANTI-PHISHING: la pantalla avisa en grande, rotula el nombre como «declar
   assert.equal((await post({ alcance: 'oficina', confirmo: 'si' })).status, 303);
 });
 
-test('REGISTRO: ninguna IP gasta más de 10 por hora y un solo origen no agota el cupo global', opts, async () => {
+test('REGISTRO: ninguna IP gasta más de 60 por hora y un solo origen no agota el cupo global', opts, async () => {
   const m = await mundo();
-  for (let i = 0; i < 10; i++) { m.avanzar(7000); assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201); }
+  for (let i = 0; i < 60; i++) { m.avanzar(7000); assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201); }
   m.avanzar(7000); const r = await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } });
   assert.equal(r.status, 429); assert.match((await r.json()).error_description, /desde aquí/);
-  assert.ok(m.db.prepare('select count(*) n from mcp_clientes').get().n < 60, 'el cupo global quedó casi entero');
+  assert.ok(m.db.prepare('select count(*) n from mcp_clientes').get().n < 200, 'el cupo global quedó casi entero');
   assert.ok(!m.db.prepare('select ip_huella h from mcp_clientes').all().some((f) => /\d+\.\d+/.test(f.h || '')), 'se guarda la huella, no la IP');
   m.avanzar(3600_000); assert.equal((await m.crudo('/oauth/register', { metodo: 'POST', cuerpo: { redirect_uris: [REDIRECT] } })).status, 201, 'una hora después, otra vez');
 });
