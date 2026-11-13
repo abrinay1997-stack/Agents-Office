@@ -44,7 +44,7 @@ async function salud(office) {
   return [`Semáforo de la oficina: ${limpio(e.overall, 20) || 'sin dato'} · ${cifra(e.unread)} avisos sin leer.`, ...lineas(c.map((x) => `- [${limpio(x.state, 8)}] ${limpio(x.label, 40)}: ${limpio(x.detail, 160)}`), 25)].join('\n');
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'costos',
   nombre: 'costos',
   titulo: 'Costos, negocio y topes',
   descripcion: 'Lee el dinero. accion: resumen (gasto de IA del mes, por departamento, agente y modelo) · topes (los vigentes) · calidad · negocio (indicadores con su id) · salud (semáforo). ' +
@@ -73,7 +73,7 @@ export async function ponerTope(office, a, ctx) {
   return { texto: `${def.titulo}: antes ${valorTope(def, antes)} → ahora ${valorTope(def, despues)}${aflojar ? ' (lo aflojaste, con confirmación; quedó un aviso para el dueño)' : valor === antes ? ' (sin cambio)' : ' (limita más)'}.` };
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'costos',
   nombre: 'topes_cambiar',
   titulo: 'Poner topes de gasto',
   descripcion: 'Pone límites de gasto. accion: poner_tope, `tope` (ver el enum) y `valor`. BAJAR un tope, o fijarlo donde no había (0 = sin tope en IA y Estudio), no pide nada; SUBIRLO o quitarlo pide ' +

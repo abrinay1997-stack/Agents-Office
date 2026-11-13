@@ -107,7 +107,7 @@ const LEER = {
   },
 };
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'agentes',
   nombre: 'agentes', titulo: 'Agentes: roster, ficha y actividad',
   descripcion: 'Lee los agentes de la oficina (35 puestos en 6 departamentos). Solo lee. `accion`: listar (roster; `departamento` opcional) · ver (ficha de `id`: brief, modelo, skills, Biblioteca, lecciones, calidad, costo) · actividad (qué ejecutan ahora)'
     + ' · cola (lo que espera turno) · ejecuciones (terminadas, con su resultado) · aprobaciones (lo que espera el OK del dueño: SOLO VER, el OK se da en la oficina)'
@@ -148,7 +148,7 @@ async function cambiarBrief(ctx, office, { id, nuevo, motivoAudit, enteroConfirm
   return { texto: `Listo: el brief de ${id} ahora tiene ${nuevo.length} letras y se aplica desde su próxima tarea. La versión anterior quedó guardada (acción «versiones_brief»; «volver_brief» la repone).` };
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'agentes',
   nombre: 'agentes_cambiar', titulo: 'Agentes: editar brief, modelo y esfuerzo',
   descripcion: 'Cambia a UN agente (alcance «oficina»). `accion`: brief (reemplaza el brief de `id` con `texto`, ≤ 2.000 letras) · volver_brief (repone la `version` guardada; la actual también se guarda) · modelo (`modelo`: sonnet, opus o fable; vacío = el de la oficina)'
     + ' · esfuerzo (`esfuerzo`: low…max; vacío = el de la oficina). '

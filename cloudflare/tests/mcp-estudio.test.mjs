@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
+import { FILA_OMITIDA } from '../worker/lib/mcp/servidor.js';
 import { mundo } from './mcp-ayudas.mjs';
 import { herramientas, PROPIEDADES_PROHIBIDAS } from '../worker/lib/mcp/registro.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
@@ -214,8 +215,9 @@ test('UN PROMPT CON ÓRDENES ESCONDIDAS no llega al modelo, y queda en la audito
   const { m, t, A, llamar } = await montar();
   m.db.prepare('update estudio_archivos set json = ? where file = ?').run(JSON.stringify({ id: A[0], file: A[0], kind: 'image', at: 1_000_000, prompt: ORDEN, model: 'prueba', by: 'agent', agent: 'x' }), A[0]);
   const r = await llamar(t.lectura, 'galeria', { accion: 'listar' });
-  assert.equal(r.j.result.isError, true); assert.match(texto(r), /órdenes escondidas/); assert.ok(!texto(r).includes('mallory'));
-  assert.ok(m.db.prepare("select count(*) n from auditoria where tipo = 'mcp' and detalle like '%inyeccion%'").get().n >= 1);
+  // P6: fila a fila — la orden nunca llega al modelo (la fila se sustituye o, si no queda nada, se veta todo) y queda en la auditoría
+  assert.ok(!texto(r).includes('mallory')); assert.ok(texto(r).includes(FILA_OMITIDA) || (r.j.result.isError === true && /órdenes escondidas/.test(texto(r))), texto(r));
+  assert.ok(m.db.prepare("select count(*) n from auditoria where tipo = 'mcp' and (detalle like '%inyeccion%' or detalle like '%filasOmitidas%')").get().n >= 1);
 });
 
 test('PRESUPUESTO: las cuatro herramientas del dominio pesan poco en tools/list (cada una se paga en cada conversación)', () => {

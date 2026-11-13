@@ -10,7 +10,7 @@ export const RUTAS = Object.freeze([
   'GET /api/business', 'GET /api/cifras', 'GET /api/anuncios', 'GET /api/anuncios/sugerencias', 'GET /api/contenido', 'GET /api/tasks', 'GET /api/costs', 'GET /api/status',
 ]);
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'empresa',
   nombre: 'radiografia',
   titulo: 'Radiografía del negocio',
   descripcion: '¿Cómo está TODO? Una lectura: 1 caja e indicadores · 2 pauta · 3 contenido de la semana · 4 tareas y aprobaciones · 5 gasto de IA · 6 salud. ' +

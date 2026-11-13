@@ -1,6 +1,6 @@
 // CAPA 1 del conector remoto (P3b, plan MCP §2 y §14): las herramientas finas de la OFICINA (oficina-tools.mjs) y del ESTUDIO (estudio-tools.mjs), las mismas del stdio, adaptadas al registro.
 // Qué se sirve y qué no (y por qué) está escrito aquí, en datos, y lo comprueba cloudflare/tests/mcp-capa1.test.mjs:
-//   · SERVIDAS de la oficina: estado_oficina, ver_calendario (lectura) · crear_tarea, crear_mi_tarea, hacer, deshacer, hablar_con_dimitri (oficina).
+//   · SERVIDAS de la oficina: estado_oficina, ver_calendario (lectura) · hacer, deshacer, hablar_con_dimitri (oficina). Crear una tarea (la de un agente o la tuya) la hace `tareas_cambiar` (accion crear), no esta capa.
 //   · SERVIDAS del Estudio: 5 de lectura y 6 que gastan, que aquí solo PREPARAN (alcance «gasto», `soloPrepara`): ver capa1/estudio.js.
 //   · FUERA de la oficina (§14.10, superficie remota ligera): las que duplican una herramienta de DOMINIO de la P5 — `OFICINA_FUERA` dice cuál la sustituye. `como_funciona` ya la sirve la P2.
 //   · `hacer` nunca ejecuta las 4 ops de gasto de anuncios (sub.OPS_GASTO): ni están en su enum ni las deja pasar el atajo (capa1/oficina.js). Nada aprueba, envía, publica ni paga.
@@ -17,8 +17,10 @@ import { definicionesEstudio, esquemaRemoto, nuevoEstudio, evaluarGasto, ESTUDIO
 import { crearSolicitud, VENCE_MS } from '../gasto.js';
 
 const OFICINA_LEE = ['estado_oficina', 'ver_calendario'];
-const OFICINA_CAMBIA = ['crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer', 'hablar_con_dimitri'];
+const OFICINA_CAMBIA = ['hacer', 'deshacer', 'hablar_con_dimitri'];
 export const OFICINA_FUERA = Object.freeze({
+  crear_tarea: 'Duplica `tareas_cambiar` (acción crear con `dept`) de la P5: la misma tarea, el OK del dueño y la marca, más idempotencia. Equivalencia probada en mcp-tareas-equivalencia.test.mjs.',
+  crear_mi_tarea: 'Duplica `tareas_cambiar` (acción crear sin `dept`, o con `persona`) de la P5. Equivalencia probada en mcp-tareas-equivalencia.test.mjs.',
   como_funciona: 'La P2 ya sirve «como_funciona» (mapa, guía y reglas de ESTE conector).',
   ver_tareas: 'Duplica la herramienta de dominio `tareas` (acción ver) de la P5.', ver_tarea: 'Duplica `tareas` (acción ver) de la P5.', ver_agenda: 'Duplica `tareas` (acción agenda) de la P5.',
   ver_mis_tareas: 'Duplica `tareas` (acción mias) de la P5.', ver_rutinas: 'Duplica `tareas` (acción rutinas) de la P5.',
@@ -27,7 +29,7 @@ export const OFICINA_FUERA = Object.freeze({
 });
 /** Las rutas /api/ que esta capa toca (las de la oficina las atiende capa1/oficina.js en proceso). Para el test de cobertura de la P7. */
 export const RUTAS = Object.freeze([
-  'GET /api/oficina/estado', 'GET /api/oficina/calendario', 'POST /api/oficina/accion', 'POST /api/oficina/deshacer', 'POST /api/tasks', 'POST /api/tareas/mias', 'POST /api/sub/chat',
+  'GET /api/oficina/estado', 'GET /api/oficina/calendario', 'POST /api/oficina/accion', 'POST /api/oficina/deshacer', 'POST /api/sub/chat',
   'GET /api/media', 'GET /api/media/presets', 'POST /api/media/presets/compile', 'GET /api/media/models', 'GET /api/media/jobs/:id', 'GET /api/media/lotes/:id',
 ]);
 
@@ -43,14 +45,10 @@ async function conOficina(ctx, permitidas) {
 }
 /** Qué puede pedir cada herramienta de la oficina: las lecturas, solo GET; las escrituras, solo el POST que usan. */
 export const PERMITIDAS = Object.freeze({
-  estado_oficina: ['GET'], ver_calendario: ['GET'], crear_tarea: ['POST /api/tasks'], crear_mi_tarea: ['POST /api/tareas/mias'],
+  estado_oficina: ['GET'], ver_calendario: ['GET'],
   hacer: ['POST /api/oficina/accion'], deshacer: ['POST /api/oficina/deshacer'], hablar_con_dimitri: ['POST /api/sub/chat'],
 });
 /** La tarea que crea un asistente nace con la marca `by: 'mcp'` (el servidor de tareas no la admite en el cuerpo): se apunta después, sobre la fila. */
-async function marcarOrigen(db, texto) {
-  const id = /Tarea creada: (\S+)/.exec(texto)?.[1];
-  if (id) { try { await db.prepare("update filas set json = json_set(json, '$.by', 'mcp') where coleccion = 'tareas' and id = ?").bind(id).run(); } catch (e) { console.warn('[mcp:capa1] no se pudo marcar el origen:', e?.message ?? e); } }
-}
 const idem = (ctx, herramienta, fn) => conIdempotencia(ctx.db, { conexionId: ctx.conexion.id, herramienta, clave: ctx.claveIdempotencia, ms: ctx.ahoraMs, fn });
 
 /* ---------- la oficina ---------- */
@@ -70,7 +68,7 @@ for (const t of OFICINA) {
     Object.assign(esquema.properties, CAMPOS_EXTRA_HACER);
     esquema.properties.type = { ...esquema.properties.type, enum: esquema.properties.type.enum.filter((o) => !OPS_FUERA_HACER[o]) };
   }
-  registrarHerramienta({
+  registrarHerramienta({ dominio: 'capa1',
     nombre: t.name, descripcion, esquema, alcance: lee ? 'lectura' : 'oficina', soloLectura: lee,
     destructiva: lee ? false : !!t.destructiva, ...(lee ? {} : { idempotente: !!t.idempotente }),
     ejecutar: async (ctx, args) => {
@@ -78,7 +76,7 @@ for (const t of OFICINA) {
         const office = await conOficina(ctx, PERMITIDAS[t.name]), llamar = crearLlamador({ office });
         // «[vía MCP]»: lo que un asistente le dice a Dimitri se distingue de lo que escribió la persona (el mensaje ya va firmado con su cuenta)
         const a = t.name === 'hablar_con_dimitri' ? { ...args, texto: `[vía MCP] ${args.texto}` } : args;
-        const hacerla = async () => { const texto = await llamar(t.name, a); if (t.name === 'crear_tarea') await marcarOrigen(ctx.db, texto); return { texto }; };
+        const hacerla = async () => { const texto = await llamar(t.name, a); return { texto }; };
         return lee ? { texto: await llamar(t.name, args) } : await idem(ctx, t.name, hacerla);
       } catch (e) { return fallo(t.name, e); }
     },
@@ -101,7 +99,7 @@ async function abrirTarjeta(ctx, office, nombre, args0) {
 }
 for (const d of definicionesEstudio()) {
   const lee = ESTUDIO_LEE.includes(d.nombre);
-  registrarHerramienta({
+  registrarHerramienta({ dominio: 'capa1',
     ...d,
     ejecutar: async (ctx, args) => {
       try {

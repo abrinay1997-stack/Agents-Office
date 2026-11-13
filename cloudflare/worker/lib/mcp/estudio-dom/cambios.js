@@ -1,13 +1,12 @@
 // Lo que `galeria_cambiar` hace en el Estudio: ordenar (carpetas, mover) y la papelera, SIEMPRE reversible y sin gastar. Cada acción recibe la `office` YA restringida (solo las rutas exactas que usa) y devuelve el texto.
 // DESHACER: mover, renombrar y mandar a la papelera apuntan cómo volver atrás en `docs` (`mcp.undo:est-<clave>`, 10 minutos, solo de quien lo hizo; la poda diaria de mantenimiento.js los barre por rango de clave).
 // Lo que NO se sirve (en datos, con motivo; el test lo vigila): borrar carpetas, vaciar o purgar la papelera, subir, editar, generar, variar, animar y todo lo que llama a un motor.
-import { guardarDoc, leerDoc } from '../../almacen.js';
-import { testigo as claveAlAzar } from '../../ids.js';
+import { apuntar, reclamar, PREFIJO_UNDO, DESHACER_MS } from '../deshacer.js';
 import { cleanName, nombreClave } from '../../../../../media/galeria-core.mjs';
 import { clip, conOficina, rutaDeArchivo, ID_CARPETA } from './comun.js';
 
-export const PREFIJO_UNDO_EST = 'mcp.undo:'; // la clave visible lleva «est-» (así capa1/deshacer la rechaza con un mensaje claro y esta no acepta las de la oficina)
-export const DESHACER_MS = 10 * 60e3;
+export const PREFIJO_UNDO_EST = PREFIJO_UNDO; // el registro único de deshacer vive en ../deshacer.js (la clave visible lleva «est-»)
+export { DESHACER_MS };
 export const MAX_ARCHIVOS = 8; // pocas lecturas y escrituras por llamada (límite de consultas de D1 por invocación)
 export const ACCIONES_CAMBIAR = Object.freeze(['carpeta_crear', 'carpeta_renombrar', 'mover', 'papelera_mandar', 'papelera_restaurar', 'deshacer']);
 export const EXCLUSIONES = Object.freeze({
@@ -30,11 +29,7 @@ export const EXCLUSIONES = Object.freeze({
 const nombreCarpeta = (v) => (typeof v === 'string' && v.length <= 200 ? cleanName(v) || null : null);
 
 /** Apunta cómo deshacer y devuelve la clave (o null si no se pudo guardar: el efecto ya ocurrió y la llamada no falla por eso). */
-async function apuntarDeshacer(ctx, que) {
-  const clave = `est-${claveAlAzar(9)}`;
-  try { await guardarDoc(ctx.db, PREFIJO_UNDO_EST + clave, { ...que, at: ctx.ahoraMs, por: ctx.usuario.id }); return clave; }
-  catch (e) { console.warn('[mcp:estudio] no se pudo guardar la clave de deshacer:', e?.message ?? e); return null; }
-}
+const apuntarDeshacer = (ctx, que) => apuntar({ db: ctx.db, ahoraMs: ctx.ahoraMs, usuarioId: ctx.usuario.id }, 'estudio', que);
 const pieDeshacer = (clave) => (clave ? `\nPara deshacerlo (10 minutos): galeria_cambiar con accion «deshacer» y deshacer «${clave}».` : '\nSe hizo, pero no pude guardar la clave para deshacerlo: se corrige con otra acción.');
 
 /** → { permitidas, hacer(office) }: lo que esa acción puede pedir y cómo lo hace. null si los argumentos no valen (con `error`). */
@@ -97,14 +92,9 @@ export function preparar(accion, a, ctx) {
 
 /** DESHACER: reclama la clave (borrar la fila es atómico: dos llamadas no deshacen dos veces) y, si falla, la repone. */
 export async function deshacer(ctx, clave) {
-  const k = String(clave || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
-  const vencida = 'Esa clave ya no sirve: pasaron más de 10 minutos, ya se deshizo o no es tuya. Corrígelo con otra acción.';
-  if (k && !k.startsWith('est-')) return { texto: 'Esa clave no es de la galería del Estudio: para las de la oficina usa la herramienta «deshacer».', esError: true };
-  const { valor } = k ? await leerDoc(ctx.db, PREFIJO_UNDO_EST + k) : { valor: null };
-  if (!valor || ctx.ahoraMs - (valor.at || 0) > DESHACER_MS || valor.por !== ctx.usuario.id) return { texto: vencida, esError: true };
-  const r = await ctx.db.prepare('delete from docs where clave = ?').bind(PREFIJO_UNDO_EST + k).run();
-  if (!r.meta?.changes) return { texto: vencida, esError: true };
-  const reponer = async () => { try { await guardarDoc(ctx.db, PREFIJO_UNDO_EST + k, valor, { espera: 0 }); } catch { /* ya hay otra */ } };
+  const g = await reclamar({ db: ctx.db, ahoraMs: ctx.ahoraMs, usuarioId: ctx.usuario.id }, 'estudio', clave);
+  if (!g.ok) return { texto: g.texto, esError: true };
+  const { valor, reponer } = g;
   try {
     if (valor.t === 'renombrar') { const o = await conOficina(ctx, [`PATCH /api/media/folders/${valor.id}`]); await o(`/api/media/folders/${valor.id}`, { name: valor.nombre }, 'PATCH'); return { texto: `Deshecho: la carpeta ${valor.id} vuelve a llamarse «${clip(valor.nombre, 60)}».` }; }
     if (valor.t === 'mover') {

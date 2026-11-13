@@ -140,7 +140,8 @@ async function cambiarTareas(ctx, office, a) {
       const campos = limpio({ prioridad: a.prioridad, limite: a.limite || undefined, etiquetas: a.etiquetas, proyecto: a.proyecto });
       if (a.dept && !a.persona) { // trabajo para un AGENTE: pide el OK siempre, y nace marcada
         if (a.agente) await agenteValido(office, a.agente, a.dept);
-        const t = await office('/api/tasks', { dept: a.dept, text: marcada(titulo && nota ? `${titulo}. ${nota}` : nota || titulo), ...(titulo ? { title: titulo } : {}), ...(a.agente ? { agent: a.agente } : {}), needsOk: true, ...campos });
+        if (a.at !== undefined && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(a.at))) falta('`at` va como AAAA-MM-DDTHH:MM (la hora a la que arranca el trabajo).');
+        const t = await office('/api/tasks', { dept: a.dept, text: marcada(titulo && nota ? `${titulo}. ${nota}` : nota || titulo), ...(titulo ? { title: titulo } : {}), ...(a.agente ? { agent: a.agente } : {}), ...(a.at ? { at: a.at } : {}), needsOk: true, ...campos });
         const av = await marcarOrigen(ctx.db, t.id);
         return conMarca(`Tarea creada: ${t.id} «${t.title}» para ${t.agent} (${t.dept}), ya en la cola. Si su trabajo envía, publica o paga algo, ESPERA el OK del dueño (siempre, desde aquí).`, av);
       }
@@ -216,7 +217,7 @@ const cuando = { type: 'object', additionalProperties: false, description: 'Hora
     start: { type: 'string' }, end: { type: 'string' }, count: { type: 'integer', minimum: 1, maximum: 1000 } }, required: ['kind'] };
 
 function definir({ nombre, descripcion, props, lee, destructiva, ejecutar }) {
-  registrarHerramienta({
+  registrarHerramienta({ dominio: 'tareas',
     nombre, descripcion, alcance: lee ? 'lectura' : 'oficina', soloLectura: lee, ...(lee ? {} : { destructiva: !!destructiva, idempotente: false }),
     esquema: { type: 'object', additionalProperties: false, properties: props, required: ['accion'] },
     ejecutar: async (ctx, args) => {
@@ -237,8 +238,8 @@ definir({
 });
 definir({
   nombre: 'tareas_cambiar', lee: false, destructiva: true, ejecutar: (c, office, a) => cambiarTareas(c, office, a),
-  descripcion: 'Cambia TAREAS. `accion`: crear (con `dept` → trabajo para un agente, que SIEMPRE pide el OK del dueño; con `persona` o sin `dept` → una tarea para esa persona o para quien conecta; `titulo`/`texto`, `prioridad`, `limite`, `etiquetas`, `proyecto`), '
-    + 'editar (`id` + prioridad/etiquetas/limite/proyecto/estimacion), mover (`id`, `at` AAAA-MM-DDTHH:MM: la de un agente que no empezó), cancelar (`id`: la de un agente que no empezó; se puede deshacer), delegar (`id` + `persona`, o `dept` y `agente`), '
+  descripcion: 'Cambia TAREAS. `accion`: crear (con `dept` → trabajo para un agente: SIEMPRE pide el OK del dueño, `at` = cuándo arranca; con `persona` o sin `dept` → una tarea para esa persona o para quien conecta; `titulo`/`texto`, `prioridad`, `limite`, `etiquetas`, `proyecto`), '
+    + 'editar (`id` + prioridad/etiquetas/limite/proyecto/estimacion), mover (`id`, `at` AAAA-MM-DDTHH:MM: la de un agente que no empezó), cancelar (`id`, igual; con deshacer), delegar (`id` + `persona`, o `dept` y `agente`), '
     + 'tomar (`id`: «lo hago yo»), hecha (`id`: una tuya), comentar (`id`, `texto`), proyecto_nuevo y etiqueta_nueva (`nombre`). Nunca aprueba, devuelve ni quita el OK de nada. Mover, cancelar y hecha dan una clave para la herramienta `deshacer`.',
   props: { accion: { type: 'string', enum: [...ACCIONES_TAREAS_CAMBIAR] }, id: comun.id, titulo: { type: 'string', maxLength: 90 }, texto: { type: 'string', maxLength: 2000 }, dept: comun.dept, agente: comun.agente,
     persona: { type: 'string', maxLength: 80, description: 'Una persona de la oficina (mira `tareas` · equipo), o «yo».' }, nota: { type: 'string', maxLength: 560 }, at: { type: 'string', description: 'AAAA-MM-DDTHH:MM' },

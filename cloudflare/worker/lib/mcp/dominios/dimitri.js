@@ -28,7 +28,7 @@ const quien = (m) => (m.who === 'user' ? (m.por ? `${corta(m.por, 30)}` : 'Tú')
 const titulo = (x) => `«${corta(x, 80)}»`;
 const mensajes = (l, n = 30) => l.slice(-n).map((m) => `${dia(m.at)} · ${quien(m)}: ${corta(m.text, 700)}`).join('\n');
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'dimitri',
   nombre: 'dimitri_chats', titulo: 'Dimitri: tus conversaciones',
   descripcion: 'Lee TUS conversaciones con Dimitri (cada cuenta tiene la suya; nunca se ve la de otra persona). Solo lee. `accion`: listar (la de ahora y las archivadas, con su id y título) · actual (los últimos mensajes de la de ahora)'
     + ' · leer (una archivada por `id`). Los mensajes largos se acortan.',
@@ -58,7 +58,7 @@ async function leer(ctx, a) {
     } catch (e) { return FALLO('dimitri_chats', e); }
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'dimitri',
   nombre: 'dimitri_chats_cambiar', titulo: 'Dimitri: renombrar o empezar una conversación nueva',
   descripcion: 'Ordena TUS conversaciones con Dimitri (alcance «oficina»). `accion`: renombrar (una archivada: `id` y `titulo`, ≤ 80 letras) · nueva (empieza una conversación nueva: la de ahora se ARCHIVA, no se borra; sigue en el historial). No borra nada.',
   esquema: { type: 'object', additionalProperties: false, required: ['accion'], properties: {

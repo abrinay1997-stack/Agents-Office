@@ -71,7 +71,7 @@ async function leer(ctx, a) {
   return pide('acción desconocida');
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'estudio',
   nombre: 'galeria', titulo: 'Galería del Estudio', descripcion: DESC_LEER, esquema: ESQUEMA_LEER, alcance: 'lectura', soloLectura: true,
   ejecutar: async (ctx, a) => { try { return await leer(ctx, a); } catch (e) { return fallo('galeria', e); } },
 });
@@ -90,7 +90,7 @@ const ESQUEMA_CAMBIAR = {
 const DESC_CAMBIAR = 'Ordena el Estudio sin gastar ni borrar nada: crea y renombra carpetas, mueve archivos de carpeta y manda a la papelera (30 días) o recupera. Mover, renombrar y mandar a la papelera dan una clave para DESHACER 10 minutos. ' +
   'No genera, no edita con IA, no borra carpetas ni archivos para siempre, no vacía la papelera: eso lo hace una persona en la oficina. Un archivo usado por una pieza de Contenido no se manda a la papelera.';
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'estudio',
   nombre: 'galeria_cambiar', titulo: 'Ordenar el Estudio', descripcion: DESC_CAMBIAR, esquema: ESQUEMA_CAMBIAR, alcance: 'oficina', soloLectura: false, destructiva: true, idempotente: false,
   ejecutar: async (ctx, a) => {
     try {

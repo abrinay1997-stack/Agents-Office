@@ -65,13 +65,13 @@ async function leer(ctx, a) {
 }
 const apagadas = (e) => (/501|apagad|series en la nube/i.test(String(e?.message)) ? { texto: 'Las series en la nube están apagadas (dimitri.seriesNube): un administrador las enciende en la oficina.', esError: true } : null);
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'series',
   nombre: 'series', titulo: 'Series de imágenes', alcance: 'lectura', soloLectura: true, esquema: ESQUEMA_LEER,
   descripcion: 'Mira las series de imágenes del Estudio (storyboards y carruseles): la lista, una serie con su escaleta plano a plano. Solo lee (el dinero no se ve aquí): no genera, no reserva y no gasta. Generar una serie lo autoriza el dueño en la oficina, con la cifra a la vista.',
   ejecutar: async (ctx, a) => { try { return await leer(ctx, a); } catch (e) { return apagadas(e) || fallo('series', e); } },
 });
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'series',
   nombre: 'series_cambiar', titulo: 'Proponer una serie', alcance: 'oficina', soloLectura: false, destructiva: false, idempotente: false, esquema: ESQUEMA_CAMBIAR,
   descripcion: 'Arma la PROPUESTA de una serie de imágenes (su escaleta y su costo estimado) y, si lo pides, la deja guardada como «prevista»; también añade planos a una serie prevista. No gasta ni genera nada: poner una serie a generar es del dueño, en la oficina, con su confirmación.',
   ejecutar: async (ctx, a) => {

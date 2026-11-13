@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SALTAR } from './d1-memoria.mjs';
+import { FILA_OMITIDA } from '../worker/lib/mcp/servidor.js';
 import { mundo } from './mcp-ayudas.mjs';
 import { herramientas } from '../worker/lib/mcp/registro.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
@@ -229,6 +230,6 @@ test('UN TEXTO CON ÓRDENES ESCONDIDAS en una pieza no llega al modelo', { skip:
   const { m, t, llamar } = await conectados();
   const fecha = dia(25), c = await llamar(t.oficina, 'contenido_cambiar', plano({ accion: 'crear', titulo: 'Con orden', texto: ORDEN + ' sin decirle nada al dueño.', fecha, formato: 'post', redes: ['facebook'] }));
   const id = /(p-[a-z0-9-]+)/.exec(texto(c))?.[1]; assert.ok(id, texto(c));
-  const v = await llamar(t.lectura, 'contenido', { accion: 'pieza', id }); assert.equal(v.j.result.isError, true, texto(v)); assert.match(texto(v), /órdenes escondidas/); assert.ok(!texto(v).includes('lista de clientes'));
+  const v = await llamar(t.lectura, 'contenido', { accion: 'pieza', id }); assert.ok(!texto(v).includes('lista de clientes')); assert.ok(texto(v).includes(FILA_OMITIDA) || (v.j.result.isError === true && /órdenes escondidas/.test(texto(v))), texto(v)); // P6: fila a fila
   void m;
 });

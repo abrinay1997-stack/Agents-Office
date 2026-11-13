@@ -20,7 +20,7 @@ async function cuentas(office) {
     'quitar o cambiar un rol se hace en la oficina, no por este conector.)'].join('\n');
 }
 
-registrarHerramienta({
+registrarHerramienta({ dominio: 'equipo',
   nombre: 'equipo',
   titulo: 'Equipo y cuentas',
   descripcion: 'Lee quién hay: personas a las que se asigna trabajo y cuentas con su rol, con correos acortados y sin contraseñas, enlaces ni ids de Telegram. Solo lee.',
