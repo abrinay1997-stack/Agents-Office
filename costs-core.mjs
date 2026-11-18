@@ -40,7 +40,10 @@ export const PRICES = [
   { provider: 'voyage', model: 'voyage-3.5-lite', name: 'Voyage 3.5 lite', match: /voyage/, in: 0.02, out: 0, cacheRead: 0, cacheWrite: 0 },
   { provider: 'google', model: 'text-embedding-004', name: 'Gemini text-embedding-004', match: /text-embedding-004/, in: 0, out: 0, cacheRead: 0, cacheWrite: 0 }, // gratis en la lista de Google (sin verificar)
 ];
-export const DEFAULTS = { monthlyBudget: 0, alertAt: 0.8, stopAtBudget: false, hourlyRate: 0, minutesPerTask: { emails: 10, sales: 30, marketing: 40, ops: 25, fin: 20, delivery: 35 } };
+export const DEFAULTS = { monthlyBudget: 0, alertAt: 0.8, stopAtBudget: false, hourlyRate: 0,
+  // VAN-06: el presupuesto del mes es de toda la oficina; estos cuatro son POR AGENTE y POR RUTINA, y cortan de verdad. 0 = sin tope.
+  perAgentDay: 0, perAgentMonth: 0, perRoutineDay: 0, perRoutineMonth: 0,
+  minutesPerTask: { emails: 10, sales: 30, marketing: 40, ops: 25, fin: 20, delivery: 35 } };
 export function config(c = {}) { return { ...DEFAULTS, ...c, minutesPerTask: { ...DEFAULTS.minutesPerTask, ...(c.minutesPerTask || {}) } }; }
 
 /** The price for a model id (the owner's own prices in costs.prices win), or null. */
@@ -68,11 +71,11 @@ export function cacheStats(lines, cfgPrices) {
   return { cacheRead: read, cacheWrite: written, input, hitRatio: total ? read / total : 0, ahorroUsd: Math.round(ahorroUsd * 1e6) / 1e6 };
 }
 /** One ledger line. reported: what Claude Code said the run cost (only trusted for Anthropic's own models). */
-export function line({ task = null, agent = null, dept = null, kind = 'task', modelId, provider = 'anthropic', usage, reported, cfgPrices, t = Date.now() }) {
+export function line({ task = null, agent = null, dept = null, routine = null, kind = 'task', modelId, provider = 'anthropic', usage, reported, cfgPrices, t = Date.now() }) {
   const price = priceFor(modelId, cfgPrices);
   const useReported = provider === 'anthropic' && typeof reported === 'number' && reported >= 0;
   const usd = useReported ? reported : usdOf(usage, price);
-  return { t, task, agent, dept, kind, model: modelId || '', provider, in: usage?.input_tokens || 0, out: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0, usd: Math.round(usd * 1e6) / 1e6, source: useReported ? 'claude' : price ? 'tabla' : 'sin-precio' };
+  return { t, task, agent, dept, ...(routine ? { routine } : {}), kind, model: modelId || '', provider, in: usage?.input_tokens || 0, out: usage?.output_tokens || 0, cacheRead: usage?.cache_read_input_tokens || 0, cacheWrite: usage?.cache_creation_input_tokens || 0, usd: Math.round(usd * 1e6) / 1e6, source: useReported ? 'claude' : price ? 'tabla' : 'sin-precio' };
 }
 
 
@@ -84,6 +87,67 @@ export function budgetState(lines, c, now = Date.now()) {
   const b = +c.monthlyBudget || 0;
   return { month: m, spent, budget: b, ratio: b ? spent / b : 0, level: !b ? 'none' : spent >= b ? 'over' : spent >= b * (c.alertAt || 0.8) ? 'alert' : 'ok' };
 }
+// ---------------------------------------------------------------- VAN-06: presupuesto por agente y por rutina, con corte duro
+// El de la oficina (`monthlyBudget` + `stopAtBudget`) frena TODO al pasarse; estos frenan solo a quien se pasó, para que un agente
+// caro o una rutina descontrolada no se coma el mes de los demás. Un tope 0 = sin tope (lo de siempre).
+// La línea del libro lleva `routine` (el id de la rutina de la que salió la tarea); las de antes no la traen y solo cuentan por agente.
+const dayOf = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+
+/** Lo gastado HOY y este MES por cada agente y por cada rutina. Puro. → { agente: { id: { dia, mes } }, rutina: { … } } */
+export function gastoPorDueno(lines, now = Date.now()) {
+  const hoy = dayOf(now), mes = monthOf(now), agente = {}, rutina = {};
+  for (const l of lines) {
+    if (monthOf(l.t) !== mes) continue;
+    const enDia = dayOf(l.t) === hoy, usd = +l.usd || 0;
+    for (const [mapa, id] of [[agente, l.agent], [rutina, l.routine]]) {
+      if (!id) continue;
+      const g = mapa[id] || (mapa[id] = { dia: 0, mes: 0 });
+      g.mes += usd; if (enDia) g.dia += usd;
+    }
+  }
+  const limpiar = m => { for (const g of Object.values(m)) { g.dia = Math.round(g.dia * 1e6) / 1e6; g.mes = Math.round(g.mes * 1e6) / 1e6; } return m; };
+  return { agente: limpiar(agente), rutina: limpiar(rutina) };
+}
+
+/**
+ * Las líneas con la rutina de su tarea. La local la guarda en la propia línea; la NUBE no tiene esa columna (y las líneas
+ * de antes de VAN-06 tampoco), así que se saca de la tarea. Puro; no copia la línea si ya la trae.
+ */
+export function conRutinaDeTarea(lines, tareas = []) {
+  const de = new Map();
+  for (const t of tareas) if (t?.routine && t?.id) de.set(t.id, t.routine);
+  if (!de.size) return lines;
+  return lines.map(l => (l.routine || !l.task || !de.has(l.task) ? l : { ...l, routine: de.get(l.task) }));
+}
+
+/** Los dos topes que le tocan a un agente o a una rutina: el PROPIO (su ficha) gana sobre el de la oficina. Puro. */
+export function topesDe(cfgCosts, { propio = {}, rutina = false } = {}) {
+  const c = config(cfgCosts);
+  const dia = +propio.budgetDay > 0 ? +propio.budgetDay : +(rutina ? c.perRoutineDay : c.perAgentDay) || 0;
+  const mes = +propio.budgetMonth > 0 ? +propio.budgetMonth : +(rutina ? c.perRoutineMonth : c.perAgentMonth) || 0;
+  return { dia, mes };
+}
+
+/**
+ * Quién está frenado por SU propio presupuesto, con el motivo en palabras. Puro: no lee reloj ni archivo.
+ * `agentes` y `rutinas`: sus topes propios ({ id: { budgetDay, budgetMonth } }), que ganan sobre los de la oficina.
+ * → { agentes: { id: motivo }, rutinas: { id: motivo } } (vacío = nada frenado).
+ */
+export function frenosDePresupuesto(lines, cfgCosts = {}, { now = Date.now(), agentes = {}, rutinas = {} } = {}) {
+  const gastos = gastoPorDueno(lines, now), out = { agentes: {}, rutinas: {} };
+  const usd = n => `US$${n.toFixed(2)}`;
+  for (const [clave, propios, esRutina, destino] of [['agente', agentes, false, out.agentes], ['rutina', rutinas, true, out.rutinas]]) {
+    const porId = gastos[clave];
+    for (const id of new Set([...Object.keys(porId), ...Object.keys(propios || {})])) {
+      const { dia, mes } = topesDe(cfgCosts, { propio: (propios || {})[id] || {}, rutina: esRutina });
+      const g = porId[id] || { dia: 0, mes: 0 };
+      if (mes > 0 && g.mes >= mes) destino[id] = `llegó a su presupuesto del mes (${usd(g.mes)} de ${usd(mes)})`;
+      else if (dia > 0 && g.dia >= dia) destino[id] = `llegó a su presupuesto de hoy (${usd(g.dia)} de ${usd(dia)})`;
+    }
+  }
+  return out;
+}
+
 /** El medidor de la esquina en la NUBE (no hay plan con ventana de 5 h: se paga por token): gasto de hoy y del mes, tokens y ejecuciones de hoy y, con tope, el porcentaje del mes.
  *  «Hoy» y «mes» son los de la zona de la oficina (la `Date` del Worker ya la lleva). Todo es una estimación: tokens × la tabla de precios. */
 export function usage(lines, cfgCosts = {}, now = Date.now()) {

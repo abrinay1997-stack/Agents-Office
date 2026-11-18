@@ -340,10 +340,11 @@ export async function archivarViejas(db, ahora = Date.now()) {
 
 /** La cola de la oficina (tareas/cola.mjs): decide qué tarea arranca ahora y la RESERVA —next → doing, tomada por su agente— con el mismo candado de versión que
  *  todo lo demás, así dos relojes a la vez no arrancan la misma. Devuelve las tareas reservadas (la fase 4 las ejecuta y devuelve el resultado con guardarEjecucion).
- *  `max`: cuántos procesos a la vez (la local: cfg.concurrency, 3); `sinPresupuesto`: no arranca nada (el tope del mes). */
-export async function tomarSiguiente(db, { max = 3, ahora = Date.now(), sinPresupuesto = false } = {}) {
+ *  `max`: cuántos procesos a la vez (la local: cfg.concurrency, 3); `sinPresupuesto`: no arranca nada (el tope del mes);
+ *  `frenados`: quién se pasó de SU tope (VAN-06, agentes/costos.js → frenos): esas tareas esperan y las demás siguen. */
+export async function tomarSiguiente(db, { max = 3, ahora = Date.now(), sinPresupuesto = false, frenados = null } = {}) {
   return conSesion(db, async s => {
-    const { arrancar } = planear(s.alm.load(), { enVuelo: 0, max, ahora, sinPresupuesto });
+    const { arrancar } = planear(s.alm.load(), { enVuelo: 0, max, ahora, sinPresupuesto, frenados });
     for (const id of arrancar) s.alm.cambiar(id, t => { t.state = 'doing'; t.startedAt = ahora; t.tomadaPor = 'agente:' + t.agent; delete t.ask; }, { por: 'oficina' });
     const l = s.alm.load();
     return arrancar.map(id => l.find(t => t.id === id));

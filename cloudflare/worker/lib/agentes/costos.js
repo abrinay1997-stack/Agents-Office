@@ -20,6 +20,18 @@ export async function leer(db, desde = 0) {
 export async function estadoDelMes(db, cfgCosts, ahora = Date.now()) {
   return costs.budgetState(await leer(db, ahora - 32 * 864e5), costs.config(cfgCosts), ahora);
 }
+/**
+ * VAN-06: quién está frenado por SU presupuesto (por agente y por rutina), con el motivo en palabras. `tareas` sirve para
+ * saber de qué rutina salió cada línea (la tabla `costos` no guarda la rutina). Sin ningún tope puesto no lee el libro: null.
+ * → { agentes: { id: motivo }, rutinas: { id: motivo } } | null
+ */
+export async function frenos(db, cfgCosts, tareas = [], ahora = Date.now()) {
+  const c = costs.config(cfgCosts);
+  if (!(+c.perAgentDay > 0 || +c.perAgentMonth > 0 || +c.perRoutineDay > 0 || +c.perRoutineMonth > 0)) return null;
+  const lineas = costs.conRutinaDeTarea(await leer(db, ahora - 32 * 864e5), tareas);
+  return costs.frenosDePresupuesto(lineas, c, { now: ahora });
+}
+
 /** ¿Con `stopAtBudget` y el tope cruzado no arranca nada nuevo? */
 export async function sinPresupuesto(db, cfgCosts, ahora = Date.now()) {
   const c = costs.config(cfgCosts);
