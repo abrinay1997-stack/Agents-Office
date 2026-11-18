@@ -120,7 +120,12 @@ export function conRutinaDeTarea(lines, tareas = []) {
   return lines.map(l => (l.routine || !l.task || !de.has(l.task) ? l : { ...l, routine: de.get(l.task) }));
 }
 
-/** Los dos topes que le tocan a un agente o a una rutina: el PROPIO (su ficha) gana sobre el de la oficina. Puro. */
+/**
+ * Los dos topes que le tocan a un agente o a una rutina: el PROPIO (su ficha) gana sobre el de la oficina. Puro.
+ * @param {Record<string, any>} cfgCosts
+ * @param {{ propio?: { budgetDay?: number, budgetMonth?: number }, rutina?: boolean }} [opciones]
+ * @returns {{ dia: number, mes: number }}
+ */
 export function topesDe(cfgCosts, { propio = {}, rutina = false } = {}) {
   const c = config(cfgCosts);
   const dia = +propio.budgetDay > 0 ? +propio.budgetDay : +(rutina ? c.perRoutineDay : c.perAgentDay) || 0;
@@ -131,21 +136,27 @@ export function topesDe(cfgCosts, { propio = {}, rutina = false } = {}) {
 /**
  * Quién está frenado por SU propio presupuesto, con el motivo en palabras. Puro: no lee reloj ni archivo.
  * `agentes` y `rutinas`: sus topes propios ({ id: { budgetDay, budgetMonth } }), que ganan sobre los de la oficina.
- * → { agentes: { id: motivo }, rutinas: { id: motivo } } (vacío = nada frenado).
+ * @param {any[]} lines
+ * @param {Record<string, any>} [cfgCosts]
+ * @param {{ now?: number, agentes?: Record<string, { budgetDay?: number, budgetMonth?: number }>, rutinas?: Record<string, { budgetDay?: number, budgetMonth?: number }> }} [opciones]
+ * @returns {{ agentes: Record<string, string>, rutinas: Record<string, string> }} vacío = nada frenado
  */
 export function frenosDePresupuesto(lines, cfgCosts = {}, { now = Date.now(), agentes = {}, rutinas = {} } = {}) {
-  const gastos = gastoPorDueno(lines, now), out = { agentes: {}, rutinas: {} };
+  const gastos = gastoPorDueno(lines, now);
   const usd = n => `US$${n.toFixed(2)}`;
-  for (const [clave, propios, esRutina, destino] of [['agente', agentes, false, out.agentes], ['rutina', rutinas, true, out.rutinas]]) {
-    const porId = gastos[clave];
-    for (const id of new Set([...Object.keys(porId), ...Object.keys(propios || {})])) {
-      const { dia, mes } = topesDe(cfgCosts, { propio: (propios || {})[id] || {}, rutina: esRutina });
-      const g = porId[id] || { dia: 0, mes: 0 };
-      if (mes > 0 && g.mes >= mes) destino[id] = `llegó a su presupuesto del mes (${usd(g.mes)} de ${usd(mes)})`;
-      else if (dia > 0 && g.dia >= dia) destino[id] = `llegó a su presupuesto de hoy (${usd(g.dia)} de ${usd(dia)})`;
+  /** Un lado (agentes o rutinas): quién se pasó de su tope, con el motivo. */
+  const lado = (gastado, propios, esRutina) => {
+    /** @type {Record<string, string>} */
+    const out = {};
+    for (const id of new Set([...Object.keys(gastado), ...Object.keys(propios)])) {
+      const { dia, mes } = topesDe(cfgCosts, { propio: propios[id] || {}, rutina: esRutina });
+      const g = gastado[id] || { dia: 0, mes: 0 };
+      if (mes > 0 && g.mes >= mes) out[id] = `llegó a su presupuesto del mes (${usd(g.mes)} de ${usd(mes)})`;
+      else if (dia > 0 && g.dia >= dia) out[id] = `llegó a su presupuesto de hoy (${usd(g.dia)} de ${usd(dia)})`;
     }
-  }
-  return out;
+    return out;
+  };
+  return { agentes: lado(gastos.agente, agentes || {}, false), rutinas: lado(gastos.rutina, rutinas || {}, true) };
 }
 
 /** El medidor de la esquina en la NUBE (no hay plan con ventana de 5 h: se paga por token): gasto de hoy y del mes, tokens y ejecuciones de hoy y, con tope, el porcentaje del mes.
