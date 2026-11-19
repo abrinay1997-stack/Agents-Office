@@ -97,7 +97,7 @@ export async function recorrer(nav, mundo, { nubeJs = null, cabeceras = null, an
     try { await paso(s.p, mundo); } catch (e) { hallazgos.push({ vista: nombre, tipo: 'paso', detalle: 'el paso falló: ' + String(e.message).split('\n')[0] }); }
     for (const f of FALTAS) hallazgos.push({ vista: nombre, tipo: 'cobertura', detalle: 'no se pudo pulsar: ' + f.slice(0, 80) });
     await esperar(s.p, 900);
-    for (const v of await s.recoger()) hallazgos.push({ vista: nombre, tipo: 'csp', detalle: `${v.dir} bloqueó ${v.bloqueado.replace(/\?.*/, '')}`, regla: v.dir });
+    for (const v of await s.recoger()) hallazgos.push({ vista: nombre, tipo: v.aviso ? 'csp-aviso' : 'csp', detalle: `${v.dir} ${v.aviso ? 'avisaría de' : 'bloqueó'} ${v.bloqueado.replace(/\?.*/, '')}`, regla: v.dir }); // una cabecera Report-Only (hoy, Trusted Types en /oficina/*) no bloquea nada: es una lista de tareas, no un fallo
     for (const r of await imagenesRotas(s.p)) hallazgos.push({ vista: nombre, tipo: 'imagen-rota', detalle: r.src.replace(/\?.*/, '') });
     if (captura) await captura(s.p, nombre);
   }
@@ -115,7 +115,7 @@ export async function recorrerPublicas(nav, mundo, { ancho = 1280 } = {}) {
   const s = await abrir(nav, { env: mundo.env, cookie: null, ancho }), hallazgos = [];
   for (const [nombre, ruta] of [['Acceso (login)', '/'], ['Invitación', '/invitacion/' + 'ab12'.repeat(12)]]) {
     await s.p.goto('https://oficina.test' + ruta, { waitUntil: 'domcontentloaded', timeout: 30000 }); await esperar(s.p, 1200);
-    for (const v of await s.recoger()) hallazgos.push({ vista: nombre, tipo: 'csp', detalle: `${v.dir} bloqueó ${v.bloqueado.replace(/\?.*/, '')}` });
+    for (const v of await s.recoger()) hallazgos.push({ vista: nombre, tipo: v.aviso ? 'csp-aviso' : 'csp', detalle: `${v.dir} ${v.aviso ? 'avisaría de' : 'bloqueó'} ${v.bloqueado.replace(/\?.*/, '')}` });
     for (const r of await imagenesRotas(s.p)) hallazgos.push({ vista: nombre, tipo: 'imagen-rota', detalle: r.src });
   }
   for (const c of s.consola) if (!/Failed to load resource: the server responded with a status of 40[134]/.test(c)) hallazgos.push({ vista: '(consola)', tipo: 'consola', detalle: c });

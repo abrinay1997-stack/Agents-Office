@@ -48,7 +48,7 @@ export async function abrir(nav, { env, cookie, ancho = 1512, alto = 900, respue
   const ctx = await nav.newContext({ viewport: { width: ancho, height: alto }, serviceWorkers: 'block' });
   if (cookie) { const [nombre, valor] = cookie.split('='); await ctx.addCookies([{ name: nombre, value: valor, domain: 'oficina.test', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]); }
   const p = await ctx.newPage(), violaciones = [], consola = [], fallidas = [], externas = [], http = [];
-  await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push({ dir: e.effectiveDirective, bloqueado: e.blockedURI, doc: e.documentURI.replace(/\?.*/, ''), muestra: (e.sample || '').slice(0, 80) })); });
+  await ctx.addInitScript(() => { window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push({ dir: e.effectiveDirective, bloqueado: e.blockedURI, doc: e.documentURI.replace(/\?.*/, ''), muestra: (e.sample || '').slice(0, 80), aviso: e.disposition === 'report' })); });
   await ctx.route('**/*', async (r) => {
     const req = r.request(), u = new URL(req.url());
     if (u.origin !== 'https://oficina.test') { externas.push(req.url().replace(/\?.*/, '')); const x = respuestaExterna?.(u, req); return r.fulfill(x || { status: 204, body: '' }); }
