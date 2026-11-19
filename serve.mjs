@@ -155,7 +155,8 @@ import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
 import * as business from './business.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
-import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
+import { parseWhen, describe, valid as validWhen, untilText, nextRun } from './src/when.js';
+import { vistaPrevia as ensayoVistaPrevia } from './ensayo-core.mjs'; // VAN-05: «¿qué haría hoy?», sin modelo y sin gastar
 import { extraAlDia } from './estudio-extra-version.mjs'; // 1 oct 2026: the page and its on-demand part, of the same build
 import { rechazoDeEscritura } from './origen-core.mjs'; // SEG-03 (29 oct 2026)
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
@@ -475,7 +476,7 @@ function ledger({ taskId, agent, kind, modelId, usage, reported, ms }) {
   return l.usd;
 }
 try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null, onText = null, partial = true, stopKey = null } = {}) { // DIM-14: onText(textSoFar) while it writes (partial: the CLI's own deltas) · stopKey: stoppers.get(key)() stops it · V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null, onText = null, partial = true, stopKey = null, ensayo = false } = {}) { // VAN-05: ensayo = la política de esta ejecución es «nunca» (lee y escribe su entrega, pero nada sale ni gasta en un motor de pago) // DIM-14: onText(textSoFar) while it writes (partial: the CLI's own deltas) · stopKey: stoppers.get(key)() stops it · V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const req = { model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: images?.length ? vision.sdkContent(user, images) : user }] };
     let res;
@@ -507,7 +508,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
   // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
-  const pol = safety.modeFor(cfg.safety, agent?.department), writes = safety.writesAllowed(pol, runMode);
+  const pol = ensayo ? 'nunca' : safety.modeFor(cfg.safety, agent?.department), writes = safety.writesAllowed(pol, runMode); // VAN-05: un ensayo nunca envía, aunque el departamento sí pueda
   const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
   const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools, SAFETY().toolKinds) : [];
   // auditoría MCP (1 oct 2026): the guard knows which servers this desk was given (MCP-07) and the run starts only those when it can (MCP-06)
@@ -751,7 +752,7 @@ function contenidoText(a) { // V4.7: what an agent of these departments may do w
   return CONTENIDO_TEXT;
 }
 const timeoutFor = task => Math.min(3600, (task.timeout || RUN_TIMEOUT / 1000) * (task.timeoutMul || 1)) * 1000; // V4.4 (B4): a routine's own clock; a retry after a timeout gets twice as long
-const runModeOf = (mode, task) => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : task?.autonomous ? 'autonomous' : 'task';
+const runModeOf = (mode, task) => task?.ensayo ? 'draft' : mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : task?.autonomous ? 'autonomous' : 'task'; // VAN-05: el ensayo corre como borrador (así `writesAllowed` ya es falso)
 const APPR = () => approvals.config(cfg.approvals); // V4.4 (G): undo window, reminders, expiry, amount limit, autonomy // V4.4: safety.writesAllowed decides from this and the policy
 const knownFor = task => `${task.text || ''}\n${task.draft || task.result || ''}`; // after the OK, a send names only addresses in what the owner approved
 const pickFor = (task, a) => { // model + effort: four places, one precedence (task > routine > agent > office)
@@ -779,7 +780,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
-  const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task), ensayo: !!task.ensayo });
   if (!text) throw new Error('Claude returned nothing');
   return { usd, result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
@@ -815,7 +816,7 @@ async function runTeam(task, mode) {
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
       const pg = {};
-      const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg, timeout: timeoutFor(task) });
+      const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg, timeout: timeoutFor(task), ensayo: !!task.ensayo });
       piece.usd = (piece.usd || 0) + (usd || 0);
       if (pg.blocked?.length || pg.taint) piece.guard = pg;
       const { body, messages } = teams.parseMessages(text, ids);
@@ -837,7 +838,7 @@ async function runTeamLead(task, feedback, mode) {
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
   const guard = {};
-  const { text, tools, modelId: ran, usd: leadUsd } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd: leadUsd } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task), ensayo: !!task.ensayo });
   if (!text) throw new Error('Claude returned nothing');
   for (const p of tm.pieces || []) if (p.guard) { guard.blocked = [...(guard.blocked || []), ...p.guard.blocked]; guard.taint = guard.taint || p.guard.taint; }
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
@@ -1568,6 +1569,27 @@ function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } 
   setImmediate(pump);
   return task;
 }
+/** VAN-05: lo que enseña «¿qué haría hoy?». Solo lee: horario, roster, conectores, tareas y el libro de costos. */
+function ensayoPrevia(r) {
+  const a = AGENTS.find(x => x.id === r.agent) || null;
+  const lee = a ? mcp.usableFor(a).map(s => s.name) : [];
+  const envian = a ? mcp.namesOf(mcp.writeTools(a, SAFETY().safeTools, SAFETY().toolKinds)) : [];
+  let lines = []; try { lines = costs.read(DATA, Date.now() - 180 * 864e5); } catch { /* sin libro, sin estimado */ }
+  const conEstado = routines.withState(loadRoutines(), RSTATE, Date.now()).list.find(x => x.id === r.id) || r;
+  return ensayoVistaPrevia({ rutina: conEstado, ahora: Date.now(), siguiente: t => nextRun(r.when, t), agente: a, tasks: load(), lines, lee, envian, zona: zonaHoraria().nombre });
+}
+
+/** VAN-05: el ENSAYO de una rutina. La misma tarea que haría, pero marcada `ensayo`: corre con la política «nunca»
+ *  (no envía, no publica, no paga, no gasta en un motor de pago del Estudio), espera tu OK siempre y NO se puede aprobar.
+ *  El reloj de la rutina no se mueve: no se llama a `routines.advance`, así que su próxima ejecución sigue en su hora. */
+function ensayar(r) {
+  const task = altaTarea({ dept: r.dept, agent: r.agent, title: `ENSAYO · ${r.title}`, text: r.text, plan: r.plan || [], eta: 15, why: 'Ensayo: lo que haría esta rutina, sin que salga nada.', by: 'ensayo', routine: r.id,
+    when: r.desc || describe(r.when), needsOk: true, ensayo: true, timeout: r.timeout, routineModel: r.model || undefined, routineEffort: r.effort || undefined,
+    team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined, prioridad: r.prioridad, etiquetas: r.etiquetas, proyecto: r.proyecto, estimacion: r.estimacion }, { por: 'dueno', arrancar: false });
+  console.log(`🎭 ensayo ${task.id} → ${task.agent}: ${r.title} (nada saldrá de aquí)`);
+  setImmediate(pump);
+  return task;
+}
 // V4.4 (D5): a second opinion on sensitive work — the department lead reads the draft before it reaches the owner, and the
 // desk fixes what the lead flags (one pass). office.config.json → quality.review { enabled, departments, words }
 const REVIEW = () => ({ enabled: true, departments: ['fin'], words: ['contrato', 'propuesta', 'cotización', 'cotizacion', 'factura', 'presupuesto', 'legal', 'contract', 'proposal', 'invoice'], ...(cfg.quality?.review || {}) });
@@ -2037,6 +2059,8 @@ function decideDraft(id, verb, note, by) {
   if (!t) return { status: 404, error: 'esa tarea ya no existe' };
   if (t.state !== 'waiting') return { status: 400, error: 'esta tarea no está esperando tu visto bueno' };
   if (t.approving) return { status: 409, error: 'ya está aprobada: se envía en unos segundos (puedes deshacerlo)' };
+  if (t.ensayo && verb === 'approve') return { status: 409, error: 'es un ENSAYO: de él no sale nada. Si te gusta lo que hizo, corre la rutina de verdad con «Hacerlo ya».' }; // VAN-05
+
   t.seenAt = t.seenAt || Date.now();
   if (verb === 'reject') {
     soltarLotes(t, 'devuelto'); // E8: devolver la tarea cancela su lote que esperaba el OK, sin gastar
@@ -2671,12 +2695,21 @@ const server = http.createServer(async (req, res) => {
       const r = await makeRoutine({ dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort, team: b.team === true }); // team: la versión móvil lo ofrece al crear
       return json(res, r.error ? 400 : 200, r);
     }
-    const rm = url.pathname.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
+    const rm = url.pathname.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip|ensayo))?$/);
     if (rm) {
       const r = loadRoutines().find(x => x.id === rm[1]);
       if (!r) return json(res, 404, { error: 'no such routine' });
       if (req.method === 'DELETE') { removeRoutine(r.id); return json(res, 200, { ok: true, routines: loadRoutines() }); }
+      if (rm[2] === 'ensayo' && req.method === 'GET') return json(res, 200, ensayoPrevia(r)); // VAN-05: «¿qué haría hoy?» — no llama a ningún modelo y no gasta
       if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { error: 'POST, PATCH or DELETE' });
+      if (rm[2] === 'ensayo') { // VAN-05: el ensayo de verdad — el agente trabaja, pero NADA sale y el reloj de la rutina no se mueve
+        const b = await body(req).catch(() => ({})) || {};
+        if (b.por === 'agente' || url.searchParams.get('por') === 'agente') return json(res, 403, { error: 'un ensayo lo pides tú, no un agente' }); // la misma convención que contenido y anuncios
+        const previa = ensayoPrevia(r);
+        const yaHay = load().find(t => t.routine === r.id && t.ensayo && ['next', 'doing', 'waiting'].includes(t.state));
+        if (yaHay) return json(res, 409, { error: 'ya hay un ensayo de esta rutina en marcha o esperando que lo leas', task: yaHay.id });
+        return json(res, 200, { ok: true, task: ensayar(r), previa, routines: loadRoutines() });
+      }
       if (rm[2] === 'run') return json(res, 200, { ok: true, task: fire(r, { by: 'you' }), routines: loadRoutines() });
       if (rm[2] === 'pause' || rm[2] === 'resume') { editRoutine(r.id, { paused: rm[2] === 'pause' }); return json(res, 200, { ok: true, routines: loadRoutines() }); }
       if (rm[2] === 'skip' || rm[2] === 'unskip') { // one run of the timetable, by its time (ms): skipped, or back

@@ -11,6 +11,34 @@
 - **El candado real se prueba aparte:** con cada ataque que el detector NO atrapa, un envío sin OK o a un destinatario no aprobado igual se bloquea (`no-writes`, `recipient`).
 - **Regla:** una regla o un ataque nuevo se añade al banco en el mismo cambio; si el detector mejora, los tests fallan a propósito para quitar la marca.
 
+## VAN-05 · ensayar una rutina sin que salga nada (19 nov 2026) — HECHO
+
+- **Dos cosas, y no se confunden.** (1) **«¿Qué haría hoy?»**: `GET /api/routines/<id>/ensayo`. GRATIS y sin llamar a ningún
+  modelo: a qué hora(s) correría hoy, quién la lleva, qué conectores LEE y cuáles ENVIARÍAN, si espera tu OK, cómo le fue las
+  últimas veces y **lo que suele costar**. (2) **El ensayo de verdad**: `POST /api/routines/<id>/ensayo` deja la misma tarea que
+  haría la rutina, marcada `ensayo`.
+- **Lo puro está en `ensayo-core.mjs`** (ni reloj propio, ni archivos, ni imports; lo podrá compartir el Worker):
+  `horasDeHoy` (el calculador del horario se inyecta), `corridasDe`, `estimadoDe` y `vistaPrevia` (el objeto de la pantalla y el
+  texto corto para una persona o para Dimitri). El estimado es la **mediana** —una corrida rara no debe mentir— de esta rutina,
+  si nunca corrió la del agente, si tampoco la de la oficina, y **sin nada que mirar, `null`: no se inventa**. Los ensayos no
+  cuentan para el estimado.
+- **Qué hace que un ensayo no pueda enviar:** la tarea lleva `ensayo: true` y con eso `runModeOf` la corre como **borrador** y
+  `askX` usa la política **«nunca»** (`safety.mjs`), así que el guardián bloquea enviar, publicar, pagar, borrar y además el
+  gasto en un motor de pago del Estudio; las herramientas de envío ni se le ofrecen (`hardOff`). **Siempre `needsOk: true`** y
+  **no se puede aprobar** (`decideDraft` contesta 409 y dice que corra la rutina de verdad). «Devolver» sí, para pedirle otra
+  cosa: sigue sin poder enviar.
+- **El reloj de la rutina no se mueve:** `ensayar()` NO llama a `routines.advance`, así que su próxima ejecución sigue en su
+  hora y no cuenta como una corrida. Dos ensayos a la vez de la misma rutina: 409. Un agente no pide ensayos (403).
+- **La pantalla:** botón **ENSAYAR** en el calendario (P → una rutina) y en el panel de tareas (T, y el carril del agente). El
+  primer toque enseña la vista previa en palabras y el botón pasa a «toca otra vez» (20 s); solo el segundo lo corre. La
+  entrega se titula «ENSAYO · …».
+- **Tests:** `tests/ensayo-rutina.test.mjs` (lo puro, y contra el `serve.mjs` REAL con un Claude de mentira: el GET no llama a
+  ningún modelo, la tarea nace marcada y esperando, el `nextAt`/`runs` de la rutina no cambian, el segundo ensayo da 409, un
+  agente 403 y aprobar 409).
+- **Lo que NO entra:** el ensayo en la versión móvil y en Telegram (hoy es escritorio), y el ensayo en la nube (el Worker
+  todavía no tiene la ruta; `ensayo-core.mjs` ya está listo para compartirse). Tampoco se ha probado con Claude de verdad: el
+  test usa un doble local.
+
 ## VAN-03 · pendiente
 - Correr el banco también en el despliegue (hoy corre dentro de `npm test` y de `check`, que ya corre en CI).
 - Casos de imagen y PDF (el texto escrito dentro de una imagen no pasa por `injectionIn`: es un límite conocido de `ver_imagen`).

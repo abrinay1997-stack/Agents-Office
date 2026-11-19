@@ -65,7 +65,7 @@ export function crearTarea(campos = {}, { id = nidBase, ahora = Date.now() } = {
   };
   for (const k of ['model', 'effort', 'needsOk', 'team', 'routine', 'when', 'due', 'late', 'missed', 'timeout', 'minutesSaved', 'routineModel', 'routineEffort', 'autonomous',
     'trigger', 'guard', 'repeatOf', 'sub', 'refs', 'person', 'handoff', 'agenteOrigen', 'por',
-    'deAgente', 'tomada', 'sugeridaPor', 'empezada', 'delegada', 'borradorAgente']) if (c[k] !== undefined && c[k] !== null && c[k] !== '') t[k] = c[k]; // plan D: las del dueño (tareas/dueno.mjs)
+    'deAgente', 'tomada', 'sugeridaPor', 'empezada', 'delegada', 'borradorAgente', 'ensayo']) if (c[k] !== undefined && c[k] !== null && c[k] !== '') t[k] = c[k]; // plan D: las del dueño (tareas/dueno.mjs)
   if (c.dueAt) { t.dueAt = c.dueAt; t.state = 'scheduled'; }
   // T1: lo nuevo
   t.prioridad = PRIORIDADES.includes(c.prioridad) ? c.prioridad : 'media';

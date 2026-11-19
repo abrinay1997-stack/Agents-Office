@@ -662,21 +662,46 @@ export function initTasks(ctx) {
     if (t) { t.routine = r.id; t.when = r.desc; t.needsOk = r.needsOk; t.modelUsed = r.model || officeModel; t.modelFrom = r.model ? 'routine' : 'office'; spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Routine${manual ? ' (run now)' : ''}: ${r.title}`); }
     r.lastAt = Date.now(); r.runs++; r.nextAt = nextRun(r.when);
   }
-  async function rtActAsk(rid, act) { // from the panel and the chat rail: deleting a routine is asked first (the calendar asks on its own), and a failure is said
+  const ensayoPide = new Map(); // VAN-05: rid → cuándo se pulsó «Ensayar» la primera vez (el segundo toque, dentro de 20 s, lo hace)
+  async function rtEnsayo(rid, boton) { // primero dice qué haría y lo que suele costar; solo el segundo toque lo ejecuta
     const r = routines.find(x => x.id === rid); if (!r) return;
+    const antes = ensayoPide.get(rid);
+    if (!antes || Date.now() - antes > 20000) {
+      const p = await rtAct(rid, 'ensayo-previa');
+      if (!p || !p.ok) { say(`No se pudo: ${esc(p && p.error)}`, 'amber'); return; }
+      ensayoPide.set(rid, Date.now());
+      if (boton) { boton.dataset.lab = boton.dataset.lab || boton.textContent; boton.textContent = 'ENSAYAR · TOCA OTRA VEZ'; setTimeout(() => { if (boton.dataset.lab) boton.textContent = boton.dataset.lab; }, 20000); }
+      say(`${esc(p.previa.texto)} El ensayo NO envía nada: toca otra vez para hacerlo.`, 'amber');
+      return;
+    }
+    ensayoPide.delete(rid);
+    if (boton && boton.dataset.lab) boton.textContent = boton.dataset.lab;
+    const res = await rtAct(rid, 'ensayo');
+    if (res && res.ok === false) { say(`No se pudo: ${esc(res.error)}`, 'amber'); return; }
+    say('Ensayo en marcha: lo verás como una entrega marcada ENSAYO. De ella no sale nada y no se puede aprobar.');
+  }
+  async function rtActAsk(rid, act, boton = null) { // from the panel and the chat rail: deleting a routine is asked first (the calendar asks on its own), and a failure is said
+    const r = routines.find(x => x.id === rid); if (!r) return;
+    if (act === 'ensayo') return rtEnsayo(rid, boton); // VAN-05
     if (act === 'delete') { // plan T0: no confirm() — it goes when the toast closes, and DESHACER keeps it (the calendar does the same)
       offerUndo(`Rutina eliminada: «${esc(short(r.title))}». Las tareas que ya hizo se quedan.`, { undo: () => true, commit: () => rtAct(rid, 'delete').then(res => { if (res && !res.ok) say(`No se pudo: ${esc(res.error)}`, 'amber'); }) });
       return;
     }
     const res = await rtAct(rid, act); if (res && !res.ok) say(`No se pudo: ${esc(res.error)}`, 'amber');
   }
-  async function rtAct(rid, act) { // RUN NOW · PAUSE · RESUME · DELETE — from a SCHEDULED row, a board card or the rail strip
+  async function rtAct(rid, act) { // RUN NOW · PAUSE · RESUME · DELETE · ENSAYO (VAN-05) — from a SCHEDULED row, a board card or the rail strip
     const r = routines.find(x => x.id === rid); if (!r) return;
+    if ((act === 'ensayo' || act === 'ensayo-previa') && !live) return { ok: false, error: 'el ensayo necesita la oficina abierta (npm start)' }; // VAN-05: la demo no tiene servidor
+    if (act === 'ensayo-previa') { // VAN-05: «¿qué haría hoy?» — gratis, no llama a ningún modelo
+      try { const j = await fetch(`${API}/routines/${encodeURIComponent(rid)}/ensayo`).then(x => x.json()); return j && !j.error ? { ok: true, previa: j } : { ok: false, error: (j && j.error) || 'no se pudo leer' }; }
+      catch { return { ok: false, error: 'sin conexión con la oficina' }; }
+    }
     if (live) {
       let err = null;
       if (act === 'delete') { try { const res = await fetch(`${API}/routines/${rid}`, { method: 'DELETE' }); if (!res.ok) err = (await res.json().catch(() => ({}))).error || res.statusText; } catch (e) { err = 'sin conexión con la oficina'; } }
-      else { const j = await post(`/routines/${rid}/${act}`); if (!j || j.error) err = (j && j.error) || 'sin conexión con la oficina'; else if (act === 'run' && j.task) reconcile(j.task); }
+      else { const j = await post(`/routines/${rid}/${act}`); if (!j || j.error) err = (j && j.error) || 'sin conexión con la oficina'; else if ((act === 'run' || act === 'ensayo') && j.task) reconcile(j.task); }
       if (!err && act === 'run') { spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Ejecutar ahora: ${r.title}`); }
+      if (!err && act === 'ensayo') { spawnEmote(R[r.agent], '🎭'); feedPush(R[r.agent], '🎭', `Ensayo (no envía nada): ${r.title}`); }
       await poll(); return err ? { ok: false, error: err } : { ok: true };
     }
     if (act === 'delete') routines.splice(routines.indexOf(r), 1);
@@ -703,9 +728,9 @@ export function initTasks(ctx) {
     el.className = 'mrt' + (railExp ? ' exp' : '');
     el.innerHTML = `<div class="mrt-h"><span>⏱ ${mine.length} rutina${mine.length > 1 ? 's' : ''}${n ? ' · próxima <b>' + esc(untilText(n.nextAt)) + '</b>' : ' · todas en pausa'}</span><span class="car">▸</span></div>
       <div class="mrt-l">${mine.map(r => `<div class="mrt-r" data-rid="${r.id}"><span>${esc(r.title)}</span><small>${esc(r.desc)} · ${modelName(r.model || officeModel)} · ${r.paused ? 'paused' : 'next ' + esc(untilText(r.nextAt))} · ${r.needsOk ? 'en espera de tu visto bueno' : 'solo lectura'}</small>
-        <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>`).join('')}</div>`;
+        <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="ensayo" title="Hace lo que haría, pero nada sale: ni enviar, ni publicar, ni pagar">ENSAYAR</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>`).join('')}</div>`;
     el.querySelector('.mrt-h').addEventListener('click', () => { railExp = !railExp; el.classList.toggle('exp', railExp); });
-    el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtActAsk(b.closest('[data-rid]').dataset.rid, b.dataset.act); }));
+    el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtActAsk(b.closest('[data-rid]').dataset.rid, b.dataset.act, b); }));
   }
   /* ---------- V3.5 live: the page keeps up with a server that runs things on its own ---------- */
   let pollN = 0, usageDue = true, lastTasksText = '', sameN = 0;
@@ -960,7 +985,7 @@ export function initTasks(ctx) {
     return `<div class="tp-row sched${r.paused ? ' paused' : ''}" data-id="r:${r.id}" data-rid="${r.id}" data-dept="${r.dept}" data-agent="${r.agent}">
       <span class="tp-st sched">⏱</span>
       <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · última ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">atrasada</span>' : '') : ''}</div>
-      <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>
+      <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="ensayo" title="Hace lo que haría, pero nada sale: ni enviar, ni publicar, ni pagar">ENSAYAR</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>
       <span class="tp-ago" data-rago="${r.id}">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt))}</span></div>`;
   }
   function renderNext() { // C1: the next-up strip under the chips
@@ -1014,7 +1039,7 @@ export function initTasks(ctx) {
     renderNext();
     if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
     P_.rows.innerHTML = lastRows = html;
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t) offerUndo(`Cancelada: «${esc(short(t.title))}».`, { undo: () => true, commit: () => cancelScheduled(t).then(r => { if (!r.ok) say(`No se pudo cancelar: ${esc(r.error)}`, 'err'); render(true); }) }); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act, b); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t) offerUndo(`Cancelada: «${esc(short(t.title))}».`, { undo: () => true, commit: () => cancelScheduled(t).then(r => { if (!r.ok) say(`No se pudo cancelar: ${esc(r.error)}`, 'err'); render(true); }) }); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); if (n.querySelector('.tp-act button')) { const t = n.querySelector('.tp-t'); t.innerHTML = `<button type="button" class="tp-open">${t.innerHTML}</button>`; return; } n.tabIndex = 0; n.setAttribute('role', 'button'); }); // every row opens its detail; V4.3: a row with its own buttons opens from its title (a button inside a button is two controls a screen reader cannot tell apart)
     if (!structural) flip(before);
     if (fid) P_.rows.querySelector(`.tp-row[data-id="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });

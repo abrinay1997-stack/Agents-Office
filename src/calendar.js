@@ -41,7 +41,7 @@ export function initCalendar(ctx) {
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
-  let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing';
+  let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing', ensayoPide = 0; // VAN-05: ensayoPide = cuándo se pulsó «Ensayar» la primera vez
   let popSel = null; // V4.8: the task or routine open in the little window, for Dimitri's «Viendo: …»
   // V4.2 (audit B13): the week starts on Monday or on Sunday (the owner's choice, remembered on this browser)
   let WS = (() => { try { return localStorage.getItem('ao.cal.ws') === '0' ? 0 : 1; } catch { return 1; } })();
@@ -410,7 +410,7 @@ export function initCalendar(ctx) {
         <label class="cv-ok"><input type="checkbox" class="cv-okc"${r.needsOk ? ' checked' : ''}> necesita mi visto bueno</label></div>
       <div class="cv-dwrap"${cadOf(r.when) === 'days' ? '' : ' hidden'}>${daysHTML(r.when.kind === 'weekly' ? r.when.days : [new Date(at).getDay()])}</div>
       <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run" title="La ejecuta ya, sin esperar a su hora">EJECUTAR AHORA</button></div>
-      <div class="cv-row cv-row2">${at > Date.now() ? `<button class="cv-lk" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'No saltar esta' : 'Saltar solo esta'}</button>` : ''}<button class="cv-lk" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'Reanudar' : 'Pausar'}</button><button class="cv-lk" type="button" data-act="only" title="El calendario muestra solo esta rutina">Ver solo esta</button><span class="sp"></span><button class="cv-lk warn" type="button" data-act="delete">Eliminar</button></div>
+      <div class="cv-row cv-row2">${at > Date.now() ? `<button class="cv-lk" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'No saltar esta' : 'Saltar solo esta'}</button>` : ''}<button class="cv-lk" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'Reanudar' : 'Pausar'}</button><button class="cv-lk" type="button" data-act="ensayo" title="Hace lo que haría esta rutina, pero NADA sale: ni enviar, ni publicar, ni pagar">Ensayar</button><button class="cv-lk" type="button" data-act="only" title="El calendario muestra solo esta rutina">Ver solo esta</button><span class="sp"></span><button class="cv-lk warn" type="button" data-act="delete">Eliminar</button></div>
       <div class="cv-hint" aria-live="polite">${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno.' : 'Solo lee y reporta: no te espera.'}</div>`;
     E.pop.hidden = false; place(E.pop, el);
     // V4.2 (audit B16): the title grows to show itself whole (a long one ran out of its field); the actions sit in two rows, none off-view
@@ -445,6 +445,21 @@ export function initCalendar(ctx) {
         closePop(); render(); return;
       }
       if (act === 'delete') { later('r:' + r.id, `Rutina eliminada: «${r.title.slice(0, 60)}».`, () => rtAct(r.id, 'delete')); return; }
+      if (act === 'ensayo') { // VAN-05: el primer toque dice qué haría hoy y lo que suele costar; solo el segundo lo ejecuta
+        if (!ensayoPide || Date.now() - ensayoPide > 20000) {
+          const p = await rtAct(r.id, 'ensayo-previa');
+          if (!p || !p.ok) { say('No se pudo: ' + ((p && p.error) || 'sin respuesta'), true); return; }
+          ensayoPide = Date.now(); b.textContent = 'Ensayar · toca otra vez';
+          note(`${p.previa.texto} El ensayo NO envía nada y no se puede aprobar.`);
+          return;
+        }
+        ensayoPide = 0; b.disabled = true;
+        const res = await rtAct(r.id, 'ensayo');
+        if (res && res.ok === false) { say('No se pudo: ' + res.error, true); b.disabled = false; b.textContent = 'Ensayar'; return; }
+        closePop(); render();
+        note('Ensayo en marcha: su entrega sale marcada ENSAYO, de ella no sale nada y no se puede aprobar. El horario de la rutina no se movió.');
+        return;
+      }
       b.disabled = true;
       const res = await rtAct(r.id, act);
       if (res && res.ok === false) { say('No se pudo: ' + res.error, true); b.disabled = false; return; }
