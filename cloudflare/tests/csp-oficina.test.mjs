@@ -15,6 +15,7 @@ after(async () => { await nav?.close(); });
 test('ninguna violación de CSP, ninguna imagen rota y ninguna petición fallida en el recorrido completo (escritorio)', { skip: SALTAR, timeout: 900000 }, async () => {
   const { hallazgos, externas } = await recorrer(nav, mundo);
   const malos = hallazgos.filter((h) => ['csp', 'imagen-rota', 'peticion-fallida', 'consola', 'paso'].includes(h.tipo) || (h.tipo === 'http' && !/\/api\/media\/plantillas$/.test(h.detalle))).filter((h) => !(h.tipo === 'consola' && /status of 501/.test(h.detalle))); // el 501 de /api/media/plantillas es el aviso «no portado todavía» (fase 8b), no un fallo
+  const avisos = hallazgos.filter((h) => h.tipo === 'csp-aviso'); if (avisos.length) console.log('Report-Only (no bloquea nada, es la lista de tareas de Trusted Types): ' + avisos.map((h) => `${h.vista}: ${h.detalle}`).join(' | '));
   const sinPulsar = hallazgos.filter((h) => h.tipo === 'cobertura'); if (sinPulsar.length) console.log('cobertura: ' + sinPulsar.map((h) => `${h.vista}: ${h.detalle}`).join(' | ')); // un botón que tardó en aparecer en una máquina cargada: se dice, no se falla
   assert.deepEqual(malos.map((h) => `${h.vista} · ${h.tipo} · ${h.detalle}`), []);
   assert.deepEqual(externas, ['https://www.facebook.com/ads/api/preview_iframe.php'], 'el único tercero al que sale la página es el marco de la vista previa de anuncios de Meta (y sí se enmarcó)');
@@ -22,5 +23,5 @@ test('ninguna violación de CSP, ninguna imagen rota y ninguna petición fallida
 
 test('el acceso y la invitación (sin sesión, con su CSP estricta): ninguna violación ni petición fallida', { skip: SALTAR, timeout: 120000 }, async () => {
   const { hallazgos } = await recorrerPublicas(nav, mundo);
-  assert.deepEqual(hallazgos.map((h) => `${h.vista} · ${h.tipo} · ${h.detalle}`), []);
+  assert.deepEqual(hallazgos.filter((h) => h.tipo !== 'csp-aviso').map((h) => `${h.vista} · ${h.tipo} · ${h.detalle}`), []);
 });
