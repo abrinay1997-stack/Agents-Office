@@ -11,6 +11,29 @@
 - **El candado real se prueba aparte:** con cada ataque que el detector NO atrapa, un envío sin OK o a un destinatario no aprobado igual se bloquea (`no-writes`, `recipient`).
 - **Regla:** una regla o un ataque nuevo se añade al banco en el mismo cambio; si el detector mejora, los tests fallan a propósito para quitar la marca.
 
+## VAN-06 · presupuesto por agente y por rutina, con corte duro (18 nov 2026) — HECHO
+
+- **Lo puro, en `costs-core.mjs`** (lo comparten la oficina local y el Worker): `gastoPorDueno` (lo gastado hoy y este mes por
+  cada agente y por cada rutina), `topesDe` (el tope propio de una ficha gana sobre el de la oficina), `frenosDePresupuesto`
+  (→ `{ agentes: { id: motivo }, rutinas: { id: motivo } }`, el motivo en palabras con sus cifras) y `conRutinaDeTarea` (la
+  rutina de cada línea: la local la guarda en la línea, la nube la saca de la tarea).
+- **Los cuatro topes** son `costs.perAgentDay`, `perAgentMonth`, `perRoutineDay`, `perRoutineMonth` (Ajustes → Costos).
+  **0 = sin tope**, así que una oficina que no los ponga se comporta EXACTAMENTE como antes y no lee el libro ni una vez.
+- **El corte es en la COLA, antes de gastar:** `tareas/cola.mjs → planear(…, { frenados })` no arranca la tarea de un agente
+  o de una rutina que se pasó (razón nueva `tope`, con su `motivo`), y `explicarCola` la cuenta aparte del tope del mes de
+  toda la oficina y lo dice en palabras. El tope del mes sigue mandando sobre todo.
+- **Local:** `serve.mjs` lo recalcula al apuntar cada costo (y, si nadie apunta nada, como mucho cada minuto: `/api/tasks` se
+  pide cada 6 s) y avisa UNA vez por cada agente o rutina que se queda sin presupuesto (`notice`, con el motivo). La línea del
+  libro lleva ahora `routine`. `GET /api/costs` devuelve `frenados` y la ventana de Costos lo enseña con el nombre del agente.
+- **Nube:** `agentes/costos.js → frenos(db, cfgCosts, tareas, ahora)` y `tomarSiguiente(db, { frenados })`; el reloj lo calcula
+  antes de tomar la cola (`resumen.frenados`) y `/api/costs` lo devuelve igual.
+- **Tests:** `tests/costos-topes.test.mjs` (14 casos puros, incluido «sin `frenados` la cola es idéntica a la de antes») y
+  `cloudflare/tests/van06-topes.test.mjs` (D1 de verdad y el reloj: una rutina que pasó su tope diario NO arranca y su motivo
+  queda escrito; un agente que pasó el del mes tampoco, y el modelo no se llama; sin topes, nada cambia).
+- **Lo que NO entra aquí:** el **costo por herramienta** además de por token (la otra mitad de VAN-06) y los topes propios por
+  ficha de agente o de rutina en la pantalla: el núcleo ya los admite (`topesDe` con `budgetDay`/`budgetMonth`), pero ni el
+  roster ni `routines.json` los piden todavía.
+
 ## VAN-03 · pendiente
 - Correr el banco también en el despliegue (hoy corre dentro de `npm test` y de `check`, que ya corre en CI).
 - Casos de imagen y PDF (el texto escrito dentro de una imagen no pasa por `injectionIn`: es un límite conocido de `ver_imagen`).

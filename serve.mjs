@@ -465,13 +465,43 @@ function guardReport(runId, taintFile) {
 // V4.4 (C1, C3): every model call is one line in data/costs.jsonl; the month's budget is watched after each one
 const COSTS = () => costs.config(cfg.costs);
 let budgetLevel = null;
+/* VAN-06: topes por agente y por rutina (costs-core → frenosDePresupuesto). El del mes frena TODA la oficina; estos solo a quien se pasó,
+   y la cola lo dice en palabras. Se recalcula al apuntar un costo y, si nadie apunta nada, como mucho cada minuto: `/api/tasks` se pide
+   cada 6 s y leer el libro entero en cada sondeo sería caro. Sin ningún tope puesto no se lee el libro ni una vez (null = nada frenado). */
+let frenosCache = { at: 0, frenos: null, dichos: new Set() };
+const hayTopes = c => +c.perAgentDay > 0 || +c.perAgentMonth > 0 || +c.perRoutineDay > 0 || +c.perRoutineMonth > 0;
+function frenosPresupuesto() {
+  const c = COSTS();
+  if (!hayTopes(c)) { frenosCache.frenos = null; return null; }
+  if (frenosCache.frenos && Date.now() - frenosCache.at < 60e3) return frenosCache.frenos;
+  frenosCache = { ...frenosCache, at: Date.now(), frenos: costs.frenosDePresupuesto(costs.read(DATA, Date.now() - 32 * 864e5), c) };
+  return frenosCache.frenos;
+}
+const tituloRutina = id => { try { return loadRoutines().find(r => r.id === id)?.title || null; } catch { return null; } };
+/** Tras cada costo: recalcula y avisa UNA vez por cada agente o rutina que acaba de quedarse sin presupuesto. */
+function revisarFrenos() {
+  if (!hayTopes(COSTS())) return;
+  frenosCache.at = 0;
+  const f = frenosPresupuesto(); if (!f) return;
+  for (const [tipo, mapa] of [['agente', f.agentes], ['rutina', f.rutinas]]) {
+    for (const [id, motivo] of Object.entries(mapa)) {
+      const clave = `tope-${tipo}-${id}-${motivo}`;
+      if (frenosCache.dichos.has(clave)) continue;
+      frenosCache.dichos.add(clave);
+      const nombre = tipo === 'agente' ? (AGENTS.find(a => a.id === id)?.name || id) : (tituloRutina(id) || id);
+      notice('budget', `${tipo === 'agente' ? 'El agente' : 'La rutina'} ${nombre} ${motivo}: sus tareas esperan hasta que suba su tope o empiece el periodo siguiente.`, { level: 'warn', key: clave });
+    }
+  }
+  if (frenosCache.dichos.size > 200) frenosCache.dichos = new Set();
+}
 function ledger({ taskId, agent, kind, modelId, usage, reported, ms }) {
   const t = taskId ? load().find(x => x.id === taskId) : null;
-  const l = costs.line({ task: taskId || null, agent: agent?.id || null, dept: agent?.department || t?.dept || null, kind, modelId: modelId || (PROVIDER.id === 'anthropic' ? modelId : PROVIDER.model) || PROVIDER.model, provider: PROVIDER.id, usage, reported, cfgPrices: cfg.costs?.prices });
+  const l = costs.line({ task: taskId || null, agent: agent?.id || null, dept: agent?.department || t?.dept || null, routine: t?.routine || null, kind, modelId: modelId || (PROVIDER.id === 'anthropic' ? modelId : PROVIDER.model) || PROVIDER.model, provider: PROVIDER.id, usage, reported, cfgPrices: cfg.costs?.prices });
   costs.append(DATA, ms > 0 ? { ...l, ms: Math.round(ms) } : l); // Auditoría 1 oct 2026 (INF-06): how long the run took, to see what each kind of call costs in time
   const b = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS());
   if (b.level !== budgetLevel && (b.level === 'alert' || b.level === 'over')) notice('budget', b.level === 'over' ? `Se llegó al presupuesto del mes: US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)}.${COSTS().stopAtBudget ? ' Las tareas nuevas esperan hasta que subas el presupuesto o empiece el mes.' : ''}` : `Van US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)} del presupuesto del mes (${Math.round(b.ratio * 100)} %).`, { level: b.level === 'over' ? 'error' : 'warn', key: 'budget-' + b.month + '-' + b.level });
   budgetLevel = b.level;
+  revisarFrenos(); // VAN-06: si este gasto pasó el tope de su agente o de su rutina, se dice y la cola no las arranca
   return l.usd;
 }
 try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
@@ -1549,7 +1579,7 @@ function pump() { // plan T0/T3: tareas/cola.planear decides (priority → deadl
   try {
     let list; try { list = load(); } catch (e) { console.error('engine:', e.message); return; }
     const procesos = [...runsOf.values()].reduce((n, s) => n + s.size, 0);
-    const { arrancar } = colaTareas.planear(list, { enVuelo: Math.max(running.size, procesos), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget });
+    const { arrancar } = colaTareas.planear(list, { enVuelo: Math.max(running.size, procesos), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget, frenados: frenosPresupuesto() });
     for (const id of arrancar) if (!running.has(id)) startRun(id);
   } finally { pumping = false; }
 }
@@ -2363,7 +2393,7 @@ function officeStatus() {
   const rs = routinesOut().routines || [], failedR = rs.filter(r => { const t = list.find(x => x.id === r.lastTaskId); return t && t.error; });
   add('rutinas', 'Rutinas', failedR.length ? 'warn' : 'ok', rs.length ? (failedR.length ? `La última ejecución falló en: ${failedR.map(r => '«' + r.title + '»').join(', ')}.` : `${rs.length} en el horario; ninguna falló la última vez.`) : 'No hay rutinas.', failedR.length ? 'Abre la tarea para ver por qué; la rutina seguirá en su horario.' : '');
   // queue and retries
-  const exCola = colaTareas.explicarCola(list, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, ahora: now, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget });
+  const exCola = colaTareas.explicarCola(list, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, ahora: now, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget, frenados: frenosPresupuesto() });
   // «esperando» = lo que la cola sí arrancaría; lo tuyo, lo de personas y lo bloqueado se cuenta aparte y se explica (punto 17)
   add('cola', 'Cola de trabajo', exCola.esperando && exCola.masViejaMs > 3600e3 ? 'warn' : 'ok', exCola.total ? `${exCola.esperando} esperando a la oficina; ${running.size} en marcha (máximo ${MAX_RUNS}). ${exCola.texto}` : `Nada esperando; ${running.size} en marcha.${exCola.okPendiente ? ' ' + exCola.texto : ''}`);
   // approvals
@@ -2656,7 +2686,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: r.nombre, graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
-    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = colaTareas.planear(l, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget }).puestos; for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
+    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = colaTareas.planear(l, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget, frenados: frenosPresupuesto() }).puestos; for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
     if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
     if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); renombrar(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
@@ -2759,7 +2789,7 @@ const server = http.createServer(async (req, res) => {
       const l = load(), ch = history.changesByAgent(DATA);
       return json(res, 200, { agents: quality.byAgent(l, AGENTS), drops: quality.drops(l, AGENTS, ch), routing: quality.rerouteRate(l, loadRouting()), reviews: l.filter(t => t.review && Date.now() - t.review.at < 28 * 864e5).length });
     }
-    if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), publicidad: publicidadSemana(), /* Fase A1: el dinero de los anuncios, APARTE del costo de los modelos (nunca en data/costs.jsonl) */ subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
+    if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), publicidad: publicidadSemana(), /* Fase A1: el dinero de los anuncios, APARTE del costo de los modelos (nunca en data/costs.jsonl) */ frenados: frenosPresupuesto(), /* VAN-06: quién está frenado por su propio tope, con el motivo */ subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
     if (url.pathname === '/api/costs.csv' && req.method === 'GET') { // V4.4 (C10): the month for the accountant
       const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : new Date().toISOString().slice(0, 7);
       res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="costos-${cfg.name.replace(/[^\w-]+/g, '-')}-${month}.csv"` });

@@ -27,7 +27,7 @@ export function ocupacion(tareas) {
 }
 
 // → { arrancar: [id], puestos: { id: { pos, why, retryAt? } } }
-export function planear(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinPresupuesto = false } = {}) {
+export function planear(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinPresupuesto = false, frenados = null } = {}) {
   const porId = new Map(tareas.map(t => [t.id, t]));
   const { agentes, procesos } = ocupacion(tareas);
   let libres = Math.max(0, max - Math.max(enVuelo, procesos));
@@ -41,6 +41,9 @@ export function planear(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinP
     if (t.retryAt && t.retryAt > ahora) { puestos[t.id] = { pos, why: 'reintento', retryAt: t.retryAt }; continue; }
     if (agentes.has(t.agent)) { puestos[t.id] = { pos, why: 'agente' }; continue; }
     if (sinPresupuesto) { puestos[t.id] = { pos, why: 'presupuesto' }; continue; }
+    // VAN-06: el tope de ESE agente o de ESA rutina (costs-core → frenosDePresupuesto). No frena a los demás.
+    const tope = frenados && (frenados.agentes?.[t.agent] || (t.routine && frenados.rutinas?.[t.routine]));
+    if (tope) { puestos[t.id] = { pos, why: 'tope', motivo: tope }; continue; }
     if (libres > 0) { libres--; agentes.add(t.agent); arrancar.push(t.id); puestos[t.id] = { pos, why: 'turno' }; continue; }
     puestos[t.id] = { pos, why: 'oficina' };
   }
@@ -50,8 +53,8 @@ export function planear(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinP
 // ---------------------------------------------------------------- por qué espera cada una (punto 17 de la auditoría de Anuncios)
 // «12 esperando; 0 en marcha» asustaba cuando casi todas eran del dueño, de personas o bloqueadas: la cola nunca las arranca, así que
 // no «esperan a la oficina». Esta función solo MIRA (usa planear tal cual, sin cambiar qué arranca) y dice en palabras por qué espera cada una.
-const RAZONES = ['persona', 'bloqueada', 'reintento', 'agente', 'oficina', 'presupuesto', 'llave', 'turno'];
-const REAL = ['reintento', 'agente', 'oficina', 'presupuesto', 'llave', 'turno']; // lo que SÍ espera a la oficina (persona y bloqueada, no)
+const RAZONES = ['persona', 'bloqueada', 'reintento', 'agente', 'oficina', 'presupuesto', 'tope', 'llave', 'turno'];
+const REAL = ['reintento', 'agente', 'oficina', 'presupuesto', 'tope', 'llave', 'turno']; // lo que SÍ espera a la oficina (persona y bloqueada, no)
 const FRASE = {
   persona: n => `${n} ${n === 1 ? 'es tuya o de una persona' : 'son tuyas o de personas'} (la oficina no las arranca sola)`,
   bloqueada: n => `${n} ${n === 1 ? 'espera' : 'esperan'} a que termine otra tarea de la que dependen`,
@@ -59,16 +62,17 @@ const FRASE = {
   agente: n => `${n} ${n === 1 ? 'espera' : 'esperan'} a que su agente termine lo que está haciendo`,
   oficina: (n, o) => `${n} ${n === 1 ? 'espera' : 'esperan'} sitio (la oficina hace ${o.max} a la vez)`,
   presupuesto: n => `${n} ${n === 1 ? 'parada' : 'paradas'} porque se acabó el presupuesto del mes`,
+  tope: n => `${n} ${n === 1 ? 'parada' : 'paradas'} por el presupuesto de su agente o de su rutina`,
   llave: n => `${n} sin poder arrancar: falta la llave de IA`,
   turno: n => `${n} ${n === 1 ? 'arranca' : 'arrancan'} en el próximo minuto`,
 };
 /**
- * → { total, razones: { persona, bloqueada, reintento, agente, oficina, presupuesto, llave, turno }, esperando (las que sí esperan a la
+ * → { total, razones: { persona, bloqueada, reintento, agente, oficina, presupuesto, tope, llave, turno }, esperando (las que sí esperan a la
  * oficina: todas menos persona y bloqueada), okPendiente (esperan tu OK), masViejaMs (de las que esperan a la oficina), texto }.
  * `texto` es null si no hay nada en la lista.
  */
-export function explicarCola(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinPresupuesto = false, sinLlave = false } = {}) {
-  const { puestos } = planear(tareas, { enVuelo, max, ahora, sinPresupuesto });
+export function explicarCola(tareas, { enVuelo = 0, max = 3, ahora = Date.now(), sinPresupuesto = false, sinLlave = false, frenados = null } = {}) {
+  const { puestos } = planear(tareas, { enVuelo, max, ahora, sinPresupuesto, frenados });
   const razones = Object.fromEntries(RAZONES.map(r => [r, 0])); let masViejaMs = 0, total = 0;
   for (const t of tareas) {
     if (t.state !== 'next' || t.archived) continue;

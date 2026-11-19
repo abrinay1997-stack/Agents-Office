@@ -17,6 +17,18 @@ export function initCosts({ served, esc }) {
   const usd = n => n >= 100 ? 'US$' + Math.round(n).toLocaleString('es-PA') : n >= 1 ? 'US$' + n.toFixed(2) : n > 0 ? 'US$' + n.toFixed(3) : 'US$0';
   const DEPT = { emails: 'Correos', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Finanzas', delivery: 'Entregas', oficina: 'La oficina (enrutar, Dimitri)' };
   const monthName = m => { const [y, mo] = m.split('-'); return new Date(+y, +mo - 1, 1).toLocaleDateString('es-PA', { month: 'long', year: 'numeric' }); };
+  /* VAN-06: quién se pasó de SU tope (por agente o por rutina). El del mes de toda la oficina ya se ve en la primera tarjeta;
+     esto dice quién está parado y por qué, para que la cola no parezca atascada sin motivo. */
+  function frenadosHTML(f, byAgent = []) {
+    if (!f) return '';
+    const nombre = id => byAgent.find(a => a.key === id)?.name || id;
+    const filas = [
+      ...Object.entries(f.agentes || {}).map(([id, m]) => `El agente <b>${esc(nombre(id))}</b> ${esc(m)}`),
+      ...Object.entries(f.rutinas || {}).map(([id, m]) => `La rutina <b>${esc(id)}</b> ${esc(m)}`),
+    ];
+    if (!filas.length) return '';
+    return `<div class="cs-note" role="status"><b>Sin presupuesto propio.</b> Sus tareas esperan al periodo siguiente, o súbele el tope en ${ajuste('perAgentDay')}.<ul>${filas.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+  }
   function chart(weeks) {
     const max = Math.max(...weeks.map(w => w.usd), 0.01), W = 560, H = 150, pad = 26, bw = (W - pad) / weeks.length;
     const bars = weeks.map((w, i) => { const h = Math.max(w.usd > 0 ? 3 : 0, (w.usd / max) * (H - 40)); const x = pad + i * bw + bw * 0.22, y = H - 22 - h, d = new Date(w.start).toLocaleDateString('es-PA', { day: 'numeric', month: 'short' });
@@ -49,6 +61,7 @@ export function initCosts({ served, esc }) {
         <div class="cs-tile"><span>Horas ahorradas</span><b>${d.hours.toFixed(1)} h</b><small>estimadas por departamento (${ajuste('minutesPerTask')})</small></div>
         <div class="cs-tile"><span>Lo que valen</span><b>${d.hourlyRate ? usd(d.value) : '—'}</b><small>${d.hourlyRate ? `a ${usd(d.hourlyRate)}/h de una persona · ${d.value > d.usd ? 'rinde ' + (d.usd ? Math.round(d.value / d.usd) + '×' : 'mucho') : 'aún no compensa'}` : `pon lo que cuesta una hora de tu equipo en ${ajuste('hourlyRate')}`}</small></div>
       </div>
+      ${frenadosHTML(d.frenados, d.byAgent)}
       ${d.suggestions.length ? `<h3>Sugerencias</h3><ul class="cs-sug">${d.suggestions.map((s, i) => `<li><span>${esc(s.text)}</span>${s.action ? `<button type="button" class="cs-btn" data-apply="${i}">${s.kind === 'routine-unread' ? 'Pausarla' : 'Cambiar el modelo'}</button>` : ''}</li>`).join('')}</ul>` : ''}
       <h3>Últimas 8 semanas</h3>${chart(d.weeks)}
       <details class="cs-more"><summary>Ver la tabla por semana</summary>${table(['Semana', 'Tareas', 'Fallos', 'Costo'], d.weeks.map(w => [new Date(w.start).toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }), w.tasks, w.failed, usd(w.usd)]))}</details>

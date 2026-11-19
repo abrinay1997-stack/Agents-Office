@@ -26,6 +26,11 @@ export const FIELDS = [
   { path: 'costs.monthlyBudget', group: 'costos', type: 'number', label: 'Presupuesto del mes (US$)', min: 0, max: 1e6, help: '0 = sin presupuesto.' },
   { path: 'costs.alertAt', group: 'costos', type: 'number', label: 'Avisarme al (fracción del presupuesto)', min: 0.1, max: 1, step: 0.05 },
   { path: 'costs.stopAtBudget', group: 'costos', type: 'bool', label: 'Frenar las tareas nuevas al pasar el presupuesto' },
+  // VAN-06: topes POR AGENTE y POR RUTINA. El del mes de arriba frena toda la oficina; estos frenan solo a quien se pasó.
+  { path: 'costs.perAgentDay', group: 'costos', type: 'number', label: 'Tope de cada agente al día (US$)', min: 0, max: 1e6, step: 0.5, default: 0, help: 'Cuando un agente llega a su tope, sus tareas esperan al día siguiente y se dice por qué. 0 = sin tope.' },
+  { path: 'costs.perAgentMonth', group: 'costos', type: 'number', label: 'Tope de cada agente al mes (US$)', min: 0, max: 1e6, step: 1, default: 0, help: '0 = sin tope.' },
+  { path: 'costs.perRoutineDay', group: 'costos', type: 'number', label: 'Tope de cada rutina al día (US$)', min: 0, max: 1e6, step: 0.5, default: 0, help: 'Para que una rutina que se descontroló no se coma el mes. 0 = sin tope.' },
+  { path: 'costs.perRoutineMonth', group: 'costos', type: 'number', label: 'Tope de cada rutina al mes (US$)', min: 0, max: 1e6, step: 1, default: 0, help: '0 = sin tope.' },
   { path: 'costs.hourlyRate', group: 'costos', type: 'number', label: 'Lo que cuesta una hora de tu equipo (US$)', min: 0, max: 1000 },
   // V4.5 (27 Sep 2026, the owner): the Estudio's caps — they were only in office.config.json (media.*). Applied at once (media.setLimits).
   // V4.7: Contenido — which departments' agents may read the content calendar and leave DRAFTS (they never approve, schedule or publish). Applies on restart.

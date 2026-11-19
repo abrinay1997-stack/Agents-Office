@@ -56,7 +56,10 @@ export async function manejar(ctx) {
   if (ruta === '/api/costs' && metodo === 'GET') {
     const C = await leerContexto(db), ahora = Date.now();
     const lineas = await costos.leer(db, ahora - 70 * 864e5), tareasL = await cargarTareas(db);
-    return json({ ...costsCore.report(lineas, tareasL, C.agents, C.ajustes.costs, ahora), publicidad: { configurado: false, motivo: 'Anuncios de Meta todavía no está en la nube (fase 7).', texto: '' },
+    // VAN-06: quién está frenado por su propio tope, con el motivo (se calcula con las mismas líneas ya leídas).
+    const frenados = costsCore.config(C.ajustes.costs).perAgentDay || costsCore.config(C.ajustes.costs).perAgentMonth || costsCore.config(C.ajustes.costs).perRoutineDay || costsCore.config(C.ajustes.costs).perRoutineMonth
+      ? costsCore.frenosDePresupuesto(costsCore.conRutinaDeTarea(lineas, tareasL), C.ajustes.costs, { now: ahora }) : null;
+    return json({ ...costsCore.report(lineas, tareasL, C.agents, C.ajustes.costs, ahora), frenados, publicidad: { configurado: false, motivo: 'Anuncios de Meta todavía no está en la nube (fase 7).', texto: '' },
       subscription: false, provider: PROVEEDOR(env).name, config: costsCore.config(C.ajustes.costs), prices: costsCore.PRICES.map(({ match, ...p }) => p), priceSources: costsCore.PRICE_SOURCES });
   }
   if (ruta === '/api/costs.csv' && metodo === 'GET') {
@@ -144,7 +147,10 @@ export async function cadaMinuto(env, opciones = {}) {
   // 3) la cola: lo que toca arrancar ahora (si hay con qué pensar y el presupuesto del mes lo permite)
   if (hayLlave(env)) {
     const max = Math.max(1, Math.min(8, +aj.concurrency || 3));
-    const tomadas = await tomarSiguiente(db, { max, ahora: ahoraFn(), sinPresupuesto });
+    // VAN-06: los topes por agente y por rutina frenan solo a quien se pasó (el del mes, de arriba, frena todo).
+    const frenados = await costos.frenos(db, aj.costs, await cargarTareas(db), ahoraFn());
+    resumen.frenados = frenados ? { agentes: Object.keys(frenados.agentes).length, rutinas: Object.keys(frenados.rutinas).length } : null;
+    const tomadas = await tomarSiguiente(db, { max, ahora: ahoraFn(), sinPresupuesto, frenados });
     for (const t of tomadas) { await crearCorrida(db, t, { modo: modoInicial(t) }, ahoraFn()); resumen.tomadas.push(t.id); }
   }
   // 4) las corridas avanzan un paso (las que nadie tiene en este momento), hasta que se acabe el presupuesto de la invocación
